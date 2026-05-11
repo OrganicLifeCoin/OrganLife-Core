@@ -1,0 +1,77 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 14,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "vcpkg",
+      "displayName": "vcpkg Release Build",
+      "description": "Build with vcpkg dependencies (auto-installed from vcpkg.json)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_TOOLCHAIN_FILE": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        },
+        "VCPKG_MANIFEST_MODE": "ON"
+      }
+    },
+    {
+      "name": "vcpkg-debug",
+      "displayName": "vcpkg Debug Build",
+      "description": "Debug build with vcpkg dependencies",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_TOOLCHAIN_FILE": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        },
+        "VCPKG_MANIFEST_MODE": "ON",
+        "DEBUG": "ON"
+      }
+    },
+    {
+      "name": "vcpkg-no-gui",
+      "displayName": "vcpkg Daemon Only (No GUI)",
+      "description": "Build daemon only without Qt GUI",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_TOOLCHAIN_FILE": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        },
+        "VCPKG_MANIFEST_MODE": "ON",
+        "VCPKG_MANIFEST_FEATURES": ""
+      },
+      "environment": {
+        "NO_QT": "1"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "vcpkg",
+      "configurePreset": "vcpkg",
+      "description": "Build with vcpkg dependencies"
+    },
+    {
+      "name": "vcpkg-debug",
+      "configurePreset": "vcpkg-debug",
+      "description": "Debug build"
+    },
+    {
+      "name": "vcpkg-no-gui",
+      "configurePreset": "vcpkg-no-gui",
+      "description": "Daemon only build"
+    }
+  ]
+}

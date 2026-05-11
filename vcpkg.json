@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "cteam",
+  "version-string": "5.6.99",
+  "description": "CTEAM Core",
+  "homepage": "https://github.com/FreedomBuzz/CTEAM",
+  "license": "MIT",
+  "supports": "linux | osx | windows",
+  "builtin-baseline": "66c0373dc7fca549e5803087b9487edfe3aca0a1",
+  "dependencies": [
+    {
+      "name": "boost",
+      "version>=": "1.90.0"
+    },
+    "libevent",
+    "gmp",
+    "libsodium",
+    {
+      "name": "berkeleydb",
+      "platform": "linux"
+    }
+  ],
+  "default-features": ["gui"],
+  "features": {
+    "gui": {
+      "description": "Build cteam-Qt GUI wallet",
+      "dependencies": [
+        "qtbase",
+        "qttools",
+        "qtsvg",
+        "qtcharts",
+        "libqrencode"
+      ]
+    },
+    "zmq": {
+      "description": "Enable ZeroMQ notifications",
+      "dependencies": ["zeromq"]
+    },
+    "upnp": {
+      "description": "Enable UPnP port mapping",
+      "dependencies": ["miniupnpc"]
+    },
+    "natpmp": {
+      "description": "Enable NAT-PMP port mapping",
+      "dependencies": ["libnatpmp"]
+    }
+  }
+}

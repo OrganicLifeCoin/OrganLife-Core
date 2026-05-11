@@ -1,0 +1,51 @@
+// Copyright (c) 2011-2013 The Bitcoin developers
+// Copyright (c) 2017-2019 The PIVX Core developers
+// Copyright (c) 2026 The CTEAM Core developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#ifndef PIVX_QT_TRAFFICGRAPHWIDGET_H
+#define PIVX_QT_TRAFFICGRAPHWIDGET_H
+
+#include <QQueue>
+#include <QPointer>
+#include <QWidget>
+
+class ClientModel;
+
+QT_BEGIN_NAMESPACE
+class QPaintEvent;
+class QTimer;
+QT_END_NAMESPACE
+
+class TrafficGraphWidget : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit TrafficGraphWidget(QWidget* parent = 0);
+    void setClientModel(ClientModel* model);
+    int getGraphRangeMins() const;
+
+protected:
+    void paintEvent(QPaintEvent*);
+
+public Q_SLOTS:
+    void updateRates();
+    void setGraphRangeMins(int mins);
+    void clear();
+
+private:
+    void paintPath(QPainterPath& path, QQueue<float>& samples);
+
+    QTimer* timer{nullptr};
+    float fMax;
+    int nMins;
+    QQueue<float> vSamplesIn;
+    QQueue<float> vSamplesOut;
+    quint64 nLastBytesIn;
+    quint64 nLastBytesOut;
+    QPointer<ClientModel> clientModel;
+};
+
+#endif // PIVX_QT_TRAFFICGRAPHWIDGET_H

@@ -1,0 +1,60 @@
+.git/
+.github/
+.DS_Store
+**/.DS_Store
+*.swp
+*.swo
+*.tmp
+*.log
+
+# Local build outputs
+build/
+dist/
+CTEAM.app/
+*.dmg
+background.tiff
+background.tiff.png
+background.tiff@2x.png
+
+# Depends outputs (very large; rebuilt on VPS)
+depends/built/
+depends/work/
+depends/sources/
+depends/*/native/
+depends/*/share/
+depends/*/include/
+depends/*/lib/
+depends/*/lib64/
+depends/*/bin/
+
+# If you rsync just `./depends/`, these patterns still prevent huge uploads
+built/
+work/
+sources/
+*-apple-darwin*/
+*-w64-mingw32*/
+
+# Autotools outputs
+autom4te.cache/
+config.cache
+config.log
+config.status
+configure~
+/Makefile
+/Makefile.in
+src/Makefile
+src/Makefile.in
+src/qt/Makefile
+src/qt/Makefile.in
+src/config/pivx-config.h
+share/qt/Info.plist
+doc/man/Makefile
+params/Makefile
+
+# Object files / libs
+**/*.o
+**/*.a
+**/*.lo
+**/*.la
+**/.deps/
+**/.libs/

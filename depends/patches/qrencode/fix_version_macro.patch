@@ -1,0 +1,23 @@
+Subject: [depends] Fix missing VERSION macro in qrencode 4.1.1
+
+qrencode 4.1.1's autotools config does not expose VERSION in config.h, but
+qrencode.c references it in QRcode_APIVersionString().
+
+Use PACKAGE_VERSION as a fallback so the library builds cleanly.
+
+diff --git a/qrencode.c b/qrencode.c
+--- a/qrencode.c
++++ b/qrencode.c
+@@ -929,7 +929,11 @@ void QRcode_APIVersion(int *major_version, int *minor_version, int *micro_version
+ 
+ char *QRcode_APIVersionString(void)
+ {
++#ifdef VERSION
+ 	return VERSION;
++#else
++	return PACKAGE_VERSION;
++#endif
+ }
+ 
+ void QRcode_clearCache(void)
+ {

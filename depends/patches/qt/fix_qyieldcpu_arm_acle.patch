@@ -1,0 +1,14 @@
+--- a/qtbase/src/corelib/thread/qyieldcpu.h
++++ b/qtbase/src/corelib/thread/qyieldcpu.h
+@@ -8,6 +8,11 @@
+ #include <QtCore/qprocessordetection.h>
+ #include <QtCore/qtconfigmacros.h>
+ 
++#if defined(Q_PROCESSOR_ARM) && __has_include(<arm_acle.h>)
++// Apple clang on current macOS SDKs requires arm_acle.h for __yield().
++#  include <arm_acle.h>
++#endif
++
+ #ifdef Q_CC_MSVC_ONLY
+ // MSVC defines _YIELD_PROCESSOR() in <xatomic.h>, but as that is a private
+ // header, we include the public ones

@@ -1,0 +1,12 @@
+diff --git a/qtbase/src/plugins/platforms/cocoa/qiosurfacegraphicsbuffer.h b/qtbase/src/plugins/platforms/cocoa/qiosurfacegraphicsbuffer.h
+index 9e1dce9..0d82ed3 100644
+--- a/qtbase/src/plugins/platforms/cocoa/qiosurfacegraphicsbuffer.h
++++ b/qtbase/src/plugins/platforms/cocoa/qiosurfacegraphicsbuffer.h
+@@ -39,6 +39,7 @@
+ 
+ #include <qpa/qplatformgraphicsbuffer.h>
+ #include <private/qcore_mac_p.h>
++#include <CoreGraphics/CGColorSpace.h>
+ 
+ QT_BEGIN_NAMESPACE
+ 

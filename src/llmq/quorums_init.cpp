@@ -1,0 +1,94 @@
+// Copyright (c) 2018-2021 The Dash Core developers
+// Copyright (c) 2022 The PIVX Core developers
+// Distributed under the MIT/X11 software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+#include "llmq/quorums_init.h"
+
+#include "bls/bls_worker.h"
+#include "dbwrapper.h"
+#include "llmq/quorums.h"
+#include "llmq/quorums_blockprocessor.h"
+#include "llmq/quorums_debug.h"
+#include "llmq/quorums_dkgsessionmgr.h"
+#include "quorums_chainlocks.h"
+#include "quorums_signing.h"
+#include "quorums_signing_shares.h"
+
+namespace llmq
+{
+
+CBLSWorker* blsWorker;
+CDBWrapper* llmqDb;
+
+void InitLLMQSystem(CEvoDB& evoDb, CScheduler* scheduler, bool unitTests)
+{
+    llmqDb = new CDBWrapper(unitTests ? "" : (GetDataDir() / "llmq"), 1 << 20, unitTests, false, CLIENT_VERSION | ADDRV2_FORMAT);
+    blsWorker = new CBLSWorker();
+
+    quorumDKGDebugManager.reset(new CDKGDebugManager());
+    quorumBlockProcessor.reset(new CQuorumBlockProcessor(evoDb));
+    quorumDKGSessionManager.reset(new CDKGSessionManager(*llmqDb, *blsWorker));
+    quorumManager.reset(new CQuorumManager(evoDb, *blsWorker, *quorumDKGSessionManager));
+    quorumSigSharesManager.reset(new CSigSharesManager());
+    quorumSigningManager.reset(new CSigningManager(*llmqDb, unitTests));
+    chainLocksHandler.reset(new CChainLocksHandler(scheduler));
+}
+
+void DestroyLLMQSystem()
+{
+    chainLocksHandler.reset();
+    quorumSigningManager.reset();
+    quorumSigSharesManager.reset();
+    quorumDKGSessionManager.reset();
+    quorumBlockProcessor.reset();
+    quorumDKGDebugManager.reset();
+    quorumManager.reset();
+    delete blsWorker;
+    blsWorker = nullptr;
+    delete llmqDb;
+    llmqDb = nullptr;
+}
+
+void StartLLMQSystem()
+{
+    if (blsWorker) {
+        blsWorker->Start();
+    }
+    if (quorumDKGSessionManager) {
+        quorumDKGSessionManager->StartThreads();
+    }
+    if (quorumSigSharesManager) {
+        quorumSigSharesManager->RegisterAsRecoveredSigsListener();
+        quorumSigSharesManager->StartWorkerThread();
+    }
+    if (chainLocksHandler) {
+        chainLocksHandler->Start();
+    }
+}
+
+void StopLLMQSystem()
+{
+    if (chainLocksHandler) {
+        chainLocksHandler->Stop();
+    }
+    if (quorumSigSharesManager) {
+        quorumSigSharesManager->StopWorkerThread();
+        quorumSigSharesManager->UnregisterAsRecoveredSigsListener();
+    }
+    if (quorumDKGSessionManager) {
+        quorumDKGSessionManager->StopThreads();
+    }
+    if (blsWorker) {
+        blsWorker->Stop();
+    }
+}
+
+void InterruptLLMQSystem()
+{
+    if (quorumSigSharesManager) {
+        quorumSigSharesManager->Interrupt();
+    }
+}
+
+} // namespace llmq
