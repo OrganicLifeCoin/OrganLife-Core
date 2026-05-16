@@ -15,7 +15,7 @@ MNRow::MNRow(QWidget *parent) :
     setCssProperty(ui->labelAddress, "text-list-body2");
     setCssProperty(ui->labelName, "text-list-title1");
     setCssProperty(ui->labelDate, "text-list-caption-medium");
-    ui->lblDivisory->setStyleSheet("background-color:#bababa;");
+    ui->lblDivisory->setStyleSheet("background-color:#C7C4C2;");
 }
 
 void MNRow::updateView(QString address, const QString& label, QString status, bool wasCollateralAccepted)

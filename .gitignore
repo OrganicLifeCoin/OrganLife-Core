@@ -152,6 +152,7 @@ testnet-data/
 contrib/genesis/mine_genesis_quark
 
 # Local brand/artwork scratch files
+/CTEAMCoin.png
 /logo1776.png
 share/pixmaps/bitcoin*
 

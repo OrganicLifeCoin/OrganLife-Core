@@ -1633,10 +1633,10 @@ void TopBar::showStatusHoverPill(ExpandableButton* button)
     }
 
     statusHoverPillText->setText(text);
-    statusHoverPillText->setStyleSheet(isLightTheme() ? "color:#0F172A; font-weight:500;" : "color:#E5E7EB; font-weight:500;");
+    statusHoverPillText->setStyleSheet(isLightTheme() ? "color:#3A2418; font-weight:500;" : "color:#F0E3D4; font-weight:500;");
     statusHoverPill->setStyleSheet(isLightTheme()
-        ? "#statusHoverPill { background-color: rgba(255,255,255,236); border: 1px solid #CBD5E1; border-radius: 10px; }"
-        : "#statusHoverPill { background-color: rgba(11,18,32,236); border: 1px solid #334155; border-radius: 10px; }");
+        ? "#statusHoverPill { background-color: rgba(255,255,255,236); border: 1px solid #D7C2AE; border-radius: 10px; }"
+        : "#statusHoverPill { background-color: rgba(19,11,8,236); border: 1px solid #6D4F3B; border-radius: 10px; }");
 
     const QRect endRect = computeStatusHoverPillGeometry(button);
     if (!endRect.isValid()) return;

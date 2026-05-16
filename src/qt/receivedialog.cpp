@@ -69,7 +69,7 @@ void ReceiveDialog::updateQr(const QString& address)
     QString error;
 
     // Use QR code with transparent background - theme-aware color
-    QColor qrColor = isLightTheme() ? QColor("#111827") : QColor("#FFFFFF");
+    QColor qrColor = isLightTheme() ? QColor("#3A2418") : QColor("#FFFFFF");
     QColor bgColor(Qt::transparent);
     QPixmap pixmap = encodeToQrModern(uri, error, qrColor, bgColor, 0, 4, 6);
 

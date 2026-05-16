@@ -213,7 +213,7 @@ void ReceiveWidget::updateQr(const QString& address)
     ui->labelQrImg->setText("");
 
     QString error;
-    QColor qrColor = isLightTheme() ? QColor("#111827") : QColor("#FFFFFF");
+    QColor qrColor = isLightTheme() ? QColor("#3A2418") : QColor("#FFFFFF");
     QColor bgColor(Qt::transparent); // Transparent background to blend with container
 
     // Use QR code with transparent background - square modules (classic style)

@@ -459,8 +459,8 @@ void ExpandableButton::paintEvent(QPaintEvent* event)
     const QColor textColor = ui->pushButton->palette().color(QPalette::ButtonText);
     const bool darkTheme = textColor.lightness() > 150;
 
-    const QColor fillStart = darkTheme ? QColor(96, 165, 250, 90) : QColor(59, 130, 246, 64);
-    const QColor fillEnd = darkTheme ? QColor(125, 190, 255, 160) : QColor(59, 130, 246, 120);
+    const QColor fillStart = darkTheme ? QColor(192, 132, 69, 72) : QColor(156, 78, 26, 64);
+    const QColor fillEnd = darkTheme ? QColor(209, 154, 93, 150) : QColor(156, 78, 26, 120);
     QLinearGradient fillGradient(fillRect.topLeft(), fillRect.bottomLeft());
     fillGradient.setColorAt(0.0, fillStart);
     fillGradient.setColorAt(0.55, fillEnd);

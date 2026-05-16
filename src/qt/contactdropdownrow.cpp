@@ -19,7 +19,7 @@ void ContactDropdownRow::init(bool isLightTheme, bool isHover) {
 }
 
 void ContactDropdownRow::update(bool isLightTheme, bool isHover, bool isSelected){
-    ui->lblDivisory->setStyleSheet("background-color:#bababa");
+    ui->lblDivisory->setStyleSheet("background-color:#C7C4C2");
 }
 
 void ContactDropdownRow::setData(QString address, QString label){

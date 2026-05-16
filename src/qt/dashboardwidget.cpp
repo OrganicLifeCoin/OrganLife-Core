@@ -25,7 +25,6 @@
 #include <QPropertyAnimation>
 #include <QScrollBar>
 #include <QTime>
-#include <QLinearGradient>
 #include <QVBoxLayout>
 
 #define DECORATION_SIZE 65
@@ -244,15 +243,18 @@ DashboardWidget::DashboardWidget(PIVXGUI* parent) :
     ui->labelPiv->setVisible(false);
     ui->labelMN->setVisible(false);
     ui->verticalLayout_8->removeItem(ui->horizontalLayout_4);
+    // Brown palette candidate. Previous marker gradients:
+    // light staking #FF8A3D -> #F24A09, light masternode #7D7877 -> #22254A,
+    // dark staking #A78BFA -> #F24A09, dark masternode #C4B5FD -> #7C3AED.
     const auto initialMarkerStyle = [](bool stakingMarker) {
         if (isLightTheme()) {
             return stakingMarker
-                ? QStringLiteral("background:qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #60A5FA, stop:1 #1D4ED8);border:none;border-radius:4px;")
-                : QStringLiteral("background:qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #FCA5A5, stop:1 #B91C1C);border:none;border-radius:4px;");
+                ? QStringLiteral("background:#9C4E1A;border:none;border-radius:4px;")
+                : QStringLiteral("background:#3A2418;border:none;border-radius:4px;");
         }
         return stakingMarker
-            ? QStringLiteral("background:qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #5A89BE, stop:1 #264A78);border:none;border-radius:4px;")
-            : QStringLiteral("background:qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #D08A96, stop:1 #7C3543);border:none;border-radius:4px;");
+            ? QStringLiteral("background:#E5A15E;border:none;border-radius:4px;")
+            : QStringLiteral("background:#B69B82;border:none;border-radius:4px;");
     };
     ui->labelSquarePiv->setStyleSheet(initialMarkerStyle(true));
     ui->labelSquareMN->setStyleSheet(initialMarkerStyle(false));
@@ -726,54 +728,29 @@ void DashboardWidget::changeChartColors()
     QColor gridY;
     QColor pivHintColor;
     QColor mnHintColor;
-    QColor pivBaseColor;
-    QColor mnBaseColor;
-    QColor pivGradientStart;
-    QColor pivGradientEnd;
-    QColor mnGradientStart;
-    QColor mnGradientEnd;
-    QLinearGradient pivGradient(0.0, 0.0, 0.0, 1.0);
-    QLinearGradient mnGradient(0.0, 0.0, 0.0, 1.0);
-    pivGradient.setCoordinateMode(QGradient::ObjectBoundingMode);
-    mnGradient.setCoordinateMode(QGradient::ObjectBoundingMode);
+    // Brown palette candidate. Previous chart anchors:
+    // light #DFE1E2/#FAF7F5/#F24A09/#22254A, dark #3A2C52/#100B1E/#A78BFA.
     if (isLightTheme()) {
-        gridLineColorX = QColor("#E5E7EB");
-        gridY = QColor("#E5E7EB");
-        linePenColor = QColor("#94A3B8");
-        labelColor = QColor("#475569");
-        backgroundColor = QColor("#F8FAFC");
-        pivHintColor = QColor("#1E3A8A");
-        mnHintColor = QColor("#B22234");
-        pivBaseColor = QColor("#1D4ED8");
-        mnBaseColor = QColor("#B91C1C");
-        pivGradientStart = QColor("#60A5FA");
-        pivGradientEnd = QColor("#1D4ED8");
-        mnGradientStart = QColor("#FCA5A5");
-        mnGradientEnd = QColor("#B91C1C");
+        gridLineColorX = QColor("#E8DCCF");
+        gridY = QColor("#E8DCCF");
+        linePenColor = QColor("#A78F7C");
+        labelColor = QColor("#8A7667");
+        backgroundColor = QColor("#FBF3E8");
+        pivHintColor = QColor("#9C4E1A");
+        mnHintColor = QColor("#3A2418");
         axisY->setGridLineColor(gridY);
-        axisY->setMinorGridLineColor(QColor("#F1F5F9"));
+        axisY->setMinorGridLineColor(QColor("#F3E5D6"));
     } else {
-        gridLineColorX = QColor("#1F2937");
-        gridY = QColor("#1F2937");
-        linePenColor = QColor("#334155");
-        labelColor = QColor("#94A3B8");
-        backgroundColor = QColor("#0B1220");
-        pivHintColor = QColor("#8FB5DE");
-        mnHintColor = QColor("#D295A1");
-        pivBaseColor = QColor("#3E6C9F");
-        mnBaseColor = QColor("#A14E5E");
-        pivGradientStart = QColor("#5A89BE");
-        pivGradientEnd = QColor("#264A78");
-        mnGradientStart = QColor("#D08A96");
-        mnGradientEnd = QColor("#7C3543");
+        gridLineColorX = QColor("#4A3022");
+        gridY = QColor("#4A3022");
+        linePenColor = QColor("#6D4F3B");
+        labelColor = QColor("#D8C2AA");
+        backgroundColor = QColor("#130B08");
+        pivHintColor = QColor("#E5A15E");
+        mnHintColor = QColor("#B69B82");
         axisY->setGridLineColor(gridY);
-        axisY->setMinorGridLineColor(QColor("#111827"));
+        axisY->setMinorGridLineColor(QColor("#1C100B"));
     }
-
-    pivGradient.setColorAt(0.0, pivGradientStart);
-    pivGradient.setColorAt(1.0, pivGradientEnd);
-    mnGradient.setColorAt(0.0, mnGradientStart);
-    mnGradient.setColorAt(1.0, mnGradientEnd);
 
     axisX->setGridLineColor(gridLineColorX);
     axisX->setLinePenColor(linePenColor);
@@ -786,22 +763,19 @@ void DashboardWidget::changeChartColors()
     chart->setPlotAreaBackgroundPen(QPen(QColor(0, 0, 0, 0)));
     ui->labelPiv->setStyleSheet(QString("color:%1;").arg(pivHintColor.name()));
     ui->labelMN->setStyleSheet(QString("color:%1;").arg(mnHintColor.name()));
-    const auto gradientMarkerStyle = [](const QColor& topColor, const QColor& bottomColor) {
-        return QString(
-            "background:qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 %1, stop:1 %2);"
-            "border:none;border-radius:4px;")
-            .arg(topColor.name(), bottomColor.name());
+    const auto markerStyle = [](const QColor& color) {
+        return QString("background:%1;border:none;border-radius:4px;").arg(color.name());
     };
-    ui->labelSquarePiv->setStyleSheet(gradientMarkerStyle(pivGradientStart, pivGradientEnd));
-    ui->labelSquareMN->setStyleSheet(gradientMarkerStyle(mnGradientStart, mnGradientEnd));
+    ui->labelSquarePiv->setStyleSheet(markerStyle(pivHintColor));
+    ui->labelSquareMN->setStyleSheet(markerStyle(mnHintColor));
     if (set0) {
-        set0->setBrush(pivGradient);
-        set0->setColor(pivBaseColor);
+        set0->setBrush(QBrush(pivHintColor));
+        set0->setColor(pivHintColor);
         set0->setBorderColor(QColor(0, 0, 0, 0));
     }
     if (set1) {
-        set1->setBrush(mnGradient);
-        set1->setColor(mnBaseColor);
+        set1->setBrush(QBrush(mnHintColor));
+        set1->setColor(mnHintColor);
         set1->setBorderColor(QColor(0, 0, 0, 0));
     }
 }

@@ -627,7 +627,7 @@ void CoinControlDialog::updateLabels()
     }
 
     // turn labels "red"
-    ui->labelCoinControlLowOutput->setStyleSheet((t.fDust) ? "color:red;" : "");                                      // Dust = "yes"
+    ui->labelCoinControlLowOutput->setStyleSheet((t.fDust) ? "color:#F84444;" : "");                                      // Dust = "yes"
 
     // tool tips
     QString toolTip3 = tr("This label turns red, if recipient receives an amount smaller than %1 (transparent) / %2 (shield)."

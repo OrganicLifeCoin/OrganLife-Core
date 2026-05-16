@@ -1,29 +1,29 @@
-<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1029.74 348.79" style="background-image: none !important;" nighteye="active"><style xmlns="">                    *::-webkit-scrollbar-track-piece {                        background-color:rgba(255, 255, 255, 0.2) !important;                    }                    *::-webkit-scrollbar-track {                        background-color:rgba(255, 255, 255, 0.3) !important;                    }                    *::-webkit-scrollbar-thumb {                        background-color:rgba(255, 255, 255, 0.5) !important;                    }                    a { color: rgb(140, 140, 250); }                    .pdfViewer,                    embed[type="application/pdf"] {                        filter:invert(90%);                    }</style><style xmlns="" id="nighteyedefaultcss">html {
-                            color:#bfbfbf !important;
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1029.74 348.79" style="background-image: none !important;" nighteye="active"><style xmlns="">                    *::-webkit-scrollbar-track-piece {                        background-color:rgba(255, 255, 255, 0.2) !important;                    }                    *::-webkit-scrollbar-track {                        background-color:rgba(255, 255, 255, 0.3) !important;                    }                    *::-webkit-scrollbar-thumb {                        background-color:rgba(255, 255, 255, 0.5) !important;                    }                    a { color: rgb(156, 78, 26); }                    .pdfViewer,                    embed[type="application/pdf"] {                        filter:invert(90%);                    }</style><style xmlns="" id="nighteyedefaultcss">html {
+                            color:#D7C2AE !important;
                             background-image:none !important;
-                            background:#1f1f1f !important;
+                            background:#130B08 !important;
                         }
                         body,
                         body &gt; .container {
-                            background-color:#1f1f1f;
+                            background-color:#130B08;
                             background-image:none !important;
                         }
                         input, select, textarea, button {
-                            color:#bfbfbf;
-                            background-color:#1f1f1f;
-                            border-color: #616161 !important;
+                            color:#D7C2AE;
+                            background-color:#130B08;
+                            border-color: #8A7667 !important;
                         }
                         input[type="radio"]::before,
                         input[type="radio"]::after {
-                            background-color: #616161 !important;
+                            background-color: #8A7667 !important;
                         }
                         text {
-                            fill:#bfbfbf;
+                            fill:#D7C2AE;
                         }
                         font {
-                            color:#bfbfbf;
+                            color:#D7C2AE;
                         }
-                        </style><style xmlns="">                        .NIGHTEYE_Filter {                            width:100%; height:100%;                            position:fixed;                            left:0; top:0;                            pointer-events:none;                            z-index:4000000000;                        }                        .NIGHTEYE_YellowFilter {                            background:rgba(255, 255, 0, 0.15);                            opacity:0;                        }                        .NIGHTEYE_BlueFilter {                            background:rgba(0, 0, 255, 0.15);                            opacity:0;                        }                        .NIGHTEYE_DimFilter {                            background:rgba(0, 0, 0, 0.5);                            opacity:0;                        }                        .NIGHTEYE_TransformZ {                            transform:translateZ(0);                        }</style><script xmlns=""/>
+                        </style><style xmlns="">                        .NIGHTEYE_Filter {                            width:100%; height:100%;                            position:fixed;                            left:0; top:0;                            pointer-events:none;                            z-index:4000000000;                        }                        .NIGHTEYE_YellowFilter {                            background:rgba(201, 130, 61, 0.15);                            opacity:0;                        }                        .NIGHTEYE_BlueFilter {                            background:rgba(156, 78, 26, 0.15);                            opacity:0;                        }                        .NIGHTEYE_DimFilter {                            background:rgba(17, 19, 38, 0.5);                            opacity:0;                        }                        .NIGHTEYE_TransformZ {                            transform:translateZ(0);                        }</style><script xmlns=""/>
 <style type="text/css">
 	.st0{fill:url(#SVGID_1_);}
 	.st1{fill:url(#SVGID_2_);}
@@ -35,26 +35,26 @@
 	<g>
 		<g>
 			<linearGradient id="SVGID_1_" gradientUnits="userSpaceOnUse" x1="31.4679" y1="184.856" x2="270.145" y2="184.856">
-				<stop offset="0" style="stop-color:#2A1B42"/>
-				<stop offset="1" style="stop-color:#4D3077"/>
+				<stop offset="0" style="stop-color:#3A2418"/>
+				<stop offset="1" style="stop-color:#C83B08"/>
 			</linearGradient>
 			<path class="st0" d="M32.98,54.12c-0.95,1.27-1.51,2.84-1.51,4.53v163c0,38.2,80.01,78.6,116.51,93.38     c1.81,0.73,3.84,0.74,5.65,0.01c20.85-8.4,55.82-25.14,81.94-45.05c2.03-1.59,4.2-3.18,6.08-4.78     c6.89-5.62,12.91-11.47,17.63-17.45C151.02,234.03,62.66,156.55,32.98,54.12z"/>
 			<linearGradient id="SVGID_2_" gradientUnits="userSpaceOnUse" x1="32.9786" y1="140.486" x2="270.145" y2="140.486">
-				<stop offset="0" style="stop-color:#4D3077"/>
-				<stop offset="1" style="stop-color:#662D91"/>
+				<stop offset="0" style="stop-color:#C83B08"/>
+				<stop offset="1" style="stop-color:#C9823D"/>
 			</linearGradient>
 			<path class="st1" d="M265.18,239.05c1.26-2.28,2.31-4.57,3.11-6.87c0.9-2.58,1.49-5.18,1.74-7.77c0.08-0.87,0.12-1.73,0.12-2.6     V58.65c0-0.47-0.04-0.92-0.12-1.37c-0.16-0.89-0.48-1.73-0.93-2.48c-0.22-0.38-0.48-0.74-0.76-1.07     c-1.14-1.33-2.73-2.27-4.57-2.57l-6.5-1.04L152.07,33.29c-0.4-0.06-0.8-0.1-1.2-0.1c-0.4,0-0.8,0.03-1.2,0.1l-101,16.15     l-10.83,1.73c-2.01,0.32-3.73,1.42-4.87,2.95c29.68,102.42,118.04,179.91,226.3,193.65c0.34-0.43,0.69-0.86,1.01-1.29     C261.77,244.55,264.5,240.27,265.18,239.05z"/>
 			<g>
 				<g>
 					<linearGradient id="SVGID_3_" gradientUnits="userSpaceOnUse" x1="150.7965" y1="174.3927" x2="293.8144" y2="174.3927">
-						<stop offset="0" style="stop-color:#4D3077"/>
-						<stop offset="1" style="stop-color:#662D91"/>
+						<stop offset="0" style="stop-color:#C83B08"/>
+						<stop offset="1" style="stop-color:#C9823D"/>
 					</linearGradient>
 					<path class="st2" d="M275.3,27.35L154.36,7.99c-1.15-0.18-2.31-0.28-3.48-0.28c-0.02,0-0.05,0-0.09,0V21.5       c0.03,0,0.06,0,0.09,0c0.43,0,0.87,0.03,1.3,0.1l120.94,19.36c3.98,0.64,6.91,4.07,6.91,8.1v176.67c0,3.75-0.71,7.5-2.01,11.23       c-0.87,2.49-2,4.98-3.37,7.44c-0.73,1.33-3.7,5.96-5.29,8.06c-5.26,6.95-12.2,13.76-20.19,20.28       c-2.04,1.72-4.39,3.45-6.58,5.17c-28.28,21.56-66.15,39.69-88.73,48.78c-0.98,0.39-2.02,0.59-3.05,0.59c-0.01,0-0.01,0-0.02,0       v13.78c0.01,0,0.01,0,0.02,0c2.82,0,5.58-0.53,8.2-1.59c26.18-10.54,64.08-29.37,91.93-50.6c0.05-0.04,0.11-0.08,0.16-0.12       c0.69-0.54,1.4-1.08,2.1-1.63c1.57-1.2,3.19-2.45,4.77-3.78c9.19-7.51,16.72-15.1,22.38-22.57c2-2.64,5.33-7.84,6.36-9.71       c1.76-3.18,3.21-6.4,4.32-9.57c1.84-5.29,2.78-10.59,2.78-15.77V49.06C293.81,38.2,286.03,29.07,275.3,27.35z"/>
 				</g>
 				<linearGradient id="SVGID_4_" gradientUnits="userSpaceOnUse" x1="7.7988" y1="174.3935" x2="150.7965" y2="174.3935">
-					<stop offset="0" style="stop-color:#2A1B42"/>
-					<stop offset="1" style="stop-color:#4D3077"/>
+					<stop offset="0" style="stop-color:#3A2418"/>
+					<stop offset="1" style="stop-color:#C83B08"/>
 				</linearGradient>
 				<path class="st3" d="M150.02,327.25c-0.77-0.08-1.54-0.26-2.27-0.56c-39.53-16-126.17-59.75-126.17-101.11V49.07      c0-4.03,2.93-7.47,6.91-8.1l11.72-1.87L149.59,21.6c0.13-0.02,0.87-0.09,1.21-0.1V7.72c-0.51,0.02-2.58,0.15-3.38,0.27      L38.04,25.48l-11.72,1.87C15.59,29.07,7.8,38.2,7.8,49.07v176.51c0,13.03,5.88,26.48,17.48,39.98      c8.83,10.28,21.22,20.87,36.8,31.48c33.1,22.53,69.98,38.17,80.49,42.43c2.38,0.96,4.88,1.49,7.44,1.59      c0.26,0.01,0.52,0.02,0.78,0.02v-13.78C150.54,327.29,150.28,327.27,150.02,327.25z"/>
 			</g>

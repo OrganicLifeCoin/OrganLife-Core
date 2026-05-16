@@ -277,9 +277,11 @@ BITCOIN_QT_H = \
 
 RES_ICONS = \
   qt/res/icons/bitcoin.ico \
+  qt/res/icons/bitcoin.icns \
   qt/res/icons/bitcoin.png \
   qt/res/icons/bitcoin_testnet.ico \
   qt/res/icons/bitcoin_testnet.png \
+  qt/res/icons/bitcoin_regtest.ico \
   qt/res/icons/bitcoin_regtest.png \
   qt/res/icons/lock_closed.png \
   qt/res/icons/lock_open.png \
@@ -301,12 +303,16 @@ RES_ICONS = \
   qt/res/images/ic-wallet-status-locked.svg \
   qt/res/images/bg-splash.svg \
   qt/res/images/bg-splash.png \
+  qt/res/images/img-logo-cteam.png \
+  qt/res/images/img-logo-cteam@2x.png \
+  qt/res/images/img-logo-cteam@3x.png \
   qt/res/images/ic-check-mint.svg \
   qt/res/images/ic-nav-dashboard-hover.svg \
   qt/res/images/ic-wallet-status-staking.svg \
   qt/res/images/ic-check-peers-off.svg \
   qt/res/images/ic-nav-dashboard.svg \
   qt/res/images/ic-wallet-status-unlocked.svg \
+  qt/res/images/img-nav-logo-cteam.png \
   qt/res/images/ic-check-peers.svg \
   qt/res/images/ic-nav-master-active.svg \
   qt/res/images/ic-watch-password-white.svg \
@@ -386,6 +392,7 @@ RES_ICONS = \
   qt/res/images/ic-radio-liliac-on.svg \
   qt/res/images/img-empty-staking-off.svg \
   qt/res/images/ic-arrow-drop-down.svg \
+  qt/res/images/ic-coin-cteam.png \
   qt/res/images/ic-coin-piv.svg \
   qt/res/images/ic-receive-off.svg \
   qt/res/images/img-empty-staking-on.svg \

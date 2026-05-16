@@ -51,11 +51,11 @@ ProposalCard::ProposalCard(QWidget *parent) :
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     shadow->setBlurRadius(36.0);
     shadow->setOffset(0.0, 10.0);
-    shadow->setColor(QColor(10, 25, 47, 38));
+    shadow->setColor(QColor(58, 36, 24, 38));
 #else
     shadow->setBlurRadius(30.0);
     shadow->setOffset(0.0, 8.0);
-    shadow->setColor(QColor(10, 25, 47, 28));
+    shadow->setColor(QColor(58, 36, 24, 28));
 #endif
     setGraphicsEffect(shadow);
 

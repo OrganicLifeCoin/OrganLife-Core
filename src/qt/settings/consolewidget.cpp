@@ -377,22 +377,22 @@ void SettingsConsoleWidget::changeTheme(bool isLightTheme, QString &theme)
     // Set default style sheet
     if (isLightTheme) {
         ui->messagesWidget->document()->setDefaultStyleSheet(
-                "table { color: #707070;  }"
-                "td.time { color: #808080; padding-top: 3px; } "
-                "td.message { color: #707070;font-family: Courier, Courier New, Lucida Console, monospace; font-size: 12px; } " // Todo: Remove fixed font-size
-                "td.cmd-request { color: #1D4ED8; } "
-                "td.cmd-error { color: red; } "
-                ".secwarning { color: red; }"
-                "b { color: #707070; } ");
+                "table { color: #8A7667;  }"
+                "td.time { color: #8A7667; padding-top: 3px; } "
+                "td.message { color: #8A7667;font-family: Courier, Courier New, Lucida Console, monospace; font-size: 12px; } " // Todo: Remove fixed font-size
+                "td.cmd-request { color: #9C4E1A; } "
+                "td.cmd-error { color: #F84444; } "
+                ".secwarning { color: #F84444; }"
+                "b { color: #3A2418; } ");
     } else {
         ui->messagesWidget->document()->setDefaultStyleSheet(
-                "table { color: #FFFFFF; }"
-                "td.time { color: #808080; padding-top: 3px; } "
-                "td.message { color: #FFFFFF;font-family: Courier, Courier New, Lucida Console, monospace; font-size: 12px; } " // Todo: Remove fixed font-size
-                "td.cmd-request { color: #60A5FA; } "
-                "td.cmd-error { color: #F87171; } "
-                ".secwarning { color: #F87171; }"
-                "b { color: #FFFFFF; } ");
+                "table { color: #E8DCCF; }"
+                "td.time { color: #A78F7C; padding-top: 3px; } "
+                "td.message { color: #E8DCCF;font-family: Courier, Courier New, Lucida Console, monospace; font-size: 12px; } " // Todo: Remove fixed font-size
+                "td.cmd-request { color: #C9823D; } "
+                "td.cmd-error { color: #F84444; } "
+                ".secwarning { color: #F84444; }"
+                "b { color: #E8DCCF; } ");
     }
     updateStyle(ui->messagesWidget);
 }

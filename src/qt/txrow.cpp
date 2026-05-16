@@ -52,8 +52,8 @@ void TxRow::updateStatus(bool isLightTheme, bool isHover, bool isSelected)
     }
 
     const QString dividerColor = isLightTheme
-            ? (isSelected ? QStringLiteral("#BFDBFE") : QStringLiteral("#D9E7FF"))
-            : (isSelected ? QStringLiteral("rgba(96, 165, 250, 0.32)") : QStringLiteral("rgba(96, 165, 250, 0.16)"));
+            ? (isSelected ? QStringLiteral("#F2D4B8") : QStringLiteral("#EAD2BE"))
+            : (isSelected ? QStringLiteral("rgba(192, 132, 69, 0.34)") : QStringLiteral("rgba(192, 132, 69, 0.18)"));
     ui->lblDivisory->setStyleSheet(QStringLiteral("background-color:%1;").arg(dividerColor));
 }
 

@@ -54,7 +54,7 @@ QPixmap encodeToQr(const QString& str, QString& errorStr, const QColor& qrColor 
 
 QPixmap encodeToQrModern(const QString& str,
                          QString& errorStr,
-                         const QColor& qrColor = QColor("#111827"),
+                         const QColor& qrColor = QColor("#3A2418"),
                          const QColor& bgColor = Qt::white,
                          int moduleRadius = 3,
                          int quietZone = 4,

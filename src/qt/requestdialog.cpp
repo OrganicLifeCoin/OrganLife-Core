@@ -166,7 +166,7 @@ void RequestDialog::updateQr(const QString& str)
     ui->labelQrImg->setText("");
     QString error;
 
-    QColor qrColor("#111827");
+    QColor qrColor("#3A2418");
     QColor bgColor(Qt::transparent);
     // Use QR code with transparent background - square modules (classic style)
     QPixmap pixmap = encodeToQrModern(uri, error, qrColor, bgColor, 0, 4, 6);

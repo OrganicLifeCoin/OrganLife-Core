@@ -42,7 +42,7 @@ public:
 protected:
     void initializeGL() override {
         initializeOpenGLFunctions();
-        glClearColor(0.1f, 0.0f, 0.2f, 1.0f);
+        glClearColor(0.07f, 0.04f, 0.03f, 1.0f);
         initShaders();
         qDebug() << "BackgroundOrbsWidget: initialized";
     }
@@ -84,14 +84,14 @@ private:
             "    vec2 uv = gl_FragCoord.xy / u_resolution.xy;\n"
             "    float aspect = u_resolution.x / u_resolution.y;\n"
             "    uv.x *= aspect;\n"
-            "    vec3 color = vec3(0.04, 0.07, 0.13);\n"
+            "    vec3 color = vec3(0.07, 0.04, 0.03);\n"
             "    float t = u_time * 0.15;\n"
             "    vec2 p1 = vec2(0.5*aspect+0.4*cos(t*0.8), 0.5+0.3*sin(t*1.1));\n"
-            "    color += vec3(0.15,0.05,0.4)*(0.2/(length(uv-p1)*length(uv-p1)+0.2));\n"
+            "    color += vec3(0.46,0.25,0.11)*(0.2/(length(uv-p1)*length(uv-p1)+0.2));\n"
             "    vec2 p2 = vec2(0.3*aspect+0.3*sin(t*1.3), 0.7+0.2*cos(t*0.9));\n"
-            "    color += vec3(0.05,0.15,0.5)*(0.15/(length(uv-p2)*length(uv-p2)+0.15));\n"
+            "    color += vec3(0.22,0.13,0.08)*(0.15/(length(uv-p2)*length(uv-p2)+0.15));\n"
             "    vec2 p3 = vec2(0.8*aspect+0.2*cos(t*1.5), 0.3+0.4*sin(t*0.7));\n"
-            "    color += vec3(0.0,0.2,0.3)*(0.18/(length(uv-p3)*length(uv-p3)+0.18));\n"
+            "    color += vec3(0.38,0.19,0.08)*(0.18/(length(uv-p3)*length(uv-p3)+0.18));\n"
             "    gl_FragColor = vec4(color, 1.0);\n"
             "}");
         program->link();
@@ -113,7 +113,7 @@ public:
 protected:
     void paintEvent(QPaintEvent*) override {
         QPainter painter(this);
-        painter.fillRect(rect(), QColor(10, 18, 33));
+        painter.fillRect(rect(), QColor(19, 11, 8));
     }
 
 private:

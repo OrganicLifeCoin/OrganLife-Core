@@ -65,9 +65,9 @@ WelcomeContentWidget::WelcomeContentWidget(QWidget *parent) :
 
     // position
     backButton->move(backX, backY);
-    backButton->setStyleSheet("background: url(://ic-arrow-white-left); background-repeat:no-repeat;background-position:center;border:0;background-color:#3B82F6;color:#3B82F6;border-radius:8px;");
+    backButton->setStyleSheet("background: url(://ic-arrow-white-left); background-repeat:no-repeat;background-position:center;border:0;background-color:#9C4E1A;color:#9C4E1A;border-radius:8px;");
     nextButton->move(nextX, nextY);
-    nextButton->setStyleSheet("background: url(://ic-arrow-white-right);background-repeat:no-repeat;background-position:center;border:0;background-color:#3B82F6;color:#3B82F6;border-radius:8px;");
+    nextButton->setStyleSheet("background: url(://ic-arrow-white-right);background-repeat:no-repeat;background-position:center;border:0;background-color:#9C4E1A;color:#9C4E1A;border-radius:8px;");
 
     if (pos == 0) {
         backButton->setVisible(false);

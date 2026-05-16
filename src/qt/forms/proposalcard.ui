@@ -343,7 +343,7 @@
             <item>
              <widget class="QLabel" name="labelNo">
               <property name="styleSheet">
-               <string notr="true">color:#4D4D4D;</string>
+               <string notr="true">color:#5E4A3C;</string>
               </property>
               <property name="text">
                <string notr="true">N/A</string>
@@ -366,7 +366,7 @@
             <item>
              <widget class="QLabel" name="labelYes">
               <property name="styleSheet">
-               <string notr="true">color:#1D4ED8;</string>
+               <string notr="true">color:#9C4E1A;</string>
               </property>
               <property name="text">
                <string notr="true">N/A</string>

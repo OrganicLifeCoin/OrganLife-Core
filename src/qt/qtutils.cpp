@@ -1165,12 +1165,12 @@ void updateStyle(QWidget* widget)
 QColor getRowColor(bool isLightTheme, bool isHovered, bool isSelected)
 {
     if (isSelected) {
-        return isLightTheme ? QColor(29, 78, 216, 38) : QColor(96, 165, 250, 64);
+        return isLightTheme ? QColor(156, 78, 26, 38) : QColor(192, 132, 69, 58);
     }
     if (isHovered) {
-        return isLightTheme ? QColor(15, 23, 42, 18) : QColor(255, 255, 255, 28);
+        return isLightTheme ? QColor(58, 36, 24, 18) : QColor(209, 154, 93, 22);
     }
-    return isLightTheme ? QColor("#ffffff") : QColor("#0B1220");
+    return isLightTheme ? QColor("#ffffff") : QColor("#130B08");
 }
 
 void initComboBox(QComboBox* combo, QLineEdit* lineEdit, QString cssClass, bool setView)

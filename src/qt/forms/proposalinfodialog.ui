@@ -334,7 +334,7 @@ background:transparent;
                    </size>
                   </property>
                   <property name="styleSheet">
-                   <string notr="true">background-color:#bababa;</string>
+                   <string notr="true">background-color:#C7C4C2;</string>
                   </property>
                   <property name="text">
                    <string/>
@@ -414,7 +414,7 @@ background:transparent;
                    </size>
                   </property>
                   <property name="styleSheet">
-                   <string notr="true">background-color:#bababa;</string>
+                   <string notr="true">background-color:#C7C4C2;</string>
                   </property>
                   <property name="text">
                    <string/>
@@ -496,7 +496,7 @@ background:transparent;
                    </size>
                   </property>
                   <property name="styleSheet">
-                   <string notr="true">background-color:#bababa;</string>
+                   <string notr="true">background-color:#C7C4C2;</string>
                   </property>
                   <property name="text">
                    <string/>
@@ -648,7 +648,7 @@ background:transparent;
                    </palette>
                   </property>
                   <property name="styleSheet">
-                   <string notr="true">background-color:#bababa;</string>
+                   <string notr="true">background-color:#C7C4C2;</string>
                   </property>
                   <property name="text">
                    <string/>
@@ -754,7 +754,7 @@ background:transparent;
                    </size>
                   </property>
                   <property name="styleSheet">
-                   <string notr="true">background-color:#bababa;</string>
+                   <string notr="true">background-color:#C7C4C2;</string>
                   </property>
                   <property name="text">
                    <string/>
@@ -834,7 +834,7 @@ background:transparent;
                    </size>
                   </property>
                   <property name="styleSheet">
-                   <string notr="true">background-color:#bababa;</string>
+                   <string notr="true">background-color:#C7C4C2;</string>
                   </property>
                   <property name="text">
                    <string/>
@@ -977,7 +977,7 @@ background:transparent;
                    </size>
                   </property>
                   <property name="styleSheet">
-                   <string notr="true">background-color:#bababa;</string>
+                   <string notr="true">background-color:#C7C4C2;</string>
                   </property>
                   <property name="text">
                    <string/>

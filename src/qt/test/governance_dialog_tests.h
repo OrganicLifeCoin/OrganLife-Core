@@ -70,7 +70,7 @@ private Q_SLOTS:
     void voteDialogActionButtonsUseDedicatedModernClasses();
     void voteDialogBodyUsesModernPanelClasses();
     void voteDialogModernBodyCssExistsInBothThemes();
-    void voteDialogHeaderUsesPremiumBlueToneInBothThemes();
+    void voteDialogHeaderUsesCteamAccentToneInBothThemes();
     void voteDialogCloseButtonUsesThemeAwareIconClass();
     void voteDialogHeaderTitleUsesThemeAwareReadableColor();
     void containerDialogHeaderTitleUsesReadableDarkThemeColor();

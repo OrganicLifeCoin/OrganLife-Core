@@ -424,22 +424,22 @@ void RPCConsole::clear()
     // Set default style sheet (QTextDocument defaults to black text unless explicitly set).
     if (isLightTheme()) {
         ui->messagesWidget->document()->setDefaultStyleSheet(
-            "table { color: #334155; }"
-            "td.time { color: #64748B; padding-top: 3px; } "
-            "td.message { color: #334155; font-family: Courier, Courier New, Lucida Console, monospace; font-size: 12px; } "
-            "td.cmd-request { color: #1D4ED8; } "
-            "td.cmd-error { color: #DC2626; } "
-            ".secwarning { color: #DC2626; }"
-            "b { color: #0F172A; } ");
+            "table { color: #5E4A3C; }"
+            "td.time { color: #8A7667; padding-top: 3px; } "
+            "td.message { color: #5E4A3C; font-family: Courier, Courier New, Lucida Console, monospace; font-size: 12px; } "
+            "td.cmd-request { color: #9C4E1A; } "
+            "td.cmd-error { color: #C83B08; } "
+            ".secwarning { color: #C83B08; }"
+            "b { color: #3A2418; } ");
     } else {
         ui->messagesWidget->document()->setDefaultStyleSheet(
-            "table { color: #E5E7EB; }"
-            "td.time { color: #94A3B8; padding-top: 3px; } "
-            "td.message { color: #E5E7EB; font-family: Courier, Courier New, Lucida Console, monospace; font-size: 12px; } "
-            "td.cmd-request { color: #60A5FA; } "
-            "td.cmd-error { color: #F87171; } "
-            ".secwarning { color: #F87171; }"
-            "b { color: #E5E7EB; } ");
+            "table { color: #F0E3D4; }"
+            "td.time { color: #B69B82; padding-top: 3px; } "
+            "td.message { color: #F0E3D4; font-family: Courier, Courier New, Lucida Console, monospace; font-size: 12px; } "
+            "td.cmd-request { color: #C08445; } "
+            "td.cmd-error { color: #F84444; } "
+            ".secwarning { color: #F84444; }"
+            "b { color: #F0E3D4; } ");
     }
 
 #ifdef Q_OS_MAC

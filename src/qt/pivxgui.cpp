@@ -655,7 +655,7 @@ void PIVXGUI::updateContentCornerArc()
 void PIVXGUI::updateContentCornerArcStyle()
 {
     if (!contentCornerArc) return;
-    const QColor arcColor = isLightTheme() ? QColor("#EFF6FF") : QColor("#0A162D");
+    const QColor arcColor = isLightTheme() ? QColor("#FFF4E8") : QColor("#170D0A");
     contentCornerArc->setFillColor(arcColor);
 }
 
@@ -675,10 +675,10 @@ void PIVXGUI::showHide(bool show)
         op->setVisible(false);
         opEnabled = false;
     } else {
-        QColor bg("#000000");
+        QColor bg("#3A2418");
         bg.setAlpha(200);
         if (!isLightTheme()) {
-            bg = QColor("#00000000");
+            bg = QColor("#130B08");
             bg.setAlpha(150);
         }
 

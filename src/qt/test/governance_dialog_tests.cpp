@@ -2985,9 +2985,9 @@ void GovernanceDialogTests::voteDialogModernBodyCssExistsInBothThemes()
     QVERIFY(cssHasModernVoteBodyStyles(darkSource));
 }
 
-void GovernanceDialogTests::voteDialogHeaderUsesPremiumBlueToneInBothThemes()
+void GovernanceDialogTests::voteDialogHeaderUsesCteamAccentToneInBothThemes()
 {
-    const auto cssHasBlueHeader = [](const QString& cssPath, const QString& expectedColor) {
+    const auto cssHasAccentHeader = [](const QString& cssPath, const QString& expectedColor) {
         QFile f(cssPath);
         if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return false;
         const QString css = QString::fromUtf8(f.readAll());
@@ -3002,8 +3002,8 @@ void GovernanceDialogTests::voteDialogHeaderUsesPremiumBlueToneInBothThemes()
     const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
     const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
 
-    QVERIFY(cssHasBlueHeader(lightSource, "#DBEAFE"));
-    QVERIFY(cssHasBlueHeader(darkSource, "#60A5FA"));
+    QVERIFY(cssHasAccentHeader(lightSource, "#F2D4B8"));
+    QVERIFY(cssHasAccentHeader(darkSource, "#C9823D"));
 }
 
 void GovernanceDialogTests::voteDialogCloseButtonUsesThemeAwareIconClass()
@@ -3063,7 +3063,7 @@ void GovernanceDialogTests::voteDialogHeaderTitleUsesThemeAwareReadableColor()
     const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
     const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
 
-    QVERIFY(cssHasTitleSpec(lightSource, "#1E3A8A"));
+    QVERIFY(cssHasTitleSpec(lightSource, "#3A2418"));
     QVERIFY(cssHasTitleSpec(darkSource, "#FFFFFF"));
 }
 

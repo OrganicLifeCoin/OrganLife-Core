@@ -80,7 +80,7 @@ static void InitMessage(Splash* splash, const std::string& message){
                               Qt::QueuedConnection,
                               Q_ARG(QString, QString::fromStdString(message)),
                               Q_ARG(int, Qt::AlignBottom | Qt::AlignHCenter),
-                              Q_ARG(QColor, QColor(100, 100, 100)));
+                              Q_ARG(QColor, QColor(125, 120, 119)));
 }
 
 static void ShowProgress(Splash* splash, const std::string& title, int nProgress){

@@ -64,7 +64,7 @@ HelpMessageDialog::HelpMessageDialog(QWidget* parent, bool about) : ContainerDia
 
         // Make URLs clickable
         static const QRegularExpression uri(QStringLiteral("<(.*?)>"));
-        licenseInfoHTML.replace(uri, "<a style='color: #60A5FA;text-decoration:none'  href=\"\\1\">\\1</a>");
+        licenseInfoHTML.replace(uri, "<a style='color: #9C4E1A;text-decoration:none'  href=\"\\1\">\\1</a>");
         // Replace newlines with HTML breaks
         licenseInfoHTML.replace("\n\n", "<br><br>");
 
