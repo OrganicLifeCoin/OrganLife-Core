@@ -299,11 +299,11 @@ OperationResult GovernanceModel::validatePropURL(const QString& url) const
 OperationResult GovernanceModel::validatePropAmount(CAmount amount) const
 {
     if (amount < PROPOSAL_MIN_AMOUNT) { // Future: move constant to a budget interface.
-        return {false, strprintf(_("Amount below the minimum of %s 1776$"), FormatMoney(PROPOSAL_MIN_AMOUNT))};
+        return {false, strprintf(_("Amount below the minimum of %s CTEAM"), FormatMoney(PROPOSAL_MIN_AMOUNT))};
     }
 
     if (amount > PROPOSAL_MAX_AMOUNT) {
-        return {false, strprintf(_("Amount exceeding the maximum allowed of %s 1776$"), FormatMoney(PROPOSAL_MAX_AMOUNT))};
+        return {false, strprintf(_("Amount exceeding the maximum allowed of %s CTEAM"), FormatMoney(PROPOSAL_MAX_AMOUNT))};
     }
     return {true};
 }

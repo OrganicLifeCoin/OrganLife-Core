@@ -370,7 +370,7 @@ void AskPassphraseDialog::warningMessage()
             "<qt>" +
             tr("Your wallet is now encrypted. "
                "Remember that encrypting your wallet cannot fully protect "
-               "your 1776$s from being stolen by malware infecting your computer.") +
+               "your CTEAM from being stolen by malware infecting your computer.") +
             "<br><br><b>" +
             tr("IMPORTANT: Any previous backups you have made of your wallet file "
                "should be replaced with the newly generated, encrypted wallet file. "

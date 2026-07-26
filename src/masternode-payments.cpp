@@ -277,7 +277,9 @@ bool IsBlockPayeeValid(const CBlock& block, const CBlockIndex* pindexPrev)
     // votes (status = TrxValidationStatus::VoteThreshold) for a finalized budget were found
     // In all cases a masternode will get the payment for this block
 
-    if (!Params().GetConsensus().NetworkUpgradeActive(nBlockHeight, Consensus::UPGRADE_POS)) {
+    // Regtest allows legacy masternode payouts before PoS for unit-test coverage.
+    if (!Params().IsRegTestNet() &&
+        !Params().GetConsensus().NetworkUpgradeActive(nBlockHeight, Consensus::UPGRADE_POS)) {
         CScript legacyPayee;
         if (masternodePayments.GetLegacyMasternodePayee(nBlockHeight, legacyPayee)) {
             for (const CTxOut& out : txNew.vout) {
@@ -312,6 +314,31 @@ void FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTransaction& txCoin
         // ... or there's no budget with enough votes, then pay a masternode
         masternodePayments.FillBlockPayee(txCoinbase, txCoinstake, pindexPrev, fProofOfStake);
     }
+}
+
+bool CanBuildRequiredMasternodePayment(const CBlockIndex* pindexPrev)
+{
+    if (!pindexPrev)
+        return false;
+
+    if (Params().IsRegTestNet())
+        return true;
+
+    const int nHeight = pindexPrev->nHeight + 1;
+    if (!Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_POS))
+        return true;
+
+    if (sporkManager.IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS) && g_budgetman.IsBudgetPaymentBlock(nHeight)) {
+        CAmount budgetPayment{0};
+        if (g_budgetman.GetExpectedPayeeAmount(nHeight, budgetPayment) && budgetPayment > 0)
+            return true;
+    }
+
+    if (GetMasternodePayment(nHeight) <= 0)
+        return true;
+
+    std::vector<CTxOut> vecMnOuts;
+    return masternodePayments.GetMasternodeTxOuts(pindexPrev, vecMnOuts) && !vecMnOuts.empty();
 }
 
 std::string GetRequiredPaymentsString(int nBlockHeight)
@@ -387,11 +414,6 @@ bool CMasternodePayments::GetLegacyMasternodePayee(int nHeight, CScript& payee) 
     const uint256& hash = mnodeman.GetHashAtHeight(nHeight - 1);
     MasternodeRef winningNode = mnodeman.GetCurrentMasterNode(hash);
     if (!winningNode) {
-        // Keep chain liveness on tiny/test networks: if all MNs are temporarily non-enabled,
-        // deterministically pick among known MNs instead of producing an invalid 0-value payout.
-        winningNode = mnodeman.GetCurrentMasterNode(hash, /*onlyEnabled=*/false);
-    }
-    if (!winningNode) {
         return false;
     }
 
@@ -419,19 +441,34 @@ static void SubtractMnPaymentFromCoinstake(CMutableTransaction& txCoinstake, CAm
     }
 }
 
+static void EnsureEmptyCoinbaseOutput(CMutableTransaction& txCoinbase)
+{
+    if (!txCoinbase.vout.empty())
+        return;
+
+    txCoinbase.vout.emplace_back();
+    txCoinbase.vout[0].SetEmpty();
+}
+
 void CMasternodePayments::FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTransaction& txCoinstake, const CBlockIndex* pindexPrev, bool fProofOfStake) const
 {
+    const int nHeight = pindexPrev->nHeight + 1;
+    const bool fPayCoinstake = fProofOfStake && !Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0);
+    const bool fPayCoinbase = fProofOfStake && !fPayCoinstake;
+
+    // Starting from CTEAM v6.0 masternode and budgets are paid in the coinbase tx.
+    // Keep a valid empty coinbase if there is no payee yet on a small or unsynced network.
+    if (fPayCoinbase) txCoinbase.vout.clear();
+
     std::vector<CTxOut> vecMnOuts;
     if (!GetMasternodeTxOuts(pindexPrev, vecMnOuts)) {
+        if (fPayCoinbase) EnsureEmptyCoinbaseOutput(txCoinbase);
         return;
     }
-
-    // Starting from CTEAM v6.0 masternode and budgets are paid in the coinbase tx
-    const int nHeight = pindexPrev->nHeight + 1;
-    bool fPayCoinstake = fProofOfStake && !Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0);
-
-    // if PoS block pays the coinbase, clear it first
-    if (fProofOfStake && !fPayCoinstake) txCoinbase.vout.clear();
+    if (vecMnOuts.empty()) {
+        if (fPayCoinbase) EnsureEmptyCoinbaseOutput(txCoinbase);
+        return;
+    }
 
     const int initial_cstake_outs = txCoinstake.vout.size();
 
@@ -909,44 +946,65 @@ void CMasternodePayments::RecordWinnerVote(const COutPoint& outMasternode, int n
     mapMasternodesLastVote[outMasternode] = nBlockHeight;
 }
 
-bool IsCoinbaseValueValid(const CTransactionRef& tx, CAmount nBudgetAmt, CValidationState& _state)
+bool IsCoinbaseValueValid(const CTransactionRef& tx, CAmount nBudgetAmt, CValidationState& _state, const CBlockIndex* pindexPrev)
 {
     assert(tx->IsCoinBase());
-    if (g_tiertwo_sync_state.IsSynced()) {
-        const CAmount nCBaseOutAmt = tx->GetValueOut();
-        if (nBudgetAmt > 0) {
-            // Superblock
-            if (nCBaseOutAmt != nBudgetAmt) {
-                const std::string strError = strprintf("%s: invalid coinbase payment for budget (%s vs expected=%s)",
-                                                       __func__, FormatMoney(nCBaseOutAmt), FormatMoney(nBudgetAmt));
-                return _state.DoS(100, error(strError.c_str()), REJECT_INVALID, "bad-superblock-cb-amt");
-            }
-            return true;
-        } else {
-            // regular block
-            int nHeight = mnodeman.GetBestHeight();
-            CAmount nMnAmt = GetMasternodePayment(nHeight);
-            // if enforcement is disabled, there could be no masternode payment
-            bool sporkEnforced = sporkManager.IsSporkActive(SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT);
-            const std::string strError = strprintf("%s: invalid coinbase payment for masternode (%s vs expected=%s)",
-                                                   __func__, FormatMoney(nCBaseOutAmt), FormatMoney(nMnAmt));
-
-            // If masternode payment amount is 0 (e.g., during upgrades, initial sync, or edge cases),
-            // accept any coinbase amount (validation will handle block value checks separately)
-            if (nMnAmt == 0) {
-                LogPrint(BCLog::MASTERNODE, "%s: Masternode payment is 0 at height %d, skipping payment validation\n",
-                         __func__, nHeight);
-                return true;
-            }
-
-            if (sporkEnforced && nCBaseOutAmt != nMnAmt) {
-                return _state.DoS(100, error(strError.c_str()), REJECT_INVALID, "bad-cb-amt");
-            }
-            if (!sporkEnforced && nCBaseOutAmt > nMnAmt) {
-                return _state.DoS(100, error(strError.c_str()), REJECT_INVALID, "bad-cb-amt-spork8-disabled");
-            }
-            return true;
+    assert(pindexPrev);
+    const int nHeight = pindexPrev->nHeight + 1;
+    const CAmount nCBaseOutAmt = tx->GetValueOut();
+    if (nBudgetAmt > 0) {
+        // Superblock
+        if (nCBaseOutAmt != nBudgetAmt) {
+            const std::string strError = strprintf("%s: invalid coinbase payment for budget (%s vs expected=%s)",
+                                                   __func__, FormatMoney(nCBaseOutAmt), FormatMoney(nBudgetAmt));
+            return _state.DoS(100, error("%s", strError.c_str()), REJECT_INVALID, "bad-superblock-cb-amt");
         }
+        return true;
+    }
+
+    // Regular block. The exact payee cannot be reconstructed while tier-two
+    // data is still syncing, but the required total payment amount is known.
+    const CAmount requiredMasternodePayment = GetMasternodePayment(nHeight);
+    if (!g_tiertwo_sync_state.IsSynced()) {
+        if (requiredMasternodePayment > 0 && nCBaseOutAmt != requiredMasternodePayment) {
+            const std::string strError = strprintf("%s: invalid coinbase payment while masternode payee is syncing (%s vs expected=%s)",
+                                                   __func__, FormatMoney(nCBaseOutAmt), FormatMoney(requiredMasternodePayment));
+            return _state.DoS(100, error("%s", strError.c_str()), REJECT_INVALID, "bad-cb-amt");
+        }
+        return true;
+    }
+
+    std::vector<CTxOut> vecMnOuts;
+    const bool havePayee = masternodePayments.GetMasternodeTxOuts(pindexPrev, vecMnOuts);
+    if (!havePayee || vecMnOuts.empty()) {
+        if (requiredMasternodePayment > 0) {
+            const std::string strError = strprintf("%s: missing masternode payee for required coinbase payment (%s vs expected=%s)",
+                                                   __func__, FormatMoney(nCBaseOutAmt), FormatMoney(requiredMasternodePayment));
+            return _state.DoS(100, error("%s", strError.c_str()), REJECT_INVALID, "bad-cb-amt");
+        }
+        const CAmount expectedCoinbase = 0;
+        if (nCBaseOutAmt != expectedCoinbase) {
+            const std::string strError = strprintf("%s: invalid coinbase payment without masternode payee (%s vs expected=%s)",
+                                                   __func__, FormatMoney(nCBaseOutAmt), FormatMoney(expectedCoinbase));
+            return _state.DoS(100, error("%s", strError.c_str()), REJECT_INVALID, "bad-cb-amt");
+        }
+        return true;
+    }
+
+    CAmount nMnAmt = 0;
+    for (const CTxOut& out : vecMnOuts) {
+        nMnAmt += out.nValue;
+    }
+    // if enforcement is disabled, there could be no masternode payment
+    bool sporkEnforced = sporkManager.IsSporkActive(SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT);
+    const std::string strError = strprintf("%s: invalid coinbase payment for masternode (%s vs expected=%s)",
+                                           __func__, FormatMoney(nCBaseOutAmt), FormatMoney(nMnAmt));
+
+    if (sporkEnforced && nCBaseOutAmt != nMnAmt) {
+        return _state.DoS(100, error("%s", strError.c_str()), REJECT_INVALID, "bad-cb-amt");
+    }
+    if (!sporkEnforced && nCBaseOutAmt > nMnAmt) {
+        return _state.DoS(100, error("%s", strError.c_str()), REJECT_INVALID, "bad-cb-amt-spork8-disabled");
     }
     return true;
 }

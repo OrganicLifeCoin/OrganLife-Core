@@ -1,6 +1,6 @@
 package=libXdmcp
 $(package)_version=1.1.4
-$(package)_download_path=https://www.x.org/releases/individual/lib/
+$(package)_download_path=https://distfiles.macports.org/xorg-libXdmcp
 $(package)_file_name=$(package)-$($(package)_version).tar.xz
 $(package)_sha256_hash=2dce5cc317f8f0b484ec347d87d81d552cdbebb178bd13c5d8193b6b7cd6ad00
 $(package)_dependencies=xproto

@@ -13,8 +13,9 @@
 
 #include "amount.h"
 #include "blockassembler.h"
+#include "chainparams.h"
 #include "consensus/params.h"
-#include "masternode-sync.h"
+#include "masternode-payments.h"
 #include "net.h"
 #include "net_processing.h"
 #include "policy/feerate.h"
@@ -117,10 +118,151 @@ bool CheckForCoins(CWallet* pwallet, std::vector<CStakeableOutput>* availableCoi
     // control the amount of times the client will check for mintable coins (every block)
     {
         WAIT_LOCK(g_best_block_mutex, lock);
-        if (g_best_block == pwallet->pStakerStatus->GetLastHash())
+        if (pwallet->pStakerStatus->GetLastTip() && g_best_block == pwallet->pStakerStatus->GetLastHash())
             return lastResult;
     }
     return pwallet->StakeableCoins(availableCoins);
+}
+
+static constexpr int MIN_STAKING_PEER_EVIDENCE = 2;
+
+int GetMinimumStakingPeerEvidence(const CChainParams& params)
+{
+    if (params.IsRegTestNet()) return 0;
+    if (params.IsTestnet()) return 1;
+    return MIN_STAKING_PEER_EVIDENCE;
+}
+
+bool RequiresNearTipStakingPeerEvidence(const CChainParams& params)
+{
+    return !params.IsRegTestNet();
+}
+
+static bool CanStakeDuringStaleTipInitialDownload()
+{
+    if (!IsInitialBlockDownload())
+        return false;
+
+    int localHeight = -1;
+    int bestHeaderHeight = -1;
+    int64_t bestHeaderTime = 0;
+    {
+        LOCK(cs_main);
+        if (fImporting || fReindex || chainActive.Tip() == nullptr || pindexBestHeader == nullptr)
+            return false;
+
+        localHeight = chainActive.Height();
+        bestHeaderHeight = pindexBestHeader->nHeight;
+        bestHeaderTime = pindexBestHeader->GetBlockTime();
+    }
+
+    if (localHeight < bestHeaderHeight)
+        return false;
+    if (bestHeaderTime >= GetTime() - nMaxTipAge)
+        return false;
+    if (!g_connman)
+        return false;
+
+    std::vector<CNodeStats> vstats;
+    g_connman->GetNodeStats(vstats);
+
+    static constexpr int PEER_HEIGHT_TOLERANCE = 2;
+    const int minPeerEvidence = GetMinimumStakingPeerEvidence(Params());
+    const bool requireNearTip = RequiresNearTipStakingPeerEvidence(Params());
+    int usablePeers = 0;
+    int nearTipPeers = 0;
+    int peersAhead = 0;
+
+    for (const CNodeStats& stats : vstats) {
+        if (stats.m_masternode_connection || stats.m_masternode_probe_connection)
+            continue;
+        if (stats.nVersion <= 0 || stats.nStartingHeight <= 0)
+            continue;
+
+        int peerHeight = stats.nStartingHeight;
+        CNodeStateStats nodeState;
+        if (GetNodeStateStats(stats.nodeid, nodeState)) {
+            if (nodeState.nSyncHeight > 0)
+                peerHeight = std::max(peerHeight, nodeState.nSyncHeight);
+            if (nodeState.nCommonHeight > 0)
+                peerHeight = std::max(peerHeight, nodeState.nCommonHeight);
+        }
+
+        usablePeers++;
+        if (peerHeight > localHeight + PEER_HEIGHT_TOLERANCE)
+            peersAhead++;
+        if (peerHeight >= localHeight - PEER_HEIGHT_TOLERANCE)
+            nearTipPeers++;
+    }
+
+    const bool canStake = usablePeers >= minPeerEvidence &&
+                          (!requireNearTip || nearTipPeers >= minPeerEvidence) &&
+                          peersAhead == 0;
+    if (canStake) {
+        static int64_t nLastLog = 0;
+        if (GetTime() - nLastLog > 60) {
+            LogPrintf("Staking allowed during stale-tip IBD: localHeight=%d bestHeaderHeight=%d peers=%d nearTipPeers=%d\n",
+                      localHeight, bestHeaderHeight, usablePeers, nearTipPeers);
+            nLastLog = GetTime();
+        }
+    }
+    return canStake;
+}
+
+static bool HasSufficientStakingPeers(const CBlockIndex* pindexPrev)
+{
+    if (!Params().MiningRequiresPeers())
+        return true;
+
+    if (!g_connman || !pindexPrev)
+        return false;
+
+    std::vector<CNodeStats> vstats;
+    g_connman->GetNodeStats(vstats);
+
+    static constexpr int PEER_HEIGHT_TOLERANCE = 2;
+    const int minPeerEvidence = GetMinimumStakingPeerEvidence(Params());
+    const bool requireNearTip = RequiresNearTipStakingPeerEvidence(Params());
+    int usablePeers = 0;
+    int nearTipPeers = 0;
+    int peersAhead = 0;
+
+    for (const CNodeStats& stats : vstats) {
+        if (stats.m_masternode_connection || stats.m_masternode_probe_connection)
+            continue;
+        if (stats.nVersion <= 0)
+            continue;
+
+        int peerHeight = stats.nStartingHeight;
+        CNodeStateStats nodeState;
+        if (GetNodeStateStats(stats.nodeid, nodeState)) {
+            if (nodeState.nSyncHeight > 0)
+                peerHeight = std::max(peerHeight, nodeState.nSyncHeight);
+            if (nodeState.nCommonHeight > 0)
+                peerHeight = std::max(peerHeight, nodeState.nCommonHeight);
+        }
+        if (peerHeight < 0)
+            continue;
+
+        usablePeers++;
+        if (peerHeight > pindexPrev->nHeight + PEER_HEIGHT_TOLERANCE)
+            peersAhead++;
+        if (peerHeight >= pindexPrev->nHeight - PEER_HEIGHT_TOLERANCE)
+            nearTipPeers++;
+    }
+
+    const bool canStake = usablePeers >= minPeerEvidence &&
+                          (!requireNearTip || nearTipPeers >= minPeerEvidence) &&
+                          peersAhead == 0;
+    if (!canStake) {
+        static int64_t nLastLog = 0;
+        if (GetTime() - nLastLog > 30) {
+            LogPrintf("Staking paused: need %d usable peer(s)%s, have usable=%d nearTip=%d peersAhead=%d height=%d\n",
+                      minPeerEvidence, requireNearTip ? " near tip" : "", usablePeers, nearTipPeers, peersAhead, pindexPrev->nHeight);
+            nLastLog = GetTime();
+        }
+    }
+    return canStake;
 }
 
 void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
@@ -187,15 +329,37 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
             // update fStakeableCoins
             fStakeableCoins = CheckForCoins(pwallet, &availableCoins, fStakeableCoins);
 
-            while ((g_connman && g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) == 0 && Params().MiningRequiresPeers())
-                    || IsInitialBlockDownload()
-                    || pwallet->IsLocked() || !fStakeableCoins
-                    || IsForkRecoveryPauseStaking()
-                    || masternodeSync.NotCompleted()) {
+            while (true) {
+                pindexPrev = GetChainTip();
+                if (!pindexPrev) {
+                    MilliSleep(nSpacingMillis);
+                    continue;
+                }
+
+                const bool fCanStakeDuringStaleTipIBD = CanStakeDuringStaleTipInitialDownload();
+                const bool fCoreChainReady = !IsInitialBlockDownload() || fCanStakeDuringStaleTipIBD;
+                if (HasSufficientStakingPeers(pindexPrev) &&
+                        fCoreChainReady &&
+                        !pwallet->IsLocked() &&
+                        fStakeableCoins &&
+                        !IsForkRecoveryPauseStaking() &&
+                        CanBuildRequiredMasternodePayment(pindexPrev)) {
+                    break;
+                }
+
                 MilliSleep(5000);
                 // Do another check here to ensure fStakeableCoins is updated
                 if (!fStakeableCoins) {
                     fStakeableCoins = CheckForCoins(pwallet, &availableCoins, fStakeableCoins);
+                }
+            }
+
+            if (Params().IsTestnet()) {
+                const int64_t nNextStakeTime = pindexPrev->GetBlockTime() + consensus.nTargetSpacing;
+                const int64_t nWaitSeconds = nNextStakeTime - GetAdjustedTime();
+                if (nWaitSeconds > 0) {
+                    MilliSleep(nWaitSeconds > 5 ? 5000 : nWaitSeconds * 1000);
+                    continue;
                 }
             }
 
@@ -204,6 +368,11 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
                     pwallet->pStakerStatus->GetLastHash() == pindexPrev->GetBlockHash() &&
                     pwallet->pStakerStatus->GetLastTime() >= GetCurrentTimeSlot()) {
                 MilliSleep(2000);
+                continue;
+            }
+
+            if (!HasSufficientStakingPeers(pindexPrev)) {
+                MilliSleep(5000);
                 continue;
             }
 

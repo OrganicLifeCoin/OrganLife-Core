@@ -30,21 +30,11 @@ std::vector <G2Element> G2ElementWrapper::Unwrap(std::vector <js_wrappers::G2Ele
     return signatures;
 }
 
-G2ElementWrapper G2ElementWrapper::FromG2Element(const G2Element &signature) {
-    return G2ElementWrapper(signature);
-}
-
 G2ElementWrapper G2ElementWrapper::FromBytes(val buffer) {
     std::vector <uint8_t> bytes = helpers::toVector(buffer);
     const bls::Bytes bytesView(bytes);
     G2Element sig = G2Element::FromBytes(bytesView);
     return G2ElementWrapper(sig);
-}
-
-G2ElementWrapper G2ElementWrapper::AggregateSigs(val signatureWrappers) {
-    std::vector <G2Element> signatures = G2ElementWrapper::Unwrap(
-            helpers::toVectorFromJSArray<G2ElementWrapper>(signatureWrappers));
-    return G2ElementWrapper::FromG2Element(BasicSchemeMPL().Aggregate(signatures));
 }
 
 G2ElementWrapper G2ElementWrapper::Generator() {

@@ -8,8 +8,8 @@
 #include "uint256.h"
 #include "budget/budgetvote.h"
 
-#include <string>
 #include <list>
+#include <string>
 
 // Future: Decouple UniValue usage. Should be used only in the RPC server files for the inputs/outputs values.
 

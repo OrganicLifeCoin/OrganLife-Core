@@ -1,0 +1,62 @@
+--- a/qtbase/src/gui/CMakeLists.txt
++++ b/qtbase/src/gui/CMakeLists.txt
+@@ -5,6 +5,11 @@
+ qt_find_package(WrapHarfbuzz MODULE PROVIDED_TARGETS WrapHarfbuzz::WrapHarfbuzz)
+ qt_find_package(WrapPNG MODULE PROVIDED_TARGETS WrapPNG::WrapPNG)
+ qt_find_package(WrapFreetype MODULE PROVIDED_TARGETS WrapFreetype::WrapFreetype)
++
++if(WIN32)
++    include(CheckIncludeFileCXX)
++    check_include_file_cxx(d3d12.h QT_HAVE_D3D12_H)
++endif()
+ 
+ if (QT_FEATURE_gui)
+     if(QT_QPA_PLATFORMS)
+@@ -462,12 +467,9 @@
+         platform/windows/qwindowsnativeinterface.cpp
+         platform/windows/qwindowsthemecache.cpp platform/windows/qwindowsthemecache_p.h
+         rhi/qrhid3d11.cpp rhi/qrhid3d11_p.h
+-        rhi/qrhid3d12.cpp rhi/qrhid3d12_p.h
+         rhi/qrhid3dhelpers.cpp rhi/qrhid3dhelpers_p.h
+         rhi/vs_test_p.h
+         rhi/cs_mipmap_p.h rhi/cs_mipmap_3d_p.h
+-        ../3rdparty/D3D12MemoryAllocator/D3D12MemAlloc.h
+-        ../3rdparty/D3D12MemoryAllocator/D3D12MemAlloc.cpp
+         rhi/qdxgivsyncservice_p.h rhi/qdxgivsyncservice.cpp
+         rhi/qdxgihdrinfo_p.h rhi/qdxgihdrinfo.cpp
+         text/windows/qwindowsfontdatabase.cpp text/windows/qwindowsfontdatabase_p.h
+@@ -485,10 +487,20 @@
+         d3d11
+         dxgi
+         dxguid
+-        d3d12
+     NO_UNITY_BUILD_SOURCES
+-        rhi/qrhid3d11.cpp rhi/qrhid3d12.cpp # duplicate aligned() etc
++        rhi/qrhid3d11.cpp # duplicate aligned() etc
+         text/windows/qwindowsfontdatabasebase.cpp # duplicate struct OS2Table
++)
++
++qt_internal_extend_target(Gui CONDITION WIN32 AND QT_HAVE_D3D12_H
++    SOURCES
++        rhi/qrhid3d12.cpp rhi/qrhid3d12_p.h
++        ../3rdparty/D3D12MemoryAllocator/D3D12MemAlloc.h
++        ../3rdparty/D3D12MemoryAllocator/D3D12MemAlloc.cpp
++    PUBLIC_LIBRARIES
++        d3d12
++    NO_UNITY_BUILD_SOURCES
++        rhi/qrhid3d12.cpp # duplicate aligned() etc
+     ATTRIBUTION_FILE_DIR_PATHS
+         ../3rdparty/D3D12MemoryAllocator
+ )
+--- a/qtbase/src/gui/rhi/qrhi.cpp
++++ b/qtbase/src/gui/rhi/qrhi.cpp
+@@ -15,7 +15,9 @@
+ #endif
+ #ifdef Q_OS_WIN
+ #include "qrhid3d11_p.h"
++#if __has_include(<d3d12.h>)
+ #include "qrhid3d12_p.h"
++#endif
+ #endif
+ #if QT_CONFIG(metal)
+ #include "qrhimetal_p.h"

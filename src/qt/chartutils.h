@@ -7,10 +7,14 @@
 #define PIVX_QT_CHARTUTILS_H
 
 #include <algorithm>
+#include <cstdlib>
 #include <cmath>
 #include <iomanip>
+#include <map>
 #include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 struct ChartAxisSpec {
     double top{1.0};
@@ -23,6 +27,25 @@ struct WeekWindow {
     int lastDay{1};
     bool canGoLeft{false};
     bool canGoRight{false};
+};
+
+enum class ChartBucketMode {
+    All,
+    Year,
+    Month
+};
+
+struct ChartStakeSample {
+    int year{0};
+    int month{0};
+    int day{0};
+    long long amount{0};
+    int txType{0};
+};
+
+struct ChartRewardAggregation {
+    std::map<int, std::pair<long long, long long>> amountsBy;
+    bool hasMasternodeRewards{false};
 };
 
 namespace chart {
@@ -159,6 +182,39 @@ inline bool IsMasternodeRewardTypeForChart(const int txType)
     return txType == chart::detail::TX_TYPE_MN_REWARD
             || txType == chart::detail::TX_TYPE_BUDGET_PAYMENT
             || txType == chart::detail::TX_TYPE_GENERATED;
+}
+
+inline int ChartBucketForSample(const ChartStakeSample& sample, const ChartBucketMode mode)
+{
+    switch (mode) {
+    case ChartBucketMode::All:
+        return sample.year;
+    case ChartBucketMode::Year:
+        return sample.month;
+    case ChartBucketMode::Month:
+        return sample.day;
+    }
+    return 0;
+}
+
+inline ChartRewardAggregation AggregateChartRewards(const std::vector<ChartStakeSample>& rows,
+                                                    const ChartBucketMode mode)
+{
+    ChartRewardAggregation result;
+    for (const ChartStakeSample& sample : rows) {
+        const int bucket = ChartBucketForSample(sample, mode);
+        if (bucket <= 0) continue;
+
+        const long long amount = std::llabs(sample.amount);
+        auto& values = result.amountsBy[bucket];
+        if (IsMasternodeRewardTypeForChart(sample.txType)) {
+            values.second += amount;
+            result.hasMasternodeRewards = true;
+        } else {
+            values.first += amount;
+        }
+    }
+    return result;
 }
 
 #endif // PIVX_QT_CHARTUTILS_H

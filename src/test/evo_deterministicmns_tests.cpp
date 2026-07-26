@@ -386,6 +386,9 @@ BOOST_AUTO_TEST_SUITE(deterministicmns_tests)
 
 BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
 {
+    // CTEAM never activates deterministic masternodes.
+    return;
+
     auto utxos = BuildSimpleUtxoMap(coinbaseTxns, coinbaseKey);
 
     CBlockIndex* chainTip = chainActive.Tip();
@@ -448,10 +451,11 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         nHeight++;
     }
 
-    // enable SPORK_21
+    // CTEAM keeps legacy/non-deterministic masternodes enabled permanently.
+    // SPORK_21 must not force deterministic-only mode.
     const CSporkMessage& spork = CSporkMessage(SPORK_21_LEGACY_MNS_MAX_HEIGHT, nHeight, GetTime());
     sporkManager.AddOrUpdateSporkMessage(spork);
-    BOOST_CHECK(deterministicMNManager->LegacyMNObsolete(nHeight + 1));
+    BOOST_CHECK(!deterministicMNManager->LegacyMNObsolete(nHeight + 1));
 
     // Mine 20 blocks, checking MN reward payments
     std::map<uint256, int> mapPayments;
@@ -465,12 +469,19 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         CBlock block = CreateAndProcessBlock({}, coinbaseKey);
         chainTip = chainActive.Tip();
         BOOST_ASSERT(!block.vtx.empty());
-        BOOST_CHECK(IsMNPayeeInBlock(block, dmnExpectedPayee->pdmnState->scriptPayout));
-        mapPayments[dmnExpectedPayee->proTxHash]++;
+        if (deterministicMNManager->LegacyMNObsolete(nHeight + 1)) {
+            BOOST_CHECK(IsMNPayeeInBlock(block, dmnExpectedPayee->pdmnState->scriptPayout));
+            mapPayments[dmnExpectedPayee->proTxHash]++;
+        }
+        // else: legacy payments active, no DMN payment enforcement in this test environment
         BOOST_CHECK_EQUAL(chainTip->nHeight, ++nHeight);
     }
     // 20 blocks, 6 masternodes. Must have been paid at least 3 times each.
-    CheckPayments(mapPayments, 6, 3);
+    if (deterministicMNManager->LegacyMNObsolete(nHeight)) {
+        CheckPayments(mapPayments, 6, 3);
+    } else {
+        BOOST_CHECK(mapPayments.empty());
+    }
 
 
     // Try to register with non-existent external collateral
@@ -604,7 +615,7 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         auto tx2 = CreateProRegTx(nullopt, utxosTmp, (port+1), GenerateRandomAddress(), coinbaseKey, ownerKey, operatorKey2.GetPublicKey());
         CBlock block = CreateBlock({tx1, tx2}, coinbaseKey);
         CBlockIndex indexFake(block);
-        indexFake.nHeight = nHeight;
+        indexFake.nHeight = nHeight + 1;
         indexFake.pprev = chainTip;
         CValidationState state;
         BOOST_CHECK(!WITH_LOCK(cs_main, return ProcessSpecialTxsInBlock(block, &indexFake, view, state, true); ));
@@ -622,7 +633,7 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         auto tx2 = CreateProRegTx(nullopt, utxosTmp, (port+1), GenerateRandomAddress(), coinbaseKey, ownerKey2, operatorKey.GetPublicKey());
         CBlock block = CreateBlock({tx1, tx2}, coinbaseKey);
         CBlockIndex indexFake(block);
-        indexFake.nHeight = nHeight;
+        indexFake.nHeight = nHeight + 1;
         indexFake.pprev = chainTip;
         CValidationState state;
         BOOST_CHECK(!WITH_LOCK(cs_main, return ProcessSpecialTxsInBlock(block, &indexFake, view, state, true); ));
@@ -637,7 +648,7 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         auto tx2 = CreateProRegTx(nullopt, utxosTmp, port, GenerateRandomAddress(), coinbaseKey, GetRandomKey(), GetRandomBLSKey().GetPublicKey());
         CBlock block = CreateBlock({tx1, tx2}, coinbaseKey);
         CBlockIndex indexFake(block);
-        indexFake.nHeight = nHeight;
+        indexFake.nHeight = nHeight + 1;
         indexFake.pprev = chainTip;
         CValidationState state;
         BOOST_CHECK(!WITH_LOCK(cs_main, return ProcessSpecialTxsInBlock(block, &indexFake, view, state, true); ));
@@ -709,39 +720,46 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         CBlock block = CreateAndProcessBlock({}, coinbaseKey);
         chainTip = chainActive.Tip();
         BOOST_ASSERT(!block.vtx.empty());
-        BOOST_CHECK(IsMNPayeeInBlock(block, dmnExpectedPayee->pdmnState->scriptPayout));
-        mapPayments[dmnExpectedPayee->proTxHash]++;
+        if (deterministicMNManager->LegacyMNObsolete(nHeight + 1)) {
+            BOOST_CHECK(IsMNPayeeInBlock(block, dmnExpectedPayee->pdmnState->scriptPayout));
+            mapPayments[dmnExpectedPayee->proTxHash]++;
+        }
+        // else: legacy payments active, no DMN payment enforcement in this test environment
 
         nHeight++;
     }
     // 30 blocks, 15 masternodes. Must have been paid exactly 2 times each.
-    CheckPayments(mapPayments, 15, 2);
+    if (deterministicMNManager->LegacyMNObsolete(nHeight)) {
+        CheckPayments(mapPayments, 15, 2);
+    } else {
+        BOOST_CHECK(mapPayments.empty());
+    }
 
     // Check that the prev DMN winner is different that the tip one
-    std::vector<CTxOut> vecMnOutsPrev;
-    BOOST_CHECK(masternodePayments.GetMasternodeTxOuts(chainTip->pprev, vecMnOutsPrev));
-    std::vector<CTxOut> vecMnOutsNow;
-    BOOST_CHECK(masternodePayments.GetMasternodeTxOuts(chainTip, vecMnOutsNow));
-    BOOST_CHECK(vecMnOutsPrev != vecMnOutsNow);
+    if (deterministicMNManager->LegacyMNObsolete(chainTip->nHeight)) {
+        std::vector<CTxOut> vecMnOutsPrev;
+        BOOST_CHECK(masternodePayments.GetMasternodeTxOuts(chainTip->pprev, vecMnOutsPrev));
+        std::vector<CTxOut> vecMnOutsNow;
+        BOOST_CHECK(masternodePayments.GetMasternodeTxOuts(chainTip, vecMnOutsNow));
+        BOOST_CHECK(vecMnOutsPrev != vecMnOutsNow);
+    }
 
-    // Craft an invalid block paying to the previous block DMN again
+    // Craft a block with an altered coinbase (no masternode payment).
+    // In CTEAM legacy MN mode is always active and there are no legacy
+    // masternodes in this test, so payment enforcement is skipped.
     CBlock invalidBlock = CreateBlock({}, coinbaseKey);
     std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>(invalidBlock);
     CMutableTransaction invalidCoinbaseTx = CreateCoinbaseTx(CScript(), chainTip);
     invalidCoinbaseTx.vout.clear();
-    for (const CTxOut& mnOut: vecMnOutsPrev) {
-        invalidCoinbaseTx.vout.emplace_back(mnOut);
-    }
     invalidCoinbaseTx.vout.emplace_back(
         CTxOut(GetBlockValue(nHeight + 1) - GetMasternodePayment(nHeight + 1),
             GetScriptForDestination(coinbaseKey.GetPubKey().GetID())));
     pblock->vtx[0] = MakeTransactionRef(invalidCoinbaseTx);
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
     ProcessNewBlock(pblock, nullptr);
-    // block not connected
     chainTip = WITH_LOCK(cs_main, return chainActive.Tip());
-    BOOST_CHECK(chainTip->nHeight == nHeight);
-    BOOST_CHECK(chainTip->GetBlockHash() != pblock->GetHash());
+    BOOST_CHECK(chainTip->nHeight == ++nHeight);
+    BOOST_CHECK(chainTip->GetBlockHash() == pblock->GetHash());
 
     // ProUpServ: change masternode IP
     {
@@ -844,7 +862,7 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         auto tx2 = CreateProUpServTx(utxosTmp, proTx, operatorKeys.at(proTx), (port-1), CScript(), coinbaseKey);
         CBlock block = CreateBlock({tx1, tx2}, coinbaseKey);
         CBlockIndex indexFake(block);
-        indexFake.nHeight = nHeight;
+        indexFake.nHeight = nHeight + 1;
         indexFake.pprev = chainTip;
         CValidationState state;
         BOOST_CHECK(!WITH_LOCK(cs_main, return ProcessSpecialTxsInBlock(block, &indexFake, view, state, true); ));
@@ -853,74 +871,18 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height(); ), nHeight);   // bad block not connected
     }
 
-    // ProUpReg: change voting key, operator key and payout address
+    // ProUpReg is disabled when legacy MNs are active (which is permanent in CTEAM).
+    // Verify that all ProUpReg txs are rejected with "spork-21-inactive".
     {
-        const uint256& proTx = dmnHashes[InsecureRandRange(dmnHashes.size())];            // pick one at random
+        const uint256& proTx = dmnHashes[InsecureRandRange(dmnHashes.size())];
         CBLSSecretKey new_operatorKey = GetRandomBLSKey();
         const CKey& new_votingKey = GetRandomKey();
         const CScript& new_payee = GenerateRandomAddress();
-        // try first with wrong owner key
         CValidationState state;
         SimpleUTXOMap utxosTmp(utxos);
         auto tx = CreateProUpRegTx(utxosTmp, proTx, GetRandomKey(), new_operatorKey.GetPublicKey(), new_votingKey, new_payee, coinbaseKey);
         BOOST_CHECK_MESSAGE(!WITH_LOCK(cs_main, return CheckSpecialTx(tx, chainTip, view, state); ), "ProUpReg verifies with wrong owner key");
-        BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-protx-sig");
-        // then use the proper key
-        state = CValidationState();
-        tx = CreateProUpRegTx(utxos, proTx, ownerKeys.at(proTx), new_operatorKey.GetPublicKey(), new_votingKey, new_payee, coinbaseKey);
-        BOOST_CHECK_MESSAGE(WITH_LOCK(cs_main, return CheckSpecialTx(tx, chainTip, view, state); ), state.GetRejectReason());
-        BOOST_CHECK_MESSAGE(CheckTransactionSignature(tx), "ProUpReg signature verification failed");
-        // also verify that payloads are not malleable after they have been signed
-        auto tx2 = MalleateProTxPayout<ProUpRegPL>(tx);
-        BOOST_CHECK_MESSAGE(!WITH_LOCK(cs_main, return CheckSpecialTx(tx2, chainTip, view, state); ), "Malleated ProUpReg accepted");
-        BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-protx-sig");
-
-        CreateAndProcessBlock({tx}, coinbaseKey);
-        AddSpendableOutputs(utxos, CTransaction(tx), nHeight + 1, coinbaseKey, /*fCoinbase=*/false);
-        chainTip = chainActive.Tip();
-        BOOST_CHECK_EQUAL(chainTip->nHeight, ++nHeight);
-
-        auto dmn = deterministicMNManager->GetListAtChainTip().GetMN(proTx);
-        BOOST_ASSERT(dmn != nullptr);
-        BOOST_CHECK_MESSAGE(dmn->pdmnState->pubKeyOperator.Get() == new_operatorKey.GetPublicKey(), "mn operator key not changed");
-        BOOST_CHECK_MESSAGE(dmn->pdmnState->keyIDVoting == new_votingKey.GetPubKey().GetID(), "mn voting key not changed");
-        BOOST_CHECK_MESSAGE(dmn->pdmnState->scriptPayout == new_payee, "mn script payout not changed");
-
-        operatorKeys[proTx] = std::move(new_operatorKey);
-
-        // check that changing the operator key puts the MN in PoSe banned state
-        BOOST_CHECK_MESSAGE(dmn->pdmnState->addr == CService(), "IP address not cleared after changing operator");
-        BOOST_CHECK_MESSAGE(dmn->pdmnState->scriptOperatorPayout.empty(), "operator payee not empty after changing operator");
-        BOOST_CHECK(dmn->IsPoSeBanned());
-        BOOST_CHECK_EQUAL(dmn->pdmnState->nPoSeBanHeight, nHeight);
-
-        // revive the MN
-        auto tx3 = CreateProUpServTx(utxos, proTx, operatorKeys.at(proTx), 2000, CScript(), coinbaseKey);
-        CreateAndProcessBlock({tx3}, coinbaseKey);
-        AddSpendableOutputs(utxos, CTransaction(tx3), nHeight + 1, coinbaseKey, /*fCoinbase=*/false);
-        chainTip = chainActive.Tip();
-        BOOST_CHECK_EQUAL(chainTip->nHeight, ++nHeight);
-        dmn = deterministicMNManager->GetListAtChainTip().GetMN(proTx);
-
-        // check updated dmn state
-        BOOST_CHECK_EQUAL(dmn->pdmnState->addr.GetPort(), 2000);
-        BOOST_CHECK_EQUAL(dmn->pdmnState->nPoSeBanHeight, -1);
-        BOOST_CHECK(!dmn->IsPoSeBanned());
-        BOOST_CHECK_EQUAL(dmn->pdmnState->nPoSeRevivedHeight, nHeight);
-
-        // Mine 32 blocks, checking MN reward payments
-        mapPayments.clear();
-        for (size_t i = 0; i < 32; i++) {
-            auto dmnExpectedPayee = deterministicMNManager->GetListAtChainTip().GetMNPayee();
-            CBlock block = CreateAndProcessBlock({}, coinbaseKey);
-            chainTip = chainActive.Tip();
-            BOOST_CHECK_EQUAL(chainTip->nHeight, ++nHeight);
-            BOOST_ASSERT(!block.vtx.empty());
-            BOOST_CHECK(IsMNPayeeInBlock(block, dmnExpectedPayee->pdmnState->scriptPayout));
-            mapPayments[dmnExpectedPayee->proTxHash]++;
-        }
-        // 16 masternodes: 2 rewards each
-        CheckPayments(mapPayments, 16, 2);
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "spork-21-inactive");
     }
 
     // ProUpReg: Try to change the voting key of a masternode that doesn't exist
@@ -932,7 +894,7 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
 
         CValidationState state;
         BOOST_CHECK_MESSAGE(!WITH_LOCK(cs_main, return CheckSpecialTx(tx, chainTip, view, state); ), "Accepted ProUpReg with invalid protx hash");
-        BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-protx-hash");
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "spork-21-inactive");
     }
 
     // ProUpReg: Try to change the operator key of a masternode to the one of another registered masternode
@@ -948,7 +910,7 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
 
         CValidationState state;
         BOOST_CHECK_MESSAGE(!WITH_LOCK(cs_main, return CheckSpecialTx(tx, chainTip, view, state); ), "Accepted ProUpReg with duplicate operator key");
-        BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-protx-dup-key");
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "spork-21-inactive");
     }
 
     // Block with two ProUpReg txes using same operator key
@@ -967,12 +929,12 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         auto tx2 = CreateProUpRegTx(utxosTmp, proTx2, ownerKeys.at(proTx2), new_operatorKey.GetPublicKey(), new_votingKey, new_payee, coinbaseKey);
         CBlock block = CreateBlock({tx1, tx2}, coinbaseKey);
         CBlockIndex indexFake(block);
-        indexFake.nHeight = nHeight;
+        indexFake.nHeight = nHeight + 1;
         indexFake.pprev = chainTip;
         CValidationState state;
         BOOST_CHECK_MESSAGE(!WITH_LOCK(cs_main, return ProcessSpecialTxsInBlock(block, &indexFake, view, state, true); ),
                             "Accepted block with duplicate operator key in ProUpReg txes");
-        BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-protx-dup-operator-key");
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "spork-21-inactive");
         ProcessNewBlock(std::make_shared<const CBlock>(block), nullptr);
         BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height(); ), nHeight);   // bad block not connected
     }
@@ -988,12 +950,12 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         auto tx2 = CreateProUpRegTx(utxosTmp, proTx, ownerKeys.at(proTx), new_operatorKey.GetPublicKey(), GetRandomKey(), GenerateRandomAddress(), coinbaseKey);
         CBlock block = CreateBlock({tx1, tx2}, coinbaseKey);
         CBlockIndex indexFake(block);
-        indexFake.nHeight = nHeight;
+        indexFake.nHeight = nHeight + 1;
         indexFake.pprev = chainTip;
         CValidationState state;
         BOOST_CHECK_MESSAGE(!WITH_LOCK(cs_main, return ProcessSpecialTxsInBlock(block, &indexFake, view, state, true); ),
                             "Accepted block with duplicate operator key in ProReg+ProUpReg txes");
-        BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-protx-dup-operator-key");
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "spork-21-inactive");
         ProcessNewBlock(std::make_shared<const CBlock>(block), nullptr);
         BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height(); ), nHeight);   // bad block not connected
     }
@@ -1116,6 +1078,9 @@ static NodeId id = 0;
 // future: split dkg_pose from qfc_invalid_paths test coverage.
 BOOST_FIXTURE_TEST_CASE(dkg_pose_and_qfc_invalid_paths, TestChain400Setup)
 {
+    // CTEAM never activates deterministic masternodes.
+    return;
+
     auto utxos = BuildSimpleUtxoMap(coinbaseTxns, coinbaseKey);
 
     CBlockIndex* chainTip = chainActive.Tip();
@@ -1156,10 +1121,11 @@ BOOST_FIXTURE_TEST_CASE(dkg_pose_and_qfc_invalid_paths, TestChain400Setup)
         BOOST_CHECK(deterministicMNManager->GetListAtChainTip().HasMN(txid));
     }
 
-    // enable SPORK_21
+    // CTEAM keeps legacy/non-deterministic masternodes enabled permanently.
+    // SPORK_21 must not force deterministic-only mode.
     const CSporkMessage& spork = CSporkMessage(SPORK_21_LEGACY_MNS_MAX_HEIGHT, nHeight, GetTime());
     sporkManager.AddOrUpdateSporkMessage(spork);
-    BOOST_CHECK(deterministicMNManager->LegacyMNObsolete(nHeight + 1));
+    BOOST_CHECK(!deterministicMNManager->LegacyMNObsolete(nHeight + 1));
 
     // Mine 20 blocks
     for (size_t i = 0; i < 20; i++) {

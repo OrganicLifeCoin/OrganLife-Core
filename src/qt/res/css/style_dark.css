@@ -2780,16 +2780,16 @@ QScrollArea[cssClass="governance-dashboard-surface"] QWidget#qt_scrollarea_viewp
 
 *[cssClass="governance-title"] {
     color: #FFF0E0;
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 700;
 }
 
 *[cssClass="governance-subtitle"] {
     color: #CDBBA8;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 500;
-    padding-top: 6px;
-    padding-bottom: 6px;
+    padding-top: 0px;
+    padding-bottom: 0px;
 }
 
 OptionButton[cssClass="governance-header-cta"] {
@@ -2867,13 +2867,13 @@ OptionButton[cssClass="governance-header-cta"] QWidget#layoutOptions2[hovered="t
 
 OptionButton[cssClass="governance-header-cta"] QLabel[cssClass="governance-cta-title"] {
     color: #FFF0E0;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
 }
 
 OptionButton[cssClass="governance-header-cta"] QLabel[cssClass="governance-cta-subtitle"] {
     color: #CDBBA8;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
 }
 
@@ -5191,7 +5191,7 @@ QScrollArea[cssClass="container"] QWidget#qt_scrollarea_viewport {
     color: #F0E3D4;
 }
 
-/* Keep VoteDialog modern controls authoritative after generic dialog/radio rules above. */
+/* VoteDialog toggle rules must override generic dialog/radio rules above. */
 QFrame#voteDialogShell QRadioButton[cssClass="vote-mode-toggle"] {
     spacing: 0px;
     color: #E7C9A8;

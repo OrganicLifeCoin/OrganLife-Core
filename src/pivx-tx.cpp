@@ -572,8 +572,7 @@ static void MutateTxSign(CMutableTransaction& tx, const std::string& flagStr)
     }
 
     if (fComplete) {
-        // do nothing... for now
-        // perhaps store this for later optional JSON output
+        // Signing completeness is not reported by this command; merged signatures are still applied.
     }
 
     tx = mergedTx;

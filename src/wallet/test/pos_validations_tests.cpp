@@ -6,13 +6,18 @@
 #include "wallet/test/pos_test_fixture.h"
 
 #include "blockassembler.h"
+#include "chainparams.h"
 #include "coincontrol.h"
-#include "util/blockstatecatcher.h"
 #include "blocksignature.h"
 #include "consensus/merkle.h"
+#include "masternode-payments.h"
 #include "primitives/block.h"
 #include "script/sign.h"
 #include "test/util/blocksutil.h"
+#include "tiertwo/tiertwo_sync_state.h"
+#include "util/blockstatecatcher.h"
+#include "util/validation.h"
+#include "validation.h"
 #include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
@@ -88,6 +93,36 @@ BOOST_FIXTURE_TEST_CASE(coinstake_tests, TestPoSChainSetup)
     pblock = std::make_shared<CBlock>(pblocktemplate->block);
     ProcessNewBlock(pblock, nullptr);
     BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), pblock->GetHash());
+}
+
+BOOST_FIXTURE_TEST_CASE(v6_pos_coinbase_without_masternode_payee_is_valid, TestPoSChainSetup)
+{
+    const int nextHeight = WITH_LOCK(cs_main, return chainActive.Height() + 1;);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, nextHeight);
+
+    g_tiertwo_sync_state.ResetData();
+    g_tiertwo_sync_state.SetBlockchainSync(false, 0);
+    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_INITIAL);
+    masternodePayments.Clear();
+
+    std::vector<CStakeableOutput> availableCoins;
+    BOOST_REQUIRE(pwalletMain->StakeableCoins(&availableCoins));
+    std::unique_ptr<CBlockTemplate> pblocktemplate = BlockAssembler(
+            Params(), false).CreateNewBlock(CScript(),
+                                            pwalletMain.get(),
+                                            true,
+                                            &availableCoins,
+                                            true);
+    BOOST_REQUIRE(pblocktemplate);
+
+    const CBlock& block = pblocktemplate->block;
+    BOOST_REQUIRE(block.IsProofOfStake());
+    BOOST_REQUIRE(!block.vtx[0]->vout.empty());
+    BOOST_CHECK(block.vtx[0]->vout[0].IsEmpty());
+
+    CValidationState state;
+    LOCK(cs_main);
+    BOOST_CHECK_MESSAGE(CheckBlock(block, state, true, true, true), FormatStateMessage(state));
 }
 
 CTransaction CreateAndCommitTx(CWallet* pwalletMain, const CTxDestination& dest, CAmount destValue, CCoinControl* coinControl = nullptr)

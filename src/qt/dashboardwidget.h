@@ -6,6 +6,7 @@
 #ifndef PIVX_QT_DASHBOARDWIDGET_H
 #define PIVX_QT_DASHBOARDWIDGET_H
 
+#include "chartutils.h"
 #include "furabstractlistitemdelegate.h"
 #include "furlistrow.h"
 #include "pwidget.h"
@@ -15,6 +16,7 @@
 
 #include <atomic>
 #include <cstdlib>
+#include <vector>
 #include <QWidget>
 #include <QLineEdit>
 #include <QMap>
@@ -186,6 +188,7 @@ private:
     int weekSpanDays{7};
     bool hasMNRewards{false};
     bool chartHasRenderedData{false};
+    std::vector<ChartStakeSample> chartStakeRowsSnapshot;
 
     ChartData* chartData{nullptr};
     bool hasStakes{false};
@@ -198,6 +201,7 @@ private:
     bool refreshChart();
     void tryChartRefresh();
     void updateStakeFilter();
+    void snapshotChartRows();
     QMap<int, std::pair<qint64, qint64>> getAmountBy();
     bool loadChartData(bool withMonthNames);
     void updateAxisX(const QStringList *arg = nullptr);

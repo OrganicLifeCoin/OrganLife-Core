@@ -22,6 +22,9 @@
 #include "wallet/wallet.h"
 
 #include <algorithm>
+#include <iterator>
+#include <memory>
+#include <vector>
 
 #include <QColor>
 #include <QCoreApplication>
@@ -47,8 +50,22 @@ static int column_alignments[] = {
     Qt::AlignRight | Qt::AlignVCenter /* amount */
 };
 
+using TransactionRecordPtr = std::unique_ptr<TransactionRecord>;
+
 // Comparison operator for sort/binary search of model tx list
 struct TxLessThan {
+    bool operator()(const TransactionRecordPtr& a, const TransactionRecordPtr& b) const
+    {
+        return a->hash < b->hash;
+    }
+    bool operator()(const TransactionRecordPtr& a, const uint256& b) const
+    {
+        return a->hash < b;
+    }
+    bool operator()(const uint256& a, const TransactionRecordPtr& b) const
+    {
+        return a < b->hash;
+    }
     bool operator()(const TransactionRecord& a, const TransactionRecord& b) const
     {
         return a.hash < b.hash;
@@ -65,7 +82,7 @@ struct TxLessThan {
 
 struct ConvertTxToVectorResult
 {
-    QList<TransactionRecord> records;
+    std::vector<TransactionRecord> records;
     qint64 nFirstLoadedTxTime{0};
 };
 
@@ -125,13 +142,21 @@ public:
      * As it is in the same order as the CWallet, by definition
      * this is sorted by sha256.
      */
-    QList<TransactionRecord> cachedWallet;
+    std::vector<TransactionRecordPtr> cachedWallet;
 
     /**
      * Time of the oldest transaction loaded into the model.
      * It can or not be the first tx in the wallet, the model only loads the last 20k txs.
      */
     qint64 nFirstLoadedTxTime{0};
+
+    void appendRecords(std::vector<TransactionRecord>& records)
+    {
+        cachedWallet.reserve(cachedWallet.size() + records.size());
+        for (TransactionRecord& rec : records) {
+            cachedWallet.push_back(std::make_unique<TransactionRecord>(std::move(rec)));
+        }
+    }
 
     /* Query entire wallet anew from core.
      */
@@ -185,13 +210,13 @@ public:
             auto res = convertTxToRecords(this, wallet,
                                               std::vector<CWalletTx>(walletTxes.end() - remainingSize, walletTxes.end())
             );
-            cachedWallet.append(res.records);
+            appendRecords(res.records);
             nFirstLoadedTxTime = res.nFirstLoadedTxTime;
 
             for (auto &future : tasks) {
                 future.waitForFinished();
                 ConvertTxToVectorResult convertRes = future.result();
-                cachedWallet.append(convertRes.records);
+                appendRecords(convertRes.records);
                 if (nFirstLoadedTxTime > convertRes.nFirstLoadedTxTime) {
                     nFirstLoadedTxTime = convertRes.nFirstLoadedTxTime;
                 }
@@ -203,7 +228,7 @@ public:
         } else {
             // Single thread flow
             ConvertTxToVectorResult convertRes = convertTxToRecords(this, wallet, walletTxes);
-            cachedWallet.append(convertRes.records);
+            appendRecords(convertRes.records);
             nFirstLoadedTxTime = convertRes.nFirstLoadedTxTime;
         }
     }
@@ -220,16 +245,18 @@ public:
     {
         ConvertTxToVectorResult res;
         for (const auto& tx : walletTxes) {
-            QList<TransactionRecord> records = TransactionRecord::decomposeTransaction(wallet, tx);
-            if (records.isEmpty()) continue;
-            qint64 time = records.first().time;
+            std::vector<TransactionRecord> records = TransactionRecord::decomposeTransaction(wallet, tx);
+            if (records.empty()) continue;
+            qint64 time = records.front().time;
             if (res.nFirstLoadedTxTime == 0 || res.nFirstLoadedTxTime > time) {
                 res.nFirstLoadedTxTime = time;
             }
             for (const auto& rec : records) {
                 tablePriv->emitTxLoaded(rec);
             }
-            res.records.append(records);
+            for (TransactionRecord& rec : records) {
+                res.records.push_back(std::move(rec));
+            }
         }
         return res;
     }
@@ -242,9 +269,9 @@ public:
     void updateWallet(const uint256& hash, int status, bool showTransaction, TransactionRecord& ret)
     {
         // Find bounds of this transaction in model
-        QList<TransactionRecord>::iterator lower = std::lower_bound(
+        std::vector<TransactionRecordPtr>::iterator lower = std::lower_bound(
             cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
-        QList<TransactionRecord>::iterator upper = std::upper_bound(
+        std::vector<TransactionRecordPtr>::iterator upper = std::upper_bound(
             cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
         int lowerIndex = (lower - cachedWallet.begin());
         int upperIndex = (upper - cachedWallet.begin());
@@ -278,16 +305,19 @@ public:
                     }
 
                     // Added -- insert at the right position
-                    QList<TransactionRecord> toInsert =
+                    std::vector<TransactionRecord> toInsert =
                         TransactionRecord::decomposeTransaction(wallet, *wtx);
-                    if (!toInsert.isEmpty()) { /* only if something to insert */
+                    if (!toInsert.empty()) { /* only if something to insert */
                         parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex + toInsert.size() - 1);
-                        int insert_idx = lowerIndex;
-                        for (const TransactionRecord& rec : toInsert) {
-                            cachedWallet.insert(insert_idx, rec);
-                            insert_idx += 1;
-                            ret = rec; // Return record
+                        std::vector<TransactionRecordPtr> recordsToInsert;
+                        recordsToInsert.reserve(toInsert.size());
+                        for (TransactionRecord& rec : toInsert) {
+                            recordsToInsert.push_back(std::make_unique<TransactionRecord>(std::move(rec)));
+                            ret = *recordsToInsert.back(); // Return record
                         }
+                        cachedWallet.insert(cachedWallet.begin() + lowerIndex,
+                                           std::make_move_iterator(recordsToInsert.begin()),
+                                           std::make_move_iterator(recordsToInsert.end()));
                         parent->endInsertRows();
                     }
                 }
@@ -306,20 +336,20 @@ public:
                 // Miscellaneous updates -- nothing to do, status update will take care of this, and is only computed for
                 // visible transactions.
                 for (int i = lowerIndex; i < upperIndex; i++) {
-                    TransactionRecord *rec = &cachedWallet[i];
+                    TransactionRecord *rec = cachedWallet[i].get();
                     const CWalletTx* wtx = wallet->GetWalletTx(rec->hash);
                     // Re-decompose coinstake transactions if block height changed
                     // This ensures masternode rewards are correctly recognized after resync
                     if (wtx && wtx->IsCoinStake() && wtx->m_confirm.block_height != rec->sortBlockHeight) {
-                        QList<TransactionRecord> toUpdate = TransactionRecord::decomposeTransaction(wallet, *wtx);
-                        if (toUpdate.size() > 0 && i + toUpdate.size() <= upperIndex) {
-                            for (int j = 0; j < toUpdate.size(); j++) {
-                                cachedWallet[i + j] = toUpdate[j];
-                                cachedWallet[i + j].sortBlockHeight = wtx->m_confirm.block_height;
+                        std::vector<TransactionRecord> toUpdate = TransactionRecord::decomposeTransaction(wallet, *wtx);
+                        if (toUpdate.size() == static_cast<std::size_t>(upperIndex - lowerIndex)) {
+                            for (std::size_t j = 0; j < toUpdate.size(); j++) {
+                                *cachedWallet[lowerIndex + j] = std::move(toUpdate[j]);
+                                cachedWallet[lowerIndex + j]->sortBlockHeight = wtx->m_confirm.block_height;
                             }
                         }
                     }
-                    rec->status.needsUpdate = true;
+                    cachedWallet[i]->status.needsUpdate = true;
                 }
                 break;
         }
@@ -327,13 +357,13 @@ public:
 
     int size()
     {
-        return cachedWallet.size();
+        return static_cast<int>(cachedWallet.size());
     }
 
     TransactionRecord* index(int cur_block_num, const uint256& cur_block_hash, int idx)
     {
-        if (idx >= 0 && idx < cachedWallet.size()) {
-            TransactionRecord* rec = &cachedWallet[idx];
+        if (idx >= 0 && idx < static_cast<int>(cachedWallet.size())) {
+            TransactionRecord* rec = cachedWallet[idx].get();
             if (!cur_block_hash.IsNull() && rec->statusUpdateNeeded(cur_block_num)) {
                 // If a status update is needed (blocks came in since last check),
                 // update the status of this transaction from the wallet. Otherwise,
@@ -562,7 +592,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord* wtx) const
     case TransactionRecord::SendToShielded:
         return tr("Shielded send to");
     case TransactionRecord::SendToNobody:
-        return tr("Burned 1776$s");
+        return tr("Burned CTEAM");
     default:
         return QString();
     }

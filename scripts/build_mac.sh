@@ -360,8 +360,28 @@ distclean_tree() {
 }
 
 ensure_configure() {
+  local reason=""
   if [[ ! -x "$REPO_ROOT/configure" ]]; then
-    echo "[AUTOGEN] Generating configure..."
+    reason="missing configure"
+  elif [[ "$REPO_ROOT/configure.ac" -nt "$REPO_ROOT/configure" ]]; then
+    reason="configure.ac is newer than configure"
+  elif [[ "$REPO_ROOT/Makefile.am" -nt "$REPO_ROOT/Makefile.in" ]]; then
+    reason="Makefile.am is newer than Makefile.in"
+  else
+    local m4_dir=""
+    local newer_macro=""
+    for m4_dir in "$REPO_ROOT/build-aux/m4" "$REPO_ROOT/m4"; do
+      [[ -d "$m4_dir" ]] || continue
+      newer_macro="$(find "$m4_dir" -type f -newer "$REPO_ROOT/configure" -print -quit)"
+      if [[ -n "$newer_macro" ]]; then
+        reason="$(basename "$newer_macro") is newer than configure"
+        break
+      fi
+    done
+  fi
+
+  if [[ -n "$reason" ]]; then
+    echo "[AUTOGEN] Regenerating configure ($reason)..."
     (cd "$REPO_ROOT" && ./autogen.sh)
   fi
 }
@@ -593,10 +613,10 @@ if [[ -n "$ICON_PNG" ]] && command -v iconutil >/dev/null 2>&1 && command -v sip
   rm -rf "$ICONSET_DIR" 2>/dev/null || true
 fi
 
-# Fallback to the legacy icon if available.
+# Reuse the checked-in app icon if generation from a source PNG is unavailable.
 if [[ -z "$ICON_FILE" ]] && [[ -f "$REPO_ROOT/src/qt/res/icons/bitcoin.icns" ]]; then
-  cp -f "$REPO_ROOT/src/qt/res/icons/bitcoin.icns" "$APP_BUNDLE/Contents/Resources/bitcoin.icns"
-  ICON_FILE="bitcoin.icns"
+  cp -f "$REPO_ROOT/src/qt/res/icons/bitcoin.icns" "$APP_BUNDLE/Contents/Resources/CTEAM.icns"
+  ICON_FILE="CTEAM.icns"
 fi
 
 ICON_PLIST_BLOCK=""

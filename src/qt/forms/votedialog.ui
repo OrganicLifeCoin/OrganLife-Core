@@ -337,7 +337,7 @@
          <item>
           <widget class="QLabel" name="labelAmount">
            <property name="text">
-            <string notr="true">5,000 1776$</string>
+            <string notr="true">5,000 CTEAM</string>
            </property>
           </widget>
          </item>
@@ -510,7 +510,7 @@
               </size>
              </property>
              <property name="placeholderText">
-              <string>Amount in 1776$</string>
+              <string>Amount in CTEAM</string>
              </property>
             </widget>
            </item>
@@ -615,7 +615,7 @@
            <item>
             <widget class="QLabel" name="labelCoinProposalCapValue">
              <property name="text">
-              <string>0.00 1776$</string>
+              <string>0.00 CTEAM</string>
              </property>
             </widget>
            </item>
@@ -649,7 +649,7 @@
            <item>
             <widget class="QLabel" name="labelCoinLockableBalanceValue">
              <property name="text">
-              <string>0.00 1776$</string>
+              <string>0.00 CTEAM</string>
              </property>
             </widget>
            </item>

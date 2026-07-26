@@ -22,9 +22,6 @@ static const bool DEFAULT_SPLASHSCREEN = true;
 /* Invalid field background style */
 #define STYLE_INVALID "background:#FF8080"
 
-/* Brown palette candidate keeps previous values nearby for quick review:
-   previous primary #F24A09, accent #FF8A3D, navy #22254A, neutral #7D7877, silver #DFE1E2. */
-
 /* Transaction list -- unconfirmed transaction */
 #define COLOR_UNCONFIRMED QColor(138, 118, 103)
 /* Transaction list -- negative amount */

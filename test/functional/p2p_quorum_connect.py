@@ -9,17 +9,13 @@ import time
 from random import getrandbits
 from test_framework.test_framework import PivxDMNTestFramework
 from test_framework.bech32 import bech32_str_to_bytes
-from test_framework.mininode import P2PInterface
+from test_framework.mininode import P2PNoVerack
 from test_framework.messages import msg_version
 from test_framework.util import (
     assert_equal,
     hash256,
     wait_until,
 )
-
-class TestP2PConn(P2PInterface):
-    def on_version(self, message):
-        pass
 
 class DMNConnectionTest(PivxDMNTestFramework):
 
@@ -152,7 +148,7 @@ class DMNConnectionTest(PivxDMNTestFramework):
         ###############################################################################
         self.log.info("5) Testing regular node disconnection after receiving an auth DMN connection..")
         self.disconnect_peers(self.miner)
-        no_version_node = self.miner.add_p2p_connection(TestP2PConn(), send_version=False, wait_for_verack=False)
+        no_version_node = self.miner.add_p2p_connection(P2PNoVerack(), send_version=False, wait_for_verack=False)
         self.wait_for_peers_count([self.miner], 1)
         # send the version as it would be a MN
         mn_challenge = getrandbits(256)

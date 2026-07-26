@@ -8,7 +8,7 @@
 #define PIVX_BUDGET_BUDGETPROPOSAL_H
 
 #include "budget/budgetvote.h"
-#include "net.h"
+#include "protocol.h"
 #include "streams.h"
 
 #include <cstdint>
@@ -29,6 +29,7 @@ static const size_t PROP_URL_MAX_SIZE = 64;
 static const size_t PROP_NAME_MAX_SIZE = 20;
 
 class CBudgetManager;
+class CNode;
 
 //
 // Budget Proposal : Contains the masternode votes for each budget
@@ -43,7 +44,7 @@ private:
     std::string strInvalid;
 
     // Functions used inside UpdateValid()/IsWellFormed - setting strInvalid
-    bool IsHeavilyDownvoted(int mnCount) const;
+    bool IsHeavilyDownvoted(int mnCount, int64_t coinWeightFixed) const;
     bool IsHeavilyDownvotedHybrid(int mnCount, int64_t coinWeightFixed) const;
     bool updateExpired(int nCurrentHeight);
     bool CheckStartEnd();
@@ -80,7 +81,7 @@ public:
     void SyncVotes(CNode* pfrom, bool fPartial, int& nInvCount) const;
 
     // sets fValid and strInvalid, returns fValid
-    bool UpdateValid(int nHeight, int mnCount);
+    bool UpdateValid(int nHeight, int mnCount, int64_t coinWeightFixed);
     // Static checks that should be done only once - sets strInvalid
     bool IsWellFormed(const CAmount& nTotalBudget);
     bool IsValid() const  { return fValid; }

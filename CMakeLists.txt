@@ -544,6 +544,8 @@ set(COMMON_SOURCES
         ./src/budget/finalizedbudget.cpp
         ./src/budget/finalizedbudgetvote.cpp
         ./src/budget/budgetutil.cpp
+        ./src/budget/budgetmanager_bridge.h
+        ./src/budget/budgetvoteutil.h
         ./src/consensus/params.cpp
         ./src/consensus/upgrades.cpp
         ./src/chainparams.cpp

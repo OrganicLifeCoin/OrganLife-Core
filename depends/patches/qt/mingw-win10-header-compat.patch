@@ -1,0 +1,206 @@
+--- a/qtbase/src/gui/rhi/qdxgihdrinfo.cpp
++++ b/qtbase/src/gui/rhi/qdxgihdrinfo.cpp
+@@ -6,6 +6,19 @@
+ 
+ QT_BEGIN_NAMESPACE
+ 
++namespace {
++
++constexpr DISPLAYCONFIG_DEVICE_INFO_TYPE QtDisplayConfigDeviceInfoGetSdrWhiteLevel =
++        static_cast<DISPLAYCONFIG_DEVICE_INFO_TYPE>(11);
++
++struct QtDisplayConfigSdrWhiteLevel
++{
++    DISPLAYCONFIG_DEVICE_INFO_HEADER header;
++    ULONG SDRWhiteLevel;
++};
++
++} // namespace
++
+ QDxgiHdrInfo::QDxgiHdrInfo()
+ {
+     HRESULT hr = CreateDXGIFactory2(0, __uuidof(IDXGIFactory2), reinterpret_cast<void **>(&m_factory));
+@@ -186,9 +199,9 @@
+         deviceName.header.id = info.sourceInfo.id;
+         if (DisplayConfigGetDeviceInfo(&deviceName.header) == ERROR_SUCCESS) {
+             if (!wcscmp(monitorInfo.szDevice, deviceName.viewGdiDeviceName)) {
+-                DISPLAYCONFIG_SDR_WHITE_LEVEL whiteLevel = {};
+-                whiteLevel.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL;
+-                whiteLevel.header.size = sizeof(DISPLAYCONFIG_SDR_WHITE_LEVEL);
++                QtDisplayConfigSdrWhiteLevel whiteLevel = {};
++                whiteLevel.header.type = QtDisplayConfigDeviceInfoGetSdrWhiteLevel;
++                whiteLevel.header.size = sizeof(QtDisplayConfigSdrWhiteLevel);
+                 whiteLevel.header.adapterId = info.targetInfo.adapterId;
+                 whiteLevel.header.id = info.targetInfo.id;
+                 if (DisplayConfigGetDeviceInfo(&whiteLevel.header) == ERROR_SUCCESS)
+--- a/qtbase/src/gui/rhi/qrhid3dhelpers.cpp
++++ b/qtbase/src/gui/rhi/qrhid3dhelpers.cpp
+@@ -78,13 +78,15 @@
+ }
+ #endif
+ 
++constexpr UINT QtDxgiAdapterFlagSoftware = 2;
++
+ void fillDriverInfo(QRhiDriverInfo *info, const DXGI_ADAPTER_DESC1 &desc)
+ {
+     const QString name = QString::fromUtf16(reinterpret_cast<const char16_t *>(desc.Description));
+     info->deviceName = name.toUtf8();
+     info->deviceId = desc.DeviceId;
+     info->vendorId = desc.VendorId;
+-    info->deviceType = (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) ? QRhiDriverInfo::CpuDevice
++    info->deviceType = (desc.Flags & QtDxgiAdapterFlagSoftware) ? QRhiDriverInfo::CpuDevice
+                                                                  : QRhiDriverInfo::UnknownDevice;
+ }
+ 
+--- a/qtbase/src/gui/text/windows/qwindowsfontdatabasebase.cpp
++++ b/qtbase/src/gui/text/windows/qwindowsfontdatabasebase.cpp
+@@ -760,6 +760,22 @@
+     static const auto stock_sysfont =
+         reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+     return stock_sysfont;
++}
++
++static BOOL qtSystemParametersInfoForDpi(UINT uiAction, UINT uiParam, PVOID pvParam, UINT fWinIni, UINT dpi)
++{
++    using SystemParametersInfoForDpiFunc = BOOL (WINAPI *)(UINT, UINT, PVOID, UINT, UINT);
++    static const auto systemParametersInfoForDpi = []() -> SystemParametersInfoForDpiFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<SystemParametersInfoForDpiFunc>(
++                GetProcAddress(user32, "SystemParametersInfoForDpi")) : nullptr;
++    }();
++
++    if (systemParametersInfoForDpi)
++        return systemParametersInfoForDpi(uiAction, uiParam, pvParam, fWinIni, dpi);
++
++    Q_UNUSED(dpi);
++    return SystemParametersInfoW(uiAction, uiParam, pvParam, fWinIni);
+ }
+ 
+ QFont QWindowsFontDatabaseBase::systemDefaultFont()
+@@ -767,7 +783,7 @@
+     // Qt 6: Obtain default GUI font (typically "Segoe UI, 9pt", see QTBUG-58610)
+     NONCLIENTMETRICS ncm = {};
+     ncm.cbSize = sizeof(ncm);
+-    SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, ncm.cbSize, &ncm, 0, defaultVerticalDPI());
++    qtSystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, ncm.cbSize, &ncm, 0, defaultVerticalDPI());
+     const QFont systemFont = QWindowsFontDatabase::LOGFONT_to_QFont(ncm.lfMessageFont);
+     qCDebug(lcQpaFonts) << __FUNCTION__ << systemFont;
+     return systemFont;
+--- a/qtbase/src/plugins/platforms/windows/qtwindowsglobal.h
++++ b/qtbase/src/plugins/platforms/windows/qtwindowsglobal.h
+@@ -31,6 +31,75 @@
+ #  define WM_DPICHANGED 0x02E0
+ #endif
+ 
++#ifndef WM_DPICHANGED_AFTERPARENT
++#  define QT_MINGW_NEEDS_WIN10_DPI_FALLBACKS
++#  define WM_DPICHANGED_AFTERPARENT 0x02E3
++#endif
++
++#if defined(QT_MINGW_NEEDS_WIN10_DPI_FALLBACKS)
++static inline int WINAPI GetSystemMetricsForDpi(int nIndex, UINT dpi)
++{
++    using GetSystemMetricsForDpiFunc = int (WINAPI *)(int, UINT);
++    static const auto getSystemMetricsForDpi = []() -> GetSystemMetricsForDpiFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<GetSystemMetricsForDpiFunc>(
++                GetProcAddress(user32, "GetSystemMetricsForDpi")) : nullptr;
++    }();
++
++    return getSystemMetricsForDpi ? getSystemMetricsForDpi(nIndex, dpi) : GetSystemMetrics(nIndex);
++}
++
++static inline BOOL WINAPI SystemParametersInfoForDpi(UINT uiAction, UINT uiParam, PVOID pvParam,
++                                                     UINT fWinIni, UINT dpi)
++{
++    using SystemParametersInfoForDpiFunc = BOOL (WINAPI *)(UINT, UINT, PVOID, UINT, UINT);
++    static const auto systemParametersInfoForDpi = []() -> SystemParametersInfoForDpiFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<SystemParametersInfoForDpiFunc>(
++                GetProcAddress(user32, "SystemParametersInfoForDpi")) : nullptr;
++    }();
++
++    return systemParametersInfoForDpi ? systemParametersInfoForDpi(uiAction, uiParam, pvParam, fWinIni, dpi)
++                                      : SystemParametersInfoW(uiAction, uiParam, pvParam, fWinIni);
++}
++
++static inline UINT WINAPI GetDpiForWindow(HWND hwnd)
++{
++    using GetDpiForWindowFunc = UINT (WINAPI *)(HWND);
++    static const auto getDpiForWindow = []() -> GetDpiForWindowFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<GetDpiForWindowFunc>(
++                GetProcAddress(user32, "GetDpiForWindow")) : nullptr;
++    }();
++
++    if (getDpiForWindow)
++        return getDpiForWindow(hwnd);
++
++    HDC hdc = GetDC(hwnd);
++    const UINT dpi = hdc ? UINT(GetDeviceCaps(hdc, LOGPIXELSX)) : 96;
++    if (hdc)
++        ReleaseDC(hwnd, hdc);
++    return dpi ? dpi : 96;
++}
++
++static inline BOOL WINAPI AdjustWindowRectExForDpi(LPRECT lpRect, DWORD dwStyle, BOOL bMenu,
++                                                   DWORD dwExStyle, UINT dpi)
++{
++    using AdjustWindowRectExForDpiFunc = BOOL (WINAPI *)(LPRECT, DWORD, BOOL, DWORD, UINT);
++    static const auto adjustWindowRectExForDpi = []() -> AdjustWindowRectExForDpiFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<AdjustWindowRectExForDpiFunc>(
++                GetProcAddress(user32, "AdjustWindowRectExForDpi")) : nullptr;
++    }();
++
++    if (adjustWindowRectExForDpi)
++        return adjustWindowRectExForDpi(lpRect, dwStyle, bMenu, dwExStyle, dpi);
++
++    (void)dpi;
++    return AdjustWindowRectEx(lpRect, dwStyle, bMenu, dwExStyle);
++}
++#endif
++
+ #ifndef WM_GETDPISCALEDSIZE
+ #  define WM_GETDPISCALEDSIZE 0x02E4
+ #endif
+--- a/qtbase/src/widgets/styles/qwindowsstyle.cpp
++++ b/qtbase/src/widgets/styles/qwindowsstyle.cpp
+@@ -65,6 +65,37 @@
+ #  ifndef COLOR_GRADIENTINACTIVECAPTION
+ #    define COLOR_GRADIENTINACTIVECAPTION   28
+ #  endif
++#  ifndef WM_DPICHANGED_AFTERPARENT
++#    define QT_WINDOWS_STYLE_NEEDS_WIN10_DPI_FALLBACKS
++#  endif
++
++#  if defined(QT_WINDOWS_STYLE_NEEDS_WIN10_DPI_FALLBACKS)
++static int WINAPI GetSystemMetricsForDpi(int nIndex, UINT dpi)
++{
++    using GetSystemMetricsForDpiFunc = int (WINAPI *)(int, UINT);
++    static const auto getSystemMetricsForDpi = []() -> GetSystemMetricsForDpiFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<GetSystemMetricsForDpiFunc>(
++                GetProcAddress(user32, "GetSystemMetricsForDpi")) : nullptr;
++    }();
++
++    return getSystemMetricsForDpi ? getSystemMetricsForDpi(nIndex, dpi) : GetSystemMetrics(nIndex);
++}
++
++static BOOL WINAPI SystemParametersInfoForDpi(UINT uiAction, UINT uiParam, PVOID pvParam,
++                                              UINT fWinIni, UINT dpi)
++{
++    using SystemParametersInfoForDpiFunc = BOOL (WINAPI *)(UINT, UINT, PVOID, UINT, UINT);
++    static const auto systemParametersInfoForDpi = []() -> SystemParametersInfoForDpiFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<SystemParametersInfoForDpiFunc>(
++                GetProcAddress(user32, "SystemParametersInfoForDpi")) : nullptr;
++    }();
++
++    return systemParametersInfoForDpi ? systemParametersInfoForDpi(uiAction, uiParam, pvParam, fWinIni, dpi)
++                                      : SystemParametersInfoW(uiAction, uiParam, pvParam, fWinIni);
++}
++#  endif
+ 
+ Q_GUI_EXPORT HICON qt_pixmapToWinHICON(const QPixmap &);
+ #endif //Q_OS_WIN

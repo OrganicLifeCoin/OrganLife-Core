@@ -215,18 +215,13 @@ void SettingsInformationWidget::run(int type)
             QMetaObject::invokeMethod(this, "setMasternodeCount",
                                       Qt::QueuedConnection, Q_ARG(QString, tr("No available data")));
         } else {
-            try {
-                QString masternodeCount = clientModel->getMasternodesCountString();
-                if (!masternodeCount.isEmpty()) {
-                    QMetaObject::invokeMethod(this, "setMasternodeCount",
-                                              Qt::QueuedConnection, Q_ARG(QString, masternodeCount));
-                } else {
-                    QMetaObject::invokeMethod(this, "setMasternodeCount",
-                                              Qt::QueuedConnection, Q_ARG(QString, tr("Loading...")));
-                }
-            } catch (...) {
+            QString masternodeCount = clientModel->getMasternodesCountString();
+            if (!masternodeCount.isEmpty()) {
                 QMetaObject::invokeMethod(this, "setMasternodeCount",
-                                          Qt::QueuedConnection, Q_ARG(QString, tr("No available data")));
+                                          Qt::QueuedConnection, Q_ARG(QString, masternodeCount));
+            } else {
+                QMetaObject::invokeMethod(this, "setMasternodeCount",
+                                          Qt::QueuedConnection, Q_ARG(QString, tr("Loading...")));
             }
         }
         QMetaObject::invokeMethod(this, "setNumBlocks",

@@ -69,7 +69,7 @@ MasterNodeWizardDialog::MasterNodeWizardDialog(WalletModel* model, MNModel* _mnM
 
     QString collateralAmountStr = GUIUtil::formatBalance(mnModel->getMNCollateralRequiredAmount());
     ui->labelMessage1a->setText(formatHtmlContent(
-                formatParagraph(tr("To create a 1776$ Masternode you must dedicate %1 (the unit of 1776$) "
+                formatParagraph(tr("To create a CTEAM Masternode you must dedicate %1 "
                         "to the network (however, these coins are still yours and will never leave your possession).").arg(collateralAmountStr)) +
                 formatParagraph(tr("You can deactivate the node and unlock the coins at any time."))));
 

@@ -97,7 +97,7 @@ private Q_SLOTS:
     void proposalCardBarsBlendMnAndCoinVotes();
     void proposalCardUsesPremiumDropShadowEffect();
     void proposalCardUsesRoundedVoteRailsInBothThemes();
-    void governanceHeaderSubtitleWrapsWithoutLegacyHeightCap();
+    void governanceHeaderSubtitleStaysCompactWithoutLegacyHeightCap();
     void governanceWidgetUsesDedicatedDashboardClasses();
     void governanceDashboardStylesExistInBothThemes();
     void governanceHeaderCtaUsesDedicatedClasses();

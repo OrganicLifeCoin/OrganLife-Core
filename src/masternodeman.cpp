@@ -623,7 +623,7 @@ MasternodeRef CMasternodeMan::GetCurrentMasterNode(const uint256& hash, bool onl
             for (const auto& it : mapMasternodes) {
                 const MasternodeRef& mn = it.second;
                 if (mn->protocolVersion < minProtocol) continue;
-                if (onlyEnabled && !mn->IsEnabled()) continue;
+                if (onlyEnabled && !mn->IsAvailableState()) continue;
 
                 // calculate the score of the masternode
                 const int64_t n = mn->CalculateScore(hash).GetCompact(false);

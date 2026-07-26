@@ -171,12 +171,12 @@ static Consensus::LLMQParams llmq400_85 = {
  * + Contains no strange transactions
  */
 static MapCheckpoints mapCheckpoints = {
-    {0, uint256S("0x00000745b6e4a986cad55bdc7a797ae39342ca1bdbecd504e206baabf473e601")},
+    {0, uint256S("0x00000139749a73940de839fba1b9f4bd88d0631905dd8895e1a253f9f77feeb6")},
 };
 
 static const CCheckpointData data = {
     &mapCheckpoints,
-    1778491632, // * UNIX timestamp of genesis checkpoint block (0)
+    1785060000, // * UNIX timestamp of genesis checkpoint block (0)
     0,          // * total number of transactions between genesis and last checkpoint
     1800        // * estimated number of transactions per day after checkpoint
 };
@@ -205,10 +205,10 @@ public:
     {
         strNetworkID = "main";
 
-        genesis = CreateCteamGenesisBlock("CTEAM Genesis 2026-05-05", 1778491632, 3537370, 0x1e0ffff0, 1, 0 * COIN);
+        genesis = CreateCteamGenesisBlock("CTEAM Genesis 2026-07-26", 1785060000, 3838157, 0x1e0ffff0, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x0000070be2de8575451e9a5520a46e6c96953c294f4d2b4b9a51ee2d7c09f2c1"));
-        assert(genesis.hashMerkleRoot == uint256S("0xc10e5c519df766e11290d700ce084d8c339bed1e56b068dade382784940c41bb"));
+        assert(consensus.hashGenesisBlock == uint256S("0x00000139749a73940de839fba1b9f4bd88d0631905dd8895e1a253f9f77feeb6"));
+        assert(genesis.hashMerkleRoot == uint256S("0x8dc7b1a1a094ad0a9b724e4e93c118454c15fe8063d4a476e4f50a2ddc1ac05c"));
 
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.fPowNoRetargeting = false;
@@ -306,7 +306,7 @@ public:
         vSeeds.emplace_back("65.108.85.215");
         vSeeds.emplace_back("89.167.108.88");
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 38);
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 28);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 25);
         base58Prefixes[STAKING_ADDRESS] = std::vector<unsigned char>(1, 57);
         base58Prefixes[EXCHANGE_ADDRESS] = {0x02, 0x17, 0x76};
@@ -379,7 +379,7 @@ public:
         consensus.posLimitV1 = uint256S("0x000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.posLimitV2 = uint256S("0x00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nBudgetFeeConfirmations = 3;      // (only 8-blocks window for finalization on testnet)
-        consensus.nCoinbaseMaturity = 15;
+        consensus.nCoinbaseMaturity = 1;
         consensus.nFutureTimeDriftPoW = 600;  // Increased for better tolerance across regions
         consensus.nFutureTimeDriftPoS = 900;  // Increased for better tolerance across regions
         consensus.nMaxMoneyOut = 777777777 * COIN;
@@ -391,9 +391,9 @@ public:
         consensus.nNewMNBlockReward = 6 * COIN;
         consensus.nMNCollateralMinConf = 15;
         consensus.nProposalEstablishmentTime = 60 * 5;  // at least 5 min old to make it into a budget
-        // Testnet is tuned for fast iteration: 30s blocks, 4x faster staking requirements.
+        // Testnet is tuned for fast iteration and tiny staking networks.
         consensus.nStakeMinAge = 15 * 60;
-        consensus.nStakeMinDepth = 25;
+        consensus.nStakeMinDepth = 1;
         consensus.nTargetTimespan = 80 * 60;
         consensus.nTargetTimespanV2 = 60 * 60;
         consensus.nTargetSpacing = 30;
@@ -467,6 +467,7 @@ public:
         // Direct IP seeds (testnet)
         vSeeds.emplace_back("65.108.85.215");
         vSeeds.emplace_back("89.167.108.88");
+        vSeeds.emplace_back("89.167.16.202");
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 38);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 25);
@@ -479,10 +480,11 @@ public:
         base58Prefixes[EXT_COIN_TYPE] = {0x80, 0x00, 0x00, 0x01};
 
         // Fixed seeds for CTEAM testnet (BIP155 format: networkID, length, IP, port)
-        // 65.108.85.215:41616, 89.167.108.88:41616
+        // 65.108.85.215:41616, 89.167.108.88:41616, 89.167.16.202:41616
         vFixedSeeds = {
             0x01, 0x04, 0x41, 0x6C, 0x55, 0xD7, 0xA2, 0x90,  // 65.108.85.215:41616
             0x01, 0x04, 0x59, 0xA7, 0x6C, 0x58, 0xA2, 0x90,  // 89.167.108.88:41616
+            0x01, 0x04, 0x59, 0xA7, 0x10, 0xCA, 0xA2, 0x90,  // 89.167.16.202:41616
         };
 
         fRequireStandard = false;

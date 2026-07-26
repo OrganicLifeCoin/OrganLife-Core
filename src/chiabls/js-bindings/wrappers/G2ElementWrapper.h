@@ -29,11 +29,7 @@ class G2ElementWrapper : public JSWrapper<G2Element> {
 
     static std::vector <G2Element> Unwrap(std::vector <G2ElementWrapper> sigWrappers);
 
-    static G2ElementWrapper FromG2Element(const G2Element &signature);
-
     static G2ElementWrapper FromBytes(val buffer);
-
-    static G2ElementWrapper AggregateSigs(val signatureWrappers);
 
     static G2ElementWrapper Generator();
 

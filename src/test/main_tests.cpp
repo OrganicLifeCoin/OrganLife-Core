@@ -8,6 +8,7 @@
 #include "test/test_pivx.h"
 
 #include "blocksignature.h"
+#include "miner.h"
 #include "net.h"
 #include "primitives/transaction.h"
 #include "script/sign.h"
@@ -16,6 +17,7 @@
 
 #include <boost/test/unit_test.hpp>
 
+#include <algorithm>
 #include <vector>
 
 BOOST_FIXTURE_TEST_SUITE(main_tests, TestingSetup)
@@ -263,10 +265,40 @@ BOOST_AUTO_TEST_CASE(mainnet_genesis_retime_lock_test)
 {
     SelectParams(CBaseChainParams::MAIN);
 
-    BOOST_CHECK_EQUAL(Params().GenesisBlock().nTime, 1777974922U);
+    BOOST_CHECK_EQUAL(Params().GenesisBlock().nTime, 1785060000U);
     BOOST_CHECK_EQUAL(Params().Checkpoints().mapCheckpoints->at(0), Params().GetConsensus().hashGenesisBlock);
     BOOST_CHECK_EQUAL(Params().GetConsensus().nTargetSpacing, 2 * 60);
     BOOST_CHECK_EQUAL(Params().GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight, 10081);
+}
+
+BOOST_AUTO_TEST_CASE(testnet_staking_peer_threshold_test)
+{
+    SelectParams(CBaseChainParams::MAIN);
+    BOOST_CHECK_EQUAL(GetMinimumStakingPeerEvidence(Params()), 2);
+    BOOST_CHECK(RequiresNearTipStakingPeerEvidence(Params()));
+
+    SelectParams(CBaseChainParams::TESTNET);
+    BOOST_CHECK_EQUAL(GetMinimumStakingPeerEvidence(Params()), 1);
+    BOOST_CHECK(RequiresNearTipStakingPeerEvidence(Params()));
+
+    SelectParams(CBaseChainParams::REGTEST);
+    BOOST_CHECK_EQUAL(GetMinimumStakingPeerEvidence(Params()), 0);
+    BOOST_CHECK(!RequiresNearTipStakingPeerEvidence(Params()));
+
+    SelectParams(CBaseChainParams::MAIN);
+}
+
+BOOST_AUTO_TEST_CASE(testnet_fixed_seed_policy_test)
+{
+    SelectParams(CBaseChainParams::TESTNET);
+
+    const std::vector<uint8_t> masternodeSeed{
+        0x01, 0x04, 0x59, 0xA7, 0x10, 0xCA, 0xA2, 0x90
+    };
+    const std::vector<uint8_t>& fixedSeeds = Params().FixedSeeds();
+    BOOST_CHECK(std::search(fixedSeeds.begin(), fixedSeeds.end(), masternodeSeed.begin(), masternodeSeed.end()) != fixedSeeds.end());
+
+    SelectParams(CBaseChainParams::MAIN);
 }
 
 bool ReturnFalse() { return false; }

@@ -14,13 +14,13 @@
 #include "masternode.h"
 #include "masternodeman.h"
 #include "netmessagemaker.h"
+#include "net_processing.h"
 #include "random.h"
 #include "tiertwo/netfulfilledman.h"
 #include "spork.h"
 #include "tiertwo/tiertwo_sync_state.h"
 #include "util/system.h"
 #include "validation.h"
-#include "net_processing.h"
 #include <algorithm>
 // clang-format on
 

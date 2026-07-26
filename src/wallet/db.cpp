@@ -12,7 +12,6 @@
 #include "protocol.h"
 #include "util/system.h"
 #include "utilstrencodings.h"
-#include "wallet/walletutil.h"
 
 #include <stdint.h>
 

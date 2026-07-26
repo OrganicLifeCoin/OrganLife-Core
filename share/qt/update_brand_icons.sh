@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Regenerate app icons for all platforms from the canonical branding image.
 #
-# Source (tracked):  ./1776logo.png
+# Preferred source (ignored/local): ./CTEAMCoin.png
+# Fallback source (tracked):        src/qt/res/images/ic-coin-cteam.png
 # Outputs updated:
 #   - Qt GUI resources: src/qt/res/icons/bitcoin*.png + .ico + .icns
-#   - Linux/packaging:  share/pixmaps/pivx*.png + pivx.ico + bitcoin*.png + bitcoin.icns
+#   - Linux/packaging:  share/pixmaps/pivx*.png + cteam.ico + pivx.ico + bitcoin*.png + bitcoin.icns
 #
 # Requires either:
 #   - ImageMagick `convert`, or
@@ -13,10 +14,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SRC_ICON="${ROOT_DIR}/src/qt/res/images/1776logo.png"
+SRC_ICON="${ROOT_DIR}/CTEAMCoin.png"
 if [[ ! -f "$SRC_ICON" ]]; then
-  # Backwards-compatible fallback for a repo-root source icon.
-  SRC_ICON="${ROOT_DIR}/1776logo.png"
+  SRC_ICON="${ROOT_DIR}/src/qt/res/images/ic-coin-cteam.png"
 fi
 
 if [[ ! -f "$SRC_ICON" ]]; then
@@ -73,7 +73,7 @@ echo "[ICON] Regenerating Windows .ico resources..."
 need python3
 "$ROOT_DIR/share/qt/make_windows_icon.sh"
 
-# Installer/UI icon used by NSIS and wx rc: share/pixmaps/pivx.ico
+# Installer/UI icon used by NSIS and wx rc.
 ICO_PACKER="$ROOT_DIR/contrib/devtools/png_to_ico.py"
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR" 2>/dev/null || true' EXIT
@@ -81,7 +81,8 @@ SIZES_ICO=(256 128 64 48 40 32 24 20 16)
 for size in "${SIZES_ICO[@]}"; do
   resize_png "$SRC_ICON" "$TMPDIR/icon-${size}.png" "$size"
 done
-python3 "$ICO_PACKER" "$ROOT_DIR/share/pixmaps/pivx.ico" $(for size in "${SIZES_ICO[@]}"; do printf "%q " "$TMPDIR/icon-${size}.png"; done)
+python3 "$ICO_PACKER" "$ROOT_DIR/share/pixmaps/cteam.ico" $(for size in "${SIZES_ICO[@]}"; do printf "%q " "$TMPDIR/icon-${size}.png"; done)
+cp -f "$ROOT_DIR/share/pixmaps/cteam.ico" "$ROOT_DIR/share/pixmaps/pivx.ico"
 
 echo "[ICON] Regenerating macOS .icns resources..."
 ICNS_PACKER="$ROOT_DIR/contrib/devtools/png_to_icns.py"
@@ -89,7 +90,8 @@ SIZES_ICNS=(16 32 64 128 256 512 1024)
 for size in "${SIZES_ICNS[@]}"; do
   resize_png "$SRC_ICON" "$TMPDIR/icon-${size}.png" "$size"
 done
-python3 "$ICNS_PACKER" "$ROOT_DIR/src/qt/res/icons/bitcoin.icns" $(for size in "${SIZES_ICNS[@]}"; do printf "%q " "$TMPDIR/icon-${size}.png"; done)
+python3 "$ICNS_PACKER" "$ROOT_DIR/src/qt/res/icons/CTEAM.icns" $(for size in "${SIZES_ICNS[@]}"; do printf "%q " "$TMPDIR/icon-${size}.png"; done)
+cp -f "$ROOT_DIR/src/qt/res/icons/CTEAM.icns" "$ROOT_DIR/src/qt/res/icons/bitcoin.icns"
 cp -f "$ROOT_DIR/src/qt/res/icons/bitcoin.icns" "$ROOT_DIR/share/pixmaps/bitcoin.icns"
 
 echo "[ICON] Done."

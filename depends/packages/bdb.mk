@@ -7,6 +7,7 @@ $(package)_build_subdir=build_unix
 
 define $(package)_set_vars
 $(package)_config_opts=--disable-shared --enable-cxx --disable-replication --enable-option-checking
+$(package)_config_opts+=--build=$(build)
 $(package)_config_opts_mingw32=--enable-mingw
 $(package)_config_opts_linux=--with-pic
 $(package)_config_opts_aarch64=--disable-atomicsupport --enable-posixmutexes

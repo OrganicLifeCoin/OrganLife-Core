@@ -11,6 +11,7 @@
 #include "transactionrecord.h"
 #include "validation.h"
 #include <QString>
+#include <vector>
 
 void ChartUtilsTests::axisRoundsToExpectedSteps()
 {
@@ -78,6 +79,29 @@ void ChartUtilsTests::rewardTypeClassificationIncludesV6CoinbaseMasternodePaymen
     QVERIFY(IsMasternodeRewardTypeForChart(TransactionRecord::MNReward));
     QVERIFY(IsMasternodeRewardTypeForChart(TransactionRecord::BudgetPayment));
     QVERIFY(IsMasternodeRewardTypeForChart(TransactionRecord::Generated));
+}
+
+void ChartUtilsTests::chartRewardAggregationUsesCopiedRows()
+{
+    const std::vector<ChartStakeSample> rows = {
+        {2026, 6, 1, 5 * COIN, TransactionRecord::StakeMint},
+        {2026, 6, 1, 2 * COIN, TransactionRecord::MNReward},
+        {2026, 7, 2, 3 * COIN, TransactionRecord::BudgetPayment},
+        {2025, 12, 25, -4 * COIN, TransactionRecord::Generated},
+    };
+
+    const ChartRewardAggregation byMonth = AggregateChartRewards(rows, ChartBucketMode::Year);
+    QCOMPARE(byMonth.amountsBy.at(6).first, static_cast<long long>(5 * COIN));
+    QCOMPARE(byMonth.amountsBy.at(6).second, static_cast<long long>(2 * COIN));
+    QCOMPARE(byMonth.amountsBy.at(7).first, 0LL);
+    QCOMPARE(byMonth.amountsBy.at(7).second, static_cast<long long>(3 * COIN));
+    QVERIFY(byMonth.hasMasternodeRewards);
+
+    const ChartRewardAggregation byYear = AggregateChartRewards(rows, ChartBucketMode::All);
+    QCOMPARE(byYear.amountsBy.at(2025).first, 0LL);
+    QCOMPARE(byYear.amountsBy.at(2025).second, static_cast<long long>(4 * COIN));
+    QCOMPARE(byYear.amountsBy.at(2026).first, static_cast<long long>(5 * COIN));
+    QCOMPARE(byYear.amountsBy.at(2026).second, static_cast<long long>(5 * COIN));
 }
 
 void ChartUtilsTests::coinbaseCreditsAreClassifiedByRewardType()

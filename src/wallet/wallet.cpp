@@ -2543,9 +2543,10 @@ CWallet::OutputAvailabilityResult CWallet::CheckOutputAvailability(
     // skip delegated coins
     if (mine == ISMINE_SPENDABLE_DELEGATED && !fIncludeDelegated) return res;
 
-    res.solvable = IsSolvable(*this, output.scriptPubKey, mine == ISMINE_COLD);
+    const bool directlySpendable = (mine & ISMINE_SPENDABLE) != ISMINE_NO;
+    res.solvable = directlySpendable || IsSolvable(*this, output.scriptPubKey, mine == ISMINE_COLD);
 
-    res.spendable = ((mine & ISMINE_SPENDABLE) != ISMINE_NO) ||
+    res.spendable = directlySpendable ||
                      (((mine & ISMINE_WATCH_ONLY) != ISMINE_NO) && (coinControl && coinControl->fAllowWatchOnly && res.solvable)) ||
                      ((mine & ((fIncludeColdStaking ? ISMINE_COLD : ISMINE_NO) |
                                (fIncludeDelegated ? ISMINE_SPENDABLE_DELEGATED : ISMINE_NO) )) != ISMINE_NO);

@@ -1,0 +1,111 @@
+--- a/qtbase/src/plugins/platforms/windows/qtwindowsglobal.h
++++ b/qtbase/src/plugins/platforms/windows/qtwindowsglobal.h
+@@ -86,11 +86,103 @@
+ #endif // WM_POINTERUPDATE
+ 
+ #if !defined(_DPI_AWARENESS_CONTEXTS_)
+-#  define DPI_AWARENESS_CONTEXT_UNAWARE              ((HANDLE)-1)
+-#  define DPI_AWARENESS_CONTEXT_SYSTEM_AWARE         ((HANDLE)-2)
+-#  define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE    ((HANDLE)-3)
+-#  define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 ((HANDLE)-4)
+-#  define DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED    ((HANDLE)-5)
++typedef HANDLE DPI_AWARENESS_CONTEXT;
++#  define DPI_AWARENESS_CONTEXT_UNAWARE              ((DPI_AWARENESS_CONTEXT)-1)
++#  define DPI_AWARENESS_CONTEXT_SYSTEM_AWARE         ((DPI_AWARENESS_CONTEXT)-2)
++#  define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE    ((DPI_AWARENESS_CONTEXT)-3)
++#  define DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 ((DPI_AWARENESS_CONTEXT)-4)
++#  define DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED    ((DPI_AWARENESS_CONTEXT)-5)
++
++static inline BOOL WINAPI AreDpiAwarenessContextsEqual(DPI_AWARENESS_CONTEXT dpiContextA,
++                                                       DPI_AWARENESS_CONTEXT dpiContextB)
++{
++    using AreDpiAwarenessContextsEqualFunc = BOOL (WINAPI *)(DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT);
++    static const auto areDpiAwarenessContextsEqual = []() -> AreDpiAwarenessContextsEqualFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<AreDpiAwarenessContextsEqualFunc>(
++                GetProcAddress(user32, "AreDpiAwarenessContextsEqual")) : nullptr;
++    }();
++
++    return areDpiAwarenessContextsEqual ? areDpiAwarenessContextsEqual(dpiContextA, dpiContextB)
++                                        : dpiContextA == dpiContextB;
++}
++
++static inline BOOL WINAPI IsValidDpiAwarenessContext(DPI_AWARENESS_CONTEXT dpiContext)
++{
++    using IsValidDpiAwarenessContextFunc = BOOL (WINAPI *)(DPI_AWARENESS_CONTEXT);
++    static const auto isValidDpiAwarenessContext = []() -> IsValidDpiAwarenessContextFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<IsValidDpiAwarenessContextFunc>(
++                GetProcAddress(user32, "IsValidDpiAwarenessContext")) : nullptr;
++    }();
++
++    if (isValidDpiAwarenessContext)
++        return isValidDpiAwarenessContext(dpiContext);
++
++    return dpiContext == DPI_AWARENESS_CONTEXT_UNAWARE
++            || dpiContext == DPI_AWARENESS_CONTEXT_SYSTEM_AWARE
++            || dpiContext == DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE
++            || dpiContext == DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
++            || dpiContext == DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED;
++}
++
++static inline DPI_AWARENESS_CONTEXT WINAPI GetThreadDpiAwarenessContext()
++{
++    using GetThreadDpiAwarenessContextFunc = DPI_AWARENESS_CONTEXT (WINAPI *)();
++    static const auto getThreadDpiAwarenessContext = []() -> GetThreadDpiAwarenessContextFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<GetThreadDpiAwarenessContextFunc>(
++                GetProcAddress(user32, "GetThreadDpiAwarenessContext")) : nullptr;
++    }();
++
++    if (getThreadDpiAwarenessContext)
++        return getThreadDpiAwarenessContext();
++
++    return IsProcessDPIAware() ? DPI_AWARENESS_CONTEXT_SYSTEM_AWARE : DPI_AWARENESS_CONTEXT_UNAWARE;
++}
++
++static inline DPI_AWARENESS_CONTEXT WINAPI GetWindowDpiAwarenessContext(HWND hwnd)
++{
++    using GetWindowDpiAwarenessContextFunc = DPI_AWARENESS_CONTEXT (WINAPI *)(HWND);
++    static const auto getWindowDpiAwarenessContext = []() -> GetWindowDpiAwarenessContextFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<GetWindowDpiAwarenessContextFunc>(
++                GetProcAddress(user32, "GetWindowDpiAwarenessContext")) : nullptr;
++    }();
++
++    return getWindowDpiAwarenessContext ? getWindowDpiAwarenessContext(hwnd) : GetThreadDpiAwarenessContext();
++}
++
++static inline BOOL WINAPI SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT dpiContext)
++{
++    using SetProcessDpiAwarenessContextFunc = BOOL (WINAPI *)(DPI_AWARENESS_CONTEXT);
++    static const auto setProcessDpiAwarenessContext = []() -> SetProcessDpiAwarenessContextFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<SetProcessDpiAwarenessContextFunc>(
++                GetProcAddress(user32, "SetProcessDpiAwarenessContext")) : nullptr;
++    }();
++
++    if (setProcessDpiAwarenessContext)
++        return setProcessDpiAwarenessContext(dpiContext);
++
++    return dpiContext == DPI_AWARENESS_CONTEXT_UNAWARE ? TRUE : SetProcessDPIAware();
++}
++
++static inline BOOL WINAPI EnableNonClientDpiScaling(HWND hwnd)
++{
++    using EnableNonClientDpiScalingFunc = BOOL (WINAPI *)(HWND);
++    static const auto enableNonClientDpiScaling = []() -> EnableNonClientDpiScalingFunc {
++        HMODULE user32 = GetModuleHandleW(L"user32.dll");
++        return user32 ? reinterpret_cast<EnableNonClientDpiScalingFunc>(
++                GetProcAddress(user32, "EnableNonClientDpiScaling")) : nullptr;
++    }();
++
++    if (enableNonClientDpiScaling)
++        return enableNonClientDpiScaling(hwnd);
++
++    SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
++    return FALSE;
++}
+ #endif
+ 
+ QT_BEGIN_NAMESPACE

@@ -139,7 +139,7 @@ void CreateProposalDialog::setupPageTwo()
     const int64_t cycleSeconds = GetCycleSeconds(govModel);
     ui->labelMessageDest->setText(tr("Add the number of payout cycles, the amount per cycle, and the payee address.\n1 cycle is approximately %1.")
                                           .arg(FormatDurationLabel(cycleSeconds)));
-    setEditBoxStyle(ui->labelAmount, ui->lineEditAmount, "e.g 500 1776$");
+    setEditBoxStyle(ui->labelAmount, ui->lineEditAmount, "e.g 500 CTEAM");
     ui->labelMonths->setText(tr("Cycles"));
     setCssProperty(ui->labelMonths, "text-title");
     setEditBoxStyle(ui->labelAddress, ui->lineEditAddress, "e.g D...something..");

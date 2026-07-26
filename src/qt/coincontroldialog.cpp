@@ -589,8 +589,8 @@ void CoinControlDialog::updateLabels()
         return;
 
     ui->labelTitle->setText(fSelectTransparent ?
-            "Select 1776$ Outputs to Spend" :
-            "Select Shielded 1776$ to Spend");
+            "Select CTEAM Outputs to Spend" :
+            "Select Shielded CTEAM to Spend");
 
     const TotalAmounts& t = getTotals();
 

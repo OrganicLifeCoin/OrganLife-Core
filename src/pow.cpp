@@ -44,6 +44,18 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
         const arith_uint256& bnTargetLimit = UintToArith256(consensus.ProofOfStakeLimit(fTimeV2));
         const int64_t& nTargetTimespan = consensus.TargetTimespan(fTimeV2);
 
+        if (Params().IsTestnet() &&
+                pblock != nullptr &&
+                pblock->nTime > pindexLast->GetBlockTime() + consensus.nTargetSpacing * 10 &&
+                pindexLast->nHeight >= consensus.vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight) {
+            arith_uint256 bnRecovery;
+            bnRecovery.SetCompact(pindexLast->nBits);
+            bnRecovery <<= 14;
+            if (bnRecovery <= 0 || bnRecovery > bnTargetLimit)
+                bnRecovery = bnTargetLimit;
+            return bnRecovery.GetCompact();
+        }
+
         int64_t nActualSpacing = 0;
         if (pindexLast->nHeight != 0)
             nActualSpacing = pindexLast->GetBlockTime() - pindexLast->pprev->GetBlockTime();

@@ -927,7 +927,9 @@ CDeterministicMNList CDeterministicMNManager::GetListAtChainTip()
 
 bool CDeterministicMNManager::IsDIP3Enforced(int nHeight) const
 {
-    return Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0);
+    (void)nHeight;
+    // CTEAM never activates deterministic masternodes.
+    return false;
 }
 
 bool CDeterministicMNManager::IsDIP3Enforced() const

@@ -37,7 +37,7 @@ define $(package)_config_cmds
   pyver="`python3 -c 'import sys; print(\"%s.%s\" % (sys.version_info[0], sys.version_info[1]))'`"; \
   export PKG_CONFIG_PATH="$(host_prefix)/lib/pkgconfig:$(host_prefix)/share/pkgconfig"; \
   export PKG_CONFIG_LIBDIR="$(host_prefix)/lib/pkgconfig"; \
-  PYTHONPATH="$(build_prefix)/local/lib/python$$$$pyver/dist-packages:$(build_prefix)/local/lib/python$$$$pyver/site-packages" \
+  PYTHONPATH="$(build_prefix)/lib/python$$$$pyver/dist-packages:$(build_prefix)/lib/python$$$$pyver/site-packages:$(build_prefix)/local/lib/python$$$$pyver/dist-packages:$(build_prefix)/local/lib/python$$$$pyver/site-packages" \
     python3 -m mesonbuild.mesonmain setup .. \
     --cross-file $(host_prefix)/meson-cross.txt \
     --prefix $(host_prefix) \
@@ -60,7 +60,7 @@ define $(package)_config_cmds
   CXX="$(firstword $($(package)_cxx))" \
   CFLAGS="$(wordlist 2,$(words $($(package)_cc)),$($(package)_cc)) $($(package)_cflags) $($(package)_cppflags)" \
   CXXFLAGS="$(wordlist 2,$(words $($(package)_cxx)),$($(package)_cxx)) $($(package)_cxxflags) $($(package)_cppflags)" \
-  PYTHONPATH="$(build_prefix)/local/lib/python$$$$pyver/dist-packages:$(build_prefix)/local/lib/python$$$$pyver/site-packages" \
+  PYTHONPATH="$(build_prefix)/lib/python$$$$pyver/dist-packages:$(build_prefix)/lib/python$$$$pyver/site-packages:$(build_prefix)/local/lib/python$$$$pyver/dist-packages:$(build_prefix)/local/lib/python$$$$pyver/site-packages" \
     python3 -m mesonbuild.mesonmain setup .. \
     --prefix $(host_prefix) \
     --libdir lib \
@@ -81,7 +81,7 @@ endef
 
 define $(package)_stage_cmds
   pyver="`python3 -c 'import sys; print(\"%s.%s\" % (sys.version_info[0], sys.version_info[1]))'`"; \
-  PYTHONPATH="$(build_prefix)/local/lib/python$$$$pyver/dist-packages:$(build_prefix)/local/lib/python$$$$pyver/site-packages" \
+  PYTHONPATH="$(build_prefix)/lib/python$$$$pyver/dist-packages:$(build_prefix)/lib/python$$$$pyver/site-packages:$(build_prefix)/local/lib/python$$$$pyver/dist-packages:$(build_prefix)/local/lib/python$$$$pyver/site-packages" \
     DESTDIR=$($(package)_staging_dir) python3 -m mesonbuild.mesonmain install --no-rebuild
 endef
 

@@ -19,7 +19,7 @@ OpenURIDialog::OpenURIDialog(QWidget* parent) : ContainerDialog(parent, Qt::Wind
 {
     ui->setupUi(this);
     applyParentOrAppStyleSheet(parent);
-    ui->uriEdit->setPlaceholderText("1776$:");
+    ui->uriEdit->setPlaceholderText("cteam:");
 
     ui->labelSubtitle->setText("URI");
     setCssProperty(ui->labelSubtitle, "text-title2-dialog");

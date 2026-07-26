@@ -8,6 +8,8 @@
 
 #include "chainparams.h"
 #include "clientversion.h"
+#include "util/system.h"
+#include "utiltime.h"
 
 static const int BUDGET_DB_VERSION = 2;
 

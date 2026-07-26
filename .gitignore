@@ -196,6 +196,8 @@ moc_*
 ui_*
 /build/
 /build-*/
+/dist/
+/dist-from-wsl/
 !/build-aux/
 !/build-aux/**
 /build-aux/.DS_Store

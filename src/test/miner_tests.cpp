@@ -180,10 +180,11 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
     pblocktemplate->block.hashPrevBlock = chainparams.GetConsensus().hashGenesisBlock;
 
     // We can't make transactions until we have inputs
-    // Therefore, load 100 blocks :)
+    // Therefore, load enough blocks for txFirst[2] (height 4) to mature.
+    // With nCoinbaseMaturity=100, we need tip >= 103 so CreateNewBlock (height 104) can spend it.
     std::vector<CTransactionRef>txFirst;
     std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>(pblocktemplate->block); // pointer for convenience
-    for (unsigned int i = 0; i < 100; ++i) {
+    for (unsigned int i = 0; i < 103; ++i) {
         CBlockIndex* pindexPrev = WITH_LOCK(cs_main, return chainActive.Tip());
         assert(pindexPrev);
         pblock->nTime = pindexPrev->GetMedianTimePast() + 60;
@@ -375,9 +376,11 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
 
     {
         LOCK(cs_main);
-        // However if we advance height and time by one, both will.
+        // However if we advance height and time, both will.
+        // Use a larger offset than +1 to avoid time-slot alignment (15s) rounding
+        // the block time back down to the lock-time.
         chainActive.Tip()->nHeight++;
-        SetMockTime(chainActive.Tip()->GetMedianTimePast() + 2);
+        SetMockTime(chainActive.Tip()->GetMedianTimePast() + 30);
     }
 
     // FIXME: we should *actually* create a new block so the following test

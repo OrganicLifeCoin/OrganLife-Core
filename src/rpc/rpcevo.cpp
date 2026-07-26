@@ -141,7 +141,7 @@ std::string GetHelpString(int nParamNum, ProRegParam p)
 {
     auto it = mapParamHelp.find(p);
     if (it == mapParamHelp.end())
-        throw std::runtime_error(strprintf("FIXME: WRONG PARAM: %d!", (int)p));
+        throw std::runtime_error(strprintf("Internal error: unknown parameter %d", (int)p));
 
     return strprintf(it->second, nParamNum);
 }

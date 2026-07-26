@@ -30,12 +30,13 @@ bool IsBlockPayeeValid(const CBlock& block, const CBlockIndex* pindexPrev);
 std::string GetRequiredPaymentsString(int nBlockHeight);
 bool IsBlockValueValid(int nHeight, CAmount& nExpectedValue, CAmount nMinted, CAmount& nBudgetAmt);
 void FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTransaction& txCoinstake, const CBlockIndex* pindexPrev, bool fProofOfStake);
+bool CanBuildRequiredMasternodePayment(const CBlockIndex* pindexPrev);
 
 /**
  * Check coinbase output value for blocks after v6.0 enforcement.
  * It must pay the masternode for regular blocks and a proposal during superblocks.
  */
-bool IsCoinbaseValueValid(const CTransactionRef& tx, CAmount nBudgetAmt, CValidationState& _state);
+bool IsCoinbaseValueValid(const CTransactionRef& tx, CAmount nBudgetAmt, CValidationState& _state, const CBlockIndex* pindexPrev);
 
 void DumpMasternodePayments();
 

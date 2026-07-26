@@ -682,6 +682,51 @@ CWalletTx& ReceiveBalanceWith(const std::vector<CTxOut>& vout,
     return BuildAndLoadTxToWallet(vin, vout, wallet);
 }
 
+class PubKeyCountingWallet : public CWallet
+{
+public:
+    using CWallet::CWallet;
+
+    bool GetPubKey(const CKeyID& address, CPubKey& pubkey) const override
+    {
+        ++getPubKeyCalls;
+        return CWallet::GetPubKey(address, pubkey);
+    }
+
+    mutable int getPubKeyCalls{0};
+};
+
+BOOST_AUTO_TEST_CASE(directly_spendable_output_skips_solvability_check)
+{
+    PubKeyCountingWallet wallet("availability", WalletDatabase::CreateMock());
+    bool firstRun;
+    BOOST_REQUIRE_EQUAL(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+    wallet.SetMinVersion(FEATURE_PRE_SPLIT_KEYPOOL);
+    BOOST_REQUIRE(wallet.SetupSPKM(false));
+    WITH_LOCK(wallet.cs_wallet, wallet.SetLastBlockProcessed(chainActive.Tip()));
+
+    auto address = wallet.getNewAddress("availability");
+    BOOST_REQUIRE(address);
+    CWalletTx& wtx = ReceiveBalanceWith(
+            {CTxOut(COIN, GetScriptForDestination(*address.getObjResult()))},
+            wallet);
+    fakeMempoolInsertion(wtx.tx);
+    wtx.fInMempool = true;
+
+    wallet.getPubKeyCalls = 0;
+    CWallet::AvailableCoinsFilter filter;
+    filter.fOnlySafe = false;
+    filter.fOnlySpendable = true;
+    std::vector<COutput> coins;
+    BOOST_REQUIRE(wallet.AvailableCoins(&coins, nullptr, filter));
+    BOOST_REQUIRE_EQUAL(coins.size(), 1U);
+    BOOST_CHECK(coins[0].fSpendable);
+    BOOST_CHECK(coins[0].fSolvable);
+    BOOST_CHECK_EQUAL(wallet.getPubKeyCalls, 0);
+
+    removeTxFromMempool(wtx);
+}
+
 void CheckBalances(const CWalletTx& tx,
                    const CAmount& nCreditAll,
                    const CAmount& nCreditSpendable,

@@ -6,6 +6,7 @@
 
 #include "budget/budgetmanager.h"
 
+#include "budget/budgetmanager_bridge.h"
 #include "consensus/validation.h"
 #include "evo/deterministicmns.h"
 #include "evo/governancevoteindex.h"
@@ -29,6 +30,22 @@
 static const std::string BUDGET_SYNC_REQUEST_RECV = "budget-sync-recv";
 
 CBudgetManager g_budgetman;
+
+bool IsBudgetProposalExpired(const uint256& proposalHash, int blockHeight)
+{
+    CBudgetProposal proposal;
+    return g_budgetman.GetProposal(proposalHash, proposal) && proposal.GetBlockEnd() < blockHeight;
+}
+
+void UpdateBudgetProposalCoinVotes(const uint256& proposalHash, int64_t coinAmount, bool fYes)
+{
+    g_budgetman.UpdateProposalCoinVotes(proposalHash, coinAmount, fYes);
+}
+
+void DecrementBudgetProposalCoinVotes(const uint256& proposalHash, int64_t coinAmount, bool fYes)
+{
+    g_budgetman.DecrementProposalCoinVotes(proposalHash, coinAmount, fYes);
+}
 
 static int GovernanceHistoryRetentionBlocks()
 {
@@ -420,7 +437,7 @@ bool CBudgetManager::AddProposal(CBudgetProposal& budgetProposal)
 
     // update expiration / heavily-downvoted
     int mnCount = mnodeman.CountEnabled();
-    if (!budgetProposal.UpdateValid(nCurrentHeight, mnCount)) {
+    if (!budgetProposal.UpdateValid(nCurrentHeight, mnCount, GetCoinGovernanceWeightFixed())) {
         if (!IsProposalInHistoryWindow(budgetProposal, nCurrentHeight)) {
             LogPrint(BCLog::MNBUDGET,"%s: Invalid budget proposal %s %s\n", __func__, nHash.ToString(), budgetProposal.IsInvalidLogStr());
             return false;
@@ -460,7 +477,7 @@ void CBudgetManager::CheckAndRemove()
         for (auto& it: mapProposals) {
             CBudgetProposal* pbudgetProposal = &(it.second);
             ApplyCoinVoteTotalsFromIndex(*pbudgetProposal);
-            if (!pbudgetProposal->UpdateValid(nCurrentHeight, mnCount)) {
+            if (!pbudgetProposal->UpdateValid(nCurrentHeight, mnCount, GetCoinGovernanceWeightFixed())) {
                 LogPrint(BCLog::MNBUDGET,"%s: Invalid budget proposal %s %s\n", __func__, (it.first).ToString(), pbudgetProposal->IsInvalidLogStr());
                 if (pbudgetProposal->IsExpired(nCurrentHeight) &&
                     nCurrentHeight < pbudgetProposal->GetBlockEnd() + historyRetentionBlocks) {

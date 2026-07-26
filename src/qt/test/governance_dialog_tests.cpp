@@ -3673,11 +3673,11 @@ void GovernanceDialogTests::proposalCardUsesRoundedVoteRailsInBothThemes()
     }
 }
 
-void GovernanceDialogTests::governanceHeaderSubtitleWrapsWithoutLegacyHeightCap()
+void GovernanceDialogTests::governanceHeaderSubtitleStaysCompactWithoutLegacyHeightCap()
 {
-    QFile file(resolveQtSourceFile("forms/governancewidget.ui"));
-    QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), "Failed to open governancewidget.ui");
-    const QString source = QString::fromUtf8(file.readAll());
+    QFile uiFile(resolveQtSourceFile("forms/governancewidget.ui"));
+    QVERIFY2(uiFile.open(QIODevice::ReadOnly | QIODevice::Text), "Failed to open governancewidget.ui");
+    const QString source = QString::fromUtf8(uiFile.readAll());
 
     const int headerStart = source.indexOf(QStringLiteral("<widget class=\"QWidget\" name=\"containerTitles\""));
     QVERIFY(headerStart >= 0);
@@ -3687,12 +3687,18 @@ void GovernanceDialogTests::governanceHeaderSubtitleWrapsWithoutLegacyHeightCap(
 
     QVERIFY2(headerSlice.contains(QStringLiteral("<widget class=\"QLabel\" name=\"labelSubtitle1\">")),
              "Subtitle label not found in header slice");
-    QVERIFY2(headerSlice.contains(QStringLiteral("<property name=\"wordWrap\">")),
-             "DAO subtitle must enable word wrap");
-    QVERIFY2(headerSlice.contains(QStringLiteral("<bool>true</bool>")),
-             "DAO subtitle wordWrap must be true");
+    QVERIFY2(headerSlice.contains(QStringLiteral("<height>64</height>")),
+             "Governance header should use the compact 64px height");
+    QVERIFY2(!headerSlice.contains(QStringLiteral("<height>80</height>")),
+             "Intermediate 80px governance header height still present");
     QVERIFY2(!headerSlice.contains(QStringLiteral("<height>60</height>")),
              "Legacy 60px header height cap still present");
+
+    QFile cppFile(resolveQtSourceFile("governancewidget.cpp"));
+    QVERIFY2(cppFile.open(QIODevice::ReadOnly | QIODevice::Text), "Failed to open governancewidget.cpp");
+    const QString cppSource = QString::fromUtf8(cppFile.readAll());
+    QVERIFY2(cppSource.contains(QStringLiteral("ui->labelSubtitle1->setWordWrap(false);")),
+             "Governance header subtitle should stay single-line to keep the header compact");
 }
 
 void GovernanceDialogTests::governanceWidgetUsesDedicatedDashboardClasses()
@@ -4002,10 +4008,10 @@ void GovernanceDialogTests::governanceHeaderCtaMatchesHeaderHeight()
     }
     const QString headerSlice = uiSource.mid(headerStart, 900);
     const QRegularExpression headerMinHeightRe(
-            QStringLiteral(R"(<property name=\"minimumSize\">\s*<size>\s*<width>0</width>\s*<height>96</height>)"),
+            QStringLiteral(R"(<property name=\"minimumSize\">\s*<size>\s*<width>0</width>\s*<height>64</height>)"),
             QRegularExpression::DotMatchesEverythingOption);
     QVERIFY2(headerMinHeightRe.match(headerSlice).hasMatch(),
-             "Governance header band should keep its 96px minimum height");
+             "Governance header band should keep its compact 64px minimum height");
 
     const int ctaStart = uiSource.indexOf(QStringLiteral("<widget class=\"OptionButton\" name=\"btnCreateProposal\""));
     QVERIFY(ctaStart >= 0);
@@ -4016,10 +4022,10 @@ void GovernanceDialogTests::governanceHeaderCtaMatchesHeaderHeight()
 
     const QString ctaSlice = uiSource.mid(ctaStart, 900);
     const QRegularExpression minHeightRe(
-            QStringLiteral(R"(<property name=\"minimumSize\">\s*<size>\s*<width>0</width>\s*<height>96</height>)"),
+            QStringLiteral(R"(<property name=\"minimumSize\">\s*<size>\s*<width>0</width>\s*<height>64</height>)"),
             QRegularExpression::DotMatchesEverythingOption);
     QVERIFY2(minHeightRe.match(ctaSlice).hasMatch(),
-             "Create Proposal CTA should match the 96px governance header height");
+             "Create Proposal CTA should match the compact 64px governance header height");
 }
 
 void GovernanceDialogTests::governanceWarningBandUsesRoundedBorderInBothThemes()
@@ -4439,7 +4445,7 @@ void GovernanceDialogTests::premiumHeadersRemainExpandableWithScaledFonts()
     ColdStakingWidget coldStakingWidget(&mainWindow);
     GovernanceWidget governanceWidget(&mainWindow);
 
-    const auto assertHeaderGeometry = [](QWidget& page, const QString& headerName) {
+    const auto assertHeaderGeometry = [](QWidget& page, const QString& headerName, bool allowCompactCap = false) {
         page.resize(1280, 720);
         page.show();
         QTest::qWait(20);
@@ -4456,8 +4462,13 @@ void GovernanceDialogTests::premiumHeadersRemainExpandableWithScaledFonts()
             return;
         }
 
-        QVERIFY2(header->maximumHeight() >= 100000,
-                 qPrintable(QString("%1 should not cap height for high-DPI font growth").arg(headerName)));
+        if (!allowCompactCap) {
+            QVERIFY2(header->maximumHeight() >= 100000,
+                     qPrintable(QString("%1 should not cap height for high-DPI font growth").arg(headerName)));
+        } else {
+            QVERIFY2(header->maximumHeight() <= 64,
+                     qPrintable(QString("%1 should keep the compact governance height cap").arg(headerName)));
+        }
 
         const QRect headerRect(QPoint(0, 0), header->size());
         const QRect titleRect(title->mapTo(header, QPoint(0, 0)), title->size());
@@ -4478,7 +4489,7 @@ void GovernanceDialogTests::premiumHeadersRemainExpandableWithScaledFonts()
     assertHeaderGeometry(addressesWidget, QStringLiteral("containerHeader"));
     assertHeaderGeometry(masternodesWidget, QStringLiteral("containerHeader"));
     assertHeaderGeometry(coldStakingWidget, QStringLiteral("containerTitle"));
-    assertHeaderGeometry(governanceWidget, QStringLiteral("containerTitles"));
+    assertHeaderGeometry(governanceWidget, QStringLiteral("containerTitles"), true);
 }
 
 void GovernanceDialogTests::dashboardWidgetUsesPremiumDashboardClasses()

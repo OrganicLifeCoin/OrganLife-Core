@@ -1552,8 +1552,11 @@ void static ProcessGetBlockData(CNode* pfrom, const CInv& inv, CConnman* connman
     if (send && (pindex->nStatus & BLOCK_HAVE_DATA)) {
         // Send block from disk
         CBlock block;
-        if (!ReadBlockFromDisk(block, pindex))
-            assert(!"cannot load block from disk");
+        if (!ReadBlockFromDisk(block, pindex)) {
+            LogPrintf("ProcessGetBlockData(): cannot load block from disk, peer=%i hash=%s\n",
+                      pfrom->GetId(), pindex->GetBlockHash().ToString());
+            return;
+        }
         if (inv.type == MSG_BLOCK)
             connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::BLOCK, block));
         else // MSG_FILTERED_BLOCK)

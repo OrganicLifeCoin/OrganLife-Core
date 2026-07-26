@@ -18,7 +18,6 @@
 #include "util/system.h"
 #include "utiltime.h"
 #include "wallet/wallet.h"
-#include "wallet/walletutil.h"
 
 #include <atomic>
 

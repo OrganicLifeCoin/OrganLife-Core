@@ -1,0 +1,14 @@
+--- a/qtbase/src/corelib/thread/qthread_win.cpp
++++ b/qtbase/src/corelib/thread/qthread_win.cpp
+@@ -220,7 +220,10 @@ void QThreadPrivate::setQualityOfServiceLevel(QThread::QualityOfService qosLevel
+         state.StateMask = 0; // Ask to disable throttling
+         break;
+     }
+-    if (!SetThreadInformation(::GetCurrentThread(), THREAD_INFORMATION_CLASS::ThreadPowerThrottling,
++    // Older MinGW headers define THREAD_INFORMATION_CLASS but not the
++    // ThreadPowerThrottling enumerator. Its documented value is 3.
++    constexpr auto threadPowerThrottling = static_cast<THREAD_INFORMATION_CLASS>(3);
++    if (!SetThreadInformation(::GetCurrentThread(), threadPowerThrottling,
+                               &state, sizeof(state))) {
+         qErrnoWarning("Failed to set thread power throttling state");
+     }

@@ -152,7 +152,7 @@ SendWidget::SendWidget(PIVXGUI* parent) :
     // Uri
     setCssProperty(ui->btnUri, "screen-side-option", true);
     ui->btnUri->setTitleClassAndText("btn-title-grey", tr("Open URI"));
-    ui->btnUri->setSubTitleClassAndText("text-subtitle", tr("Parse a 1776$ URI"));
+    ui->btnUri->setSubTitleClassAndText("text-subtitle", tr("Parse a CTEAM URI"));
 
     // Shield coins
     setCssProperty(ui->btnShieldCoins, "screen-side-option", true);
@@ -867,7 +867,7 @@ void SendWidget::onShieldCoinsClicked()
         ProcessSend(recipients, true, [this](QList<SendCoinsRecipient>& recipients) {
             auto res = walletModel->getNewShieldedAddress("");
             if (!res) {
-                inform(tr("Error generating address to shield 1776$s"));
+                inform(tr("Error generating address to shield CTEAM"));
                 return false;
             }
             recipients.back().address = QString::fromStdString(res.getObjResult()->ToString());
@@ -875,7 +875,7 @@ void SendWidget::onShieldCoinsClicked()
             return true;
         });
     } else {
-        inform(tr("You don't have any transparent 1776$s to shield."));
+        inform(tr("You don't have any transparent CTEAM to shield."));
     }
 }
 

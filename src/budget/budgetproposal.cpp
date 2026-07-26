@@ -5,10 +5,13 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "budget/budgetproposal.h"
-#include "budget/budgetmanager.h"
+#include "budget/budgetvoteutil.h"
 #include "chainparams.h"
 #include "logging.h"
+#include "net.h"
 #include "script/standard.h"
+#include "timedata.h"
+#include "util/system.h"
 #include "utilstrencodings.h"
 
 #include <algorithm>
@@ -84,9 +87,9 @@ void CBudgetProposal::SyncVotes(CNode* pfrom, bool fPartial, int& nInvCount) con
     }
 }
 
-bool CBudgetProposal::IsHeavilyDownvoted(int mnCount) const
+bool CBudgetProposal::IsHeavilyDownvoted(int mnCount, int64_t coinWeightFixed) const
 {
-    return IsHeavilyDownvotedHybrid(mnCount, g_budgetman.GetCoinGovernanceWeightFixed());
+    return IsHeavilyDownvotedHybrid(mnCount, coinWeightFixed);
 }
 
 bool CBudgetProposal::IsHeavilyDownvotedHybrid(int mnCount, int64_t coinWeightFixed) const
@@ -197,12 +200,12 @@ bool CBudgetProposal::updateExpired(int nCurrentHeight)
     return false;
 }
 
-bool CBudgetProposal::UpdateValid(int nCurrentHeight, int mnCount)
+bool CBudgetProposal::UpdateValid(int nCurrentHeight, int mnCount, int64_t coinWeightFixed)
 {
     fValid = false;
 
     // Never kill a proposal before the first superblock
-    if (nCurrentHeight > nBlockStart && IsHeavilyDownvoted(mnCount)) {
+    if (nCurrentHeight > nBlockStart && IsHeavilyDownvoted(mnCount, coinWeightFixed)) {
         return false;
     }
 
@@ -248,30 +251,7 @@ bool CBudgetProposal::IsExpired(int nCurrentHeight) const
 
 bool CBudgetProposal::AddOrUpdateVote(const CBudgetVote& vote, std::string& strError)
 {
-    std::string strAction = "New vote inserted:";
-    const COutPoint& mnId = vote.GetVin().prevout;
-    const int64_t voteTime = vote.GetTime();
-
-    if (mapVotes.count(mnId)) {
-        const int64_t& oldTime = mapVotes[mnId].GetTime();
-        if (oldTime > voteTime) {
-            strError = strprintf("new vote older than existing vote - %s\n", vote.GetHash().ToString());
-            LogPrint(BCLog::MNBUDGET, "%s: %s\n", __func__, strError);
-            return false;
-        }
-        if (voteTime - oldTime < BUDGET_VOTE_UPDATE_MIN) {
-            strError = strprintf("time between votes is too soon - %s - %lli sec < %lli sec\n",
-                    vote.GetHash().ToString(), voteTime - oldTime, BUDGET_VOTE_UPDATE_MIN);
-            LogPrint(BCLog::MNBUDGET, "%s: %s\n", __func__, strError);
-            return false;
-        }
-        strAction = "Existing vote updated:";
-    }
-
-    mapVotes[mnId] = vote;
-    LogPrint(BCLog::MNBUDGET, "%s: %s %s\n", __func__, strAction.c_str(), vote.GetHash().ToString().c_str());
-
-    return true;
+    return AddOrUpdateBudgetVote(mapVotes, vote, BUDGET_VOTE_UPDATE_MIN, __func__, strError);
 }
 
 UniValue CBudgetProposal::GetVotesArray() const

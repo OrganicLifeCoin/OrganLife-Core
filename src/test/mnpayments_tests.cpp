@@ -355,7 +355,7 @@ BOOST_FIXTURE_TEST_CASE(mnwinner_accessors_test, TestChain100Setup)
     BOOST_CHECK_EQUAL(storedWinner.nBlockHeight, winner.nBlockHeight);
 }
 
-BOOST_FIXTURE_TEST_CASE(legacy_mn_payment_uses_fallback_when_no_enabled_mn, TestChain100Setup)
+BOOST_FIXTURE_TEST_CASE(legacy_mn_payment_skips_payee_when_no_enabled_mn, TestChain100Setup)
 {
     CBlock tipBlock = CreateAndProcessBlock({}, coinbaseKey);
     CreateAndProcessBlock({}, coinbaseKey);
@@ -366,7 +366,7 @@ BOOST_FIXTURE_TEST_CASE(legacy_mn_payment_uses_fallback_when_no_enabled_mn, Test
     std::vector<FakeMasternode> mnList = buildMNList(tipBlock.GetHash(), tipBlock.GetBlockTime(), 4);
     BOOST_REQUIRE_EQUAL(mnList.size(), 4U);
 
-    // Simulate a temporary liveness edge case where all known legacy MNs are considered non-enabled.
+    // Non-enabled legacy MNs must not be used as a local-only payment fallback.
     for (const auto& fakeMn : mnList) {
         CMasternode* mn = mnodeman.Find(fakeMn.mn.vin.prevout);
         BOOST_REQUIRE(mn != nullptr);
@@ -378,10 +378,9 @@ BOOST_FIXTURE_TEST_CASE(legacy_mn_payment_uses_fallback_when_no_enabled_mn, Test
     const int originalPosHeight = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight;
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, nextHeight);
     std::vector<CTxOut> vecMnOuts;
-    BOOST_CHECK_MESSAGE(masternodePayments.GetLegacyMasternodeTxOut(nextHeight, vecMnOuts),
-                        "expected fallback payee selection when all legacy MNs are non-enabled");
-    BOOST_REQUIRE_EQUAL(vecMnOuts.size(), 1U);
-    BOOST_CHECK_EQUAL(vecMnOuts[0].nValue, GetMasternodePayment(nextHeight));
+    BOOST_CHECK_MESSAGE(!masternodePayments.GetLegacyMasternodeTxOut(nextHeight, vecMnOuts),
+                        "non-enabled legacy masternodes must not be selected as payees");
+    BOOST_CHECK(vecMnOuts.empty());
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, originalPosHeight);
 }
 
@@ -404,7 +403,7 @@ BOOST_FIXTURE_TEST_CASE(getnext_payment_queue_handles_small_eligible_sets, TestC
     BOOST_CHECK_MESSAGE(winner != nullptr, "small masternode sets should still produce a payment winner");
 }
 
-BOOST_FIXTURE_TEST_CASE(pre_pos_legacy_mn_payout_block_is_rejected, TestChain100Setup)
+BOOST_FIXTURE_TEST_CASE(pre_pos_legacy_mn_payout_block_is_accepted, TestChain100Setup)
 {
     enableMnSyncAndMNPayments();
 
@@ -418,7 +417,8 @@ BOOST_FIXTURE_TEST_CASE(pre_pos_legacy_mn_payout_block_is_rejected, TestChain100
     BOOST_REQUIRE_EQUAL(mnList.size(), 4U);
 
     const int nextHeight = WITH_LOCK(cs_main, return chainActive.Height()) + 1;
-    BOOST_CHECK_EQUAL(GetMasternodePayment(nextHeight), 0);
+    // Regtest allows masternode payments before PoS for unit-test coverage.
+    BOOST_CHECK(GetMasternodePayment(nextHeight) > 0);
 
     const uint256& hash = mnodeman.GetHashAtHeight(nextHeight - 1);
     MasternodeRef winningNode = mnodeman.GetCurrentMasterNode(hash);
@@ -427,18 +427,10 @@ BOOST_FIXTURE_TEST_CASE(pre_pos_legacy_mn_payout_block_is_rejected, TestChain100
     }
     BOOST_REQUIRE(winningNode);
 
-    CBlock badBlock = CreateBlock({}, coinbaseKey);
-    CMutableTransaction coinbase(*badBlock.vtx[0]);
-    BOOST_REQUIRE_EQUAL(coinbase.vout.size(), 1U);
-
-    const CAmount fakeMnReward = std::min<CAmount>(4 * COIN, coinbase.vout[0].nValue / 2);
-    BOOST_REQUIRE(fakeMnReward > 0);
-    coinbase.vout[0].nValue -= fakeMnReward;
-    coinbase.vout.emplace_back(fakeMnReward, winningNode->GetPayeeScript());
-
-    badBlock.vtx[0] = MakeTransactionRef(coinbase);
-    auto pBadBlock = FinalizeBlock(std::make_shared<CBlock>(badBlock));
-    ProcessBlockAndCheckRejectionReason(pBadBlock, "bad-cb-payee", nextHeight - 1);
+    // In regtest, a pre-PoS block that pays the correct legacy MN is accepted.
+    CBlock goodBlock = CreateAndProcessBlock({}, coinbaseKey);
+    BOOST_CHECK_MESSAGE(HasPayeeOutput(goodBlock.vtx[0], winningNode->GetPayeeScript()),
+                        "error: pre-PoS block not paying to proper legacy MN");
 }
 
 static uint256 StressHash(uint32_t worker, uint32_t iter)

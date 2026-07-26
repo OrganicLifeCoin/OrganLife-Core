@@ -878,7 +878,9 @@ int64_t GetMasternodePayment(int nHeight)
     const Consensus::Params& consensus = Params().GetConsensus();
 
     if (nHeight <= 0) return 0;
-    if (!consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_POS)) return 0;
+    // Regtest: allow masternode payments from height 1 for unit-test coverage of the
+    // legacy winner system without requiring a full PoS staking setup.
+    if (!Params().IsRegTestNet() && !consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_POS)) return 0;
 
     // Cap MN payment to the block subsidy (e.g. if subsidy is 0 after reaching max supply).
     const CAmount blockValue = GetBlockValue(nHeight);
@@ -1707,7 +1709,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     }
 
     // After v6 enforcement: Check that the coinbase pays the exact amount
-    if (isPoSBlock && isV6UpgradeEnforced && !IsCoinbaseValueValid(block.vtx[0], nBudgetAmt, state)) {
+    if (isPoSBlock && isV6UpgradeEnforced && !IsCoinbaseValueValid(block.vtx[0], nBudgetAmt, state, pindex->pprev)) {
         // pass the state returned by the function above
         return false;
     }

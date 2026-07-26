@@ -5,7 +5,7 @@
 
 #include "evo/governancevoteindex.h"
 
-#include "budget/budgetmanager.h"
+#include "budget/budgetmanager_bridge.h"
 #include "chain.h"
 #include "chainparams.h"
 #include "consensus/params.h"
@@ -115,9 +115,7 @@ bool CheckAndStageCast(const CGovVoteCastTx& castPayload,
                         CEvoDB& evoDb,
                         CValidationState& state)
 {
-    CBudgetProposal proposal;
-    if (g_budgetman.GetProposal(castPayload.proposalHash, proposal) &&
-            proposal.GetBlockEnd() < static_cast<int>(blockHeight)) {
+    if (IsBudgetProposalExpired(castPayload.proposalHash, static_cast<int>(blockHeight))) {
         return false;
     }
 
@@ -252,7 +250,7 @@ bool CGovernanceVoteIndex::ApplyCastTx(const CTransaction& tx, uint32_t blockHei
     evoDb.Write(std::make_pair(EVODB_GOV_TALLY, payload.proposalHash), tallyRecord);
 
     const bool fYesVote = (payload.voteDirection == CGovVoteCastTx::VOTE_YES);
-    g_budgetman.UpdateProposalCoinVotes(payload.proposalHash, castWeightCoins, fYesVote);
+    UpdateBudgetProposalCoinVotes(payload.proposalHash, castWeightCoins, fYesVote);
     return true;
 }
 
@@ -314,7 +312,7 @@ bool CGovernanceVoteIndex::UndoCastTx(const CTransaction& tx)
     }
 
     const bool fYesVote = (payload.voteDirection == CGovVoteCastTx::VOTE_YES);
-    g_budgetman.DecrementProposalCoinVotes(payload.proposalHash, castWeightCoins, fYesVote);
+    DecrementBudgetProposalCoinVotes(payload.proposalHash, castWeightCoins, fYesVote);
 
     return true;
 }

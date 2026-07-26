@@ -6,43 +6,37 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 /* Previous CTEAM palette kept for comparison: primary #F24A09, accent #FF8A3D, navy #22254A, neutral #7D7877, silver #DFE1E2. */
 
 *[cssClass="container"] {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #FFFFFF,
-        stop: 1 #FBF3E8);
+    background-color:#FFFFFF;
 }
 
 *[cssClass="container-border"] {
-    background-color:#FBF3E8;
+    background-color:#FFFFFF;
     border:  1px solid #FFFFFF;
 }
 
 *[cssClass="container-border-light"] {
-    background-color:#FBF3E8;
+    background-color:#FFFFFF;
     border:  1px solid #E8DCCF;
     border-radius:2px;
 }
 
 *[cssClass="container_right"] {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #FFFFFF,
-        stop: 1 #FBF3E8);
+    background-color:#FFFFFF;
     border-left:  1px solid #E8DCCF;
 }
 
 *[cssClass="container-right"] {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #FFFFFF,
-        stop: 1 #FBF3E8);
+    background-color:#FFFFFF;
     border-left:  1px solid #E8DCCF;
 }
 
 *[cssClass="container-square"] {
-    background-color:#FBF3E8;
+    background-color:#FFFFFF;
     border:  1px solid #E8DCCF;
 }
 
 *[cssClass="container-options"] {
-    background-color:#FBF3E8;
+    background-color:#FFFFFF;
     border-bottom: 1px solid #E8DCCF;
     border-radius: 8px;
 }
@@ -57,7 +51,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="container-border-purple"] {
-    background-color:#FBF3E8;
+    background-color:#FFFFFF;
     border:  1px solid #9C4E1A;
     border-radius:2px;
 }
@@ -432,30 +426,18 @@ HH       TOP BAR
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="container-top"] {
-    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-        stop: 0 #FFF4E8,
-        stop: 0.25 #FFFFFF,
-        stop: 0.75 #FFFFFF,
-        stop: 1 #FFF4E8);
+    background-color:#FFFFFF;
     border-bottom: 1px solid #E8DCCF;
 }
 
 *[cssClass="container-top-home"] {
-    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-        stop: 0 #FFF4E8,
-        stop: 0.25 #FFFFFF,
-        stop: 0.75 #FFFFFF,
-        stop: 1 #FFF4E8);
+    background-color:#FFFFFF;
     border-bottom: 1px solid #E8DCCF;
     border-top-left-radius: 16px;
 }
 
 *[cssClass="container-topbar-no-image"] {
-    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-        stop: 0 #FFF4E8,
-        stop: 0.25 #FFFFFF,
-        stop: 0.75 #FFFFFF,
-        stop: 1 #FFF4E8);
+    background-color:#FFFFFF;
 }
 
 *[cssClass="text-title-topbar"] {
@@ -2284,9 +2266,10 @@ QLineEdit[cssClass="dashboard-filter-line"] {
 }
 
 QListView[cssClass="dashboard-transactions-list"] {
-    background: transparent;
-    border: 0;
-    padding: 4px 0 0 0;
+    background-color: #FFFFFF;
+    border: 1px solid #EAD2BE;
+    border-radius: 16px;
+    padding: 6px 6px 6px 6px;
     outline: 0;
 }
 
@@ -2404,8 +2387,8 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 }
 
 *[cssClass="dashboard-tx-row"] {
-    background-color: transparent;
-    border: 1px solid transparent;
+    background-color: #FFFFFF;
+    border: 1px solid rgba(234, 210, 190, 0.68);
     border-radius: 16px;
 }
 
@@ -2645,7 +2628,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 *[cssClass="governance-dashboard-shell"] {
     border: 1px solid #EAD2BE;
     border-radius: 22px;
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #FFFFFF, stop:1 #FFF4E8);
+    background-color: #FFFFFF;
 }
 
 *[cssClass="screen-header-band"] {
@@ -2675,17 +2658,13 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="screen-side-rail"] {
     border-left: 1px solid #EAD2BE;
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 rgba(255, 248, 245, 0.96),
-        stop:1 rgba(250, 247, 245, 0.92));
+    background-color: #FFFFFF;
 }
 
 *[cssClass="screen-side-card"] {
     border: 1px solid rgba(243, 216, 204, 0.96);
     border-radius: 16px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(255, 255, 255, 0.98),
-        stop:1 rgba(255, 244, 239, 0.94));
+    background-color: #FFFFFF;
 }
 
 *[cssClass="screen-side-section-title"] {
@@ -2743,36 +2722,36 @@ QComboBox[cssClass="governance-dashboard-filter"]::down-arrow {
 *[cssClass="governance-dashboard-warning"] {
     border: 1px solid #E5A15E;
     border-radius: 14px;
-    background-color: #FFF4E8;
+    background-color: #FFFFFF;
 }
 
 *[cssClass="governance-dashboard-surface"] {
-    background-color: transparent;
+    background-color: #FFFFFF;
     border: none;
 }
 
 QScrollArea[cssClass="governance-dashboard-surface"],
 QScrollArea[cssClass="governance-dashboard-surface"] QWidget#qt_scrollarea_viewport {
     border: none;
-    background-color: transparent;
+    background-color: #FFFFFF;
 }
 
 *[cssClass="governance-side-rail"] {
-    background-color: transparent;
+    background-color: #FFFFFF;
 }
 
 *[cssClass="governance-title"] {
     color: #3A2418;
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 700;
 }
 
 *[cssClass="governance-subtitle"] {
     color: #8A7667;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 500;
-    padding-top: 6px;
-    padding-bottom: 6px;
+    padding-top: 0px;
+    padding-bottom: 0px;
 }
 
 OptionButton[cssClass="governance-header-cta"] {
@@ -2787,16 +2766,12 @@ OptionButton[cssClass="screen-side-option"] {
 OptionButton[cssClass="screen-side-option"] QWidget#layoutOptions2 {
     border: 1px solid #EAD2BE;
     border-radius: 16px;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(255, 255, 255, 0.98),
-        stop:1 rgba(255, 244, 239, 0.94));
+    background-color: #FFFFFF;
 }
 
 OptionButton[cssClass="screen-side-option"] QWidget#layoutOptions2[hovered="true"] {
     border: 1px solid #F0BFA9;
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(255, 255, 255, 1.0),
-        stop:1 rgba(255, 244, 239, 0.98));
+    background-color: #FFFFFF;
 }
 
 OptionButton[cssClass="screen-side-option"] QLabel#labelTitleChange {
@@ -2850,13 +2825,13 @@ OptionButton[cssClass="governance-header-cta"] QWidget#layoutOptions2[hovered="t
 
 OptionButton[cssClass="governance-header-cta"] QLabel[cssClass="governance-cta-title"] {
     color: #3A2418;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
 }
 
 OptionButton[cssClass="governance-header-cta"] QLabel[cssClass="governance-cta-subtitle"] {
     color: #8A7667;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
 }
 
@@ -2884,7 +2859,7 @@ QLabel[cssClass="governance-warning-text"] {
 *[cssClass="governance-budget-panel"] {
     border: 1px solid #EAD2BE;
     border-radius: 18px;
-    background-color: rgba(255, 255, 255, 0.78);
+    background-color: #FFFFFF;
 }
 
 *[cssClass="governance-budget-title"] {
@@ -2916,7 +2891,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 
 *[cssClass="card-governance"] {
-    background-color:qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #FFFFFF, stop:1 #FFF4E8);
+    background-color:#FFFFFF;
     border:  1px solid #EAD2BE;
     border-radius: 16px;
 }
@@ -3858,7 +3833,7 @@ HH             SEND
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="container-coin-type"] {
-    background-color:#FBF3E8;
+    background-color:#FFFFFF;
     border:  1px solid #C7C4C2;
     border-radius: 8px;
 }
@@ -5146,11 +5121,11 @@ QTextEdit[cssClass="container"],
 QPlainTextEdit[cssClass="container"],
 QScrollArea[cssClass="container"],
 QScrollArea[cssClass="container"] QWidget#qt_scrollarea_viewport {
-    background-color: #FBF3E8;
+    background-color: #FFFFFF;
     color: #32313A;
 }
 
-/* Keep VoteDialog modern controls authoritative after generic dialog/radio rules above. */
+/* VoteDialog toggle rules must override generic dialog/radio rules above. */
 QFrame#voteDialogShell QRadioButton[cssClass="vote-mode-toggle"] {
     spacing: 0px;
     color: #5E4A3C;

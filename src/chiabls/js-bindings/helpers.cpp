@@ -55,36 +55,4 @@ namespace helpers {
         return vec;
     }
 
-    std::vector<std::vector<uint8_t>> jsBuffersArrayToVector(val buffersArray) {
-        auto l = buffersArray["length"].as<unsigned>();
-        std::vector<std::vector<uint8_t>> vec;
-        for (unsigned i = 0; i < l; ++i) {
-            vec.push_back(toVector(buffersArray[i].as<val>()));
-        }
-        return vec;
-    }
-
-    std::vector<bn_t *> jsBuffersArrayToBnVector(val buffersArray) {
-        auto l = buffersArray["length"].as<unsigned>();
-        std::vector<bn_t *> vec;
-        for (unsigned i = 0; i < l; ++i) {
-            bn_t data;
-            bn_new(data);
-            std::vector<uint8_t> bnVec = toVector(buffersArray[i]);
-            bn_read_bin(data, bnVec.data(), static_cast<int>(bnVec.size()));
-            bn_t *point = &data;
-            vec.push_back(point);
-        }
-        return vec;
-    }
-
-    val byteArraysVectorToJsBuffersArray(std::vector<uint8_t *> arraysVector, size_t element_size) {
-        auto vecSize = arraysVector.size();
-        std::vector<val> valVector;
-        for (unsigned i = 0; i < vecSize; ++i) {
-            valVector.push_back(toUint8Array(arraysVector[i], element_size));
-        }
-        val arr = helpers::toJSArray<val>(valVector);
-        return arr;
-    }
 }  // namespace helpers

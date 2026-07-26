@@ -1159,7 +1159,7 @@
                     <item>
                      <widget class="QLabel" name="labelResultAmount">
                       <property name="text">
-                       <string notr="true">5500 1776$</string>
+                       <string notr="true">5500 CTEAM</string>
                       </property>
                       <property name="alignment">
                        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>

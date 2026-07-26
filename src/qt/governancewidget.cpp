@@ -56,6 +56,8 @@ GovernanceWidget::GovernanceWidget(PIVXGUI* parent) :
     setCssProperty(ui->left, "governance-dashboard-shell");
     ui->left->setContentsMargins(0, 0, 0, 0);
     setCssProperty(ui->containerTitles, "governance-dashboard-band");
+    ui->containerTitles->setMinimumHeight(64);
+    ui->containerTitles->setMaximumHeight(64);
     setCssProperty(ui->containerSort, "governance-dashboard-filter-shell");
     setCssProperty(ui->containerFilter, "governance-dashboard-filter-shell");
     setCssProperty(ui->right, "governance-side-rail");
@@ -68,7 +70,7 @@ GovernanceWidget::GovernanceWidget(PIVXGUI* parent) :
     ui->labelTitle->setText(tr("Governance"));
     setCssProperty(ui->labelTitle, "governance-title");
     ui->labelSubtitle1->setText(tr("View, follow, vote and submit network budget proposals. Be part of the DAO."));
-    ui->labelSubtitle1->setWordWrap(true);
+    ui->labelSubtitle1->setWordWrap(false);
     setCssProperty(ui->labelSubtitle1, "governance-subtitle");
     setCssProperty(ui->pushImgEmpty, "img-empty-governance");
     setCssProperty(ui->labelEmpty, "text-empty");
@@ -122,12 +124,14 @@ GovernanceWidget::GovernanceWidget(PIVXGUI* parent) :
 
     // Create proposal
     setCssProperty(ui->btnCreateProposal, "governance-header-cta", true);
+    ui->btnCreateProposal->setMinimumHeight(64);
+    ui->btnCreateProposal->setMaximumHeight(64);
     ui->btnCreateProposal->setTitleClassAndText("governance-cta-title", tr("Create Proposal"));
     ui->btnCreateProposal->setSubTitleClassAndText("governance-cta-subtitle", tr("Prepare and submit a new proposal."));
     ui->btnCreateProposal->setRightIconClass("governance-cta-arrow", true);
     if (QWidget* ctaBody = ui->btnCreateProposal->findChild<QWidget*>("layoutOptions2")) {
         ctaBody->setAttribute(Qt::WA_Hover, true);
-        ctaBody->setContentsMargins(14, 10, 10, 10);
+        ctaBody->setContentsMargins(12, 6, 8, 6);
     }
     connect(ui->btnCreateProposal, &OptionButton::clicked, this, &GovernanceWidget::onCreatePropClicked);
     ui->emptyContainer->setVisible(false);

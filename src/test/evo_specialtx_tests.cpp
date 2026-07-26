@@ -543,6 +543,12 @@ BOOST_AUTO_TEST_CASE(gov_votecast_accepts_same_block_lock_without_mempool_lookup
     const uint256 indexHash = GetRandHash();
     index.phashBlock = &indexHash;
 
+    // Disable DIP3 enforcement for this test — we are validating governance
+    // vote transactions, not DMN list transitions. The fake block indexes
+    // used here do not exist in the DMN database, so ProcessBlock would
+    // otherwise throw "failed-dmn-block".
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+
     CValidationState state;
     BOOST_CHECK(ProcessSpecialTxsInBlock(block, &index, &view, state, true));
 }

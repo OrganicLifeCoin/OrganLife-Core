@@ -97,7 +97,7 @@
             <item alignment="Qt::AlignTop">
              <widget class="QLabel" name="labelSubtitle1">
               <property name="text">
-               <string>Scan the QR code or copy the address to receive 1776$</string>
+               <string>Scan the QR code or copy the address to receive CTEAM</string>
               </property>
              </widget>
             </item>
@@ -220,7 +220,7 @@
              <item alignment="Qt::AlignHCenter|Qt::AlignTop">
               <widget class="QLabel" name="labelSubtitle2">
                <property name="text">
-                <string>Accept transparent or shielded 1776$</string>
+                <string>Accept transparent or shielded CTEAM</string>
                </property>
                <property name="alignment">
                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>

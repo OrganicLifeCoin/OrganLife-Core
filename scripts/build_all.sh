@@ -67,7 +67,7 @@ assert_file_arch() {
   fi
   local desc
   desc=$(file -b "$path" || true)
-  if ! echo "$desc" | rg -q "$expect"; then
+  if ! echo "$desc" | grep -Eq "$expect"; then
     echo "unexpected arch for $path" >&2
     echo "  got: $desc" >&2
     echo "  want regex: $expect" >&2

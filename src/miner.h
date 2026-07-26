@@ -14,6 +14,7 @@
 class CBlock;
 class CBlockHeader;
 class CBlockIndex;
+class CChainParams;
 class CStakeableOutput;
 class CReserveKey;
 class CScript;
@@ -22,6 +23,9 @@ class CWallet;
 struct CBlockTemplate;
 
 static const bool DEFAULT_PRINTPRIORITY = false;
+
+int GetMinimumStakingPeerEvidence(const CChainParams& params);
+bool RequiresNearTipStakingPeerEvidence(const CChainParams& params);
 
 #ifdef ENABLE_WALLET
     /** Run the miner threads */

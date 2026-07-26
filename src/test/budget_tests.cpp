@@ -58,7 +58,10 @@ BOOST_AUTO_TEST_CASE(masternode_value)
     SelectParams(CBaseChainParams::REGTEST);
     const int posActivationHeight = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight;
     const CAmount expectedAtPos = std::min(Params().GetConsensus().nNewMNBlockReward, GetBlockValue(posActivationHeight));
-    BOOST_CHECK_EQUAL(GetMasternodePayment(posActivationHeight - 1), 0);
+    // Regtest enables masternode payments from height 1 to allow unit-testing
+    // the legacy winner system without requiring a full PoS staking setup.
+    const CAmount expectedPrePos = std::min(Params().GetConsensus().nNewMNBlockReward, GetBlockValue(1));
+    BOOST_CHECK_EQUAL(GetMasternodePayment(1), expectedPrePos);
     BOOST_CHECK_EQUAL(GetMasternodePayment(posActivationHeight), expectedAtPos);
 }
 
@@ -460,33 +463,33 @@ BOOST_FIXTURE_TEST_CASE(IsCoinbaseValueValid_test, TestingSetup)
 
     // Exact (mnAmt, which is 0 in PoW phase)
     CMutableTransaction cbase = NewCoinBase(1, mnAmt, cbaseScript);
-    BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+    BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
 
     // If mnAmt is 0, skip underpay/overpay tests that require positive amounts
     if (mnAmt > 0) {
         cbase.vout[0].nValue /= 2;
         cbase.vout.emplace_back(cbase.vout[0]);
-        BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
 
         // Underpaying with SPORK_8 disabled (good)
         cbase.vout.clear();
         cbase.vout.emplace_back(mnAmt - 1, cbaseScript);
-        BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
         cbase.vout[0].nValue = mnAmt/2;
         cbase.vout.emplace_back(cbase.vout[0]);
         cbase.vout[1].nValue = mnAmt/2 - 1;
-        BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
 
         // Overpaying with SPORK_8 disabled
         cbase.vout.clear();
         cbase.vout.emplace_back(mnAmt + 1, cbaseScript);
-        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
         BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt-spork8-disabled");
         state = CValidationState();
         cbase.vout[0].nValue = mnAmt/2;
         cbase.vout.emplace_back(cbase.vout[0]);
         cbase.vout[1].nValue = mnAmt/2 + 1;
-        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
         BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt-spork8-disabled");
         state = CValidationState();
 
@@ -499,35 +502,36 @@ BOOST_FIXTURE_TEST_CASE(IsCoinbaseValueValid_test, TestingSetup)
         // Underpaying with SPORK_8 enabled
         cbase.vout.clear();
         cbase.vout.emplace_back(mnAmt - 1, cbaseScript);
-        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
         BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt");
         state = CValidationState();
         cbase.vout[0].nValue = mnAmt/2;
         cbase.vout.emplace_back(cbase.vout[0]);
         cbase.vout[1].nValue = mnAmt/2 - 1;
-        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
         BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt");
         state = CValidationState();
 
         // Overpaying with SPORK_8 enabled
         cbase.vout.clear();
         cbase.vout.emplace_back(mnAmt + 1, cbaseScript);
-        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
         BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt");
         state = CValidationState();
         cbase.vout[0].nValue = mnAmt/2;
         cbase.vout.emplace_back(cbase.vout[0]);
         cbase.vout[1].nValue = mnAmt/2 + 1;
-        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
         BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt");
         state = CValidationState();
     } else {
-        // PoW phase: MN expected payment is 0.
-        // IsCoinbaseValueValid intentionally skips MN payee amount enforcement in this case;
-        // block reward amount is validated by IsBlockValueValid at block validation level.
+        // PoW phase: MN expected payment is 0, but no masternode payee exists.
+        // IsCoinbaseValueValid requires coinbase to be exactly 0 when there is no payee.
         cbase.vout.clear();
         cbase.vout.emplace_back(1, cbaseScript);
-        BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state));
+        BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt");
+        state = CValidationState();
     }
 
     const CAmount budgAmt = 200 * COIN;
@@ -537,35 +541,58 @@ BOOST_FIXTURE_TEST_CASE(IsCoinbaseValueValid_test, TestingSetup)
     // Exact
     cbase.vout.clear();
     cbase.vout.emplace_back(budgAmt, cbaseScript);
-    BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state));
+    BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state, chainActive.Tip()));
     cbase.vout[0].nValue /= 2;
     cbase.vout.emplace_back(cbase.vout[0]);
-    BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state));
+    BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state, chainActive.Tip()));
 
     // Underpaying
     cbase.vout.clear();
     cbase.vout.emplace_back(budgAmt - 1, cbaseScript);
-    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state));
+    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state, chainActive.Tip()));
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-superblock-cb-amt");
     state = CValidationState();
     cbase.vout[0].nValue = budgAmt/2;
     cbase.vout.emplace_back(cbase.vout[0]);
     cbase.vout[1].nValue = budgAmt/2 - 1;
-    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state));
+    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state, chainActive.Tip()));
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-superblock-cb-amt");
     state = CValidationState();
 
     // Overpaying
     cbase.vout.clear();
     cbase.vout.emplace_back(budgAmt + 1, cbaseScript);
-    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state));
+    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state, chainActive.Tip()));
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-superblock-cb-amt");
     state = CValidationState();
     cbase.vout[0].nValue = budgAmt/2;
     cbase.vout.emplace_back(cbase.vout[0]);
     cbase.vout[1].nValue = budgAmt/2 + 1;
-    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state));
+    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), budgAmt, state, chainActive.Tip()));
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-superblock-cb-amt");
+}
+
+BOOST_FIXTURE_TEST_CASE(coinbase_value_deferred_when_tiertwo_unsynced, TestingSetup)
+{
+    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_INITIAL);
+
+    const CScript& cbaseScript = GetRandomP2PKH();
+    const CAmount mnAmt = GetMasternodePayment(chainActive.Tip()->nHeight + 1);
+    CMutableTransaction cbase = NewCoinBase(1, mnAmt, cbaseScript);
+    CValidationState state;
+
+    BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
+
+    cbase.vout[0].nValue = 0;
+    state = CValidationState();
+    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
+    BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt");
+
+    cbase.vout[0].nValue = mnAmt;
+    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_FINISHED);
+    state = CValidationState();
+    BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
+    BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt");
 }
 
 BOOST_AUTO_TEST_CASE(fbv_signverify_bls)

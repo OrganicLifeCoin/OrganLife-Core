@@ -9,12 +9,13 @@
 
 #include "addressbook.h"
 #include "amount.h"
+#include "chainparams.h"
 #include "coincontrol.h"
 #include "core_io.h"
 #include "destination_io.h"
 #include "httpserver.h"
 #include "key_io.h"
-#include "masternode-sync.h"
+#include "masternode-payments.h"
 #include "messagesigner.h"
 #include "net.h"
 #include "policy/feerate.h"
@@ -26,6 +27,7 @@
 #include "spork.h"
 #include "timedata.h"
 #include "utilmoneystr.h"
+#include "validation.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/walletutil.h"
@@ -35,6 +37,28 @@
 
 
 static const std::string WALLET_ENDPOINT_BASE = "/wallet/";
+
+static bool HasUsableStakingPeerConnection()
+{
+    if (!g_connman)
+        return false;
+
+    std::vector<CNodeStats> vstats;
+    g_connman->GetNodeStats(vstats);
+    for (const CNodeStats& stats : vstats) {
+        if (stats.m_masternode_connection || stats.m_masternode_probe_connection)
+            continue;
+        if (stats.nVersion > 0)
+            return true;
+    }
+    return false;
+}
+
+static bool HasRequiredStakingPaymentData()
+{
+    CBlockIndex* pindexPrev = WITH_LOCK(cs_main, return chainActive.Tip(););
+    return CanBuildRequiredMasternodePayment(pindexPrev);
+}
 
 CWallet* GetWalletForJSONRPCRequest(const JSONRPCRequest& request)
 {
@@ -2996,9 +3020,59 @@ static void MaybePushAddress(UniValue & entry, const CTxDestination &dest)
         entry.pushKV("address", EncodeDestination(dest));
 }
 
+static bool ListCoinStakeTransaction(CWallet* const pwallet, const CWalletTx& wtx, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    if (!wtx.IsCoinStake()) {
+        return false;
+    }
+
+    const int depth = wtx.GetDepthInMainChain();
+    if (depth < nMinDepth) {
+        return true;
+    }
+
+    UniValue entry(UniValue::VOBJ);
+    const CAmount nNet = wtx.GetCredit(filter) - wtx.GetDebit(filter);
+    const bool fColdStake = filter & ISMINE_COLD;
+    for (unsigned int i = 1; i < wtx.tx->vout.size(); ++i) {
+        const CTxOut& txout = wtx.tx->vout[i];
+        if (!(pwallet->IsMine(txout) & filter)) {
+            continue;
+        }
+
+        CTxDestination destination;
+        if (ExtractDestination(txout.scriptPubKey, destination, fColdStake)) {
+            MaybePushAddress(entry, destination);
+            if (pwallet->HasAddressBook(destination)) {
+                entry.pushKV("label", pwallet->GetNameForAddressBookEntry(destination));
+            }
+        }
+        entry.pushKV("vout", static_cast<int>(i));
+        break;
+    }
+
+    if (depth < 1) {
+        entry.pushKV("category", "orphan");
+    } else if (wtx.GetBlocksToMaturity() > 0) {
+        entry.pushKV("category", "immature");
+    } else {
+        entry.pushKV("category", "generate");
+    }
+    entry.pushKV("amount", ValueFromAmount(nNet));
+    if (fLong) {
+        WalletTxToJSON(wtx, entry);
+    }
+    ret.push_back(entry);
+    return true;
+}
+
 static void ListTransactions(CWallet* const pwallet, const CWalletTx& wtx, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
+
+    if (ListCoinStakeTransaction(pwallet, wtx, nMinDepth, fLong, ret, filter)) {
+        return;
+    }
 
     CAmount nFee;
     std::list<COutputEntry> listReceived;
@@ -3342,11 +3416,16 @@ UniValue gettransaction(const JSONRPCRequest& request)
     CAmount nCredit = wtx.GetCredit(filter);
     CAmount nDebit = wtx.GetDebit(filter);
     CAmount nNet = nCredit - nDebit;
-    CAmount nFee = (wtx.IsFromMe(filter) ? wtx.tx->GetValueOut() - nDebit : 0);
 
-    entry.pushKV("amount", ValueFromAmount(nNet - nFee));
-    if (wtx.IsFromMe(filter))
-        entry.pushKV("fee", ValueFromAmount(nFee));
+    if (wtx.IsCoinStake()) {
+        entry.pushKV("amount", ValueFromAmount(nNet));
+    } else {
+        CAmount nFee = (wtx.IsFromMe(filter) ? wtx.tx->GetValueOut() - nDebit : 0);
+        entry.pushKV("amount", ValueFromAmount(nNet - nFee));
+        if (wtx.IsFromMe(filter)) {
+            entry.pushKV("fee", ValueFromAmount(nFee));
+        }
+    }
 
     WalletTxToJSON(wtx, entry);
 
@@ -4437,15 +4516,19 @@ UniValue getstakingstatus(const JSONRPCRequest& request)
 
     if (!pwallet)
         throw JSONRPCError(RPC_IN_WARMUP, "Try again after active chain is loaded");
+
+    const bool fHaveConnections = HasUsableStakingPeerConnection();
+    const bool fPaymentDataReady = HasRequiredStakingPaymentData();
     {
         LOCK2(cs_main, &pwallet->cs_wallet);
         UniValue obj(UniValue::VOBJ);
-        obj.pushKV("staking_status", pwallet->pStakerStatus->IsActive());
-        obj.pushKV("staking_enabled", gArgs.GetBoolArg("-staking", DEFAULT_STAKING));
+        const bool fStakingEnabled = gArgs.GetBoolArg("-staking", DEFAULT_STAKING);
+        obj.pushKV("staking_status", fStakingEnabled && fHaveConnections && fPaymentDataReady && !pwallet->IsLocked() && pwallet->pStakerStatus->IsActive());
+        obj.pushKV("staking_enabled", fStakingEnabled);
         bool fColdStaking = gArgs.GetBoolArg("-coldstaking", true);
         obj.pushKV("coldstaking_enabled", fColdStaking);
-        obj.pushKV("haveconnections", (g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) > 0));
-        obj.pushKV("mnsync", !masternodeSync.NotCompleted());
+        obj.pushKV("haveconnections", fHaveConnections);
+        obj.pushKV("mnsync", fPaymentDataReady);
         obj.pushKV("walletunlocked", !pwallet->IsLocked());
         std::vector<CStakeableOutput> vCoins;
         pwallet->StakeableCoins(&vCoins);

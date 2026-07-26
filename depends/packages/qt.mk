@@ -4,7 +4,7 @@ $(package)_download_path=https://download.qt.io/official_releases/qt/6.10/$($(pa
 $(package)_file_name=qt-everywhere-src-$($(package)_version).tar.xz
 $(package)_sha256_hash=c3df0f0e421130cc52ed81cb712358804471ce9bd2a41d97828f9f5b1bf7fed2
 $(package)_dependencies=zlib
-$(package)_patches=fix_qyieldcpu_arm_acle.patch
+$(package)_patches=fix_qyieldcpu_arm_acle.patch mingw-thread-power-throttling.patch mingw-network-header-compat.patch mingw-optional-d3d12.patch mingw-win10-header-compat.patch mingw-dpi-awareness-compat.patch
 $(package)_linux_dependencies=freetype fontconfig libxcb xcb_util xcb_util_image xcb_util_keysyms xcb_util_renderutil xcb_util_wm xcb_util_cursor xkbcommon
 
 ifneq ($(host_arch)_$(host_os),$(build_arch)_$(build_os))
@@ -80,10 +80,24 @@ $(package)_config_opts_aarch64_linux += -skip qttools,qttranslations
 $(package)_config_opts_darwin += QT_NO_APPLE_SDK_MAX_VERSION_CHECK=ON
 
 $(package)_config_opts_mingw32 += -no-pkg-config
+# Ubuntu 20.04's MinGW GCC 9.3 accepts these Qt feature probes but ICEs when
+# compiling Qt's bundled image/regex sources with the emitted hardening flags.
+$(package)_cmake_opts_mingw32 += -DFEATURE_intelcet=OFF
+$(package)_cmake_opts_mingw32 += -DFEATURE_stack_protector=OFF
+$(package)_cmake_opts_mingw32 += -DFEATURE_stack_clash_protection=OFF
+$(package)_cmake_opts_mingw32 += -DFEATURE_libstdcpp_assertions=OFF
+$(package)_cmake_opts_mingw32 += -DFEATURE_schannel=OFF
+$(package)_cmake_opts_mingw32 += -DFEATURE_networklistmanager=OFF
+$(package)_cmake_opts_mingw32 += -DFEATURE_accessibility=OFF
 endef
 
 define $(package)_preprocess_cmds
-  patch -p1 < $($(package)_patch_dir)/fix_qyieldcpu_arm_acle.patch
+  patch -p1 < $($(package)_patch_dir)/fix_qyieldcpu_arm_acle.patch && \
+  patch -p1 < $($(package)_patch_dir)/mingw-thread-power-throttling.patch && \
+  patch -p1 < $($(package)_patch_dir)/mingw-network-header-compat.patch && \
+  patch -p1 < $($(package)_patch_dir)/mingw-optional-d3d12.patch && \
+  patch -p1 < $($(package)_patch_dir)/mingw-win10-header-compat.patch && \
+  patch -p1 < $($(package)_patch_dir)/mingw-dpi-awareness-compat.patch
 endef
 
 define $(package)_extract_cmds
@@ -128,7 +142,7 @@ define $(package)_config_cmds
     echo 'set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)' >> $(host_prefix)/mingw-toolchain.cmake && \
     echo 'set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)' >> $(host_prefix)/mingw-toolchain.cmake && \
     cd qtbase && \
-    ./configure -top-level $($(package)_config_opts) -- -DCMAKE_TOOLCHAIN_FILE=$(host_prefix)/mingw-toolchain.cmake -DFEATURE_system_doubleconversion=OFF -DQT_HOST_PATH=$(build_prefix) -DQt6HostInfo_DIR=$(build_prefix)/lib/cmake/Qt6HostInfo -DCMAKE_PREFIX_PATH=$(build_prefix)/lib/cmake; \
+    ./configure -top-level $($(package)_config_opts) -- -DCMAKE_TOOLCHAIN_FILE=$(host_prefix)/mingw-toolchain.cmake -DFEATURE_system_doubleconversion=OFF -DQT_HOST_PATH=$(build_prefix) -DQt6HostInfo_DIR=$(build_prefix)/lib/cmake/Qt6HostInfo -DCMAKE_PREFIX_PATH=$(build_prefix)/lib/cmake $($(package)_cmake_opts_mingw32); \
   elif echo "$(host)" | grep -q "linux" && test "$(host_arch)_$(host_os)" != "$(build_arch)_$(build_os)"; then \
     echo 'set(CMAKE_SYSTEM_NAME Linux)' > $(host_prefix)/linux-toolchain.cmake && \
     echo 'set(CMAKE_SYSTEM_PROCESSOR $(host_arch))' >> $(host_prefix)/linux-toolchain.cmake && \

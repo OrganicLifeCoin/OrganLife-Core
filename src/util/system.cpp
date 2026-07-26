@@ -977,7 +977,7 @@ std::string ArgsManager::GetChainName() const
         return CBaseChainParams::REGTEST;
     if (fTestNet)
         return CBaseChainParams::TESTNET;
-    return CBaseChainParams::TESTNET;
+    return CBaseChainParams::MAIN;
 }
 
 bool RenameOver(fs::path src, fs::path dest)

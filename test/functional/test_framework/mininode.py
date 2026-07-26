@@ -428,6 +428,11 @@ class P2PInterface(P2PConnection):
         self.ping_counter += 1
 
 
+class P2PNoVerack(P2PInterface):
+    def on_version(self, message):
+        pass
+
+
 # One lock for synchronizing all data access between the network event loop (see
 # NetworkThread below) and the thread running the test logic.  For simplicity,
 # P2PConnection acquires this lock whenever delivering a message to a P2PInterface.

@@ -6,6 +6,9 @@ $(package)_sha256_hash=a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c4
 
 define $(package)_set_vars
 $(package)_config_opts+=--enable-cxx --with-pic --disable-shared --enable-option-checking
+$(package)_config_opts+=--build=$(build)
+$(package)_config_env+=CC_FOR_BUILD="$(build_CC)"
+$(package)_config_env+=CPP_FOR_BUILD="$(build_CC) -E"
 $(package)_config_opts_mingw32+=--enable-mingw
 # Disable assembly and fat build when cross-compiling x86_64 on Apple Silicon
 $(package)_config_opts_x86_64_darwin+=--disable-assembly --disable-fat

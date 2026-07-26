@@ -60,11 +60,6 @@ namespace helpers {
         return arr;
     }
 
-    std::vector<std::vector<uint8_t>> jsBuffersArrayToVector(val buffersArray);
-
-    std::vector<bn_t *> jsBuffersArrayToBnVector(val buffersArray);
-
-    val byteArraysVectorToJsBuffersArray(std::vector<uint8_t *> arraysVector, size_t element_size);
 }  // namespace helpers
 
 #endif  // JS_BINDINGS_HELPERS_H_

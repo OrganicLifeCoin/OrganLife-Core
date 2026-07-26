@@ -250,6 +250,8 @@ BITCOIN_CORE_H = \
   budget/finalizedbudget.h \
   budget/finalizedbudgetvote.h \
   budget/budgetutil.h \
+  budget/budgetmanager_bridge.h \
+  budget/budgetvoteutil.h \
   mapport.h \
   memusage.h \
   masternode.h \

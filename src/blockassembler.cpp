@@ -78,19 +78,43 @@ static CMutableTransaction NewCoinbase(const int nHeight, const CScript* pScript
     return txCoinbase;
 }
 
+static CAmount GetMutableValueOut(const CMutableTransaction& tx)
+{
+    CAmount valueOut{0};
+    for (const CTxOut& out : tx.vout) {
+        valueOut += out.nValue;
+    }
+    return valueOut;
+}
+
+static bool HasRequiredCoinbasePayment(const CMutableTransaction& txCoinbase, const CBlockIndex* pindexPrev)
+{
+    const int nHeight = pindexPrev->nHeight + 1;
+    if (!Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0))
+        return true;
+    if (GetMasternodePayment(nHeight) <= 0)
+        return true;
+    if (GetMutableValueOut(txCoinbase) > 0)
+        return true;
+
+    LogPrintf("Staking paused: missing required coinbase masternode/budget payment at height %d\n", nHeight);
+    return false;
+}
+
 bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet,
                        std::vector<CStakeableOutput>* availableCoins, bool stopPoSOnNewBlock)
 {
     boost::this_thread::interruption_point();
 
     assert(pindexPrev);
+    UpdateTime(pblock, Params().GetConsensus(), pindexPrev);
     pblock->nBits = GetNextWorkRequired(pindexPrev, pblock);
 
     // Sync wallet before create coinstake
     pwallet->BlockUntilSyncedToCurrentChain();
 
     CMutableTransaction txCoinStake;
-    int64_t nTxNewTime = 0;
+    int64_t nTxNewTime = pblock->nTime;
     if (!pwallet->CreateCoinStake(pindexPrev,
                                   pblock->nBits,
                                   txCoinStake,
@@ -106,6 +130,9 @@ bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet
     // Create coinbase tx and add masternode/budget payments
     CMutableTransaction txCoinbase = NewCoinbase(pindexPrev->nHeight + 1);
     FillBlockPayee(txCoinbase, txCoinStake, pindexPrev, true);
+    if (!HasRequiredCoinbasePayment(txCoinbase, pindexPrev)) {
+        return false;
+    }
 
     // Sign coinstake
     if (!pwallet->SignCoinStake(txCoinStake)) {

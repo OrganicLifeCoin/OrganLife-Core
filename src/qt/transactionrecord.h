@@ -13,8 +13,9 @@
 #include "optional.h"
 #include "uint256.h"
 
-#include <QList>
 #include <QString>
+
+#include <vector>
 
 class CWallet;
 class CWalletTx;
@@ -25,7 +26,8 @@ class TransactionStatus
 {
 public:
     TransactionStatus() : countsForBalance(false), sortKey(""),
-                          matures_in(0), status(Unconfirmed), depth(0), open_for(0), cur_num_blocks(-1)
+                          matures_in(0), status(Unconfirmed), depth(0), open_for(0), cur_num_blocks(-1),
+                          needsUpdate(false)
     {
     }
 
@@ -125,34 +127,34 @@ public:
 
     /** Decompose CWallet transaction to model transaction records.
      */
-    static QList<TransactionRecord> decomposeTransaction(const CWallet* wallet, const CWalletTx& wtx);
+    static std::vector<TransactionRecord> decomposeTransaction(const CWallet* wallet, const CWalletTx& wtx);
 
     /// Helpers
     static bool decomposeCoinStake(const CWallet* wallet, const CWalletTx& wtx,
                                    const CAmount& nCredit, const CAmount& nDebit,
-                                   QList<TransactionRecord>& parts);
+                                   std::vector<TransactionRecord>& parts);
 
     static bool decomposeZcSpendTx(const CWallet* wallet, const CWalletTx& wtx,
                                    const CAmount& nCredit, const CAmount& nDebit,
-                                   QList<TransactionRecord>& parts);
+                                   std::vector<TransactionRecord>& parts);
 
     static bool decomposeP2CS(const CWallet* wallet, const CWalletTx& wtx,
                                     const CAmount& nCredit, const CAmount& nDebit,
-                                    QList<TransactionRecord>& parts);
+                                    std::vector<TransactionRecord>& parts);
 
     static bool decomposeCreditTransaction(const CWallet* wallet, const CWalletTx& wtx,
-                                    QList<TransactionRecord>& parts);
+                                    std::vector<TransactionRecord>& parts);
 
     static bool decomposeSendToSelfTransaction(const CWalletTx& wtx, const CAmount& nCredit,
                                     const CAmount& nDebit, bool involvesWatchAddress,
-                                    QList<TransactionRecord>& parts, const CWallet* wallet);
+                                    std::vector<TransactionRecord>& parts, const CWallet* wallet);
 
     static bool decomposeDebitTransaction(const CWallet* wallet, const CWalletTx& wtx,
                                                       const CAmount& nDebit, bool involvesWatchAddress,
-                                                      QList<TransactionRecord>& parts);
+                                                      std::vector<TransactionRecord>& parts);
 
     static bool decomposeShieldedDebitTransaction(const CWallet* wallet, const CWalletTx& wtx, CAmount nTxFee,
-                                                  bool involvesWatchAddress, QList<TransactionRecord>& parts);
+                                                  bool involvesWatchAddress, std::vector<TransactionRecord>& parts);
 
     static Type classifyCoinbaseCredit(int blockHeight, const CAmount& credit);
     static std::string getValueOrReturnEmpty(const std::map<std::string, std::string>& mapValue, const std::string& key);

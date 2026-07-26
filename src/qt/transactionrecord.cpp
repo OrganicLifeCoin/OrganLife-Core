@@ -70,7 +70,7 @@ TransactionRecord::Type TransactionRecord::classifyCoinbaseCredit(int blockHeigh
 
 bool TransactionRecord::decomposeCoinStake(const CWallet* wallet, const CWalletTx& wtx,
         const CAmount& nCredit, const CAmount& nDebit,
-        QList<TransactionRecord>& parts)
+        std::vector<TransactionRecord>& parts)
 {
     // Return if it's not a coinstake
     if (!wtx.IsCoinStake()) {
@@ -151,7 +151,7 @@ bool TransactionRecord::decomposeCoinStake(const CWallet* wallet, const CWalletT
 
     if (hasStakePart) {
         sub.sortBlockHeight = wtx.m_confirm.block_height;
-        parts.append(sub);
+        parts.push_back(sub);
     }
     if (hasMNReward) {
         TransactionRecord mnSub(hash, wtx.GetTxTime(), wtx.tx->GetTotalSize());
@@ -160,14 +160,14 @@ bool TransactionRecord::decomposeCoinStake(const CWallet* wallet, const CWalletT
         mnSub.type = isBudgetPayment ? TransactionRecord::BudgetPayment : TransactionRecord::MNReward;
         mnSub.idx = nIndexMN;
         mnSub.sortBlockHeight = wtx.m_confirm.block_height;
-        parts.append(mnSub);
+        parts.push_back(mnSub);
     }
     return true;
 }
 
 bool TransactionRecord::decomposeZcSpendTx(const CWallet* wallet, const CWalletTx& wtx,
                                            const CAmount& nCredit, const CAmount& nDebit,
-                                           QList<TransactionRecord>& parts)
+                                           std::vector<TransactionRecord>& parts)
 {
 
     // Return if it's not a zc spend
@@ -201,7 +201,7 @@ bool TransactionRecord::decomposeZcSpendTx(const CWallet* wallet, const CWalletT
             sub.credit = txout.nValue;
             sub.address = (!strAddress.empty()) ? strAddress : getValueOrReturnEmpty(wtx.mapValue, "recvzerocoinspend");
             sub.idx = (int) nOut;
-            parts.append(sub);
+            parts.push_back(sub);
             continue;
         }
     }
@@ -210,7 +210,7 @@ bool TransactionRecord::decomposeZcSpendTx(const CWallet* wallet, const CWalletT
 
 bool TransactionRecord::decomposeP2CS(const CWallet* wallet, const CWalletTx& wtx,
                                            const CAmount& nCredit, const CAmount& nDebit,
-                                           QList<TransactionRecord>& parts)
+                                           std::vector<TransactionRecord>& parts)
 {
     if (wtx.tx->HasP2CSOutputs()) {
         // Delegate tx.
@@ -218,13 +218,13 @@ bool TransactionRecord::decomposeP2CS(const CWallet* wallet, const CWalletTx& wt
         sub.credit = nCredit;
         sub.debit = -nDebit;
         loadHotOrColdStakeOrContract(wallet, wtx, sub, true);
-        parts.append(sub);
+        parts.push_back(sub);
         return true;
     } else if (wtx.HasP2CSInputs()) {
         // Delegation unlocked
         TransactionRecord sub(wtx.GetHash(), wtx.GetTxTime(), wtx.tx->GetTotalSize());
         loadUnlockColdStake(wallet, wtx, sub);
-        parts.append(sub);
+        parts.push_back(sub);
         return true;
     }
     return false;
@@ -233,7 +233,7 @@ bool TransactionRecord::decomposeP2CS(const CWallet* wallet, const CWalletTx& wt
 /**
  * Decompose a credit transaction into a record for each received output.
  */
-bool TransactionRecord::decomposeCreditTransaction(const CWallet* wallet, const CWalletTx& wtx, QList<TransactionRecord>& parts)
+bool TransactionRecord::decomposeCreditTransaction(const CWallet* wallet, const CWalletTx& wtx, std::vector<TransactionRecord>& parts)
 {
     TransactionRecord sub(wtx.GetHash(), wtx.GetTxTime(), wtx.tx->GetTotalSize());
     for (unsigned int nOut = 0; nOut < wtx.tx->vout.size(); nOut++) {
@@ -257,7 +257,7 @@ bool TransactionRecord::decomposeCreditTransaction(const CWallet* wallet, const 
                 sub.type = classifyCoinbaseCredit(wtx.m_confirm.block_height, sub.credit);
             }
 
-            parts.append(sub);
+            parts.push_back(sub);
         }
     }
 
@@ -280,7 +280,7 @@ bool TransactionRecord::decomposeCreditTransaction(const CWallet* wallet, const 
                     sub.type = TransactionRecord::RecvWithShieldedAddressMemo;
                 }
                 sub.idx = i;
-                parts.append(sub);
+                parts.push_back(sub);
             }
         }
     }
@@ -290,7 +290,7 @@ bool TransactionRecord::decomposeCreditTransaction(const CWallet* wallet, const 
 
 bool TransactionRecord::decomposeSendToSelfTransaction(const CWalletTx& wtx, const CAmount& nCredit,
                                                        const CAmount& nDebit, bool involvesWatchAddress,
-                                                       QList<TransactionRecord>& parts, const CWallet* wallet)
+                                                       std::vector<TransactionRecord>& parts, const CWallet* wallet)
 {
     // Payment to self tx is presented as a single record.
     TransactionRecord sub(wtx.GetHash(), wtx.GetTxTime(), wtx.tx->GetTotalSize());
@@ -345,12 +345,12 @@ bool TransactionRecord::decomposeSendToSelfTransaction(const CWalletTx& wtx, con
     sub.debit = -(nDebit - nChange);
     sub.credit = nCredit - nChange;
     sub.involvesWatchAddress = involvesWatchAddress;
-    parts.append(sub);
+    parts.push_back(sub);
     return true;
 }
 
 bool TransactionRecord::decomposeShieldedDebitTransaction(const CWallet* wallet, const CWalletTx& wtx, CAmount nTxFee,
-                                                          bool involvesWatchAddress, QList<TransactionRecord>& parts)
+                                                          bool involvesWatchAddress, std::vector<TransactionRecord>& parts)
 {
     // Return early if there are no outputs.
     if (wtx.tx->sapData->vShieldedOutput.empty()) {
@@ -378,7 +378,7 @@ bool TransactionRecord::decomposeShieldedDebitTransaction(const CWallet* wallet,
             nTxFee = 0;
         }
         sub.debit = -nValue;
-        parts.append(sub);
+        parts.push_back(sub);
     }
     return true;
 }
@@ -388,7 +388,7 @@ bool TransactionRecord::decomposeShieldedDebitTransaction(const CWallet* wallet,
  */
 bool TransactionRecord::decomposeDebitTransaction(const CWallet* wallet, const CWalletTx& wtx,
                                                   const CAmount& nDebit, bool involvesWatchAddress,
-                                                  QList<TransactionRecord>& parts)
+                                                  std::vector<TransactionRecord>& parts)
 {
     // Return early if there are no outputs.
     if (wtx.tx->vout.empty() && wtx.tx->sapData->vShieldedOutput.empty()) {
@@ -458,7 +458,7 @@ bool TransactionRecord::decomposeDebitTransaction(const CWallet* wallet, const C
         }
         sub.debit = -nValue;
 
-        parts.append(sub);
+        parts.push_back(sub);
     }
 
     // Decompose shielded debit
@@ -492,9 +492,9 @@ std::pair<bool, bool> areInputsAndOutputsFromAndToMe(const CWalletTx& wtx, Sapli
 /*
  * Decompose CWallet transaction to model transaction records.
  */
-QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet* wallet, const CWalletTx& wtx)
+std::vector<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet* wallet, const CWalletTx& wtx)
 {
-    QList<TransactionRecord> parts;
+    std::vector<TransactionRecord> parts;
     CAmount nCredit = wtx.GetCredit(ISMINE_ALL);
     CAmount nDebit = wtx.GetDebit(ISMINE_ALL);
 
@@ -570,7 +570,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet* 
         TransactionRecord record(wtx.GetHash(), wtx.GetTxTime(), wtx.tx->GetTotalSize(), TransactionRecord::Other, "", nNet,
                                  0);
         record.involvesWatchAddress = involvesWatchAddress;
-        parts.append(record);
+        parts.push_back(record);
     }
     return parts;
 }

@@ -9,6 +9,8 @@
 
 #include "budget/budgetproposal.h"
 #include "budget/finalizedbudget.h"
+#include "logging.h"
+#include "sync.h"
 #include "validationinterface.h"
 
 #include <cstdint>

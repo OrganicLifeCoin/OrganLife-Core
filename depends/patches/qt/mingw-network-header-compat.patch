@@ -1,0 +1,43 @@
+--- a/qtbase/src/network/socket/qnativesocketengine_win.cpp
++++ b/qtbase/src/network/socket/qnativesocketengine_win.cpp
+@@ -36,0 +37,9 @@
++#ifndef IP_IFLIST
++#define IP_IFLIST                 28
++#endif
++#ifndef IP_ADD_IFLIST
++#define IP_ADD_IFLIST             29
++#endif
++#ifndef IP_UNICAST_IF
++#define IP_UNICAST_IF             31
++#endif
+--- a/qtbase/src/network/kernel/qdnslookup_win.cpp
++++ b/qtbase/src/network/kernel/qdnslookup_win.cpp
+@@ -65,0 +66,11 @@
++#pragma pack(push, 1)
++struct QtDnsTlsaData
++{
++    BYTE bCertUsage;
++    BYTE bSelector;
++    BYTE bMatchingType;
++    WORD bCertificateAssociationDataLength;
++    BYTE bPad[3];
++    BYTE bCertificateAssociationData[1];
++};
++#pragma pack(pop)
+@@ -97 +108 @@
+-    dnsBuffer->MessageHead.AuthenticatedData = true;
++    DNS_HEADER_FLAGS(&dnsBuffer->MessageHead) |= 0x2000;
+@@ -236,4 +247,4 @@
+-            const auto &tlsa = ptr->Data.Tlsa;
+-            const quint8 usage = tlsa.bCertUsage;
+-            const quint8 selector = tlsa.bSelector;
+-            const quint8 matchType = tlsa.bMatchingType;
++            const auto *tlsa = reinterpret_cast<const QtDnsTlsaData *>(&ptr->Data);
++            const quint8 usage = tlsa->bCertUsage;
++            const quint8 selector = tlsa->bSelector;
++            const quint8 matchType = tlsa->bMatchingType;
+@@ -244,2 +255,2 @@
+-            record.d->value.assign(tlsa.bCertificateAssociationData,
+-                                   tlsa.bCertificateAssociationData + tlsa.bCertificateAssociationDataLength);
++            record.d->value.assign(tlsa->bCertificateAssociationData,
++                                   tlsa->bCertificateAssociationData + tlsa->bCertificateAssociationDataLength);

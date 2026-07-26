@@ -9,11 +9,14 @@
 
 #include "budget/budgetproposal.h"
 #include "interfaces/handler.h"
+#include "masternode-payments.h"
+#include "net.h"
 #include "sapling/key_io_sapling.h"
 #include "sapling/sapling_operation.h"
 #include "sapling/transaction_builder.h"
 #include "shutdown.h"
 #include "spork.h"
+#include "validation.h"
 #include "wallet/fees.h"
 
 #include "qt/addresstablemodel.h"
@@ -24,7 +27,6 @@
 #include "qt/walletmodeltransaction.h"
 
 #include <stdint.h>
-#include <iostream>
 
 #include <QtConcurrent/QtConcurrent>
 #include <QCryptographicHash>
@@ -40,6 +42,28 @@ static std::string toHexStr(const T& obj)
     CDataStream ss(SER_DISK, CLIENT_VERSION);
     ss << obj;
     return HexStr(ss);
+}
+
+static bool HasUsableStakingPeerConnection()
+{
+    if (!g_connman)
+        return false;
+
+    std::vector<CNodeStats> vstats;
+    g_connman->GetNodeStats(vstats);
+    for (const CNodeStats& stats : vstats) {
+        if (stats.m_masternode_connection || stats.m_masternode_probe_connection)
+            continue;
+        if (stats.nVersion > 0)
+            return true;
+    }
+    return false;
+}
+
+static bool HasRequiredStakingPaymentData()
+{
+    CBlockIndex* pindexPrev = WITH_LOCK(cs_main, return chainActive.Tip(););
+    return CanBuildRequiredMasternodePayment(pindexPrev);
 }
 
 WalletModel::WalletModel(CWallet* wallet, OptionsModel* optionsModel, QObject* parent) : QObject(parent), wallet(wallet), walletWrapper(*wallet),
@@ -110,7 +134,7 @@ bool WalletModel::isV6Enforced() const
 
 bool WalletModel::isStakingStatusActive() const
 {
-    return wallet && wallet->pStakerStatus && wallet->pStakerStatus->IsActive();
+    return wallet && wallet->pStakerStatus && HasUsableStakingPeerConnection() && HasRequiredStakingPaymentData() && !wallet->IsLocked() && wallet->pStakerStatus->IsActive();
 }
 
 bool WalletModel::isHDEnabled() const
@@ -453,12 +477,8 @@ void WalletModel::updateTransaction()
 
 void WalletModel::updateAddressBook(const QString& address, const QString& label, bool isMine, const QString& purpose, int status)
 {
-    try {
-        if (addressTableModel)
-            addressTableModel->updateEntry(address, label, isMine, purpose, status);
-    } catch (...) {
-        std::cout << "Exception updateAddressBook" << std::endl;
-    }
+    if (addressTableModel)
+        addressTableModel->updateEntry(address, label, isMine, purpose, status);
 }
 
 void WalletModel::updateWatchOnlyFlag(bool fHaveWatchonly)
@@ -1059,7 +1079,7 @@ bool WalletModel::updateAddressBookPurpose(const QString &addressStr, const std:
     bool isStaking = false, isExchange = false;
     CTxDestination address = DecodeDestination(addressStr.toStdString(), isStaking, isExchange);
     if (isStaking)
-        return error("Invalid 1776$ address, cold staking address");
+        return error("Invalid CTEAM address, cold staking address");
     CKeyID keyID;
     if (!getKeyId(address, keyID))
         return false;
@@ -1069,11 +1089,11 @@ bool WalletModel::updateAddressBookPurpose(const QString &addressStr, const std:
 bool WalletModel::getKeyId(const CTxDestination& address, CKeyID& keyID)
 {
     if (!IsValidDestination(address))
-        return error("Invalid 1776$ address");
+        return error("Invalid CTEAM address");
 
     const CKeyID* inKeyID = boost::get<CKeyID>(&address);
     if (!inKeyID)
-        return error("Unable to get KeyID from 1776$ address");
+        return error("Unable to get KeyID from CTEAM address");
 
     keyID = *inKeyID;
     return true;

@@ -94,11 +94,8 @@ QVariant MNModel::data(const QModelIndex &index, int role) const
                 std::string status = "MISSING";
                 if (pair.second) {
                     status = pair.second->Status();
-                    // Quick workaround to the current Masternode status types.
-                    // If the status is REMOVE and there is no pubkey associated to the Masternode
-                    // means that the MN is not in the network list and was created in
-                    // updateMNList(). Which.. denotes a not started masternode.
-                    // This will change in the future with the MasternodeWrapper introduction.
+                    // updateMNList() uses REMOVE without a collateral pubkey for local entries
+                    // that are configured but not present in the network list.
                     if (status == "REMOVE" && !pair.second->pubKeyCollateralAddress.IsValid()) {
                         return "MISSING";
                     }
@@ -315,7 +312,6 @@ void MNModel::startAllLegacyMNs(bool onlyMissing, int& amountOfMnFailed, int& am
     }
 }
 
-// Future: remove after v6.0
 CMasternodeConfig::CMasternodeEntry* MNModel::createLegacyMN(COutPoint& collateralOut,
                              const std::string& alias,
                              std::string& serviceAddr,
@@ -414,7 +410,6 @@ CMasternodeConfig::CMasternodeEntry* MNModel::createLegacyMN(COutPoint& collater
     return ret_mn_entry;
 }
 
-// Future: remove after v6.0
 bool MNModel::removeLegacyMN(const std::string& alias_to_remove, const std::string& tx_id, unsigned int out_index, QString& ret_error)
 {
     QString strConfFileQt(PIVX_MASTERNODE_CONF_FILENAME);

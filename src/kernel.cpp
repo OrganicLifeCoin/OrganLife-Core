@@ -119,7 +119,10 @@ bool Stake(const CBlockIndex* pindexPrev, CStakeInput* stakeInput, unsigned int 
 
     // Get the new time slot (and verify it's not the same as previous block)
     const bool fRegTest = Params().IsRegTestNet();
-    nTimeTx = (fRegTest ? GetAdjustedTime() : GetCurrentTimeSlot());
+    if (nTimeTx <= 0)
+        nTimeTx = (fRegTest ? GetAdjustedTime() : GetCurrentTimeSlot());
+    else if (!fRegTest)
+        nTimeTx = GetTimeSlot(nTimeTx);
     if (nTimeTx <= pindexPrev->nTime && !fRegTest) return false;
 
     // Verify Proof Of Stake
@@ -139,6 +142,10 @@ bool Stake(const CBlockIndex* pindexPrev, CStakeInput* stakeInput, unsigned int 
  */
 bool CheckProofOfStake(const CBlock& block, std::string& strError, const CBlockIndex* pindexPrev)
 {
+    if (!pindexPrev) {
+        strError = "null previous block index";
+        return false;
+    }
     const int nHeight = pindexPrev->nHeight + 1;
     // Initialize stake input
     std::unique_ptr<CStakeInput> stakeInput;

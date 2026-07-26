@@ -420,7 +420,7 @@ AC_DEFUN([_BITCOIN_QT_CHECK_STATIC_PLUGINS],[
     changequote([,])
     dnl Use word-boundary matching to avoid stripping -lm from -lmpr etc.
     plugin_libs=" $plugin_libs "
-    plugin_libs=$(echo "$plugin_libs" | sed 's/ -ldl / /g; s/ -lrt / /g; s/ -lresolv / /g; s/ -lm / /g; s/ -pthread / /g; s/ -lpthread / /g')
+    plugin_libs=$(echo "$plugin_libs" | sed 's/ -ldl / /g; s/ -lrt / /g; s/ -lresolv / /g; s/ -lm / /g; s/ -pthread / /g; s/ -lpthread / /g; s/ -ld3d12 / /g')
     plugin_libs=$(echo "$plugin_libs" | sed 's/^ *//; s/ *$//')
   fi
 
@@ -518,7 +518,7 @@ AC_DEFUN([_BITCOIN_QT_FIND_STATIC_PLUGINS],[
            fi
          else
            # Qt6 Windows specific system libraries
-           QT_LIBS="$QT_LIBS -lversion -ldwmapi -luxtheme -lkernel32 -luser32 -lgdi32 -lcomdlg32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lws2_32 -ladvapi32 -lcrypt32 -liphlpapi -lshlwapi -ld3d11 -ldxgi -ldxguid -ld3d12 -ldwrite -ld2d1 -lsynchronization -lmpr -luserenv -lauthz -lnetapi32 -lwinmm"
+           QT_LIBS="$QT_LIBS -lversion -ldwmapi -luxtheme -lkernel32 -luser32 -lgdi32 -lcomdlg32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lws2_32 -ladvapi32 -lcrypt32 -liphlpapi -lshlwapi -ld3d11 -ldxgi -ldxguid -ldwrite -ld2d1 -lsynchronization -lmpr -luserenv -lauthz -lnetapi32 -lwinmm"
          fi
        fi
      fi
@@ -845,7 +845,7 @@ AC_DEFUN([_BITCOIN_QT6_FIND_LIBS_WITH_QMAKE],[
           prl_libs=$(echo "$prl_libs" | sed 's|/objects-[^ ]*/[^ ]*\\.o||g')
           changequote([,])
           prl_libs=" $prl_libs "
-          prl_libs=$(echo "$prl_libs" | sed 's/ -ldl / /g; s/ -lrt / /g; s/ -lresolv / /g; s/ -lm / /g; s/ -pthread / /g; s/ -lpthread / /g')
+          prl_libs=$(echo "$prl_libs" | sed 's/ -ldl / /g; s/ -lrt / /g; s/ -lresolv / /g; s/ -lm / /g; s/ -pthread / /g; s/ -lpthread / /g; s/ -ld3d12 / /g')
           prl_libs=$(echo "$prl_libs" | sed 's/^ *//; s/ *$//')
           prl_libs=$(echo "$prl_libs" | sed 's/-lxkbcommon//g; s/-lX11//g; s/-lXext//g; s/-lXrender//g; s/-lXinerama//g; s/-lXi//g; s/-lXcursor//g; s/-lXfixes//g; s/-lXrandr//g; s/-lXdamage//g; s/-lXcomposite//g; s/-lXss//g')
         fi
@@ -874,7 +874,7 @@ AC_DEFUN([_BITCOIN_QT6_FIND_LIBS_WITH_QMAKE],[
   QT_LIBS="$QT_LIBS $qt6_widgets_prl_libs $qt6_network_prl_libs $qt6_concurrent_prl_libs $qt6_svg_prl_libs"
   if test "x$TARGET_OS" = xwindows; then
     QT_LIBS=" $QT_LIBS "
-    QT_LIBS=$(echo "$QT_LIBS" | sed 's/ -ldl / /g; s/ -lrt / /g; s/ -lresolv / /g; s/ -lm / /g; s/ -pthread / /g; s/ -lpthread / /g')
+    QT_LIBS=$(echo "$QT_LIBS" | sed 's/ -ldl / /g; s/ -lrt / /g; s/ -lresolv / /g; s/ -lm / /g; s/ -pthread / /g; s/ -lpthread / /g; s/ -ld3d12 / /g')
     QT_LIBS=$(echo "$QT_LIBS" | sed 's/^ *//; s/ *$//')
   fi
 
@@ -887,7 +887,7 @@ AC_DEFUN([_BITCOIN_QT6_FIND_LIBS_WITH_QMAKE],[
     QT_TEST_LIBS="-L$qt_lib_path -l${QT_LIB_PREFIX}Test $(qt6_prl_libs "$qt_lib_path/lib${QT_LIB_PREFIX}Test.prl")"
     if test "x$TARGET_OS" = xwindows; then
       QT_TEST_LIBS=" $QT_TEST_LIBS "
-      QT_TEST_LIBS=$(echo "$QT_TEST_LIBS" | sed 's/ -ldl / /g; s/ -lrt / /g; s/ -lresolv / /g; s/ -lm / /g; s/ -pthread / /g; s/ -lpthread / /g')
+      QT_TEST_LIBS=$(echo "$QT_TEST_LIBS" | sed 's/ -ldl / /g; s/ -lrt / /g; s/ -lresolv / /g; s/ -lm / /g; s/ -pthread / /g; s/ -lpthread / /g; s/ -ld3d12 / /g')
       QT_TEST_LIBS=$(echo "$QT_TEST_LIBS" | sed 's/^ *//; s/ *$//')
     fi
   fi

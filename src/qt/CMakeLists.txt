@@ -269,3 +269,6 @@ if(NAT-PMP_FOUND)
 endif()
 
 	# Qt link dependencies are carried via qt_stuff.
+
+# Qt tests
+add_subdirectory(test)

@@ -120,7 +120,7 @@ public:
     void KeepDestination(int64_t index);
     void ReturnDestination(int64_t index, const uint8_t& type, const CTxDestination&);
 
-    // TODO: This is public for now but shouldn't be here.
+    // Accessed by wallet migration code that reconciles pre-split keypools.
     std::set<int64_t> set_pre_split_keypool;
 
 private:
@@ -129,7 +129,7 @@ private:
     /* the HD chain data model (external/internal chain counters) */
     CHDChain hdChain;
 
-    /* TODO: This has not been implemented yet.. */
+    /* Active encryption transaction, when wallet encryption is in progress. */
     WalletBatch *encrypted_batch = nullptr;
 
     // Key pool maps
@@ -146,7 +146,6 @@ private:
 
     //! Adds a key to the store, and saves it to disk.
     bool AddKeyPubKeyWithDB(WalletBatch &batch,const CKey& key, const CPubKey &pubkey);
-    /* Complete me */
     void AddKeypoolPubkeyWithDB(const CPubKey& pubkey, const uint8_t& type, WalletBatch& batch);
     void GeneratePool(WalletBatch& batch, int64_t targetSize, const uint8_t& type);
 

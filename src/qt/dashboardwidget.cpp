@@ -24,6 +24,7 @@
 #include <QPainter>
 #include <QPropertyAnimation>
 #include <QScrollBar>
+#include <QThread>
 #include <QTime>
 #include <QVBoxLayout>
 
@@ -91,6 +92,23 @@ qreal MaxValue(const QList<qreal>& values)
         maxValue = std::max(maxValue, value);
     }
     return maxValue;
+}
+
+bool ToChartBucketMode(const ChartShowType type, ChartBucketMode& mode)
+{
+    switch (type) {
+    case ALL:
+        mode = ChartBucketMode::All;
+        return true;
+    case YEAR:
+        mode = ChartBucketMode::Year;
+        return true;
+    case MONTH:
+        mode = ChartBucketMode::Month;
+        return true;
+    default:
+        return false;
+    }
 }
 } // namespace
 
@@ -819,57 +837,54 @@ void DashboardWidget::updateStakeFilter()
     }
 }
 
-// pair PIV, MN Reward
-QMap<int, std::pair<qint64, qint64>> DashboardWidget::getAmountBy()
+void DashboardWidget::snapshotChartRows()
 {
+    Q_ASSERT(QThread::currentThread() == thread());
+    chartStakeRowsSnapshot.clear();
+
+    if (!stakesFilter) return;
+
     if (filterUpdateNeeded) {
         filterUpdateNeeded = false;
         updateStakeFilter();
     }
-    const int size = stakesFilter->rowCount();
-    QMap<int, std::pair<qint64, qint64>> amountBy;
-    hasMNRewards = false;
-    // Get all the stakes
-    for (int i = 0; i < size; ++i) {
-        QModelIndex modelIndex = stakesFilter->index(i, TransactionTableModel::ToAddress);
-        qint64 amount = llabs(modelIndex.data(TransactionTableModel::AmountRole).toLongLong());
-        QDate date = modelIndex.data(TransactionTableModel::DateRole).toDateTime().date();
-        const int txType = modelIndex.data(TransactionTableModel::TypeRole).toInt();
-        const bool isPiv = !IsMasternodeRewardTypeForChart(txType);
 
-        int time = 0;
-        switch (chartShow) {
-            case YEAR: {
-                time = date.month();
-                break;
-            }
-            case ALL: {
-                time = date.year();
-                break;
-            }
-            case MONTH: {
-                time = date.day();
-                break;
-            }
-            default:
-                inform(tr("Error loading chart, invalid show option"));
-                return amountBy;
-        }
-        if (amountBy.contains(time)) {
-            if (isPiv) {
-                amountBy[time].first += amount;
-            } else {
-                amountBy[time].second += amount;
-                hasMNRewards = true;
-            }
-        } else {
-            if (isPiv) {
-                amountBy[time] = std::make_pair(amount, 0);
-            } else {
-                amountBy[time] = std::make_pair(0, amount);
-                hasMNRewards = true;
-            }
-        }
+    const int size = stakesFilter->rowCount();
+    chartStakeRowsSnapshot.reserve(size);
+    for (int i = 0; i < size; ++i) {
+        const QModelIndex modelIndex = stakesFilter->index(i, TransactionTableModel::ToAddress);
+        if (!modelIndex.isValid()) continue;
+
+        const QDate date = modelIndex.data(TransactionTableModel::DateRole).toDateTime().date();
+        if (!date.isValid()) continue;
+
+        chartStakeRowsSnapshot.push_back({
+            date.year(),
+            date.month(),
+            date.day(),
+            modelIndex.data(TransactionTableModel::AmountRole).toLongLong(),
+            modelIndex.data(TransactionTableModel::TypeRole).toInt()
+        });
+    }
+}
+
+// pair PIV, MN Reward
+QMap<int, std::pair<qint64, qint64>> DashboardWidget::getAmountBy()
+{
+    QMap<int, std::pair<qint64, qint64>> amountBy;
+    ChartBucketMode mode;
+    if (!ToChartBucketMode(chartShow, mode)) {
+        inform(tr("Error loading chart, invalid show option"));
+        return amountBy;
+    }
+
+    const ChartRewardAggregation aggregation = AggregateChartRewards(chartStakeRowsSnapshot, mode);
+    hasMNRewards = aggregation.hasMasternodeRewards;
+    for (const auto& item : aggregation.amountsBy) {
+        amountBy.insert(item.first, {
+            static_cast<qint64>(item.second.first),
+            static_cast<qint64>(item.second.second)
+        });
     }
     return amountBy;
 }
@@ -957,6 +972,7 @@ bool DashboardWidget::refreshChart()
     isLoading = true;
     isChartMin = width() < 1300;
     isChartInitialized = false;
+    snapshotChartRows();
     showHideEmptyChart(!chartHasRenderedData, true, true);
     return execute(REQUEST_LOAD_TASK);
 }

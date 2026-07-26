@@ -503,7 +503,7 @@ void ScriptPubKeyMan::DeriveNewChildKey(WalletBatch &batch, CKeyMetadata& metada
     masterKey.Derive(purposeKey, 44 | BIP32_HARDENED_KEY_LIMIT);
     // derive m/purpose'/coin_type'
     purposeKey.Derive(cointypeKey, 119 | BIP32_HARDENED_KEY_LIMIT);
-    // derive m/purpose'/coin_type'/account' // Hardcoded to account 0 for now.
+    // derive m/purpose'/coin_type'/account'
     cointypeKey.Derive(accountKey, nAccountNumber | BIP32_HARDENED_KEY_LIMIT);
     // derive m/purpose'/coin_type'/account'/change'
     accountKey.Derive(changeKey,  changeType | BIP32_HARDENED_KEY_LIMIT);

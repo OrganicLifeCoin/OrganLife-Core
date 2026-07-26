@@ -5,7 +5,9 @@
 
 #include "budget/finalizedbudget.h"
 
+#include "budget/budgetvoteutil.h"
 #include "masternodeman.h"
+#include "net.h"
 #include "validation.h"
 
 CFinalizedBudget::CFinalizedBudget() :
@@ -53,29 +55,7 @@ bool CFinalizedBudget::ParseBroadcast(CDataStream& broadcast)
 
 bool CFinalizedBudget::AddOrUpdateVote(const CFinalizedBudgetVote& vote, std::string& strError)
 {
-    const COutPoint& mnId = vote.GetVin().prevout;
-    const int64_t voteTime = vote.GetTime();
-    std::string strAction = "New vote inserted:";
-
-    if (mapVotes.count(mnId)) {
-        const int64_t oldTime = mapVotes[mnId].GetTime();
-        if (oldTime > voteTime) {
-            strError = strprintf("new vote older than existing vote - %s\n", vote.GetHash().ToString());
-            LogPrint(BCLog::MNBUDGET, "%s: %s\n", __func__, strError);
-            return false;
-        }
-        if (voteTime - oldTime < BUDGET_VOTE_UPDATE_MIN) {
-            strError = strprintf("time between votes is too soon - %s - %lli sec < %lli sec\n",
-                    vote.GetHash().ToString(), voteTime - oldTime, BUDGET_VOTE_UPDATE_MIN);
-            LogPrint(BCLog::MNBUDGET, "%s: %s\n", __func__, strError);
-            return false;
-        }
-        strAction = "Existing vote updated:";
-    }
-
-    mapVotes[mnId] = vote;
-    LogPrint(BCLog::MNBUDGET, "%s: %s %s\n", __func__, strAction.c_str(), vote.GetHash().ToString().c_str());
-    return true;
+    return AddOrUpdateBudgetVote(mapVotes, vote, BUDGET_VOTE_UPDATE_MIN, __func__, strError);
 }
 
 UniValue CFinalizedBudget::GetVotesObject() const
