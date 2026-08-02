@@ -33,9 +33,9 @@
 #ifdef USE_QTCHARTS
 
 #include <QtCharts/QChartView>
-#include <QtCharts/QBarSeries>
+#include <QtCharts/QLineSeries>
+#include <QtCharts/QAreaSeries>
 #include <QtCharts/QBarCategoryAxis>
-#include <QtCharts/QBarSet>
 #include <QtCharts/QChart>
 #include <QtCharts/QValueAxis>
 
@@ -47,6 +47,7 @@ using namespace QtCharts;
 
 class OrganicLifeGUI;
 class WalletModel;
+class QLabel;
 class GovernanceDialogTests;
 
 namespace Ui {
@@ -158,6 +159,13 @@ private:
     QPersistentModelIndex animatedTxProxyIndex;
     QPointer<QVariantAnimation> txRowFadeAnimation;
 
+    // V2 stat row
+    QLabel* statValueAvailable{nullptr};
+    QLabel* statValueStaking{nullptr};
+    QLabel* statValueRewards{nullptr};
+    void updateStatBalances(const interfaces::WalletBalances& balances);
+    void updateStatRewards();
+
     void changeSort(int nSortIndex);
     void startInsertedRowAnimations(const QModelIndex& proxyIndex);
     void updateTransactionViewState(bool hasTransactions, bool hasVisibleTransactions);
@@ -171,9 +179,9 @@ private:
     TransactionFilterProxy* stakesFilter{nullptr};
     bool isChartInitialized{false};
 	    QChartView *chartView{nullptr};
-	    QBarSeries *series{nullptr};
-	    QBarSet *set0{nullptr};
-	    QBarSet *set1{nullptr};
+	    QLineSeries *stakesLine{nullptr};
+	    QAreaSeries *areaStakes{nullptr};
+	    QLineSeries *mnLine{nullptr};
 
 	    QBarCategoryAxis *axisX{nullptr};
 	    QValueAxis *axisY{nullptr};
@@ -194,7 +202,6 @@ private:
     bool hasStakes{false};
     bool fShowCharts{true};
     std::atomic<bool> filterUpdateNeeded{false};
-    QPointer<QVariantAnimation> chartBarsAnimation;
 
     void initChart();
     void showHideEmptyChart(bool show, bool loading, bool forceView = false);

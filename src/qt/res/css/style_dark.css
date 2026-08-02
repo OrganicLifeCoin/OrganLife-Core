@@ -67,10 +67,8 @@ HH       NAVIGATION
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="container-nav"] {
-    background: qlineargradient(x1: 1, y1: 0, x2: 0, y2: 0,
-        stop: 0 #0d1008,
-        stop: 1 #0d1008);
-    border-right: 1px solid #3b4426;
+    background-color:#22331a;
+    border: 0;
 }
 
 QPushButton[cssClass="img-nav-logo"] {
@@ -83,85 +81,29 @@ QWidget#NavMenuWidget QToolButton {
     text-align: center;
 }
 
-*[cssClass="btn-nav-receive"] {
-    qproperty-icon: url("://ic-nav-receive") off,
-    url("://ic-nav-receive-active") on;
-    qproperty-iconSize: 24px 40px;
-    background-color:transparent;
-    border: 0;
-    font-size:14px;
-    color: #a9b38d;
-}
 
-*[cssClass="btn-nav-receive"]:checked {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-receive"]:checked:hover  {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-receive"]:hover {
-    background-color: #2a3319;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-receive-active"] {
-    qproperty-icon:url("://ic-nav-receive-active")  ;
-    qproperty-iconSize: 24px 40px;
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
+
+
+
+
+
 
 /*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
 !############# Cold staking Nav
  ################################*/
 
-*[cssClass="btn-nav-cold-staking"] {
-    qproperty-icon: url("://ic-nav-cold-staking") off,
-    url("://ic-nav-cold-staking-active") on;
-    qproperty-iconSize: 24px 40px;
-    background-color:transparent;
-    border: 0;
-    font-size:14px;
-    color: #a9b38d;
-}
 
-*[cssClass="btn-nav-cold-staking"]:checked {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-cold-staking"]:checked:hover {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-cold-staking"]:hover {
-    qproperty-icon: url("://ic-nav-cold-staking-hover");
-    qproperty-iconSize: 24px 40px;
-    background-color: #2a3319;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-cold-staking-active"] {
-    qproperty-icon:url("://ic-nav-cold-staking-active")  ;
-    qproperty-iconSize: 24px 40px;
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
+
+
+
+
+
 
 /*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
 !#############
@@ -223,269 +165,77 @@ QPushButton[cssClass="btn-check-cold-staking"]:checked {
 ******end cold staking*********
  ********************/
 
-*[cssClass="btn-nav-settings"] {
-    qproperty-icon: url("://ic-nav-settings") off,
-    url("://ic-nav-settings-active") on;
-    qproperty-iconSize: 24px 40px;
-    background-color:transparent;
-    border: 0;
-    font-size:14px;
-    color: #a9b38d;
-}
-
-*[cssClass="btn-nav-settings"]:checked {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-settings"]:checked:hover  {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-settings"]:hover {
-    background-color: #2a3319;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-settings-active"] {
-    qproperty-icon:url("://ic-nav-settings-active")  ;
-    qproperty-iconSize: 24px 40px;
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-dash"] {
-    qproperty-icon: url("://ic-nav-dashboard") off,
-    url("://ic-nav-dashboard-active") on ;
-    qproperty-iconSize: 24px 40px;
-    background-color:transparent;
-    border: 0;
-    font-size:14px;
-    color: #a9b38d;
-}
-
-*[cssClass="btn-nav-dash"]:checked {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-dash"]:checked:hover  {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    color: #efefdd;
-}
 
 
-*[cssClass="btn-nav-dash"]:hover {
-    background-color: #2a3319;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-dash-active"] {
-    qproperty-icon:url("://ic-nav-dashboard-active");
-    qproperty-iconSize: 24px 40px;
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-send"] {
-    qproperty-icon: url("://ic-nav-send") off,
-    url("://ic-nav-send") on ;
-    qproperty-iconSize: 24px 40px;
-    background-color:transparent;
-    border: 0;
-    font-size:14px;
-    color: #a9b38d;
-}
-
-*[cssClass="btn-nav-send"]:checked {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-send"]:checked:hover  {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-send"]:hover {
-    background-color: #2a3319;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-send-active"] {
-    qproperty-icon:url("://ic-nav-send-active")  ;
-    qproperty-iconSize: 24px 40px;
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-address"] {
-    qproperty-icon: url("://ic-nav-address") off,
-    url("://ic-nav-address-active") on ;
-    qproperty-iconSize: 24px 40px;
-    background-color:transparent;
-    border: 0;
-    font-size:14px;
-    color: #a9b38d;
-}
-
-*[cssClass="btn-nav-address"]:checked {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-address"]:checked:hover  {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    color: #efefdd;
-}
-
-*[cssClass="btn-nav-address"]:hover {
-    background-color: #2a3319;
-    color: #efefdd;
-}
 
 
-*[cssClass="btn-nav-address-active"] {
-    qproperty-icon:url("://ic-nav-address-active")  ;
-    qproperty-iconSize: 24px 40px;
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-privacy"] {
-    qproperty-icon: url("://ic-nav-privacy") off,
-    url("://ic-nav-privacy-active") on ;
-    qproperty-iconSize: 24px 40px;
-    background-color:transparent;
-    border: 0;
-    font-size:14px;
-    color: #a9b38d;
-}
 
-*[cssClass="btn-nav-privacy"]:checked {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-privacy"]:checked:hover  {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-privacy"]:hover {
-    background-color: #2a3319;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-privacy-active"] {
-    qproperty-icon:url("://ic-nav-privacy-active")  ;
-    qproperty-iconSize: 24px 40px;
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-master"] {
-    qproperty-icon: url("://ic-nav-master") off,
-    url("://ic-nav-master-active") on;
-    qproperty-iconSize: 24px 30px;
-    background-color:transparent;
-    border: 0;
-    font-size:14px;
-    color: #a9b38d;
-}
 
-*[cssClass="btn-nav-master"]:checked {
-    qproperty-icon: url("://ic-nav-master-active");
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-master"]:checked:hover  {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-master"]:hover {
-    background-color: #2a3319;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-master-active"] {
-    qproperty-icon:url("://ic-nav-master-active");
-    qproperty-iconSize: 24px 30px;
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-governance"] {
-    qproperty-icon: url("://ic-nav-governance") off,
-    url("://ic-nav-governance-active") on ;
-    qproperty-iconSize: 36px 36px;
-    background-color:transparent;
-    border: 0;
-    font-size:14px;
-    color: #a9b38d;
-}
 
-*[cssClass="btn-nav-governance"]:checked {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-governance"]:checked:hover {
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-governance"]:hover {
-    qproperty-icon: url("://ic-nav-governance-hover");
-    qproperty-iconSize: 36px 36px;
-    background-color: #2a3319;
-    color: #efefdd;
-}
 
-*[cssClass="btn-nav-governance-active"] {
-    qproperty-icon:url("://ic-nav-governance-active")  ;
-    qproperty-iconSize: 36px 36px;
-    background-color: #141a0d;
-    border-left: 3px solid #8fb35f;
-    font-size:14px;
-    color: #efefdd;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
 HH       TOP BAR
@@ -2422,20 +2172,23 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 
 *[cssClass="dashboard-tx-row"] {
     background-color: transparent;
-    border: 1px solid transparent;
-    border-radius: 16px;
+    border: 0;
+    border-bottom: 1px solid rgba(143, 179, 95, 0.10);
+    border-radius: 0;
 }
 
 *[cssClass="dashboard-tx-row-hover"] {
-    background-color: rgba(42, 51, 25, 0.18);
-    border: 1px solid rgba(143, 179, 95, 0.20);
-    border-radius: 16px;
+    background-color: rgba(143, 179, 95, 0.10);
+    border: 0;
+    border-bottom: 1px solid rgba(143, 179, 95, 0.14);
+    border-radius: 0;
 }
 
 *[cssClass="dashboard-tx-row-selected"] {
-    background-color: rgba(42, 51, 25, 0.28);
-    border: 1px solid rgba(143, 179, 95, 0.28);
-    border-radius: 16px;
+    background-color: rgba(143, 179, 95, 0.16);
+    border: 0;
+    border-bottom: 1px solid rgba(143, 179, 95, 0.20);
+    border-radius: 0;
 }
 
 *[cssClass="dashboard-tx-address"] {
@@ -5275,4 +5028,275 @@ QFrame#voteDialogShell QPushButton[cssClass="vote-action-cancel"]:hover {
 
 QFrame#voteDialogShell QPushButton[cssClass="vote-action-cancel"]:pressed {
     background-color: rgba(96, 106, 76, 0.70);
+}
+
+/*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+HH       V2 ICON RAIL
+HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
+
+*[cssClass="btn-nav-dash"] {
+    qproperty-icon: url("://ic-rail-dashboard") off,
+    url("://ic-rail-dashboard-active") on;
+    qproperty-iconSize: 26px 26px;
+    background-color: transparent;
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-dash"]:hover {
+    background-color: rgba(244, 246, 226, 0.08);
+}
+
+*[cssClass="btn-nav-dash"]:checked,
+*[cssClass="btn-nav-dash"]:checked:hover {
+    background-color: rgba(244, 246, 226, 0.16);
+}
+
+*[cssClass="btn-nav-dash-active"] {
+    qproperty-icon:url("://ic-rail-dashboard-active");
+    qproperty-iconSize: 26px 26px;
+    background-color: rgba(61, 82, 38, 0.95);
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-dash-active"]:hover {
+    background-color: rgba(61, 82, 38, 1);
+}
+
+*[cssClass="btn-nav-send"] {
+    qproperty-icon: url("://ic-rail-send") off,
+    url("://ic-rail-send-active") on;
+    qproperty-iconSize: 26px 26px;
+    background-color: transparent;
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-send"]:hover {
+    background-color: rgba(244, 246, 226, 0.08);
+}
+
+*[cssClass="btn-nav-send"]:checked,
+*[cssClass="btn-nav-send"]:checked:hover {
+    background-color: rgba(244, 246, 226, 0.16);
+}
+
+*[cssClass="btn-nav-send-active"] {
+    qproperty-icon:url("://ic-rail-send-active");
+    qproperty-iconSize: 26px 26px;
+    background-color: rgba(61, 82, 38, 0.95);
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-send-active"]:hover {
+    background-color: rgba(61, 82, 38, 1);
+}
+
+*[cssClass="btn-nav-receive"] {
+    qproperty-icon: url("://ic-rail-receive") off,
+    url("://ic-rail-receive-active") on;
+    qproperty-iconSize: 26px 26px;
+    background-color: transparent;
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-receive"]:hover {
+    background-color: rgba(244, 246, 226, 0.08);
+}
+
+*[cssClass="btn-nav-receive"]:checked,
+*[cssClass="btn-nav-receive"]:checked:hover {
+    background-color: rgba(244, 246, 226, 0.16);
+}
+
+*[cssClass="btn-nav-receive-active"] {
+    qproperty-icon:url("://ic-rail-receive-active");
+    qproperty-iconSize: 26px 26px;
+    background-color: rgba(61, 82, 38, 0.95);
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-receive-active"]:hover {
+    background-color: rgba(61, 82, 38, 1);
+}
+
+*[cssClass="btn-nav-address"] {
+    qproperty-icon: url("://ic-rail-address") off,
+    url("://ic-rail-address-active") on;
+    qproperty-iconSize: 26px 26px;
+    background-color: transparent;
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-address"]:hover {
+    background-color: rgba(244, 246, 226, 0.08);
+}
+
+*[cssClass="btn-nav-address"]:checked,
+*[cssClass="btn-nav-address"]:checked:hover {
+    background-color: rgba(244, 246, 226, 0.16);
+}
+
+*[cssClass="btn-nav-address-active"] {
+    qproperty-icon:url("://ic-rail-address-active");
+    qproperty-iconSize: 26px 26px;
+    background-color: rgba(61, 82, 38, 0.95);
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-address-active"]:hover {
+    background-color: rgba(61, 82, 38, 1);
+}
+
+*[cssClass="btn-nav-master"] {
+    qproperty-icon: url("://ic-rail-master") off,
+    url("://ic-rail-master-active") on;
+    qproperty-iconSize: 26px 26px;
+    background-color: transparent;
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-master"]:hover {
+    background-color: rgba(244, 246, 226, 0.08);
+}
+
+*[cssClass="btn-nav-master"]:checked,
+*[cssClass="btn-nav-master"]:checked:hover {
+    background-color: rgba(244, 246, 226, 0.16);
+}
+
+*[cssClass="btn-nav-master-active"] {
+    qproperty-icon:url("://ic-rail-master-active");
+    qproperty-iconSize: 26px 26px;
+    background-color: rgba(61, 82, 38, 0.95);
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-master-active"]:hover {
+    background-color: rgba(61, 82, 38, 1);
+}
+
+*[cssClass="btn-nav-cold-staking"] {
+    qproperty-icon: url("://ic-rail-cold-staking") off,
+    url("://ic-rail-cold-staking-active") on;
+    qproperty-iconSize: 26px 26px;
+    background-color: transparent;
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-cold-staking"]:hover {
+    background-color: rgba(244, 246, 226, 0.08);
+}
+
+*[cssClass="btn-nav-cold-staking"]:checked,
+*[cssClass="btn-nav-cold-staking"]:checked:hover {
+    background-color: rgba(244, 246, 226, 0.16);
+}
+
+*[cssClass="btn-nav-cold-staking-active"] {
+    qproperty-icon:url("://ic-rail-cold-staking-active");
+    qproperty-iconSize: 26px 26px;
+    background-color: rgba(61, 82, 38, 0.95);
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-cold-staking-active"]:hover {
+    background-color: rgba(61, 82, 38, 1);
+}
+
+*[cssClass="btn-nav-settings"] {
+    qproperty-icon: url("://ic-rail-settings") off,
+    url("://ic-rail-settings-active") on;
+    qproperty-iconSize: 26px 26px;
+    background-color: transparent;
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-settings"]:hover {
+    background-color: rgba(244, 246, 226, 0.08);
+}
+
+*[cssClass="btn-nav-settings"]:checked,
+*[cssClass="btn-nav-settings"]:checked:hover {
+    background-color: rgba(244, 246, 226, 0.16);
+}
+
+*[cssClass="btn-nav-settings-active"] {
+    qproperty-icon:url("://ic-rail-settings-active");
+    qproperty-iconSize: 26px 26px;
+    background-color: rgba(61, 82, 38, 0.95);
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-settings-active"]:hover {
+    background-color: rgba(61, 82, 38, 1);
+}
+
+*[cssClass="btn-nav-governance"] {
+    qproperty-icon: url("://ic-rail-governance") off,
+    url("://ic-rail-governance-active") on;
+    qproperty-iconSize: 26px 26px;
+    background-color: transparent;
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-governance"]:hover {
+    background-color: rgba(244, 246, 226, 0.08);
+}
+
+*[cssClass="btn-nav-governance"]:checked,
+*[cssClass="btn-nav-governance"]:checked:hover {
+    background-color: rgba(244, 246, 226, 0.16);
+}
+
+*[cssClass="btn-nav-governance-active"] {
+    qproperty-icon:url("://ic-rail-governance-active");
+    qproperty-iconSize: 26px 26px;
+    background-color: rgba(61, 82, 38, 0.95);
+    border: 0;
+    border-radius: 14px;
+}
+
+*[cssClass="btn-nav-governance-active"]:hover {
+    background-color: rgba(61, 82, 38, 1);
+}
+
+/*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+HH       V2 STAT ROW
+HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
+
+*[cssClass="dashboard-stat-row"] {
+    background: transparent;
+}
+
+*[cssClass="dashboard-stat-tile"] {
+    background-color: rgba(19, 22, 12, 0.85);
+    border: 1px solid rgba(143, 179, 95, 0.20);
+    border-radius: 16px;
+}
+
+*[cssClass="dashboard-stat-tile-label"] {
+    color: #c2c7ae;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+}
+
+*[cssClass="dashboard-stat-value"] {
+    color: #f4f6e2;
+    font-size: 21px;
+    font-weight: 700;
 }

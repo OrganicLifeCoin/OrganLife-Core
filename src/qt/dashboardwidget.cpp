@@ -35,36 +35,16 @@
 #define CHART_LOAD_MIN_TIME_INTERVAL 15
 
 namespace {
-void ReplaceBarSetValues(QBarSet* barSet, const QList<qreal>& values)
+void ReplaceLineSeriesValues(QLineSeries* lineSeries, const QList<qreal>& values)
 {
-    if (!barSet) return;
-
-    const int currentCount = barSet->count();
-    const int targetCount = values.size();
-    const int commonCount = std::min(currentCount, targetCount);
-
-    for (int i = 0; i < commonCount; ++i) {
-        barSet->replace(i, values.at(i));
+    if (!lineSeries) return;
+    QVector<QPointF> points;
+    points.reserve(values.size());
+    for (int i = 0; i < values.size(); ++i) {
+        // bar-category buckets span [i, i+1]; center points at i+0.5
+        points.append(QPointF(i + 0.5, values.at(i)));
     }
-
-    if (currentCount < targetCount) {
-        for (int i = currentCount; i < targetCount; ++i) {
-            barSet->append(values.at(i));
-        }
-    } else if (currentCount > targetCount) {
-        barSet->remove(targetCount, currentCount - targetCount);
-    }
-}
-
-QList<qreal> ReadBarSetValues(const QBarSet* barSet)
-{
-    QList<qreal> values;
-    if (!barSet) return values;
-    values.reserve(barSet->count());
-    for (int i = 0; i < barSet->count(); ++i) {
-        values.append(barSet->at(i));
-    }
-    return values;
+    lineSeries->replace(points);
 }
 
 QList<qreal> NormalizeValues(const QList<qreal>& values, int targetCount)
@@ -303,6 +283,55 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_71->setContentsMargins(0, 0, 0, 0);
     ui->verticalLayout_71->setSpacing(0);
 
+    // --- V2: stat row across the top (Available / Staking / Rewards 30d) ---
+    auto* statRow = new QWidget(this);
+    statRow->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(statRow, "dashboard-stat-row");
+    auto* statRowLayout = new QHBoxLayout(statRow);
+    statRowLayout->setContentsMargins(20, 14, 8, 6);
+    statRowLayout->setSpacing(12);
+    auto makeTile = [&](const QString& chipRes, const QString& caption, QLabel*& valueOut) {
+        auto* tile = new QWidget(statRow);
+        tile->setAttribute(Qt::WA_StyledBackground, true);
+        setCssProperty(tile, "dashboard-stat-tile");
+        auto* lay = new QHBoxLayout(tile);
+        lay->setContentsMargins(14, 10, 14, 10);
+        lay->setSpacing(12);
+        auto* chip = new QLabel(tile);
+        chip->setFixedSize(44, 44);
+        chip->setPixmap(QPixmap(chipRes).scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        lay->addWidget(chip, 0, Qt::AlignVCenter);
+        auto* texts = new QVBoxLayout();
+        texts->setContentsMargins(0, 0, 0, 0);
+        texts->setSpacing(2);
+        auto* cap = new QLabel(caption.toUpper(), tile);
+        setCssProperty(cap, "dashboard-stat-tile-label");
+        valueOut = new QLabel("--", tile);
+        setCssProperty(valueOut, "dashboard-stat-value");
+        texts->addWidget(cap);
+        texts->addWidget(valueOut);
+        lay->addLayout(texts, 1);
+        statRowLayout->addWidget(tile, 1);
+    };
+    makeTile(":/ic-chip-available", tr("Available"), statValueAvailable);
+    makeTile(":/ic-chip-staking", tr("Staking"), statValueStaking);
+    makeTile(":/ic-chip-rewards", tr("Rewards 30d"), statValueRewards);
+
+    // Restructure root: stat row on top, original two columns below
+    ui->horizontalLayout_2->removeWidget(ui->left);
+    ui->horizontalLayout_2->removeWidget(ui->right);
+    auto* columnsLayout = new QHBoxLayout();
+    columnsLayout->setContentsMargins(0, 0, 0, 0);
+    columnsLayout->setSpacing(0);
+    columnsLayout->addWidget(ui->left, 3);
+    columnsLayout->addWidget(ui->right, 2);
+    delete ui->horizontalLayout_2;
+    auto* rootV = new QVBoxLayout(this);
+    rootV->setContentsMargins(0, 0, 0, 0);
+    rootV->setSpacing(0);
+    rootV->addWidget(statRow);
+    rootV->addLayout(columnsLayout, 1);
+
 #ifdef USE_QTCHARTS
     connect(ui->comboBoxYears, static_cast<void (QComboBox::*)(const QString&)>(&QComboBox::currentTextChanged),
         this, &DashboardWidget::onChartYearChanged);
@@ -346,7 +375,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->listTransactions->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui->listTransactions->setUniformItemSizes(true);
     ui->listTransactions->setFrameShape(QFrame::NoFrame);
-    ui->listTransactions->setSpacing(8);
+    ui->listTransactions->setSpacing(0);
     ui->listTransactions->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     ui->listTransactions->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
@@ -452,6 +481,10 @@ void DashboardWidget::loadWalletModel()
         connect(walletModel->getOptionsModel(), &OptionsModel::hideChartsChanged, this,
                 &DashboardWidget::onHideChartsChanged);
 #endif
+        // V2 stat row data
+        connect(walletModel, &WalletModel::balanceChanged, this, &DashboardWidget::updateStatBalances);
+        updateStatBalances(interfaces::WalletBalances());
+        updateStatRewards();
     }
     // update the display unit, to not use the default ("PIV")
     updateDisplayUnit();
@@ -514,6 +547,26 @@ void DashboardWidget::showList()
     const bool hasTransactions = txModel && txModel->size() > 0;
     const bool hasVisibleTransactions = filter && filter->rowCount() > 0;
     updateTransactionViewState(hasTransactions, hasVisibleTransactions);
+}
+
+void DashboardWidget::updateStatBalances(const interfaces::WalletBalances&)
+{
+    if (!statValueAvailable || !walletModel) return;
+    const int unit = walletModel->getOptionsModel()->getDisplayUnit();
+    statValueAvailable->setText(GUIUtil::formatBalance(walletModel->getBalance(), unit));
+    statValueStaking->setText(GUIUtil::formatBalance(walletModel->getDelegatedBalance(), unit));
+}
+
+void DashboardWidget::updateStatRewards()
+{
+    if (!statValueRewards || !walletModel) return;
+    const QDate cutoff = QDate::currentDate().addDays(-30);
+    CAmount total = 0;
+    for (const auto& sample : chartStakeRowsSnapshot) {
+        if (QDate(sample.year, sample.month, sample.day) >= cutoff) total += sample.amount;
+    }
+    const int unit = walletModel->getOptionsModel()->getDisplayUnit();
+    statValueRewards->setText(GUIUtil::formatBalance(total, unit));
 }
 
 void DashboardWidget::updateDisplayUnit()
@@ -746,28 +799,27 @@ void DashboardWidget::changeChartColors()
     QColor gridY;
     QColor pivHintColor;
     QColor mnHintColor;
-    // Brown palette candidate. Previous chart anchors:
-    // light #DFE1E2/#FAF7F5/#F24A09/#22254A, dark #3A2C52/#100B1E/#A78BFA.
+    // Harvest palette anchors for the V2 area chart.
     if (isLightTheme()) {
-        gridLineColorX = QColor("#E8DCCF");
-        gridY = QColor("#E8DCCF");
-        linePenColor = QColor("#A78F7C");
-        labelColor = QColor("#8A7667");
-        backgroundColor = QColor("#FBF3E8");
-        pivHintColor = QColor("#9C4E1A");
-        mnHintColor = QColor("#3A2418");
+        gridLineColorX = QColor("#E3E8CE");
+        gridY = QColor("#E3E8CE");
+        linePenColor = QColor("#B9C49A");
+        labelColor = QColor("#7E7A62");
+        backgroundColor = QColor("#FFFFFF");
+        pivHintColor = QColor("#4F7A2E");
+        mnHintColor = QColor("#C4552A");
         axisY->setGridLineColor(gridY);
-        axisY->setMinorGridLineColor(QColor("#F3E5D6"));
+        axisY->setMinorGridLineColor(QColor("#EFF2DF"));
     } else {
-        gridLineColorX = QColor("#4A3022");
-        gridY = QColor("#4A3022");
-        linePenColor = QColor("#6D4F3B");
-        labelColor = QColor("#D8C2AA");
-        backgroundColor = QColor("#130B08");
-        pivHintColor = QColor("#E5A15E");
-        mnHintColor = QColor("#B69B82");
+        gridLineColorX = QColor("#3B4426");
+        gridY = QColor("#3B4426");
+        linePenColor = QColor("#55613F");
+        labelColor = QColor("#C2C7AE");
+        backgroundColor = QColor("#0D1008");
+        pivHintColor = QColor("#8FB35F");
+        mnHintColor = QColor("#D08A63");
         axisY->setGridLineColor(gridY);
-        axisY->setMinorGridLineColor(QColor("#1C100B"));
+        axisY->setMinorGridLineColor(QColor("#1A2010"));
     }
 
     axisX->setGridLineColor(gridLineColorX);
@@ -786,15 +838,29 @@ void DashboardWidget::changeChartColors()
     };
     ui->labelSquarePiv->setStyleSheet(markerStyle(pivHintColor));
     ui->labelSquareMN->setStyleSheet(markerStyle(mnHintColor));
-    if (set0) {
-        set0->setBrush(QBrush(pivHintColor));
-        set0->setColor(pivHintColor);
-        set0->setBorderColor(QColor(0, 0, 0, 0));
+    if (stakesLine) {
+        QPen linePen(pivHintColor);
+        linePen.setWidth(2);
+        stakesLine->setPen(linePen);
     }
-    if (set1) {
-        set1->setBrush(QBrush(mnHintColor));
-        set1->setColor(mnHintColor);
-        set1->setBorderColor(QColor(0, 0, 0, 0));
+    if (areaStakes) {
+        QLinearGradient fillGrad(0, 0, 0, 1);
+        fillGrad.setCoordinateMode(QGradient::ObjectBoundingMode);
+        QColor top = pivHintColor;
+        top.setAlpha(isLightTheme() ? 72 : 96);
+        QColor bottom = pivHintColor;
+        bottom.setAlpha(8);
+        fillGrad.setColorAt(0, top);
+        fillGrad.setColorAt(1, bottom);
+        areaStakes->setBrush(QBrush(fillGrad));
+        QPen areaPen(pivHintColor);
+        areaPen.setWidth(2);
+        areaStakes->setPen(areaPen);
+    }
+    if (mnLine) {
+        QPen mnPen(mnHintColor);
+        mnPen.setWidth(2);
+        mnLine->setPen(mnPen);
     }
 }
 
@@ -957,11 +1023,6 @@ void DashboardWidget::onChartMonthChanged(const QString& monthStr)
             }
             filterUpdateNeeded = true;
             refreshChart();
-#ifndef Q_OS_MAC
-        // quick hack to re paint the chart view.
-        chart->removeSeries(series);
-        chart->addSeries(series);
-#endif
         }
     }
 }
@@ -983,41 +1044,31 @@ void DashboardWidget::onChartRefreshed()
         axisX->clear();
     }
 
-    if (!series) {
-        series = new QBarSeries();
-        chart->addSeries(series);
-        series->attachAxis(axisX);
-        series->attachAxis(axisY);
+    // V2 harvest chart: filled area for stakes, accent line for masternodes
+    if (!stakesLine) {
+        stakesLine = new QLineSeries();
+        areaStakes = new QAreaSeries(stakesLine);
+        areaStakes->setName(tr("Stakes"));
+        chart->addSeries(areaStakes);
+        areaStakes->attachAxis(axisX);
+        areaStakes->attachAxis(axisY);
     }
-
-    if (!set0) {
-        set0 = new QBarSet(tr("Stakes"));
-    }
-    if (!set1) {
-        set1 = new QBarSet(tr("MN"));
+    if (!mnLine) {
+        mnLine = new QLineSeries();
+        mnLine->setName(tr("MN"));
+        chart->addSeries(mnLine);
+        mnLine->attachAxis(axisX);
+        mnLine->attachAxis(axisY);
     }
     changeChartColors();
 
-    if (!series->barSets().contains(set0)) {
-        series->append(set0);
-    }
-    if (!series->barSets().contains(set1)) {
-        series->append(set1);
-    }
-
-    QList<qreal> oldPivValues = ReadBarSetValues(set0);
-    QList<qreal> oldMnValues = ReadBarSetValues(set1);
     QList<qreal> targetPivValues = chartData->valuesPiv;
     QList<qreal> targetMnValues = chartData->valuesMN;
     const int targetSize = std::max(targetPivValues.size(), targetMnValues.size());
-    oldPivValues = NormalizeValues(oldPivValues, targetSize);
-    oldMnValues = NormalizeValues(oldMnValues, targetSize);
     targetPivValues = NormalizeValues(targetPivValues, targetSize);
     targetMnValues = NormalizeValues(targetMnValues, targetSize);
 
-    const qreal maxBefore = std::max(MaxValue(oldPivValues), MaxValue(oldMnValues));
-    const qreal maxAfter = std::max(MaxValue(targetPivValues), MaxValue(targetMnValues));
-    const qreal maxForRange = std::max(maxBefore, maxAfter);
+    const qreal maxForRange = std::max(MaxValue(targetPivValues), MaxValue(targetMnValues));
 
     // Total
     nDisplayUnit = walletModel->getOptionsModel()->getDisplayUnit();
@@ -1034,12 +1085,6 @@ void DashboardWidget::onChartRefreshed()
     ui->labelAmountPiv->setText(GUIUtil::formatBalance(chartData->totalPiv, nDisplayUnit));
     ui->labelAmountMN->setText(GUIUtil::formatBalance(chartData->totalMN, nDisplayUnit));
 
-    // bar width
-    if (chartShow == YEAR)
-        series->setBarWidth(0.65);
-    else {
-        series->setBarWidth(0.42);
-    }
     axisX->append(chartData->xLabels);
     const ChartAxisSpec axisSpec = ComputeNiceAxisSpec(std::max(0.0, static_cast<double>(maxForRange)), 5);
     axisY->setRange(0.0, axisSpec.top);
@@ -1052,64 +1097,19 @@ void DashboardWidget::onChartRefreshed()
         axisY->setLabelFormat("%.0f");
     }
 
-    ReplaceBarSetValues(set0, oldPivValues);
-    ReplaceBarSetValues(set1, oldMnValues);
+    ReplaceLineSeriesValues(stakesLine, targetPivValues);
+    ReplaceLineSeriesValues(mnLine, targetMnValues);
+    mnLine->setVisible(hasMNRewards);
+    updateStatRewards();
 
     bool hasVisibleValues = false;
     for (const qreal value : targetPivValues) {
-        if (value > 0.0) {
-            hasVisibleValues = true;
-            break;
-        }
+        if (value > 0.0) { hasVisibleValues = true; break; }
     }
     if (!hasVisibleValues) {
         for (const qreal value : targetMnValues) {
-            if (value > 0.0) {
-                hasVisibleValues = true;
-                break;
-            }
+            if (value > 0.0) { hasVisibleValues = true; break; }
         }
-    }
-
-    if (hasVisibleValues) {
-        if (chartBarsAnimation) {
-            disconnect(chartBarsAnimation, nullptr, this, nullptr);
-            chartBarsAnimation->stop();
-            chartBarsAnimation->deleteLater();
-            chartBarsAnimation = nullptr;
-        }
-
-        auto* animation = new QVariantAnimation(this);
-        chartBarsAnimation = animation;
-        animation->setDuration(420);
-        animation->setEasingCurve(QEasingCurve::OutCubic);
-        animation->setStartValue(0.0);
-        animation->setEndValue(1.0);
-        connect(animation, &QVariantAnimation::valueChanged, this,
-                [this, animation, oldPivValues, oldMnValues, targetPivValues, targetMnValues](const QVariant& value) {
-                    if (chartBarsAnimation != animation) return;
-                    const qreal progress = value.toReal();
-                    QList<qreal> framePiv = targetPivValues;
-                    QList<qreal> frameMn = targetMnValues;
-                    for (int i = 0; i < framePiv.size(); ++i) {
-                        framePiv[i] = oldPivValues[i] + ((targetPivValues[i] - oldPivValues[i]) * progress);
-                        frameMn[i] = oldMnValues[i] + ((targetMnValues[i] - oldMnValues[i]) * progress);
-                    }
-                    ReplaceBarSetValues(set0, framePiv);
-                    ReplaceBarSetValues(set1, frameMn);
-                });
-        connect(animation, &QVariantAnimation::finished, this,
-                [this, animation, targetPivValues, targetMnValues]() {
-            if (chartBarsAnimation != animation) return;
-            ReplaceBarSetValues(set0, targetPivValues);
-            ReplaceBarSetValues(set1, targetMnValues);
-            animation->deleteLater();
-            chartBarsAnimation = nullptr;
-        });
-        animation->start();
-    } else {
-        ReplaceBarSetValues(set0, targetPivValues);
-        ReplaceBarSetValues(set1, targetMnValues);
     }
 
     // Controllers
