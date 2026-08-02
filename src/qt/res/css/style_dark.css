@@ -3,7 +3,7 @@ HH       CONTAINER
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 /* OrganicLife dark brown candidate palette sampled from ic-coin-cteam.png: espresso #0d1008, cocoa surface #2a3319, roasted border #3b4426, copper primary #4f7a2e, caramel accent #8fb35f. */
-/* Previous dark palette kept for comparison: aubergine #100B1E, violet surface #2B1F46, violet border #3A2C52, primary #F24A09, dark accent #A78BFA. */
+/* Previous dark palette kept for comparison: aubergine #100B1E, violet surface #2B1F46, violet border #3A2C52, primary #c4552a, dark accent #A78BFA. */
 
 *[cssClass="container"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -68,7 +68,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="container-nav"] {
     background: qlineargradient(x1: 1, y1: 0, x2: 0, y2: 0,
-        stop: 0 #170D0A,
+        stop: 0 #0d1008,
         stop: 1 #0d1008);
     border-right: 1px solid #3b4426;
 }
@@ -975,7 +975,7 @@ QPushButton[cssClass="btn-check-lock-sub-menu-staking"]:hover {
 
 
 *[cssClass="top-sub-menu"] {
-    background-color:#2B1A12;
+    background-color:#1c2210;
 }
 
 
@@ -1347,8 +1347,8 @@ QPushButton[cssClass="btn-check-right"]:checked {
 }
 
 QPushButton[cssClass="btn-check-right"]:checked:hover {
-    border:  1px solid #A85A36;
-    background-color:#A85A36;
+    border:  1px solid #5f7a3a;
+    background-color:#5f7a3a;
     font-size:18px;
     padding:4px;
     color: #FFFFFF;
@@ -1357,8 +1357,8 @@ QPushButton[cssClass="btn-check-right"]:checked:hover {
 }
 
 QPushButton[cssClass="btn-check-right"]:checked:pressed {
-    border:  1px solid #2C170F;
-    background-color:#2C170F;
+    border:  1px solid #1a200d;
+    background-color:#1a200d;
     font-size:18px;
     padding:4px;
     color: #8fb35f;
@@ -1406,8 +1406,8 @@ QPushButton[cssClass="btn-check-left"]:checked {
 }
 
 QPushButton[cssClass="btn-check-left"]:checked:hover {
-    border:  1px solid #A85A36;
-    background-color:#A85A36;
+    border:  1px solid #5f7a3a;
+    background-color:#5f7a3a;
     font-size:18px;
     padding:4px;
     color: #FFFFFF;
@@ -2066,7 +2066,7 @@ QPushButton[cssClass="btn-chart-arrow"]:hover {
 }
 
 QPushButton[cssClass="btn-chart-arrow"]:pressed {
-    background-color:#2C170F;
+    background-color:#1a200d;
 }
 
 QPushButton[cssClass="btn-chart-arrow-right"] {
@@ -2082,7 +2082,7 @@ QPushButton[cssClass="btn-chart-arrow-right"]:hover {
 }
 
 QPushButton[cssClass="btn-chart-arrow-right"]:pressed {
-    background-color:#2C170F;
+    background-color:#1a200d;
 }
 
 QComboBox[cssClass="btn-combo-secundary"] {
@@ -2142,7 +2142,7 @@ QComboBox[cssClass="btn-combo-chart-selected"]:on {
 }
 
 QComboBox[cssClass="btn-combo-chart-selected"]:disabled {
-    background-color:#2B1A12;
+    background-color:#1c2210;
     padding:6px 12px 6px 6px;
     font-size:16px;
     border:1px solid #5d6b45;
@@ -2180,7 +2180,7 @@ QPushButton[cssClass="btn-check-time"]:checked {
 }
 
 QPushButton[cssClass="btn-check-time"]:hover {
-    background-color:#2B1A12;
+    background-color:#1c2210;
     border:1px solid #6B6563;
     border-radius:10px;
     font-size:14px;
@@ -2200,7 +2200,7 @@ QPushButton[cssClass="btn-check-time"]:pressed {
 }
 
 QPushButton[cssClass="btn-check-time"]:disabled {
-    background-color:#2B1A12;
+    background-color:#1c2210;
     border-radius:10px;
     font-size:14px;
     font-weight:600;
@@ -2335,7 +2335,7 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 
 *[cssClass="dashboard-analytics-card"] {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(28, 16, 11, 0.86),
+        stop:0 rgba(16, 20, 10, 0.86),
         stop:1 rgba(13,16,8, 0.88));
     border: 1px solid rgba(143, 179, 95, 0.26);
     border-radius: 18px;
@@ -2662,7 +2662,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 *[cssClass="governance-dashboard-shell"] {
     border: 1px solid rgba(143, 179, 95, 0.18);
     border-radius: 22px;
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0d1008, stop:1 #3A2116);
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0d1008, stop:1 #1a1e0e);
 }
 
 *[cssClass="screen-header-band"] {
@@ -2672,7 +2672,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     border-bottom: 1px solid rgba(143, 179, 95, 0.26);
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
         stop:0 rgba(42, 51, 25, 0.94),
-        stop:0.55 rgba(28, 16, 11, 0.86),
+        stop:0.55 rgba(16, 20, 10, 0.86),
         stop:1 rgba(13,16,8, 0.74));
 }
 
@@ -2694,7 +2694,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     border-left: 1px solid rgba(143, 179, 95, 0.16);
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
         stop:0 rgba(13,16,8, 0.96),
-        stop:1 rgba(28, 16, 11, 0.92));
+        stop:1 rgba(16, 20, 10, 0.92));
 }
 
 *[cssClass="screen-side-card"] {
@@ -2717,7 +2717,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     border-bottom: 1px solid rgba(143, 179, 95, 0.30);
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
         stop:0 rgba(42, 51, 25, 0.94),
-        stop:0.55 rgba(28, 16, 11, 0.86),
+        stop:0.55 rgba(16, 20, 10, 0.86),
         stop:1 rgba(13,16,8, 0.74));
 }
 
@@ -2760,7 +2760,7 @@ QComboBox[cssClass="governance-dashboard-filter"]::down-arrow {
 *[cssClass="governance-dashboard-warning"] {
     border: 1px solid rgba(143, 179, 95, 0.38);
     border-radius: 14px;
-    background-color: rgba(120, 53, 15, 0.22);
+    background-color: rgba(110, 155, 69, 0.22);
 }
 
 *[cssClass="governance-dashboard-surface"] {
@@ -2813,7 +2813,7 @@ OptionButton[cssClass="screen-side-option"] QWidget#layoutOptions2[hovered="true
     border: 1px solid rgba(143, 179, 95, 0.30);
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
         stop:0 rgba(42, 51, 25, 0.98),
-        stop:1 rgba(28, 16, 11, 0.90));
+        stop:1 rgba(16, 20, 10, 0.90));
 }
 
 OptionButton[cssClass="screen-side-option"] QLabel#labelTitleChange {
@@ -2862,7 +2862,7 @@ OptionButton[cssClass="governance-header-cta"] QWidget#layoutOptions2[hovered="t
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
         stop:0 rgba(196, 85, 42, 0.24),
         stop:0.2 rgba(42, 51, 25, 0.96),
-        stop:1 rgba(45, 28, 18, 0.90));
+        stop:1 rgba(30, 36, 18, 0.90));
 }
 
 OptionButton[cssClass="governance-header-cta"] QLabel[cssClass="governance-cta-title"] {
@@ -2901,7 +2901,7 @@ QLabel[cssClass="governance-warning-text"] {
 *[cssClass="governance-budget-panel"] {
     border: 1px solid rgba(143, 179, 95, 0.30);
     border-radius: 18px;
-    background-color: rgba(28, 16, 11, 0.52);
+    background-color: rgba(16, 20, 10, 0.52);
 }
 
 *[cssClass="governance-budget-title"] {
@@ -2932,13 +2932,13 @@ HH       GOVERNANCE CARD
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="card-governance"] {
-    background-color:qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0d1008, stop:1 #3A2116);
+    background-color:qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0d1008, stop:1 #1a1e0e);
     border:  1px solid rgba(143, 179, 95, 0.40);
     border-radius: 16px;
 }
 
 *[cssClass="card-title"] {
-    color:#F1D8BC;
+    color:#eef2d8;
     font-size:17px;
 }
 
@@ -2965,8 +2965,8 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     color:#f4f6e2;
     font-size:11px;
     border-radius:11px;
-    background-color:rgba(234, 88, 12, 0.20);
-    border: 1px solid rgba(251, 146, 60, 0.22);
+    background-color:rgba(196, 85, 42, 0.20);
+    border: 1px solid rgba(196, 85, 42, 0.22);
     padding:6px 10px;
 }
 
@@ -2999,7 +2999,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="label-progress-no"] {
-    color:#F1D8BC;
+    color:#eef2d8;
 }
 
 *[cssClass="label-progress-yes"] {
@@ -3039,14 +3039,14 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     border:  1px solid rgba(143, 179, 95, 0.58);
     background-color:rgba(42, 51, 25, 0.92);
     font-size:15px;
-    color: #F1D8BC;
+    color: #eef2d8;
     border-radius: 10px;
     padding:6px 14px;
 }
 
 QPushButton[cssClass="card-btn-vote"]:hover {
     border:  1px solid #a8c46b;
-    background-color:rgba(58, 48, 41, 0.98);
+    background-color:rgba(48, 50, 40, 0.98);
 }
 
 QPushButton[cssClass="card-btn-vote"]:pressed {
@@ -3075,13 +3075,13 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="vote-dialog-subtitle"] {
-    color:#EBD5BD;
+    color:#e9eed4;
     font-size:16px;
     font-weight:500;
 }
 
 *[cssClass="vote-section-label"] {
-    color:#EBD5BD;
+    color:#e9eed4;
     font-size:14px;
     font-weight:600;
 }
@@ -3089,7 +3089,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 *[cssClass="vote-body-panel"] {
     border: 1px solid rgba(143, 179, 95, 0.46);
     border-radius: 12px;
-    background-color: rgba(28, 16, 11, 0.42);
+    background-color: rgba(16, 20, 10, 0.42);
     padding: 12px 14px;
 }
 
@@ -3206,7 +3206,7 @@ QCheckBox:checked[cssClass="check-vote"][voteChoice="yes"]  {
 QCheckBox[cssClass="check-vote"][voteChoice="no"] {
     color:#2a3319;
     border: 1px solid #a8c46b;
-    background-color: #F1D8BC;
+    background-color: #eef2d8;
 }
 
 QCheckBox:checked[cssClass="check-vote"][voteChoice="no"]  {
@@ -3228,12 +3228,12 @@ QCheckBox::indicator[cssClass="check-vote"] {
     border-top-right-radius: 0px;
     border-bottom-left-radius: 12px;
     border-bottom-right-radius: 12px;
-    background-color: rgba(28, 16, 11, 0.55);
+    background-color: rgba(16, 20, 10, 0.55);
 }
 
 QRadioButton[cssClass="vote-mode-radio"] {
     spacing: 8px;
-    color: #EBD5BD;
+    color: #e9eed4;
     font-size: 14px;
 }
 
@@ -3244,7 +3244,7 @@ QRadioButton[cssClass="vote-mode-radio"]:checked {
 }
 
 QRadioButton[cssClass="vote-mode-radio"]:unchecked {
-    color: #E7C9A8;
+    color: #dde3c0;
     font-size: 14px;
     font-weight: 500;
 }
@@ -3269,7 +3269,7 @@ QRadioButton[cssClass="vote-mode-radio"]::indicator:checked {
 
 QRadioButton[cssClass="vote-mode-toggle"] {
     spacing: 0px;
-    color: #E7C9A8;
+    color: #dde3c0;
     font-size: 14px;
     font-weight: 600;
     border: 1px solid transparent;
@@ -3291,7 +3291,7 @@ QRadioButton[cssClass="vote-mode-toggle"]:checked {
 }
 
 QRadioButton[cssClass="vote-mode-toggle"]:unchecked {
-    color: #E7C9A8;
+    color: #dde3c0;
     background-color: transparent;
     border-radius: 12px;
     border: 1px solid transparent;
@@ -3373,7 +3373,7 @@ QLineEdit[coinAmountInvalid="true"] {
     border: 1px solid #4f7a2e;
     border-radius: 10px;
     color: #a8c46b;
-    background-color: rgba(28, 16, 11, 0.55);
+    background-color: rgba(16, 20, 10, 0.55);
     padding: 8px 12px;
     font-size: 13px;
 }
@@ -3381,8 +3381,8 @@ QLineEdit[coinAmountInvalid="true"] {
 QListWidget[cssClass="vote-mn-list"] {
     border: 1px solid #4f7a2e;
     border-radius: 12px;
-    background-color: rgba(28, 16, 11, 0.5);
-    color: #EBD5BD;
+    background-color: rgba(16, 20, 10, 0.5);
+    color: #e9eed4;
     font-size: 13px;
     padding: 4px;
 }
@@ -3754,7 +3754,7 @@ QRadioButton::indicator:unchecked {
 
 QRadioButton#radioModeMasternode,
 QRadioButton#radioModeCoinLock {
-    color: #EBD5BD;
+    color: #e9eed4;
     font-size: 14px;
     spacing: 8px;
 }
@@ -3768,7 +3768,7 @@ QRadioButton#radioModeCoinLock:checked {
 
 QRadioButton#radioModeMasternode:unchecked,
 QRadioButton#radioModeCoinLock:unchecked {
-    color: #E7C9A8;
+    color: #dde3c0;
     font-size: 14px;
     font-weight: 500;
 }
@@ -4092,7 +4092,7 @@ QPushButton[cssClass="vote-action-cancel"] {
     border: 1px solid transparent;
     border-radius: 14px;
     background-color: transparent;
-    color: #EBD5BD;
+    color: #e9eed4;
     font-size: 16px;
     font-weight: 600;
     padding: 10px 18px;
@@ -4100,11 +4100,11 @@ QPushButton[cssClass="vote-action-cancel"] {
 
 QPushButton[cssClass="vote-action-cancel"]:hover {
     border: 1px solid #5d6b45;
-    background-color: rgba(109, 79, 59, 0.45);
+    background-color: rgba(96, 106, 76, 0.45);
 }
 
 QPushButton[cssClass="vote-action-cancel"]:pressed {
-    background-color: rgba(109, 79, 59, 0.70);
+    background-color: rgba(96, 106, 76, 0.70);
 }
 
 
@@ -4256,7 +4256,7 @@ QPushButton[cssClass="btn-settings-options"]:checked {
 }
 
 QPushButton[cssClass="btn-settings-options"]:hover {
-    background-color: rgba(143, 118, 99, 0.7);
+    background-color: rgba(126, 130, 100, 0.7);
     border:none;
     border-radius: 8px;
     font-size:20px;
@@ -4494,7 +4494,7 @@ QPushButton[cssClass="ic-step-confirm-welcome"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
         stop: 0 #0d1008,
         stop: 0.5 #2a3319,
-        stop: 1 #2B1A12);
+        stop: 1 #1c2210);
     border-image: none;
 }
 
@@ -4517,7 +4517,7 @@ QPushButton[cssClass="ic-step-confirm-welcome"] {
 *[cssClass="container-welcome-stack"] {
     background-image: none;
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #2B1A12,
+        stop: 0 #1c2210,
         stop: 1 #2a3319);
     border:  1px solid #5d6b45;
     border-radius: 16px;
@@ -4540,7 +4540,7 @@ QPushButton[cssClass="ic-step-confirm-welcome"] {
 }
 
 QComboBox[cssClass="btn-combo-welcome"] {
-    background-color:#2B1A12;
+    background-color:#1c2210;
     padding:12px 24px 12px 16px;
     font-size:16px;
     border:2px solid #5d6b45;
@@ -5194,7 +5194,7 @@ QScrollArea[cssClass="container"] QWidget#qt_scrollarea_viewport {
 /* VoteDialog toggle rules must override generic dialog/radio rules above. */
 QFrame#voteDialogShell QRadioButton[cssClass="vote-mode-toggle"] {
     spacing: 0px;
-    color: #E7C9A8;
+    color: #dde3c0;
     font-size: 14px;
     font-weight: 600;
     border: 1px solid transparent;
@@ -5216,7 +5216,7 @@ QFrame#voteDialogShell QRadioButton[cssClass="vote-mode-toggle"]:checked {
 }
 
 QFrame#voteDialogShell QRadioButton[cssClass="vote-mode-toggle"]:unchecked {
-    color: #E7C9A8;
+    color: #dde3c0;
     background-color: transparent;
     border-radius: 12px;
     border: 1px solid transparent;
@@ -5262,7 +5262,7 @@ QFrame#voteDialogShell QPushButton[cssClass="vote-action-cancel"] {
     border: 1px solid transparent;
     border-radius: 14px;
     background-color: transparent;
-    color: #EBD5BD;
+    color: #e9eed4;
     font-size: 16px;
     font-weight: 600;
     padding: 10px 18px;
@@ -5270,9 +5270,9 @@ QFrame#voteDialogShell QPushButton[cssClass="vote-action-cancel"] {
 
 QFrame#voteDialogShell QPushButton[cssClass="vote-action-cancel"]:hover {
     border: 1px solid #5d6b45;
-    background-color: rgba(109, 79, 59, 0.45);
+    background-color: rgba(96, 106, 76, 0.45);
 }
 
 QFrame#voteDialogShell QPushButton[cssClass="vote-action-cancel"]:pressed {
-    background-color: rgba(109, 79, 59, 0.70);
+    background-color: rgba(96, 106, 76, 0.70);
 }
