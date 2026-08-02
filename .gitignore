@@ -247,3 +247,6 @@ to_backport.txt
 /OrganicLife-macos-universal-qt.zip
 /OrganicLife-macos-universal-qt.dmg
 /OrganicLife-macos-universal-qt/
+.test-data*
+build-arm64/
+build-x86_64/
