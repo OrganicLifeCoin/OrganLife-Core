@@ -114,12 +114,12 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->left->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->left, "dashboard-shell-left");
     ui->left->setContentsMargins(0,0,0,0);
-    ui->verticalLayout22->setContentsMargins(0, 0, 0, 0);
-    ui->verticalLayout22->setSpacing(0);
+    ui->verticalLayout22->setContentsMargins(12, 12, 12, 12);
+    ui->verticalLayout22->setSpacing(12);
     ui->left_top_container->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->left_top_container, "dashboard-header-band");
     ui->left_top_container->setMinimumHeight(108);
-    ui->horizontalLayout->setContentsMargins(20, 12, 20, 12);
+    ui->horizontalLayout->setContentsMargins(24, 14, 24, 14);
     ui->horizontalLayout->setSpacing(12);
     ui->verticalLayout_5->setContentsMargins(0, 0, 0, 0);
     ui->verticalLayout_5->setSpacing(4);
@@ -295,14 +295,15 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     statRow->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(statRow, "dashboard-stat-row");
     auto* statRowLayout = new QHBoxLayout(statRow);
-    statRowLayout->setContentsMargins(20, 14, 8, 6);
-    statRowLayout->setSpacing(12);
+    statRowLayout->setContentsMargins(0, 18, 14, 14);
+    statRowLayout->setSpacing(14);
     auto makeTile = [&](const QString& chipRes, const QString& caption, QLabel*& valueOut) {
         auto* tile = new QWidget(statRow);
         tile->setAttribute(Qt::WA_StyledBackground, true);
         setCssProperty(tile, "dashboard-stat-tile");
         auto* lay = new QHBoxLayout(tile);
-        lay->setContentsMargins(14, 10, 14, 10);
+        lay->setContentsMargins(20, 14, 20, 14);
+        tile->setMinimumWidth(230);
         lay->setSpacing(12);
         auto* chip = new QLabel(tile);
         chip->setFixedSize(44, 44);
@@ -318,18 +319,19 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
         texts->addWidget(cap);
         texts->addWidget(valueOut);
         lay->addLayout(texts, 1);
-        statRowLayout->addWidget(tile, 1);
+        statRowLayout->addWidget(tile);
     };
     makeTile(":/ic-chip-available", tr("Available"), statValueAvailable);
     makeTile(":/ic-chip-staking", tr("Staking"), statValueStaking);
     makeTile(":/ic-chip-rewards", tr("Rewards 30d"), statValueRewards);
+    statRowLayout->addStretch(1);
 
     // Restructure root: stat row on top, original two columns below
     ui->horizontalLayout_2->removeWidget(ui->left);
     ui->horizontalLayout_2->removeWidget(ui->right);
     auto* columnsLayout = new QHBoxLayout();
-    columnsLayout->setContentsMargins(0, 0, 0, 0);
-    columnsLayout->setSpacing(0);
+    columnsLayout->setContentsMargins(0, 0, 14, 0);
+    columnsLayout->setSpacing(14);
     columnsLayout->addWidget(ui->left, 3);
     columnsLayout->addWidget(ui->right, 2);
     delete ui->horizontalLayout_2;
@@ -344,7 +346,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     feedCard->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(feedCard, "dashboard-feed-card");
     auto* feedCardLayout = new QVBoxLayout(feedCard);
-    feedCardLayout->setContentsMargins(16, 14, 16, 10);
+    feedCardLayout->setContentsMargins(20, 16, 20, 14);
     feedCardLayout->setSpacing(2);
     auto* feedTitle = new QLabel(tr("Field notes"), feedCard);
     setCssProperty(feedTitle, "dashboard-feed-title");
@@ -356,6 +358,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     feedRowsLayout->setContentsMargins(0, 6, 0, 0);
     feedRowsLayout->setSpacing(0);
     feedCardLayout->addLayout(feedRowsLayout);
+    ui->verticalLayout_2->setSpacing(12);
     ui->verticalLayout_2->insertWidget(0, feedCard, 0);
     updateFeedNotes();
 
@@ -622,7 +625,7 @@ void DashboardWidget::updateFeedNotes()
         row->setAttribute(Qt::WA_StyledBackground, true);
         setCssProperty(row, "dashboard-feed-row");
         auto* lay = new QHBoxLayout(row);
-        lay->setContentsMargins(0, 7, 0, 7);
+        lay->setContentsMargins(0, 9, 0, 9);
         lay->setSpacing(10);
         auto* dot = new QLabel(row);
         dot->setFixedSize(10, 10);
