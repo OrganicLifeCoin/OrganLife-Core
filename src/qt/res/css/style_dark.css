@@ -5300,3 +5300,48 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     font-size: 21px;
     font-weight: 700;
 }
+
+/*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+HH       V2 FIELD NOTES FEED
+HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
+
+*[cssClass="dashboard-feed-card"] {
+    background-color: rgba(19, 22, 12, 0.85);
+    border: 1px solid rgba(143, 179, 95, 0.20);
+    border-radius: 16px;
+}
+
+*[cssClass="dashboard-feed-title"] {
+    color: #f4f6e2;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+*[cssClass="dashboard-feed-subtitle"] {
+    color: #c2c7ae;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+*[cssClass="dashboard-feed-row"] {
+    background: transparent;
+    border-bottom: 1px solid rgba(143, 179, 95, 0.10);
+}
+
+*[cssClass="dashboard-feed-type"] {
+    color: #f4f6e2;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+*[cssClass="dashboard-feed-date"] {
+    color: #c2c7ae;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+*[cssClass="dashboard-feed-empty"] {
+    color: #7a8064;
+    font-size: 12px;
+    padding: 10px 0 6px 0;
+}

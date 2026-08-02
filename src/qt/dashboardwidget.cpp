@@ -6,6 +6,7 @@
 #include "dashboardwidget.h"
 #include "ui_dashboardwidget.h"
 
+#include "chainparams.h"
 #include "chartutils.h"
 #include "clientmodel.h"
 #include "guiutil.h"
@@ -124,9 +125,15 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_5->setSpacing(4);
     ui->verticalSpacer->changeSize(0, 10, QSizePolicy::Minimum, QSizePolicy::Fixed);
 
-    // Title
+    // Title: V2 greeting band
     setCssProperty(ui->labelTitle, "screen-header-title");
     setCssProperty(ui->labelTitle2, "dashboard-side-title");
+    {
+        const int hour = QTime::currentTime().hour();
+        const QString daypart = hour < 5 ? tr("night") : (hour < 12 ? tr("morning") : (hour < 18 ? tr("afternoon") : tr("evening")));
+        ui->labelTitle->setText(tr("Good %1, grower").arg(daypart));
+        ui->labelSubtitle->setText(tr("%1 network").arg(QString::fromStdString(Params().NetworkIDString())));
+    }
 
     /* Subtitle */
     setCssProperty(ui->labelSubtitle, "screen-header-subtitle");
@@ -332,6 +339,26 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     rootV->addWidget(statRow);
     rootV->addLayout(columnsLayout, 1);
 
+    // --- V2: "Field notes" activity feed, top of the right column ---
+    auto* feedCard = new QWidget(ui->right);
+    feedCard->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(feedCard, "dashboard-feed-card");
+    auto* feedCardLayout = new QVBoxLayout(feedCard);
+    feedCardLayout->setContentsMargins(16, 14, 16, 10);
+    feedCardLayout->setSpacing(2);
+    auto* feedTitle = new QLabel(tr("Field notes"), feedCard);
+    setCssProperty(feedTitle, "dashboard-feed-title");
+    auto* feedSubtitle = new QLabel(tr("recent activity"), feedCard);
+    setCssProperty(feedSubtitle, "dashboard-feed-subtitle");
+    feedCardLayout->addWidget(feedTitle);
+    feedCardLayout->addWidget(feedSubtitle);
+    feedRowsLayout = new QVBoxLayout();
+    feedRowsLayout->setContentsMargins(0, 6, 0, 0);
+    feedRowsLayout->setSpacing(0);
+    feedCardLayout->addLayout(feedRowsLayout);
+    ui->verticalLayout_2->insertWidget(0, feedCard, 0);
+    updateFeedNotes();
+
 #ifdef USE_QTCHARTS
     connect(ui->comboBoxYears, static_cast<void (QComboBox::*)(const QString&)>(&QComboBox::currentTextChanged),
         this, &DashboardWidget::onChartYearChanged);
@@ -485,6 +512,7 @@ void DashboardWidget::loadWalletModel()
         connect(walletModel, &WalletModel::balanceChanged, this, &DashboardWidget::updateStatBalances);
         updateStatBalances(interfaces::WalletBalances());
         updateStatRewards();
+        updateFeedNotes();
     }
     // update the display unit, to not use the default ("PIV")
     updateDisplayUnit();
@@ -531,6 +559,7 @@ void DashboardWidget::clearWalletModel()
 void DashboardWidget::onTxArrived(const QString& hash, const bool isCoinStake, const bool isMNReward, const bool isCSAnyType)
 {
     showList();
+    updateFeedNotes();
     if (!isVisible()) return;
 #ifdef USE_QTCHARTS
     if (isCoinStake || isMNReward) {
@@ -547,6 +576,74 @@ void DashboardWidget::showList()
     const bool hasTransactions = txModel && txModel->size() > 0;
     const bool hasVisibleTransactions = filter && filter->rowCount() > 0;
     updateTransactionViewState(hasTransactions, hasVisibleTransactions);
+}
+
+void DashboardWidget::updateFeedNotes()
+{
+    if (!feedRowsLayout) return;
+    while (QLayoutItem* item = feedRowsLayout->takeAt(0)) {
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+
+    auto addEmpty = [this]() {
+        auto* empty = new QLabel(tr("no activity yet"), this);
+        setCssProperty(empty, "dashboard-feed-empty");
+        feedRowsLayout->addWidget(empty);
+    };
+
+    if (!filter || filter->rowCount() == 0) { addEmpty(); return; }
+
+    const int unit = walletModel && walletModel->getOptionsModel()
+        ? walletModel->getOptionsModel()->getDisplayUnit() : 0;
+    const int rows = std::min(4, filter->rowCount());
+    for (int i = 0; i < rows; ++i) {
+        const QModelIndex idx = filter->index(i, TransactionTableModel::ToAddress);
+        if (!idx.isValid()) continue;
+        const int type = idx.data(TransactionTableModel::TypeRole).toInt();
+        const CAmount amount = idx.data(TransactionTableModel::AmountRole).toLongLong();
+        const QDateTime date = idx.data(TransactionTableModel::DateRole).toDateTime();
+
+        QString label, color;
+        switch (type) {
+            case TransactionRecord::MNReward:      label = tr("MN reward");    color = "#8FB35F"; break;
+            case TransactionRecord::StakeMint:
+            case TransactionRecord::StakeZPIV:
+            case TransactionRecord::StakeDelegated:
+            case TransactionRecord::StakeHot:      label = tr("Stake found");  color = "#B77E35"; break;
+            case TransactionRecord::Generated:     label = tr("Mined");        color = "#B77E35"; break;
+            default:
+                if (amount >= 0) { label = tr("Received"); color = "#4F7A2E"; }
+                else             { label = tr("Sent");     color = "#B0502E"; }
+                break;
+        }
+
+        auto* row = new QWidget(this);
+        row->setAttribute(Qt::WA_StyledBackground, true);
+        setCssProperty(row, "dashboard-feed-row");
+        auto* lay = new QHBoxLayout(row);
+        lay->setContentsMargins(0, 7, 0, 7);
+        lay->setSpacing(10);
+        auto* dot = new QLabel(row);
+        dot->setFixedSize(10, 10);
+        dot->setStyleSheet(QString("background:%1;border-radius:5px;").arg(color));
+        lay->addWidget(dot, 0, Qt::AlignVCenter);
+        auto* texts = new QVBoxLayout();
+        texts->setContentsMargins(0, 0, 0, 0);
+        texts->setSpacing(1);
+        auto* typeLabel = new QLabel(label, row);
+        setCssProperty(typeLabel, "dashboard-feed-type");
+        auto* dateLabel = new QLabel(date.date().toString("MMM d"), row);
+        setCssProperty(dateLabel, "dashboard-feed-date");
+        texts->addWidget(typeLabel);
+        texts->addWidget(dateLabel);
+        lay->addLayout(texts, 1);
+        auto* amountLabel = new QLabel(QString("%1%2").arg(amount >= 0 ? "+" : "")
+                                       .arg(GUIUtil::formatBalance(std::abs(amount), unit)), row);
+        amountLabel->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;").arg(color));
+        lay->addWidget(amountLabel, 0, Qt::AlignVCenter | Qt::AlignRight);
+        feedRowsLayout->addWidget(row);
+    }
 }
 
 void DashboardWidget::updateStatBalances(const interfaces::WalletBalances&)
