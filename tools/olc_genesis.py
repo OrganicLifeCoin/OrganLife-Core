@@ -1,12 +1,25 @@
 #!/usr/bin/env python3
 """OrganicLife Coin (OLC) network parameter generator.
 
-Replicates this codebase's exact genesis block serialization (PIVX 5.x style:
-int16 nVersion + int16 nType, no nTime field) to:
-  1. Validate the implementation against the existing CTEAM genesis hashes.
-  2. Mine new genesis blocks (main/test/regtest) for OrganicLife Coin.
-  3. Pick base58 prefixes with distinctive leading characters.
-  4. Generate a fresh spork keypair (pure-python secp256k1).
+Replicates this codebase's exact genesis *transaction* serialization
+(PIVX 5.x style: int16 nVersion + int16 nType) to:
+  1. Validate the tx/merkle side against the existing CTEAM genesis blocks.
+  2. Pick base58 prefixes with distinctive leading characters.
+  3. Generate a fresh spork keypair (pure-python secp256k1).
+
+WARNING: block-header hashing in this codebase is NOT sha256d.
+CBlockHeader::GetHash() uses HashQuark() for nVersion < 4 (see
+src/primitives/block.cpp), and the genesis blocks have nVersion=1.
+The make_genesis()/validate functions below only reproduce the merkle
+roots; the mined block hashes will NOT match the node. To mine or verify
+genesis block hashes, use the C tool instead (byte-exact, links the
+repo's own sphlib):
+
+    cc -O2 -I src -I src/crypto tools/quark_miner.c \
+       src/crypto/blake.c src/crypto/bmw.c src/crypto/groestl.c \
+       src/crypto/jh.c src/crypto/keccak.c src/crypto/skein.c \
+       src/crypto/aes_helper.c -o tools/quark_miner
+    tools/quark_miner mine <merkle_hex> <ntime> <nbits_hex>
 """
 import hashlib
 import struct

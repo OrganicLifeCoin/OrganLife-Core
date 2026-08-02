@@ -270,9 +270,9 @@ BOOST_AUTO_TEST_CASE(mainnet_genesis_retime_lock_test)
 {
     SelectParams(CBaseChainParams::MAIN);
 
-    BOOST_CHECK_EQUAL(Params().GenesisBlock().nTime, 1785744000U);
+    BOOST_CHECK_EQUAL(Params().GenesisBlock().nTime, 1785672000U);
     BOOST_CHECK_EQUAL(Params().GetConsensus().hashGenesisBlock,
-                      uint256S("0x00000e7a809b258b8a8bb8e79bf69f34209c0b74bfdde08a7a2e0d7c98cc9787"));
+                      uint256S("0x0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e"));
     BOOST_CHECK_EQUAL(Params().GenesisBlock().hashMerkleRoot,
                       uint256S("0x33f4424ac84d7e801d2b09fc982a24c9228747a3f01f7402029a4664f1e63a44"));
     BOOST_CHECK_EQUAL(Params().Checkpoints().mapCheckpoints->at(0), Params().GetConsensus().hashGenesisBlock);

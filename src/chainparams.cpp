@@ -172,30 +172,30 @@ static Consensus::LLMQParams llmq400_85 = {
  * + Contains no strange transactions
  */
 static MapCheckpoints mapCheckpoints = {
-    {0, uint256S("0x00000e7a809b258b8a8bb8e79bf69f34209c0b74bfdde08a7a2e0d7c98cc9787")},
+    {0, uint256S("0x0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e")},
 };
 
 static const CCheckpointData data = {
     &mapCheckpoints,
-    1785744000, // * UNIX timestamp of genesis checkpoint block (0)
+    1785672000, // * UNIX timestamp of genesis checkpoint block (0)
     0,          // * total number of transactions between genesis and last checkpoint
     1800        // * estimated number of transactions per day after checkpoint
 };
 
 static MapCheckpoints mapCheckpointsTestnet = {
-    {0, uint256S("0x00000afe2c73a7367385c4378a7a31af8159e667b1270b8dd96e98536da44ad9")},
+    {0, uint256S("0x00000da1c1aee747221262d679d0b0e18ae5b40baccd97fb09be864a2623b484")},
 };
 
 static const CCheckpointData dataTestnet = {
     &mapCheckpointsTestnet,
-    1785743999,  // timestamp of genesis checkpoint block (0)
+    1785671999,  // timestamp of genesis checkpoint block (0)
     0,           // estimated tx count
     500};        // estimated tx per day
 
-static MapCheckpoints mapCheckpointsRegtest = {{0, uint256S("0x1f0193048e95830f9c3e87524f8cfd8a63e47fc9b0e0fda8fb9944db67ee762d")}};
+static MapCheckpoints mapCheckpointsRegtest = {{0, uint256S("0x6cbed3ed562f675e62738ee15283cdc2a4631330f665c11c64c3c65a2810f527")}};
 static const CCheckpointData dataRegtest = {
     &mapCheckpointsRegtest,
-    1785743998,
+    1785671998,
     1,
     100};
 
@@ -206,9 +206,9 @@ public:
     {
         strNetworkID = "main";
 
-        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin Genesis 2026-08-02", 1785744000, 1823964, 0x1e0ffff0, 1, 0 * COIN);
+        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin Genesis 2026-08-02", 1785672000, 490347, 0x1e0ffff0, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x00000e7a809b258b8a8bb8e79bf69f34209c0b74bfdde08a7a2e0d7c98cc9787"));
+        assert(consensus.hashGenesisBlock == uint256S("0x0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e"));
         assert(genesis.hashMerkleRoot == uint256S("0x33f4424ac84d7e801d2b09fc982a24c9228747a3f01f7402029a4664f1e63a44"));
 
         consensus.fPowAllowMinDifficultyBlocks = false;
@@ -363,9 +363,9 @@ public:
     {
         strNetworkID = "test";
 
-        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin Testnet Genesis 2026-08-02", 1785743999, 109128, 0x1e0ffff0, 1, 0 * COIN);
+        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin Testnet Genesis 2026-08-02", 1785671999, 2269109, 0x1e0ffff0, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x00000afe2c73a7367385c4378a7a31af8159e667b1270b8dd96e98536da44ad9"));
+        assert(consensus.hashGenesisBlock == uint256S("0x00000da1c1aee747221262d679d0b0e18ae5b40baccd97fb09be864a2623b484"));
         assert(genesis.hashMerkleRoot == uint256S("0x1d359659f716789e16106511749b0555742154f0efa325fac559c9136aaa9272"));
 
         consensus.fPowAllowMinDifficultyBlocks = true;
@@ -514,9 +514,9 @@ public:
     {
         strNetworkID = "regtest";
 
-        genesis = CreateGenesisBlock(1785743998, 0, 0x207fffff, 1, 0 * COIN);
+        genesis = CreateGenesisBlock(1785671998, 0, 0x207fffff, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x1f0193048e95830f9c3e87524f8cfd8a63e47fc9b0e0fda8fb9944db67ee762d"));
+        assert(consensus.hashGenesisBlock == uint256S("0x6cbed3ed562f675e62738ee15283cdc2a4631330f665c11c64c3c65a2810f527"));
         assert(genesis.hashMerkleRoot == uint256S("0xfdd9758d1b3adffe58ecb6abe2c50a9458ada72ce9617665772c70c537d1e1d5"));
 
         consensus.fPowAllowMinDifficultyBlocks = true;

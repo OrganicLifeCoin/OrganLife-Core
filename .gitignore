@@ -250,3 +250,4 @@ to_backport.txt
 .test-data*
 build-arm64/
 build-x86_64/
+tools/quark_miner
