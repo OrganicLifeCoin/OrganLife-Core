@@ -23,21 +23,21 @@ static const bool DEFAULT_SPLASHSCREEN = true;
 #define STYLE_INVALID "background:#FF8080"
 
 /* Transaction list -- unconfirmed transaction */
-#define COLOR_UNCONFIRMED QColor(138, 118, 103)
+#define COLOR_UNCONFIRMED QColor(126, 122, 98)
 /* Transaction list -- negative amount */
 #define COLOR_NEGATIVE QColor(220, 38, 38)
 /* Transaction list -- bare address (without label) */
-#define COLOR_BAREADDRESS QColor(138, 118, 103)
+#define COLOR_BAREADDRESS QColor(126, 122, 98)
 /* Transaction list -- TX status decoration - open until date */
-#define COLOR_TX_STATUS_OPENUNTILDATE QColor(201, 130, 61)
+#define COLOR_TX_STATUS_OPENUNTILDATE QColor(110, 155, 69)
 /* Transaction list -- TX status decoration - default color */
-#define COLOR_BLACK QColor(58, 36, 24)
+#define COLOR_BLACK QColor(43, 43, 26)
 /* Transaction list -- TX status decoration - conflicted */
 #define COLOR_CONFLICTED QColor(248, 68, 68)
-/* Transaction list -- TX status decoration - orphan (OrganicLife parchment #E8DCCF) */
-#define COLOR_ORPHAN QColor(232, 220, 207)
-/* Transaction list -- TX status decoration - stake (OrganicLife copper #9C4E1A) */
-#define COLOR_STAKE QColor(156, 78, 26)
+/* Transaction list -- TX status decoration - orphan (OrganicLife parchment #e3e8ce) */
+#define COLOR_ORPHAN QColor(227, 232, 206)
+/* Transaction list -- TX status decoration - stake (OrganicLife copper #4f7a2e) */
+#define COLOR_STAKE QColor(79, 122, 46)
 /* Tooltips longer than this (in characters) are converted into rich text,
    so that they can be word-wrapped.
  */

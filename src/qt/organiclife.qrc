@@ -22,11 +22,11 @@
     <qresource prefix="/">
         <file alias="bg-splash">res/images/bg-splash.svg</file>
         <file alias="bg-splash-png">res/images/bg-splash.png</file>
-        <file alias="img-logo-pivx-png">res/images/img-logo-cteam.png</file>
+        <file alias="img-logo-pivx-png">res/images/img-logo-organiclife.png</file>
         <file alias="img-logo-pivx-2x">res/images/img-logo-organiclife@2x.png</file>
         <file alias="img-logo-pivx-3x">res/images/img-logo-organiclife@3x.png</file>
-        <file alias="img-nav-logo-pivx">res/images/img-nav-logo-cteam.png</file>
-        <file alias="logo1776">res/images/img-logo-cteam.png</file>
+        <file alias="img-nav-logo-pivx">res/images/img-nav-logo-organiclife.png</file>
+        <file alias="logo1776">res/images/img-logo-organiclife.png</file>
         <file alias="img-qr-test-big">res/images/qr-code.png</file>
         <file alias="img-qr-test">res/images/img-qr-test.png</file>
         <file alias="img-welcome-step1">res/images/img-welcome-step1.png</file>
@@ -97,8 +97,8 @@
         <file alias="ic-clear-purple">res/images/ic-clear-purple.svg</file>
         <file alias="ic-close-white">res/images/ic-close-white.svg</file>
         <file alias="ic-close">res/images/ic-close.svg</file>
-        <file alias="ic-coin-piv">res/images/ic-coin-cteam.png</file>
-        <file alias="ic-coin-zpiv">res/images/ic-coin-cteam.png</file>
+        <file alias="ic-coin-piv">res/images/ic-coin-organiclife.png</file>
+        <file alias="ic-coin-zpiv">res/images/ic-coin-organiclife.png</file>
         <file alias="ic-combo-box">res/images/ic-combo-box.svg</file>
         <file alias="ic-connect">res/images/ic-connect.svg</file>
         <file alias="ic-copy-liliac">res/images/ic-copy-liliac.svg</file>
@@ -192,7 +192,7 @@
         <file alias="img-empty-staking-off">res/images/img-empty-staking-off.svg</file>
         <file alias="img-empty-staking-on">res/images/img-empty-staking-on.svg</file>
         <file alias="img-empty-transactions">res/images/img-empty-transactions.svg</file>
-        <file alias="img-nav-logo">res/images/img-nav-logo-cteam.png</file>
+        <file alias="img-nav-logo">res/images/img-nav-logo-organiclife.png</file>
         <file alias="img-qr">res/images/img-qr.svg</file>
         <file alias="ic-contact-arrow-down">res/images/ic-contact-arrow-down.svg</file>
         <file alias="ic-contact-arrow-down-white">res/images/ic-contact-arrow-down-white.svg</file>
@@ -200,7 +200,7 @@
         <file alias="ic-arrow-drop-up-purple">res/images/ic-arrow-drop-up-purple.svg</file>
         <file alias="bg-welcome-2x">res/images/bg-welcome@2x.jpg</file>
         <file alias="bg-welcome-3x">res/images/bg-welcome@3x.jpg</file>
-        <file alias="img-logo-pivx">res/images/img-logo-cteam.png</file>
+        <file alias="img-logo-pivx">res/images/img-logo-organiclife.png</file>
         <file alias="bg-welcome-svg">res/images/bg-welcome.svg</file>
         <file alias="bg-welcome-container">res/images/bg-welcome-container.svg</file>
         <file alias="bg-welcome">res/images/bg-welcome.png</file>
