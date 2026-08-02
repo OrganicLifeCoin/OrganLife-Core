@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -618,7 +618,7 @@ bool openDialog(QDialog* widget, QWidget* gui)
     return widget->exec();
 }
 
-void closeDialog(QDialog* widget, PIVXGUI* gui)
+void closeDialog(QDialog* widget, OrganicLifeGUI* gui)
 {
     prepareDialogBeforeShow(widget);
     QPropertyAnimation* animation = new QPropertyAnimation(widget, "pos");
@@ -638,7 +638,7 @@ void openDialogFullScreen(QWidget* parent, QWidget* dialog)
     dialog->resize(parent->width(), parent->height());
 }
 
-bool openDialogWithOpaqueBackgroundY(QDialog* widget, PIVXGUI* gui, double posX, int posY, bool hideOpaqueBackground)
+bool openDialogWithOpaqueBackgroundY(QDialog* widget, OrganicLifeGUI* gui, double posX, int posY, bool hideOpaqueBackground)
 {
     if (!widget || !gui) return false;
 
@@ -701,12 +701,12 @@ bool openDialogWithOpaqueBackgroundY(QDialog* widget, PIVXGUI* gui, double posX,
     return res;
 }
 
-bool openDialogWithOpaqueBackground(QDialog* widget, PIVXGUI* gui, double posX)
+bool openDialogWithOpaqueBackground(QDialog* widget, OrganicLifeGUI* gui, double posX)
 {
     return openDialogWithOpaqueBackgroundY(widget, gui, posX, 5);
 }
 
-bool openDialogWithOpaqueBackgroundFullScreen(QDialog* widget, PIVXGUI* gui)
+bool openDialogWithOpaqueBackgroundFullScreen(QDialog* widget, OrganicLifeGUI* gui)
 {
     prepareDialogBeforeShow(widget);
 
@@ -719,7 +719,7 @@ bool openDialogWithOpaqueBackgroundFullScreen(QDialog* widget, PIVXGUI* gui)
     return res;
 }
 
-bool openDialogCentered(QDialog* widget, PIVXGUI* gui, int width, int height)
+bool openDialogCentered(QDialog* widget, OrganicLifeGUI* gui, int width, int height)
 {
     widget->setWindowFlags(Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     widget->setAttribute(Qt::WA_TranslucentBackground, true);

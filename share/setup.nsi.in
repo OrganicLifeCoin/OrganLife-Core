@@ -46,7 +46,7 @@ Var StartMenuGroup
 
 # Installer attributes
 OutFile @abs_top_srcdir@/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-win64-setup.exe
-InstallDir $LOCALAPPDATA\CTEAM
+InstallDir $LOCALAPPDATA\OrganicLife
 CRCCheck on
 XPStyle on
 BrandingText " "
@@ -58,7 +58,7 @@ VIAddVersionKey CompanyName "${COMPANY}"
 VIAddVersionKey CompanyWebsite "${URL}"
 VIAddVersionKey FileVersion "@PACKAGE_VERSION@"
 VIAddVersionKey FileDescription "Installer for @PACKAGE_NAME@"
-VIAddVersionKey LegalCopyright "Copyright (C) 2015-@COPYRIGHT_YEAR@ The CTEAM Core developers"
+VIAddVersionKey LegalCopyright "Copyright (C) 2015-@COPYRIGHT_YEAR@ The OrganicLife Coin developers"
 InstallDirRegKey HKCU "${REGKEY}" Path
 ShowUninstDetails show
 
@@ -74,7 +74,7 @@ Section -Main SEC0000
     File @abs_top_srcdir@/release/@BITCOIN_CLI_NAME@@EXEEXT@
     SetOutPath $INSTDIR\doc
     File /r @abs_top_srcdir@/doc\*.*
-    SetOutPath $APPDATA\CTEAMParams
+    SetOutPath $APPDATA\OrganicLifeParams
     File @abs_top_srcdir@/params/sapling-output.params
     File @abs_top_srcdir@/params/sapling-spend.params
     SetOutPath $INSTDIR
@@ -100,7 +100,7 @@ Section -post SEC0001
     WriteRegDWORD HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" NoModify 1
     WriteRegDWORD HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" NoRepair 1
     WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@" "URL Protocol" ""
-    WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@" "" "URL:CTEAM"
+    WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@" "" "URL:OrganicLife"
     WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@\DefaultIcon" "" $INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@
     WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@\shell\open\command" "" '"$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "%1"'
 SectionEnd
@@ -133,7 +133,7 @@ Section -un.post UNSEC0001
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\Uninstall $(^Name).lnk"
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\$(^Name).lnk"
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\@PACKAGE_NAME@ (testnet, 64-bit).lnk"
-    Delete /REBOOTOK "$SMSTARTUP\CTEAM.lnk"
+    Delete /REBOOTOK "$SMSTARTUP\OrganicLife.lnk"
     Delete /REBOOTOK $INSTDIR\uninstall.exe
     Delete /REBOOTOK $INSTDIR\debug.log
     Delete /REBOOTOK $INSTDIR\db.log

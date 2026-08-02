@@ -1,7 +1,7 @@
 // Copyright (c) 2011-2014 The Bitcoin developers
 // Copyright (c) 2014-2016 The Dash developers
 // Copyright (c) 2016-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -592,7 +592,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord* wtx) const
     case TransactionRecord::SendToShielded:
         return tr("Shielded send to");
     case TransactionRecord::SendToNobody:
-        return tr("Burned CTEAM");
+        return tr("Burned OrganicLife");
     default:
         return QString();
     }

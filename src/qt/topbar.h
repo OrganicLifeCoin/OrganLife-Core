@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -17,7 +17,7 @@
 #include <QWidget>
 
 class BalanceBubble;
-class PIVXGUI;
+class OrganicLifeGUI;
 class WalletModel;
 class ClientModel;
 class ExpandableButton;
@@ -33,7 +33,7 @@ class TopBar : public PWidget
     Q_OBJECT
 
 public:
-    explicit TopBar(PIVXGUI* _mainWindow, QWidget *parent = nullptr);
+    explicit TopBar(OrganicLifeGUI* _mainWindow, QWidget *parent = nullptr);
     ~TopBar();
 
     void showTop();

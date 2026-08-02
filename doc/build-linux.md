@@ -83,49 +83,49 @@ Build Outputs
 -------------
 
 After `build-depends.sh`:
-- `src/cteamd` - Daemon
-- `src/cteam-cli` - CLI client
-- `src/cteam-tx` - Transaction tool
-- `src/qt/cteam-qt` - GUI wallet
+- `src/organiclifed` - Daemon
+- `src/organiclife-cli` - CLI client
+- `src/organiclife-tx` - Transaction tool
+- `src/qt/organiclife-qt` - GUI wallet
 
 Running
 -------
 
 ```bash
 # Start daemon
-./src/cteamd -daemon
+./src/organiclifed -daemon
 
 # Check status
-./src/cteam-cli getblockchaininfo
-./src/cteam-cli getbalance
+./src/organiclife-cli getblockchaininfo
+./src/organiclife-cli getbalance
 
 # Stop daemon
-./src/cteam-cli stop
+./src/organiclife-cli stop
 
 # GUI wallet
-./src/qt/cteam-qt
+./src/qt/organiclife-qt
 ```
 
 Data Directory
 --------------
 
-`~/.cteam/`
+`~/.organiclife/`
 
 Systemd Service (Optional)
 --------------------------
 
-Create `/etc/systemd/system/cteamd.service`:
+Create `/etc/systemd/system/organiclifed.service`:
 
 ```ini
 [Unit]
-Description=CTEAM Daemon
+Description=OrganicLife Daemon
 After=network.target
 
 [Service]
 Type=forking
 User=YOUR_USER
-ExecStart=/path/to/cteamd -daemon
-ExecStop=/path/to/cteam-cli stop
+ExecStart=/path/to/organiclifed -daemon
+ExecStop=/path/to/organiclife-cli stop
 Restart=on-failure
 
 [Install]
@@ -134,9 +134,9 @@ WantedBy=multi-user.target
 
 Enable:
 ```bash
-sudo systemctl enable cteamd
-sudo systemctl start cteamd
-sudo systemctl status cteamd
+sudo systemctl enable organiclifed
+sudo systemctl start organiclifed
+sudo systemctl status organiclifed
 ```
 
 Troubleshooting

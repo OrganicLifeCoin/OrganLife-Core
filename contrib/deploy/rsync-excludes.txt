@@ -10,7 +10,7 @@
 # Local build outputs
 build/
 dist/
-CTEAM.app/
+OrganicLife.app/
 *.dmg
 background.tiff
 background.tiff.png

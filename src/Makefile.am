@@ -123,11 +123,11 @@ TESTS =
 BENCHMARKS =
 
 if BUILD_BITCOIND
-  bin_PROGRAMS += cteamd
+  bin_PROGRAMS += organiclifed
 endif
 
 if BUILD_BITCOIN_UTILS
-  bin_PROGRAMS += cteam-cli cteam-tx
+  bin_PROGRAMS += organiclife-cli organiclife-tx
 endif
 
 LIBSAPLING_H = \
@@ -363,7 +363,7 @@ obj/build.h: FORCE
 	  "$(abs_top_srcdir)"
 libbitcoin_util_a-clientversion.$(OBJEXT): obj/build.h
 
-# server: shared between pivxd and pivx-qt
+# server: shared between organiclifed and organiclife-qt
 libbitcoin_server_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(MINIUPNPC_CPPFLAGS) $(NATPMP_CPPFLAGS) $(EVENT_CFLAGS) $(EVENT_PTHREADS_CFLAGS)
 libbitcoin_server_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_server_a_DEPENDENCIES = $(BLS_LIBS) $(RELIC_CONF_H)
@@ -456,7 +456,7 @@ libbitcoin_zmq_a_SOURCES = \
   zmq/zmqpublishnotifier.cpp
 endif
 
-# wallet: shared between pivxd and pivx-qt, but only linked
+# wallet: shared between organiclifed and organiclife-qt, but only linked
 # when wallet enabled
 libbitcoin_wallet_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_wallet_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
@@ -551,7 +551,7 @@ libzerocoin_libbitcoin_zerocoin_a_SOURCES = \
   libzerocoin/Params.cpp \
   zpiv/zpivmodule.cpp
 
-# common: shared between pivxd, and pivx-qt and non-server tools
+# common: shared between organiclifed, and organiclife-qt and non-server tools
 libbitcoin_common_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_common_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_common_a_SOURCES = \
@@ -670,7 +670,7 @@ libsapling_a_SOURCES += compat/glibc_compat.cpp
 AM_LDFLAGS += $(COMPAT_LDFLAGS)
 endif
 
-# cli: shared between cteam-cli and cteam-qt
+# cli: shared between organiclife-cli and organiclife-qt
 libbitcoin_cli_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_cli_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_cli_a_SOURCES = \
@@ -681,16 +681,16 @@ libbitcoin_cli_a_SOURCES = \
 nodist_libbitcoin_util_a_SOURCES = $(srcdir)/obj/build.h
 #
 
-# cteamd binary #
-cteamd_SOURCES = pivxd.cpp
-cteamd_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-cteamd_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-cteamd_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+# organiclifed binary #
+organiclifed_SOURCES = organiclifed.cpp
+organiclifed_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+organiclifed_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+organiclifed_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
 if TARGET_WINDOWS
-cteamd_SOURCES += pivxd-res.rc
+organiclifed_SOURCES += organiclifed-res.rc
 endif
-cteamd_LDADD = \
+organiclifed_LDADD = \
   $(LIBBITCOIN_SERVER) \
   $(LIBBITCOIN_WALLET) \
   $(LIBBITCOIN_COMMON) \
@@ -707,19 +707,19 @@ cteamd_LDADD = \
   $(LIBRUSTZCASH) \
   $(LIBZCASH_LIBS)
 
-cteamd_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(MINIUPNPC_LIBS) $(NATPMP_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(ZMQ_LIBS) $(BLS_LIBS)
+organiclifed_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(MINIUPNPC_LIBS) $(NATPMP_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(ZMQ_LIBS) $(BLS_LIBS)
 
-# cteam-cli binary #
-cteam_cli_SOURCES = pivx-cli.cpp
-cteam_cli_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
-cteam_cli_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-cteam_cli_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+# organiclife-cli binary #
+organiclife_cli_SOURCES = organiclife-cli.cpp
+organiclife_cli_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
+organiclife_cli_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+organiclife_cli_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
 if TARGET_WINDOWS
-cteam_cli_SOURCES += pivx-cli-res.rc
+organiclife_cli_SOURCES += organiclife-cli-res.rc
 endif
 
-cteam_cli_LDADD = \
+organiclife_cli_LDADD = \
   $(LIBBITCOIN_CLI) \
   $(LIBUNIVALUE) \
   $(LIBBITCOIN_UTIL) \
@@ -728,20 +728,20 @@ cteam_cli_LDADD = \
   $(LIBRUSTZCASH) \
   $(LIBZCASH_LIBS)
 
-cteam_cli_LDADD += $(BOOST_LIBS) $(EVENT_LIBS) $(BLS_LIBS)
+organiclife_cli_LDADD += $(BOOST_LIBS) $(EVENT_LIBS) $(BLS_LIBS)
 #
 
-# cteam-tx binary #
-cteam_tx_SOURCES = pivx-tx.cpp
-cteam_tx_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-cteam_tx_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-cteam_tx_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+# organiclife-tx binary #
+organiclife_tx_SOURCES = organiclife-tx.cpp
+organiclife_tx_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+organiclife_tx_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+organiclife_tx_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
 if TARGET_WINDOWS
-cteam_tx_SOURCES += pivx-tx-res.rc
+organiclife_tx_SOURCES += organiclife-tx-res.rc
 endif
 
-cteam_tx_LDADD = \
+organiclife_tx_LDADD = \
   $(LIBUNIVALUE) \
   $(LIBBITCOIN_COMMON) \
   $(LIBBITCOIN_ZEROCOIN) \
@@ -752,7 +752,7 @@ cteam_tx_LDADD = \
   $(LIBRUSTZCASH) \
   $(LIBZCASH_LIBS)
 
-cteam_tx_LDADD += $(BOOST_LIBS) $(BLS_LIBS)
+organiclife_tx_LDADD += $(BOOST_LIBS) $(BLS_LIBS)
 #
 
 # bitcoinconsensus library #

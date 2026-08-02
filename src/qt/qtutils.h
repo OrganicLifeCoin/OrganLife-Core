@@ -1,12 +1,12 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef PIVX_QT_QTUTILS_H
 #define PIVX_QT_QTUTILS_H
 
-#include "pivxgui.h"
+#include "organiclifegui.h"
 
 #include <QAbstractAnimation>
 #include <QColor>
@@ -34,12 +34,12 @@ const QString RESYNC("-resync");
 extern Qt::Modifier SHORT_KEY;
 
 bool openDialog(QDialog* widget, QWidget* gui);
-void closeDialog(QDialog* widget, PIVXGUI* gui);
+void closeDialog(QDialog* widget, OrganicLifeGUI* gui);
 void openDialogFullScreen(QWidget* parent, QWidget* dialog);
-bool openDialogWithOpaqueBackgroundY(QDialog* widget, PIVXGUI* gui, double posX = 3, int posY = 5, bool hideOpaqueBackground = true);
-bool openDialogWithOpaqueBackground(QDialog* widget, PIVXGUI* gui, double posX = 3);
-bool openDialogWithOpaqueBackgroundFullScreen(QDialog* widget, PIVXGUI* gui);
-bool openDialogCentered(QDialog* widget, PIVXGUI* gui, int width = 500, int height = 520);
+bool openDialogWithOpaqueBackgroundY(QDialog* widget, OrganicLifeGUI* gui, double posX = 3, int posY = 5, bool hideOpaqueBackground = true);
+bool openDialogWithOpaqueBackground(QDialog* widget, OrganicLifeGUI* gui, double posX = 3);
+bool openDialogWithOpaqueBackgroundFullScreen(QDialog* widget, OrganicLifeGUI* gui);
+bool openDialogCentered(QDialog* widget, OrganicLifeGUI* gui, int width = 500, int height = 520);
 void setDialogOwnsOpenPosition(QDialog* dialog, bool enabled);
 void setDialogAutoSizeToContents(QDialog* dialog, bool enabled);
 void setDialogPopAnimationTarget(QDialog* dialog, QWidget* target);

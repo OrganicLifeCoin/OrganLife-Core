@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build CTEAM Windows binaries on Ubuntu VPS
+# Build OrganicLife Windows binaries on Ubuntu VPS
 # Usage: ./build-depends-windows.sh
 # This script installs dependencies, builds the Windows depends, configures, and compiles everything
 
@@ -349,7 +349,7 @@ configure_project() {
 
 # Build the project
 build_project() {
-    log_step "Building CTEAM..."
+    log_step "Building OrganicLife..."
     log_info "Building with $JOBS parallel jobs..."
     
     make -j$JOBS
@@ -374,17 +374,17 @@ package_binaries() {
     log_step "Packaging binaries..."
     
     VERSION=$(git describe --tags --dirty 2>/dev/null || echo "unknown")
-    PACKAGE_DIR="cteam-windows-$VERSION"
+    PACKAGE_DIR="organiclife-windows-$VERSION"
     
     mkdir -p "$PACKAGE_DIR"
 
     # Copy Windows executables
-    cp src/cteamd.exe "$PACKAGE_DIR/" 2>/dev/null || true
-    cp src/cteam-cli.exe "$PACKAGE_DIR/" 2>/dev/null || true
-    cp src/cteam-tx.exe "$PACKAGE_DIR/" 2>/dev/null || true
-    cp src/qt/cteam-qt.exe "$PACKAGE_DIR/" 2>/dev/null || true
+    cp src/organiclifed.exe "$PACKAGE_DIR/" 2>/dev/null || true
+    cp src/organiclife-cli.exe "$PACKAGE_DIR/" 2>/dev/null || true
+    cp src/organiclife-tx.exe "$PACKAGE_DIR/" 2>/dev/null || true
+    cp src/qt/organiclife-qt.exe "$PACKAGE_DIR/" 2>/dev/null || true
 
-    # Include Sapling params so the wallet can copy them to %APPDATA%\\CTEAMParams on first run
+    # Include Sapling params so the wallet can copy them to %APPDATA%\\OrganicLifeParams on first run
     if [ -f "params/sapling-spend.params" ] && [ -f "params/sapling-output.params" ]; then
         mkdir -p "$PACKAGE_DIR/params"
         cp params/sapling-spend.params "$PACKAGE_DIR/params/"
@@ -410,21 +410,21 @@ print_summary() {
     ls -lh src/*.exe src/qt/*.exe 2>/dev/null || echo "  (executables in src/ and src/qt/)"
     echo ""
     echo "To run on Windows:"
-    echo "  1. Copy cteam-qt.exe to Windows machine"
+    echo "  1. Copy organiclife-qt.exe to Windows machine"
     echo "  2. Run it (no installation needed)"
     echo ""
     echo "Package location:"
-    ls -lh cteam-windows-*.zip 2>/dev/null || true
+    ls -lh organiclife-windows-*.zip 2>/dev/null || true
     echo ""
     echo "Installer:"
-    ls -lh cteam-*-win64-setup*.exe 2>/dev/null || true
+    ls -lh organiclife-*-win64-setup*.exe 2>/dev/null || true
     echo ""
 }
 
 # Main function
 main() {
     echo "========================================"
-    echo "  CTEAM Windows Build Script"
+    echo "  OrganicLife Windows Build Script"
     echo "========================================"
     echo ""
 
@@ -432,7 +432,7 @@ main() {
     
     # Check if running from correct directory
     if [ ! -f "configure.ac" ] || [ ! -d "src" ]; then
-        log_error "Please run this script from the CTEAM source directory"
+        log_error "Please run this script from the OrganicLife source directory"
         exit 1
     fi
     

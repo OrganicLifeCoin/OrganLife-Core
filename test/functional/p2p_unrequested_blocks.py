@@ -64,8 +64,8 @@ from test_framework.util import assert_equal, assert_raises_rpc_error
 class AcceptBlockTest(PivxTestFramework):
     def add_options(self, parser):
         parser.add_option("--testbinary", dest="testbinary",
-                          default=os.getenv("BITCOIND", "pivxd"),
-                          help="pivxd binary to test")
+                          default=os.getenv("BITCOIND", "organiclifed"),
+                          help="organiclifed binary to test")
 
     def set_test_params(self):
         self.setup_clean_chain = True

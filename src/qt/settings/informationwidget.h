@@ -18,7 +18,7 @@ class SettingsInformationWidget : public PWidget
     Q_OBJECT
 
 public:
-    explicit SettingsInformationWidget(PIVXGUI* _window, QWidget *parent = nullptr);
+    explicit SettingsInformationWidget(OrganicLifeGUI* _window, QWidget *parent = nullptr);
     ~SettingsInformationWidget() override;
 
     void loadClientModel() override;

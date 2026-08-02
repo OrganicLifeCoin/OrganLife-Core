@@ -5,7 +5,7 @@
 #ifndef PIVX_WALLET_TEST_POS_TEST_FIXTURE_H
 #define PIVX_WALLET_TEST_POS_TEST_FIXTURE_H
 
-#include "test/test_pivx.h"
+#include "test/test_organiclife.h"
 
 class CWallet;
 

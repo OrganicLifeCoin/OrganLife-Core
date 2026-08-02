@@ -286,7 +286,7 @@ def update_build_systems():
     filename_lang.sort(key=lambda x: x[0])
 
     # update qrc locales
-    with open('src/qt/pivx_locale.qrc', 'w', encoding="utf8") as f:
+    with open('src/qt/organiclife_locale.qrc', 'w', encoding="utf8") as f:
         f.write('<!DOCTYPE RCC><RCC version="1.0">\n')
         f.write('    <qresource prefix="/translations">\n')
         for (filename, basename, lang) in filename_lang:

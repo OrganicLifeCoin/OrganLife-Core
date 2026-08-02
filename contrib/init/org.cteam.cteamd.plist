@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>org.cteam.cteamd</string>
+	<string>org.organiclife.organiclifed</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/usr/local/bin/cteamd</string>
+		<string>/usr/local/bin/organiclifed</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>

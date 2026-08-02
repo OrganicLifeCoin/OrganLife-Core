@@ -1,5 +1,5 @@
 // Copyright (c) 2021-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
@@ -299,11 +299,11 @@ OperationResult GovernanceModel::validatePropURL(const QString& url) const
 OperationResult GovernanceModel::validatePropAmount(CAmount amount) const
 {
     if (amount < PROPOSAL_MIN_AMOUNT) { // Future: move constant to a budget interface.
-        return {false, strprintf(_("Amount below the minimum of %s CTEAM"), FormatMoney(PROPOSAL_MIN_AMOUNT))};
+        return {false, strprintf(_("Amount below the minimum of %s OrganicLife"), FormatMoney(PROPOSAL_MIN_AMOUNT))};
     }
 
     if (amount > PROPOSAL_MAX_AMOUNT) {
-        return {false, strprintf(_("Amount exceeding the maximum allowed of %s CTEAM"), FormatMoney(PROPOSAL_MAX_AMOUNT))};
+        return {false, strprintf(_("Amount exceeding the maximum allowed of %s OrganicLife"), FormatMoney(PROPOSAL_MAX_AMOUNT))};
     }
     return {true};
 }

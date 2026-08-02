@@ -26,7 +26,7 @@ check_absent 'VERIFY_REWARD_SCHEDULE' \
 check_absent 'verify_reward_schedule' \
     "$REPO_ROOT/scripts/build-depends.sh"
 
-check_absent 'test/test_pivx' \
+check_absent 'test/test_organiclife' \
     "$REPO_ROOT/scripts/build-depends.sh" \
     "$REPO_ROOT/scripts/build_all.sh"
 

@@ -1,6 +1,6 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
 // Copyright (c) 2017-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,7 +12,7 @@
 #include "netbase.h"
 #include "util/system.h"
 
-#include "test/test_pivx.h"
+#include "test/test_organiclife.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/test/unit_test.hpp>

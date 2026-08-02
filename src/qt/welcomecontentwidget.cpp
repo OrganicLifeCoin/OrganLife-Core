@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,7 +8,7 @@
 #endif
 
 #if !defined(PACKAGE_NAME)
-#define PACKAGE_NAME "CTEAM"
+#define PACKAGE_NAME "OrganicLife"
 #endif
 
 #include "welcomecontentwidget.h"
@@ -183,9 +183,9 @@ void WelcomeContentWidget::applyBranding()
 
     const auto apply = [&packageName](QLabel* label) {
         if (!label) return;
-        // Backward compatible with older/translated strings that still contain "CTEAM".
+        // Backward compatible with older/translated strings that still contain "OrganicLife".
         QString text = label->text();
-        text.replace("CTEAM", packageName, Qt::CaseInsensitive);
+        text.replace("OrganicLife", packageName, Qt::CaseInsensitive);
         label->setText(text.arg(packageName));
     };
 

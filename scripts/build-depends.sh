@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# CTEAM Build Script using Depends System
-# Builds CTEAM with static dependencies for release-quality binaries
+# OrganicLife Build Script using Depends System
+# Builds OrganicLife with static dependencies for release-quality binaries
 #
 # Usage: ./build-depends.sh [options]
 #
@@ -1010,7 +1010,7 @@ configure_build() {
     # If GUI was requested, ensure configure actually enabled it.
     if [ "$BUILD_GUI" = true ] && [ -f "$REPO_ROOT/config.log" ]; then
         local gui_line
-        gui_line="$(grep -A1 "checking whether to build CTEAM GUI" "$REPO_ROOT/config.log" | tail -n 1 || true)"
+        gui_line="$(grep -A1 "checking whether to build OrganicLife GUI" "$REPO_ROOT/config.log" | tail -n 1 || true)"
         if echo "$gui_line" | grep -q "result: no"; then
             print_error "Qt GUI was requested but configure disabled it ($gui_line)."
             print_error "Try: ./build-depends.sh --clean --jobs ${JOBS:-<n>} (or pass --no-gui for daemon-only)."
@@ -1021,9 +1021,9 @@ configure_build() {
     print_success "Configuration complete"
 }
 
-# Build CTEAM
+# Build OrganicLife
 build_pivx() {
-    print_info "Building CTEAM..."
+    print_info "Building OrganicLife..."
 
     cd "$REPO_ROOT"
 
@@ -1056,9 +1056,9 @@ build_pivx() {
     setup_native_qt_tools
     clean_stale_qt_generated_files
 
-    local src_targets=(cteamd cteam-cli cteam-tx)
+    local src_targets=(organiclifed organiclife-cli organiclife-tx)
     if [ "$BUILD_GUI" = true ]; then
-        src_targets+=(qt/cteam-qt)
+        src_targets+=(qt/organiclife-qt)
     fi
 
     make -C src $jobs_opt "${src_targets[@]}"
@@ -1072,7 +1072,7 @@ print_summary() {
     print_success "=== Build Summary ==="
     echo "Build type:    $([ "$DEBUG_BUILD" = true ] && echo "Debug" || echo "Release")"
     local gui_built=false
-    if [ -f "$REPO_ROOT/src/qt/cteam-qt" ]; then
+    if [ -f "$REPO_ROOT/src/qt/organiclife-qt" ]; then
         gui_built=true
     fi
     if [ "$BUILD_GUI" = true ] && [ "$gui_built" = false ]; then
@@ -1087,17 +1087,17 @@ print_summary() {
     echo "Binaries are located in: $REPO_ROOT/src"
     echo ""
 
-    if [ -f "$REPO_ROOT/src/cteamd" ]; then
-        echo "  src/cteamd        - CTEAM daemon"
+    if [ -f "$REPO_ROOT/src/organiclifed" ]; then
+        echo "  src/organiclifed        - OrganicLife daemon"
     fi
-    if [ -f "$REPO_ROOT/src/cteam-cli" ]; then
-        echo "  src/cteam-cli     - CTEAM command-line client"
+    if [ -f "$REPO_ROOT/src/organiclife-cli" ]; then
+        echo "  src/organiclife-cli     - OrganicLife command-line client"
     fi
-    if [ -f "$REPO_ROOT/src/cteam-tx" ]; then
-        echo "  src/cteam-tx      - CTEAM transaction tool"
+    if [ -f "$REPO_ROOT/src/organiclife-tx" ]; then
+        echo "  src/organiclife-tx      - OrganicLife transaction tool"
     fi
-    if [ -f "$REPO_ROOT/src/qt/cteam-qt" ]; then
-        echo "  src/qt/cteam-qt   - CTEAM Qt GUI wallet"
+    if [ -f "$REPO_ROOT/src/qt/organiclife-qt" ]; then
+        echo "  src/qt/organiclife-qt   - OrganicLife Qt GUI wallet"
     fi
     echo ""
     echo "To install system-wide, run: sudo make install"
@@ -1106,7 +1106,7 @@ print_summary() {
     if [ "$OS" = "macOS" ] && [ "$BUILD_GUI" = true ]; then
         echo "macOS .app/.dmg packaging:"
         echo "  make deploy"
-        echo "  (This produces CTEAM.app and a .dmg; double-clicking the raw src/qt/cteam-qt binary will open Terminal.)"
+        echo "  (This produces OrganicLife.app and a .dmg; double-clicking the raw src/qt/organiclife-qt binary will open Terminal.)"
         echo ""
     fi
 }
@@ -1114,7 +1114,7 @@ print_summary() {
 # Main
 main() {
     echo ""
-    print_info "=== CTEAM Build Script (depends system) ==="
+    print_info "=== OrganicLife Build Script (depends system) ==="
     echo ""
 
     cd "$REPO_ROOT"
@@ -1134,7 +1134,7 @@ main() {
         exit 0
     fi
 
-    print_info "This script builds CTEAM with static dependencies."
+    print_info "This script builds OrganicLife with static dependencies."
     print_info "First build will take longer as dependencies are compiled."
     echo ""
 

@@ -2,26 +2,26 @@
 
 # backward compatibility for existing gentoo layout
 #
-if [ -d "/var/lib/cteam/.CTEAM" ]; then
-	BITCOIND_DEFAULT_DATADIR="/var/lib/cteam/.CTEAM"
+if [ -d "/var/lib/organiclife/.OrganicLife" ]; then
+	BITCOIND_DEFAULT_DATADIR="/var/lib/organiclife/.OrganicLife"
 else
-	BITCOIND_DEFAULT_DATADIR="/var/lib/cteamd"
+	BITCOIND_DEFAULT_DATADIR="/var/lib/organiclifed"
 fi
 
-BITCOIND_CONFIGFILE=${BITCOIND_CONFIGFILE:-/etc/cteam/CTEAM.conf}
-BITCOIND_PIDDIR=${BITCOIND_PIDDIR:-/var/run/cteamd}
-BITCOIND_PIDFILE=${BITCOIND_PIDFILE:-${BITCOIND_PIDDIR}/cteamd.pid}
+BITCOIND_CONFIGFILE=${BITCOIND_CONFIGFILE:-/etc/organiclife/organiclifecoin.conf}
+BITCOIND_PIDDIR=${BITCOIND_PIDDIR:-/var/run/organiclifed}
+BITCOIND_PIDFILE=${BITCOIND_PIDFILE:-${BITCOIND_PIDDIR}/organiclifed.pid}
 BITCOIND_DATADIR=${BITCOIND_DATADIR:-${BITCOIND_DEFAULT_DATADIR}}
-BITCOIND_USER=${BITCOIND_USER:-${BITCOIN_USER:-cteam}}
-BITCOIND_GROUP=${BITCOIND_GROUP:-cteam}
-BITCOIND_BIN=${BITCOIND_BIN:-/usr/bin/cteamd}
+BITCOIND_USER=${BITCOIND_USER:-${BITCOIN_USER:-organiclife}}
+BITCOIND_GROUP=${BITCOIND_GROUP:-organiclife}
+BITCOIND_BIN=${BITCOIND_BIN:-/usr/bin/organiclifed}
 BITCOIND_NICE=${BITCOIND_NICE:-${NICELEVEL:-0}}
 BITCOIND_OPTS="${BITCOIND_OPTS:-${BITCOIN_OPTS}}"
 
-name="CTEAM Daemon"
-description="CTEAM crypto-currency p2p network daemon"
+name="OrganicLife Daemon"
+description="OrganicLife crypto-currency p2p network daemon"
 
-command="/usr/bin/cteamd"
+command="/usr/bin/organiclifed"
 command_args="-pid=\"${BITCOIND_PIDFILE}\" \
 		-conf=\"${BITCOIND_CONFIGFILE}\" \
 		-datadir=\"${BITCOIND_DATADIR}\" \
@@ -71,7 +71,7 @@ checkconfig()
 {
 	if ! grep -qs '^rpcpassword=' "${BITCOIND_CONFIGFILE}" ; then
 		eerror ""
-		eerror "ERROR: You must set a secure rpcpassword to run cteamd."
+		eerror "ERROR: You must set a secure rpcpassword to run organiclifed."
 		eerror "The setting must appear in ${BITCOIND_CONFIGFILE}"
 		eerror ""
 		eerror "This password is security critical to securing wallets "
@@ -84,7 +84,7 @@ checkconfig()
 		eerror "It is recommended that you also set alertnotify so you are "
 		eerror "notified of problems:"
 		eerror ""
-		eerror "ie: alertnotify=echo %%s | mail -s \"CTEAM Alert\"" \
+		eerror "ie: alertnotify=echo %%s | mail -s \"OrganicLife Alert\"" \
 			"admin@foo.com"
 		eerror ""
 		return 1

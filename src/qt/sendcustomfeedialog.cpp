@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,7 +15,7 @@
 #include <QComboBox>
 #include <QListView>
 
-SendCustomFeeDialog::SendCustomFeeDialog(PIVXGUI* parent, WalletModel* model) :
+SendCustomFeeDialog::SendCustomFeeDialog(OrganicLifeGUI* parent, WalletModel* model) :
     FocusedDialog(parent),
     ui(new Ui::SendCustomFeeDialog),
     walletModel(model)
@@ -58,7 +58,7 @@ SendCustomFeeDialog::SendCustomFeeDialog(PIVXGUI* parent, WalletModel* model) :
     connect(ui->comboBoxRecommended, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &SendCustomFeeDialog::updateFee);
     if (parent)
-        connect(parent, &PIVXGUI::themeChanged, this, &SendCustomFeeDialog::onChangeTheme);
+        connect(parent, &OrganicLifeGUI::themeChanged, this, &SendCustomFeeDialog::onChangeTheme);
     ui->checkBoxRecommended->setChecked(true);
 }
 

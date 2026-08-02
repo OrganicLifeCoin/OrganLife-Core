@@ -1,13 +1,13 @@
-# bash programmable completion for cteam-tx(1)
+# bash programmable completion for organiclife-tx(1)
 # Copyright (c) 2016 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-_cteam_tx() {
+_organiclife_tx() {
     local cur prev words=() cword
     local cash_tx
 
-    # save and use original argument to invoke cteam-tx for -help
+    # save and use original argument to invoke organiclife-tx for -help
     # it might not be in $PATH
     cash_tx="$1"
 
@@ -27,7 +27,7 @@ _cteam_tx() {
 
     if [[ "$cword" == 1 || ( "$prev" != "-create" && "$prev" == -* ) ]]; then
         # only options (or an uncompletable hex-string) allowed
-        # parse cteam-tx -help for options
+        # parse organiclife-tx -help for options
         local helpopts
         helpopts=$($cash_tx -help | sed -e '/^  -/ p' -e d )
         COMPREPLY=( $( compgen -W "$helpopts" -- "$cur" ) )
@@ -46,7 +46,7 @@ _cteam_tx() {
 
     return 0
 } &&
-complete -F _cteam_tx cteam-tx
+complete -F _organiclife_tx organiclife-tx
 
 # Local variables:
 # mode: shell-script

@@ -5,7 +5,7 @@
 // Copyright (c) 2013-2014 The NovaCoin Developers
 // Copyright (c) 2014-2018 The BlackCoin Developers
 // Copyright (c) 2015-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -63,7 +63,7 @@
 
 
 #if defined(NDEBUG)
-#error "CTEAM cannot be compiled without assertions."
+#error "OrganicLife cannot be compiled without assertions."
 #endif
 
 /**
@@ -821,7 +821,7 @@ CAmount GetBlockValue(int nHeight)
 {
     const auto& consensus = Params().GetConsensus();
 
-    // CTEAM launch monetary policy is applied to public networks.
+    // OrganicLife launch monetary policy is applied to public networks.
     // Keep regtest on the legacy/dev schedule expected by local testing workflows.
     if (!Params().IsRegTestNet() && consensus.nPremineReward > 0) {
         // - Total supply cap: Params().GetConsensus().nMaxMoneyOut
@@ -844,7 +844,7 @@ CAmount GetBlockValue(int nHeight)
         return std::min(blockSubsidy, remaining);
     }
 
-    // Default CTEAM regtest schedule (kept for development/testing).
+    // Default OrganicLife regtest schedule (kept for development/testing).
     const int nLast = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V5_5].nActivationHeight;
 
     // Regtest block reward reduction schedule
@@ -1464,7 +1464,7 @@ static CCheckQueue<CScriptCheck> scriptcheckqueue(128);
 
 void ThreadScriptCheck()
 {
-    util::ThreadRename("pivx-scriptch");
+    util::ThreadRename("olc-scriptch");
     scriptcheckqueue.Thread();
 }
 
@@ -2825,7 +2825,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, bool fCheckPOW, bo
         }
         nHeight = pindexPrev->nHeight + 1;
 
-        // CTEAM
+        // OrganicLife
         // It is entirely possible that we don't have enough data and this could fail
         // (i.e. the block could indeed be valid). Store the block for later consideration
         // but issue an initial reject message.
@@ -2894,7 +2894,7 @@ bool CheckWork(const CBlock& block, const CBlockIndex* const pindexPrev)
         const Consensus::Params& consensus = Params().GetConsensus();
         if ((block.nTime == (uint32_t) consensus.nPivxBadBlockTime) &&
                 (block.nBits == (uint32_t) consensus.nPivxBadBlockBits)) {
-            // accept CTEAM block minted with incorrect proof of work threshold
+            // accept OrganicLife block minted with incorrect proof of work threshold
             return true;
         }
 

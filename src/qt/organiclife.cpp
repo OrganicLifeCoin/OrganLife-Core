@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,7 +9,7 @@
 #include "config/pivx-config.h"
 #endif
 
-#include "pivxgui.h"
+#include "organiclifegui.h"
 
 #include "fs.h"
 #include "guiinterface.h"
@@ -96,7 +96,7 @@ static void InitMessage(const std::string& message)
  */
 static std::string Translate(const char* psz)
 {
-    return QCoreApplication::translate("pivx-core", psz).toStdString();
+    return QCoreApplication::translate("organiclife-core", psz).toStdString();
 }
 
 static QString GetLangTerritory(bool forceLangFromSetting = false)
@@ -221,11 +221,11 @@ static void initTranslations(QTranslator& qtTranslatorBase, QTranslator& qtTrans
     if (qtTranslator.load("qt_" + lang_territory, translationsPath))
         QApplication::installTranslator(&qtTranslator);
 
-    // Load e.g. bitcoin_de.qm (shortcut "de" needs to be defined in pivx.qrc)
+    // Load e.g. bitcoin_de.qm (shortcut "de" needs to be defined in organiclife.qrc)
     if (translatorBase.load(lang, ":/translations/"))
         QApplication::installTranslator(&translatorBase);
 
-    // Load e.g. bitcoin_de_DE.qm (shortcut "de_DE" needs to be defined in pivx.qrc)
+    // Load e.g. bitcoin_de_DE.qm (shortcut "de_DE" needs to be defined in organiclife.qrc)
     if (translator.load(lang_territory, ":/translations/"))
         QApplication::installTranslator(&translator);
 }
@@ -241,7 +241,7 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
     }
 }
 
-/** Class encapsulating CTEAM Core startup and shutdown.
+/** Class encapsulating OrganicLife Core startup and shutdown.
  * Allows running startup and shutdown in a different thread from the UI thread.
  */
 class BitcoinCore : public QObject
@@ -266,7 +266,7 @@ private:
     void handleRunawayException(const std::exception* e);
 };
 
-/** Main CTEAM application object */
+/** Main OrganicLife application object */
 class BitcoinApplication : public QApplication
 {
     Q_OBJECT
@@ -299,7 +299,7 @@ public:
     int getReturnValue() { return returnValue; }
     bool isCoreInitialized() const { return coreInitialized; }
 
-    /// Get window identifier of QMainWindow (PIVXGUI)
+    /// Get window identifier of QMainWindow (OrganicLifeGUI)
     WId getMainWinId() const;
 
 public Q_SLOTS:
@@ -320,7 +320,7 @@ private:
     QThread* coreThread{nullptr};
     OptionsModel* optionsModel{nullptr};
     ClientModel* clientModel{nullptr};
-    PIVXGUI* window{nullptr};
+    OrganicLifeGUI* window{nullptr};
     QTimer* pollShutdownTimer{nullptr};
     bool coreInitialized{false};
 #ifdef ENABLE_WALLET
@@ -340,7 +340,7 @@ private:
     void unsubscribeFromWalletLifecycleNotifications();
 };
 
-#include "pivx.moc"
+#include "organiclife.moc"
 
 BitcoinCore::BitcoinCore() : QObject()
 {
@@ -470,10 +470,10 @@ void BitcoinApplication::createOptionsModel()
 
 void BitcoinApplication::createWindow(const NetworkStyle* networkStyle)
 {
-    window = new PIVXGUI(networkStyle, nullptr);
+    window = new OrganicLifeGUI(networkStyle, nullptr);
 
     pollShutdownTimer = new QTimer(window);
-    connect(pollShutdownTimer, &QTimer::timeout, window, &PIVXGUI::detectShutdown);
+    connect(pollShutdownTimer, &QTimer::timeout, window, &OrganicLifeGUI::detectShutdown);
 }
 
 void BitcoinApplication::createSplashScreen(const NetworkStyle* networkStyle)
@@ -520,7 +520,7 @@ void BitcoinApplication::startThread()
     connect(executor, &BitcoinCore::runawayException, this, &BitcoinApplication::handleRunawayException);
     connect(this, &BitcoinApplication::requestedInitialize, executor, &BitcoinCore::initialize);
     connect(this, &BitcoinApplication::requestedShutdown, executor, &BitcoinCore::shutdown);
-    connect(window, &PIVXGUI::requestedRestart, executor, &BitcoinCore::restart);
+    connect(window, &OrganicLifeGUI::requestedRestart, executor, &BitcoinCore::restart);
     /*  make sure executor object is deleted in its own thread */
     connect(this, &BitcoinApplication::stopThread, executor, &QObject::deleteLater);
     connect(this, &BitcoinApplication::stopThread, coreThread, &QThread::quit);
@@ -768,9 +768,9 @@ void BitcoinApplication::initializeResult(int retval)
 
 #ifdef ENABLE_WALLET
         // Now that initialization/startup is done, process any command-line
-        // CTEAM: URIs or payment requests:
-        //connect(paymentServer, &PaymentServer::receivedPaymentRequest, window, &PIVXGUI::handlePaymentRequest);
-        connect(window, &PIVXGUI::receivedURI, paymentServer, &PaymentServer::handleURIOrFile);
+        // OrganicLife: URIs or payment requests:
+        //connect(paymentServer, &PaymentServer::receivedPaymentRequest, window, &OrganicLifeGUI::handlePaymentRequest);
+        connect(window, &OrganicLifeGUI::receivedURI, paymentServer, &PaymentServer::handleURIOrFile);
         connect(paymentServer, &PaymentServer::message, [this](const QString& title, const QString& message, unsigned int style) {
           window->message(title, message, style);
         });
@@ -797,7 +797,7 @@ void BitcoinApplication::shutdownResult(int retval)
 
 void BitcoinApplication::handleRunawayException(const QString& message)
 {
-    QMessageBox::critical(nullptr, "Runaway exception", QObject::tr("A fatal error occurred. CTEAM can no longer continue safely and will quit.") + QString("\n\n") + message);
+    QMessageBox::critical(nullptr, "Runaway exception", QObject::tr("A fatal error occurred. OrganicLife can no longer continue safely and will quit.") + QString("\n\n") + message);
     ::exit(EXIT_FAILURE);
 }
 
@@ -826,19 +826,19 @@ int main(int argc, char* argv[])
     // to the Qt binary by scripts. In GUI mode it can disable helpful recovery
     // behavior (e.g. auto-reindex) and may lead to confusing behavior.
     //
-    // For compatibility treat it as a no-op in cteam-qt and guide users to
-    // cteamd if they truly want background mode.
+    // For compatibility treat it as a no-op in organiclife-qt and guide users to
+    // organiclifed if they truly want background mode.
     if (gArgs.IsArgSet("-daemon")) {
-        fprintf(stderr, "Warning: -daemon is ignored by cteam-qt.\n");
-        fprintf(stderr, "         Use cteamd -daemon instead (e.g. `cteamd -testnet -daemon`).\n");
+        fprintf(stderr, "Warning: -daemon is ignored by organiclife-qt.\n");
+        fprintf(stderr, "         Use organiclifed -daemon instead (e.g. `organiclifed -testnet -daemon`).\n");
         gArgs.ForceSetArg("-daemon", "0");
     }
 
 // Do not refer to data directory yet, this can be overridden by Intro::pickDataDirectory
 
 /// 2. Basic Qt initialization (not dependent on parameters or configuration)
-    Q_INIT_RESOURCE(pivx_locale);
-    Q_INIT_RESOURCE(pivx);
+    Q_INIT_RESOURCE(organiclife_locale);
+    Q_INIT_RESOURCE(organiclife);
 
     // High-DPI support:
     // - Qt5: opt-in via app attributes
@@ -890,7 +890,7 @@ int main(int argc, char* argv[])
     if (!Intro::pickDataDirectory())
         return EXIT_SUCCESS;
 
-    /// 6. Determine availability of data directory and parse pivx.conf
+    /// 6. Determine availability of data directory and parse organiclifecoin.conf
     /// - Do not call GetDataDir(true) before this step finishes
     if (!CheckDataDirOption()) {
         QMessageBox::critical(nullptr, PACKAGE_NAME,
@@ -915,11 +915,11 @@ int main(int argc, char* argv[])
                 std::string rpcpassword = HexStr(Span<const uint8_t>(rand_bytes, 32));
 
                 conf_stream <<
-                    "# CTEAM configuration\n"
+                    "# OrganicLife configuration\n"
                     "# Mainnet by default. Add testnet=1 to use the test chain.\n"
                     "\n"
                     "# RPC credentials (rpcpassword was randomly generated):\n"
-                    "rpcuser=cteamrpc\n"
+                    "rpcuser=organicliferpc\n"
                     "rpcpassword=" << rpcpassword << "\n"
                     "rpcallowip=127.0.0.1\n"
                     "\n"
@@ -975,7 +975,7 @@ int main(int argc, char* argv[])
         exit(EXIT_SUCCESS);
 
     // Start up the payment server early, too, so impatient users that click on
-    // pivx: links repeatedly have their payment requests routed to this process:
+    // organiclife: links repeatedly have their payment requests routed to this process:
     app.createPaymentServer();
 #endif
 

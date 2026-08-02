@@ -9,7 +9,7 @@
 #include <QModelIndex>
 #include <QWidget>
 
-class PIVXGUI;
+class OrganicLifeGUI;
 class WalletModel;
 
 namespace Ui {
@@ -25,7 +25,7 @@ class TooltipMenu : public PWidget
     Q_OBJECT
 
 public:
-    explicit TooltipMenu(PIVXGUI* _window, QWidget *parent = nullptr);
+    explicit TooltipMenu(OrganicLifeGUI* _window, QWidget *parent = nullptr);
     ~TooltipMenu() override;
 
     virtual void showEvent(QShowEvent *event) override;

@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2015-2020 The Zcash developers
 # Copyright (c) 2020-2021 The PIVX Core developers
-# Copyright (c) 2026 The CTEAM Core developers
+# Copyright (c) 2026 The OrganicLife Coin developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -14,9 +14,9 @@ if [ -n "${1:-}" ]; then
     PARAMS_DIR="$1"
 else
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        PARAMS_DIR="$HOME/Library/Application Support/CTEAMParams"
+        PARAMS_DIR="$HOME/Library/Application Support/OrganicLifeParams"
     else
-        PARAMS_DIR="$HOME/.CTEAM-params"
+        PARAMS_DIR="$HOME/.organiclifecoin-params"
     fi
 fi
 
@@ -43,7 +43,7 @@ function install_params {
     # if the params don't exist in the current directory, assume we're running from release tarballs
     if ! [ -f "$filename" ]
     then
-        filename="share/cteam/$filename"
+        filename="share/organiclife/$filename"
         if ! [ -f "$filename" ]; then
             filename="share/pivx/$filename"
         fi
@@ -97,11 +97,11 @@ function main() {
 
         cat <<EOF
 
-    CTEAM - install-params.sh
+    OrganicLife - install-params.sh
 
     
 
-    This script will install the CTEAM zkSNARK parameters and verify their
+    This script will install the OrganicLife zkSNARK parameters and verify their
 
     integrity with sha256sum.
 
@@ -114,7 +114,7 @@ EOF
         mkdir -p "$PARAMS_DIR"
         README_PATH="$PARAMS_DIR/README"
                 cat >> "$README_PATH" <<EOF
-        This directory stores common CTEAM zkSNARK parameters. Note that it is
+        This directory stores common OrganicLife zkSNARK parameters. Note that it is
 distinct from the daemon's -datadir argument because the parameters are
 large and may be shared across multiple distinct -datadir's such as when
 setting up test networks.

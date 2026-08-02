@@ -790,7 +790,7 @@
                          <enum>Qt::NoFocus</enum>
                         </property>
                         <property name="text">
-                         <string>About CTEAM</string>
+                         <string>About OrganicLife</string>
                         </property>
                         <property name="checkable">
                          <bool>false</bool>

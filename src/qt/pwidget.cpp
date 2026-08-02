@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,13 +13,13 @@
 #include <QRunnable>
 #include <QThreadPool>
 
-PWidget::PWidget(PIVXGUI* _window, QWidget *parent) : QWidget((parent) ? parent : _window), window(_window) { init(); }
+PWidget::PWidget(OrganicLifeGUI* _window, QWidget *parent) : QWidget((parent) ? parent : _window), window(_window) { init(); }
 PWidget::PWidget(PWidget* parent) : QWidget(parent), window(parent->getWindow()) { init(); }
 
 void PWidget::init()
 {
     if (window)
-        connect(window, &PIVXGUI::themeChanged, this, &PWidget::onChangeTheme);
+        connect(window, &OrganicLifeGUI::themeChanged, this, &PWidget::onChangeTheme);
 }
 
 void PWidget::setClientModel(ClientModel* model)

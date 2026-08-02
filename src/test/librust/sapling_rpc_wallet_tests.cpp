@@ -1,6 +1,6 @@
 // Copyright (c) 2016-2020 The ZCash developers
 // Copyright (c) 2020-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -20,7 +20,7 @@
 #include "settings/walletoptionswidget.h"
 #include "settings/walletrepairwidget.h"
 
-class PIVXGUI;
+class OrganicLifeGUI;
 
 QT_BEGIN_NAMESPACE
 class QDataWidgetMapper;
@@ -35,7 +35,7 @@ class SettingsWidget : public PWidget
     Q_OBJECT
 
 public:
-    explicit SettingsWidget(PIVXGUI* parent);
+    explicit SettingsWidget(OrganicLifeGUI* parent);
     ~SettingsWidget();
 
     void loadClientModel() override;

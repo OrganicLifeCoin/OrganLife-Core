@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,7 +19,7 @@ OpenURIDialog::OpenURIDialog(QWidget* parent) : ContainerDialog(parent, Qt::Wind
 {
     ui->setupUi(this);
     applyParentOrAppStyleSheet(parent);
-    ui->uriEdit->setPlaceholderText("cteam:");
+    ui->uriEdit->setPlaceholderText("organiclife:");
 
     ui->labelSubtitle->setText("URI");
     setCssProperty(ui->labelSubtitle, "text-title2-dialog");

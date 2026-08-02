@@ -141,7 +141,7 @@ public:
 };
 
 /**
- * CTEAM RPC command dispatcher.
+ * OrganicLife RPC command dispatcher.
  */
 class CRPCTable
 {

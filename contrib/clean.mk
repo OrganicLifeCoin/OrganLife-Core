@@ -20,10 +20,10 @@
 	target \
 	vcpkg \
 	vcpkg_installed \
-		CTEAM.app \
+		OrganicLife.app \
 		*.dmg \
 	background.tiff background.tiff.png background.tiff@2x.png \
-	cache test/cache test/tmp coverage_percent.txt test_pivx.coverage total.coverage \
+	cache test/cache test/tmp coverage_percent.txt test_organiclife.coverage total.coverage \
 	depends/work depends/built depends/SDKs \
 	depends/*-*-*/
 

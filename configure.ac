@@ -7,16 +7,16 @@ define(_CLIENT_VERSION_BUILD, 0)
 define(_CLIENT_VERSION_RC, 0)
 define(_CLIENT_VERSION_IS_RELEASE, true)
 define(_COPYRIGHT_YEAR, 2026)
-AC_INIT([CTEAM],m4_join([.], _CLIENT_VERSION_MAJOR, _CLIENT_VERSION_MINOR, _CLIENT_VERSION_REVISION, m4_if(_CLIENT_VERSION_BUILD, [0], [], _CLIENT_VERSION_BUILD))m4_if(_CLIENT_VERSION_RC, [0], [], [rc]_CLIENT_VERSION_RC),[https://github.com/cteam/cteam/issues],[cteam],[https://example.invalid/])
+AC_INIT([OrganicLife],m4_join([.], _CLIENT_VERSION_MAJOR, _CLIENT_VERSION_MINOR, _CLIENT_VERSION_REVISION, m4_if(_CLIENT_VERSION_BUILD, [0], [], _CLIENT_VERSION_BUILD))m4_if(_CLIENT_VERSION_RC, [0], [], [rc]_CLIENT_VERSION_RC),[https://github.com/organiclifecoin/organiclifecoin/issues],[organiclife],[https://example.invalid/])
 AC_CONFIG_SRCDIR([src/validation.cpp])
 AC_CONFIG_HEADERS([src/config/pivx-config.h])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
 
-BITCOIN_DAEMON_NAME=cteamd
-BITCOIN_GUI_NAME=cteam-qt
-BITCOIN_CLI_NAME=cteam-cli
-BITCOIN_TX_NAME=cteam-tx
+BITCOIN_DAEMON_NAME=organiclifed
+BITCOIN_GUI_NAME=organiclife-qt
+BITCOIN_CLI_NAME=organiclife-cli
+BITCOIN_TX_NAME=organiclife-tx
 
 dnl Unless the user specified ARFLAGS, force it to be cr
 AC_ARG_VAR([ARFLAGS], [Flags for the archiver, defaults to <cr> if not set])
@@ -484,7 +484,7 @@ CPPFLAGS="$CPPFLAGS -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS"
 
 AC_ARG_WITH([utils],
   [AS_HELP_STRING([--with-utils],
-  [build cteam-cli cteam-tx (default=yes)])],
+  [build organiclife-cli organiclife-tx (default=yes)])],
   [build_bitcoin_utils=$withval],
   [build_bitcoin_utils=yes])
 
@@ -496,7 +496,7 @@ AC_ARG_WITH([libs],
 
 AC_ARG_WITH([daemon],
   [AS_HELP_STRING([--with-daemon],
-  [build cteamd daemon (default=yes)])],
+  [build organiclifed daemon (default=yes)])],
   [build_bitcoind=$withval],
   [build_bitcoind=yes])
 
@@ -1367,11 +1367,11 @@ AX_CHECK_COMPILE_FLAG([-Wno-builtin-declaration-mismatch], [CXXFLAGS="$CXXFLAGS 
 
 LIBZCASH_LIBS="$BOOST_SYSTEM_LIB $SODIUM_LIBS $RUST_LIBS $GMP_LIBS"
 
-AC_MSG_CHECKING([whether to build cteamd])
+AC_MSG_CHECKING([whether to build organiclifed])
 AM_CONDITIONAL([BUILD_BITCOIND], [test x$build_bitcoind = xyes])
 AC_MSG_RESULT([$build_bitcoind])
 
-AC_MSG_CHECKING([whether to build utils (cteam-cli cteam-tx)])
+AC_MSG_CHECKING([whether to build utils (organiclife-cli organiclife-tx)])
 AM_CONDITIONAL([BUILD_BITCOIN_UTILS], [test x$build_bitcoin_utils = xyes])
 AC_MSG_RESULT([$build_bitcoin_utils])
 

@@ -161,7 +161,7 @@ CAmount CTransaction::GetValueOut() const
 {
     CAmount nValueOut = 0;
     for (const CTxOut& out : vout) {
-        // CTEAM: previously MoneyRange() was called here. This has been replaced with negative check and boundary wrap check.
+        // OrganicLife: previously MoneyRange() was called here. This has been replaced with negative check and boundary wrap check.
         if (out.nValue < 0)
             throw std::runtime_error("CTransaction::GetValueOut() : value out of range : less than 0");
 

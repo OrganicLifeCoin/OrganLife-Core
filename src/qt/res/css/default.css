@@ -917,7 +917,7 @@ background-image: url(':/images/pivx_logo_horizontal');
 background-repeat: no-repeat;
 }
 
-QWidget .QFrame#frame_Header { /* Header with Page-Title and CTEAM-image */
+QWidget .QFrame#frame_Header { /* Header with Page-Title and OrganicLife-image */
 min-width:400px;
 background-color:#ffffff;
 }

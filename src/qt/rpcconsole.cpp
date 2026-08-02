@@ -1,7 +1,7 @@
 // Copyright (c) 2011-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,7 +10,7 @@
 
 #include "bantablemodel.h"
 #include "clientmodel.h"
-#include "pivxgui.h"
+#include "organiclifegui.h"
 #include "peertablemodel.h"
 #include "qt/rpcexecutor.h"
 #include "walletmodel.h"
@@ -308,7 +308,7 @@ void RPCConsole::setWalletModel(WalletModel* model)
 {
     walletModel = model;
 #ifdef ENABLE_WALLET
-    if (auto* window = qobject_cast<PIVXGUI*>(parentWidget())) {
+    if (auto* window = qobject_cast<OrganicLifeGUI*>(parentWidget())) {
         if (WalletModel* primaryWalletModel = window->getWallet(window->primaryWalletName())) {
             walletModel = primaryWalletModel;
         } else if (WalletModel* implicitPrimaryWalletModel = window->getWallet(QString())) {
@@ -448,7 +448,7 @@ void RPCConsole::clear()
     QString clsKey = "Ctrl-L";
 #endif
 
-    message(RPCExecutor::CMD_REPLY, (tr("Welcome to the CTEAM RPC console.") + "<br>" +
+    message(RPCExecutor::CMD_REPLY, (tr("Welcome to the OrganicLife RPC console.") + "<br>" +
                         tr("Use up and down arrows to navigate history, and %1 to clear screen.").arg("<b>"+clsKey+"</b>") + "<br>" +
                         tr("Type %1 for an overview of available commands.").arg("<b>help</b>") + "<br>" +
                         tr("For more information on using this console type %1.").arg("<b>help-console</b>") +

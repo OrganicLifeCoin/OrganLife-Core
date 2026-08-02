@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
@@ -96,7 +96,7 @@ QIcon walletStateIcon(WalletModel* model)
     return QIcon("://ic-wallet-selector-unlocked");
 }
 
-QString walletListLabel(PIVXGUI* window, const QString& walletName, const bool activeWallet)
+QString walletListLabel(OrganicLifeGUI* window, const QString& walletName, const bool activeWallet)
 {
     QStringList badges;
     if (window && window->isPrimaryWallet(walletName)) {
@@ -119,7 +119,7 @@ QString walletListLabel(PIVXGUI* window, const QString& walletName, const bool a
 class WalletSelectorDialog : public FocusedDialog
 {
 public:
-    WalletSelectorDialog(PIVXGUI* window, const QStringList& walletNames, const QString& currentWallet, QWidget* parent = nullptr) :
+    WalletSelectorDialog(OrganicLifeGUI* window, const QStringList& walletNames, const QString& currentWallet, QWidget* parent = nullptr) :
             FocusedDialog(parent ? parent : window),
             listWidget(new QListWidget(this))
     {
@@ -223,7 +223,7 @@ private:
 class ManageWalletsDialog : public FocusedDialog
 {
 public:
-    explicit ManageWalletsDialog(PIVXGUI* window, QWidget* parent = nullptr) :
+    explicit ManageWalletsDialog(OrganicLifeGUI* window, QWidget* parent = nullptr) :
             FocusedDialog(parent ? parent : window),
             window(window),
             loadedList(new QListWidget(this))
@@ -479,7 +479,7 @@ private:
         refreshLists();
     }
 
-    PIVXGUI* window{nullptr};
+    OrganicLifeGUI* window{nullptr};
     QListWidget* loadedList{nullptr};
     QPushButton* createButton{nullptr};
     QPushButton* unloadButton{nullptr};
@@ -489,7 +489,7 @@ private:
 };
 
 
-TopBar::TopBar(PIVXGUI* _mainWindow, QWidget *parent) :
+TopBar::TopBar(OrganicLifeGUI* _mainWindow, QWidget *parent) :
     PWidget(_mainWindow, parent),
     ui(new Ui::TopBar)
 {
@@ -1259,7 +1259,7 @@ void TopBar::loadWalletModel()
     connect(walletModel, &WalletModel::encryptionStatusChanged, this, &TopBar::refreshStatus);
     // Ask for passphrase if needed
     connect(walletModel, &WalletModel::requireUnlock, this, &TopBar::unlockWallet);
-    // update the display unit, to not use the default ("CTEAM")
+    // update the display unit, to not use the default ("OrganicLife")
     updateDisplayUnit();
 
     refreshStatus();

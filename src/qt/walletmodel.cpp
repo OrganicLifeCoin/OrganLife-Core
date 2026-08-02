@@ -1,7 +1,7 @@
 // Copyright (c) 2011-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -750,7 +750,7 @@ OperationResult WalletModel::createAndSendProposalFeeTx(CBudgetProposal& proposa
     CTransactionRef wtx;
     const uint256& nHash = proposal.GetHash();
     CReserveKey keyChange(wallet);
-    if (!wallet->CreateBudgetFeeTX(wtx, nHash, keyChange, BUDGET_FEE_TX_OLD)) { // 100 CTEAM collateral for proposal
+    if (!wallet->CreateBudgetFeeTX(wtx, nHash, keyChange, BUDGET_FEE_TX_OLD)) { // 100 OLC collateral for proposal
         return {false , "Error making fee transaction for proposal. Please check your wallet balance."};
     }
 
@@ -1079,7 +1079,7 @@ bool WalletModel::updateAddressBookPurpose(const QString &addressStr, const std:
     bool isStaking = false, isExchange = false;
     CTxDestination address = DecodeDestination(addressStr.toStdString(), isStaking, isExchange);
     if (isStaking)
-        return error("Invalid CTEAM address, cold staking address");
+        return error("Invalid OrganicLife address, cold staking address");
     CKeyID keyID;
     if (!getKeyId(address, keyID))
         return false;
@@ -1089,11 +1089,11 @@ bool WalletModel::updateAddressBookPurpose(const QString &addressStr, const std:
 bool WalletModel::getKeyId(const CTxDestination& address, CKeyID& keyID)
 {
     if (!IsValidDestination(address))
-        return error("Invalid CTEAM address");
+        return error("Invalid OrganicLife address");
 
     const CKeyID* inKeyID = boost::get<CKeyID>(&address);
     if (!inKeyID)
-        return error("Unable to get KeyID from CTEAM address");
+        return error("Unable to get KeyID from OrganicLife address");
 
     keyID = *inKeyID;
     return true;

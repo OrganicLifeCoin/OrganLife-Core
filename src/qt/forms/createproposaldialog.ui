@@ -742,7 +742,7 @@
                 </sizepolicy>
                </property>
 <property name="text">
-                 <string>Make sure you have 100 CTEAM for the proposal fee</string>
+                 <string>Make sure you have 100 OLC for the proposal fee</string>
                 </property>
                <property name="alignment">
                 <set>Qt::AlignCenter</set>
@@ -1132,7 +1132,7 @@
                     <item>
                      <widget class="QLabel" name="labelResultName">
                       <property name="text">
-                       <string notr="true">CTEAM-MBD-JanJun2021</string>
+                       <string notr="true">OrganicLife-MBD-JanJun2021</string>
                       </property>
                      </widget>
                     </item>
@@ -1159,7 +1159,7 @@
                     <item>
                      <widget class="QLabel" name="labelResultAmount">
                       <property name="text">
-                       <string notr="true">5500 CTEAM</string>
+                       <string notr="true">5500 OLC</string>
                       </property>
                       <property name="alignment">
                        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>

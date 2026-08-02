@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# CTEAM Easy Build Script
-# Builds CTEAM using vcpkg for dependency management
+# OrganicLife Easy Build Script
+# Builds OrganicLife using vcpkg for dependency management
 #
 # Usage: ./build.sh [options]
 #
 # Options:
 #   --install-deps    Install required dependencies (auto-detect OS)
 #   --no-gui          Build without Qt GUI (daemon only)
-#   --daemon-only     Build only cteamd (skips bench/tests)
+#   --daemon-only     Build only organiclifed (skips bench/tests)
 #   --no-wallet       Build without wallet support
 #   --with-zmq        Enable ZeroMQ notifications
 #   --with-upnp       Enable UPnP port mapping
@@ -819,7 +819,7 @@ configure_cmake() {
 
 # Build
 build_project() {
-    print_info "Building CTEAM..."
+    print_info "Building OrganicLife..."
 
     cd "$BUILD_DIR"
 
@@ -845,19 +845,19 @@ build_project() {
     fi
 
     if [ "$DAEMON_ONLY" = true ]; then
-        cmake --build . $jobs_arg --target cteamd
+        cmake --build . $jobs_arg --target organiclifed
     else
         cmake --build . $jobs_arg
     fi
 
     # Convenience: CMake places the Qt wallet under src/qt/. Copy it to the
-    # build root so users can run `./build/cteam-qt` like the other binaries.
+    # build root so users can run `./build/organiclife-qt` like the other binaries.
     if [ "$DAEMON_ONLY" = false ] && [ "$BUILD_GUI" = true ]; then
-        if [ -f "$BUILD_DIR/src/qt/cteam-qt" ]; then
-            cp -f "$BUILD_DIR/src/qt/cteam-qt" "$BUILD_DIR/cteam-qt"
-            chmod +x "$BUILD_DIR/cteam-qt" || true
-        elif [ -f "$BUILD_DIR/src/qt/cteam-qt.exe" ]; then
-            cp -f "$BUILD_DIR/src/qt/cteam-qt.exe" "$BUILD_DIR/cteam-qt.exe"
+        if [ -f "$BUILD_DIR/src/qt/organiclife-qt" ]; then
+            cp -f "$BUILD_DIR/src/qt/organiclife-qt" "$BUILD_DIR/organiclife-qt"
+            chmod +x "$BUILD_DIR/organiclife-qt" || true
+        elif [ -f "$BUILD_DIR/src/qt/organiclife-qt.exe" ]; then
+            cp -f "$BUILD_DIR/src/qt/organiclife-qt.exe" "$BUILD_DIR/organiclife-qt.exe"
         fi
     fi
 
@@ -879,19 +879,19 @@ print_summary() {
     echo "Binaries are located in: $BUILD_DIR"
     echo ""
 
-    if [ -f "$BUILD_DIR/cteamd" ]; then
-        echo "  cteamd        - CTEAM daemon"
+    if [ -f "$BUILD_DIR/organiclifed" ]; then
+        echo "  organiclifed        - OrganicLife daemon"
     fi
-    if [ -f "$BUILD_DIR/cteam-cli" ]; then
-        echo "  cteam-cli     - CTEAM command-line client"
+    if [ -f "$BUILD_DIR/organiclife-cli" ]; then
+        echo "  organiclife-cli     - OrganicLife command-line client"
     fi
-    if [ -f "$BUILD_DIR/cteam-tx" ]; then
-        echo "  cteam-tx      - CTEAM transaction tool"
+    if [ -f "$BUILD_DIR/organiclife-tx" ]; then
+        echo "  organiclife-tx      - OrganicLife transaction tool"
     fi
-    if [ -f "$BUILD_DIR/cteam-qt" ]; then
-        echo "  cteam-qt      - CTEAM Qt GUI wallet"
-    elif [ -f "$BUILD_DIR/src/qt/cteam-qt" ]; then
-        echo "  src/qt/cteam-qt - CTEAM Qt GUI wallet"
+    if [ -f "$BUILD_DIR/organiclife-qt" ]; then
+        echo "  organiclife-qt      - OrganicLife Qt GUI wallet"
+    elif [ -f "$BUILD_DIR/src/qt/organiclife-qt" ]; then
+        echo "  src/qt/organiclife-qt - OrganicLife Qt GUI wallet"
     fi
     echo ""
 }
@@ -914,7 +914,7 @@ install_all_dependencies() {
 # Main
 main() {
     echo ""
-    print_info "=== CTEAM Build Script ==="
+    print_info "=== OrganicLife Build Script ==="
     echo ""
 
     detect_os

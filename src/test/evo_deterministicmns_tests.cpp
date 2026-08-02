@@ -1,10 +1,10 @@
 // Copyright (c) 2018-2021 The Dash Core developers
 // Copyright (c) 2021-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "test/test_pivx.h"
+#include "test/test_organiclife.h"
 
 #include "blockassembler.h"
 #include "consensus/merkle.h"
@@ -386,7 +386,7 @@ BOOST_AUTO_TEST_SUITE(deterministicmns_tests)
 
 BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
 {
-    // CTEAM never activates deterministic masternodes.
+    // OrganicLife never activates deterministic masternodes.
     return;
 
     auto utxos = BuildSimpleUtxoMap(coinbaseTxns, coinbaseKey);
@@ -451,7 +451,7 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         nHeight++;
     }
 
-    // CTEAM keeps legacy/non-deterministic masternodes enabled permanently.
+    // OrganicLife keeps legacy/non-deterministic masternodes enabled permanently.
     // SPORK_21 must not force deterministic-only mode.
     const CSporkMessage& spork = CSporkMessage(SPORK_21_LEGACY_MNS_MAX_HEIGHT, nHeight, GetTime());
     sporkManager.AddOrUpdateSporkMessage(spork);
@@ -745,7 +745,7 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
     }
 
     // Craft a block with an altered coinbase (no masternode payment).
-    // In CTEAM legacy MN mode is always active and there are no legacy
+    // In OrganicLife legacy MN mode is always active and there are no legacy
     // masternodes in this test, so payment enforcement is skipped.
     CBlock invalidBlock = CreateBlock({}, coinbaseKey);
     std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>(invalidBlock);
@@ -871,7 +871,7 @@ BOOST_FIXTURE_TEST_CASE(dip3_protx, TestChain400Setup)
         BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height(); ), nHeight);   // bad block not connected
     }
 
-    // ProUpReg is disabled when legacy MNs are active (which is permanent in CTEAM).
+    // ProUpReg is disabled when legacy MNs are active (which is permanent in OrganicLife).
     // Verify that all ProUpReg txs are rejected with "spork-21-inactive".
     {
         const uint256& proTx = dmnHashes[InsecureRandRange(dmnHashes.size())];
@@ -1078,7 +1078,7 @@ static NodeId id = 0;
 // future: split dkg_pose from qfc_invalid_paths test coverage.
 BOOST_FIXTURE_TEST_CASE(dkg_pose_and_qfc_invalid_paths, TestChain400Setup)
 {
-    // CTEAM never activates deterministic masternodes.
+    // OrganicLife never activates deterministic masternodes.
     return;
 
     auto utxos = BuildSimpleUtxoMap(coinbaseTxns, coinbaseKey);
@@ -1121,7 +1121,7 @@ BOOST_FIXTURE_TEST_CASE(dkg_pose_and_qfc_invalid_paths, TestChain400Setup)
         BOOST_CHECK(deterministicMNManager->GetListAtChainTip().HasMN(txid));
     }
 
-    // CTEAM keeps legacy/non-deterministic masternodes enabled permanently.
+    // OrganicLife keeps legacy/non-deterministic masternodes enabled permanently.
     // SPORK_21 must not force deterministic-only mode.
     const CSporkMessage& spork = CSporkMessage(SPORK_21_LEGACY_MNS_MAX_HEIGHT, nHeight, GetTime());
     sporkManager.AddOrUpdateSporkMessage(spork);

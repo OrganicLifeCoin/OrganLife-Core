@@ -12,7 +12,7 @@
 #include <QPixmap>
 
 class WalletModel;
-class PIVXGUI;
+class OrganicLifeGUI;
 
 namespace Ui {
 class RequestDialog;

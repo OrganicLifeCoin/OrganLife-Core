@@ -29,16 +29,16 @@
   <string>????</string>
 
   <key>CFBundleExecutable</key>
-  <string>CTEAM</string>
+  <string>OrganicLife</string>
 
   <key>CFBundleName</key>
-  <string>CTEAM</string>
+  <string>OrganicLife</string>
 
   <key>LSHasLocalizedDisplayName</key>
   <true/>
 
   <key>CFBundleIdentifier</key>
-  <string>org.cteam.cteam-qt</string>
+  <string>org.organiclife.organiclife-qt</string>
 
   <key>CFBundleURLTypes</key>
   <array>
@@ -46,10 +46,10 @@
       <key>CFBundleTypeRole</key>
       <string>Editor</string>
       <key>CFBundleURLName</key>
-      <string>org.cteam.cteampayment</string>
+      <string>org.organiclife.organiclifepayment</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>cteam</string>
+        <string>organiclife</string>
       </array>
     </dict>
   </array>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and package CTEAM artifacts for Linux amd64, Linux aarch64 (cross), and Windows.
+# Build and package OrganicLife artifacts for Linux amd64, Linux aarch64 (cross), and Windows.
 # Produces two zips per platform: daemon+cli+tx+params and qt+params.
 
 set -euo pipefail
@@ -99,16 +99,16 @@ make_zip() {
 copy_windows_installer() {
   local version installer_expected installer_found
   version="$(get_client_package_version "$REPO_ROOT/configure.ac")"
-  installer_expected="cteam-${version}-win64-setup.exe"
+  installer_expected="organiclife-${version}-win64-setup.exe"
 
   if [ -f "$REPO_ROOT/$installer_expected" ]; then
     installer_found="$REPO_ROOT/$installer_expected"
   else
-    installer_found=$(ls -t "$REPO_ROOT"/cteam-*-win64-setup.exe 2>/dev/null | head -n 1 || true)
+    installer_found=$(ls -t "$REPO_ROOT"/organiclife-*-win64-setup.exe 2>/dev/null | head -n 1 || true)
   fi
 
   if [ -z "$installer_found" ]; then
-    echo "missing windows installer (make deploy did not produce cteam-*-win64-setup.exe)" >&2
+    echo "missing windows installer (make deploy did not produce organiclife-*-win64-setup.exe)" >&2
     exit 1
   fi
 
@@ -124,18 +124,18 @@ build_linux_amd64() {
     "$REPO_ROOT/scripts/build-depends.sh" --jobs "$BUILD_JOBS"
   fi
 
-  local d="$REPO_ROOT/src/cteamd"
-  local c="$REPO_ROOT/src/cteam-cli"
-  local t="$REPO_ROOT/src/cteam-tx"
-  local q="$REPO_ROOT/src/qt/cteam-qt"
+  local d="$REPO_ROOT/src/organiclifed"
+  local c="$REPO_ROOT/src/organiclife-cli"
+  local t="$REPO_ROOT/src/organiclife-tx"
+  local q="$REPO_ROOT/src/qt/organiclife-qt"
 
   assert_file_arch "$d" "x86-64"
   assert_file_arch "$c" "x86-64"
   assert_file_arch "$t" "x86-64"
   assert_file_arch "$q" "x86-64"
 
-  make_zip "CTEAM-linux-amd64-daemon.zip" "$d" "$c" "$t"
-  make_zip "CTEAM-linux-amd64-qt.zip" "$q"
+  make_zip "OrganicLife-linux-amd64-daemon.zip" "$d" "$c" "$t"
+  make_zip "OrganicLife-linux-amd64-qt.zip" "$q"
 }
 
 build_linux_aarch64() {
@@ -158,18 +158,18 @@ build_linux_aarch64() {
   "$REPO_ROOT/scripts/build-depends-aarch64.sh" --jobs "$BUILD_JOBS" "${aarch64_args[@]}"
   fi
 
-  local d="$REPO_ROOT/src/cteamd"
-  local c="$REPO_ROOT/src/cteam-cli"
-  local t="$REPO_ROOT/src/cteam-tx"
-  local q="$REPO_ROOT/src/qt/cteam-qt"
+  local d="$REPO_ROOT/src/organiclifed"
+  local c="$REPO_ROOT/src/organiclife-cli"
+  local t="$REPO_ROOT/src/organiclife-tx"
+  local q="$REPO_ROOT/src/qt/organiclife-qt"
 
   assert_file_arch "$d" "aarch64"
   assert_file_arch "$c" "aarch64"
   assert_file_arch "$t" "aarch64"
   assert_file_arch "$q" "aarch64"
 
-  make_zip "CTEAM-linux-aarch64-daemon.zip" "$d" "$c" "$t"
-  make_zip "CTEAM-linux-aarch64-qt.zip" "$q"
+  make_zip "OrganicLife-linux-aarch64-daemon.zip" "$d" "$c" "$t"
+  make_zip "OrganicLife-linux-aarch64-qt.zip" "$q"
 }
 
 build_windows() {
@@ -180,19 +180,19 @@ build_windows() {
   fi
   "$REPO_ROOT/scripts/build-depends-windows.sh" --jobs "$BUILD_JOBS" "${windows_args[@]}"
 
-  local d="$REPO_ROOT/src/cteamd.exe"
-  local c="$REPO_ROOT/src/cteam-cli.exe"
-  local t="$REPO_ROOT/src/cteam-tx.exe"
-  local q="$REPO_ROOT/src/qt/cteam-qt.exe"
+  local d="$REPO_ROOT/src/organiclifed.exe"
+  local c="$REPO_ROOT/src/organiclife-cli.exe"
+  local t="$REPO_ROOT/src/organiclife-tx.exe"
+  local q="$REPO_ROOT/src/qt/organiclife-qt.exe"
 
   assert_file_arch "$d" "PE32\+.*x86-64"
   assert_file_arch "$c" "PE32\+.*x86-64"
   assert_file_arch "$t" "PE32\+.*x86-64"
   assert_file_arch "$q" "PE32\+.*x86-64"
 
-  make_zip "CTEAM-windows-x86_64-package.zip" "$d" "$c" "$t" "$q"
-  make_zip "CTEAM-windows-x86_64-daemon.zip" "$d" "$c" "$t"
-  make_zip "CTEAM-windows-x86_64-qt.zip" "$q"
+  make_zip "OrganicLife-windows-x86_64-package.zip" "$d" "$c" "$t" "$q"
+  make_zip "OrganicLife-windows-x86_64-daemon.zip" "$d" "$c" "$t"
+  make_zip "OrganicLife-windows-x86_64-qt.zip" "$q"
   copy_windows_installer
 }
 

@@ -1,8 +1,8 @@
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 #include <boost/test/unit_test.hpp>
 #include <boost/test/unit_test_parameters.hpp>
 
-#include "test/test_pivx.h"
+#include "test/test_organiclife.h"
 #include "evo/governancevotetx.h"
 #include "evo/governancevoteindex.h"
 #include "budget/budgetproposal.h"

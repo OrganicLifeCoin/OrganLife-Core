@@ -312,7 +312,7 @@ class FullBlockTest(PivxTestFramework):
         b26 = self.update_block(26, [])
         self.send_blocks([b26], False, "bad-cb-length", reconnect=True)
 
-        # Extend the b26 chain to make sure pivxd isn't accepting b26
+        # Extend the b26 chain to make sure organiclifed isn't accepting b26
         b27 = self.next_block(27, spend=out[7])
         self.send_blocks([b27], False)
 
@@ -324,7 +324,7 @@ class FullBlockTest(PivxTestFramework):
         b28 = self.update_block(28, [])
         self.send_blocks([b28], False, "bad-cb-length", reconnect=True)
 
-        # Extend the b28 chain to make sure pivxd isn't accepting b28
+        # Extend the b28 chain to make sure organiclifed isn't accepting b28
         b29 = self.next_block(29, spend=out[7])
         self.send_blocks([b29], False)
         # b30

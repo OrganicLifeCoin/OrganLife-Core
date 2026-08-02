@@ -166,7 +166,7 @@ static inline void LogPrintf(const char* fmt, const Args&... args)
     }                                                                               \
 } while(0)
 
-/// CTEAM
+/// OrganicLife
 
 class CBatchedLogger
 {

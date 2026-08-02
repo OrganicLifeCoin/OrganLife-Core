@@ -106,7 +106,7 @@ SET(QT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/transactiontablemodel.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/walletmodel.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/walletmodeltransaction.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/pivxgui.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/organiclifegui.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/loadingdialog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/pwidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/focuseddialog.cpp
@@ -228,17 +228,17 @@ endif()
 add_custom_target(translations_target ALL DEPENDS ${QM})
 
 if (QT_VERSION_MAJOR EQUAL 6)
-    qt_add_resources(QRC_RESOURCE pivx.qrc)
-    qt_add_resources(QRC_LOCALE_RESOURCE pivx_locale.qrc)
+    qt_add_resources(QRC_RESOURCE organiclife.qrc)
+    qt_add_resources(QRC_LOCALE_RESOURCE organiclife_locale.qrc)
 else()
-    qt5_add_resources(QRC_RESOURCE pivx.qrc)
-    qt5_add_resources(QRC_LOCALE_RESOURCE pivx_locale.qrc)
+    qt5_add_resources(QRC_RESOURCE organiclife.qrc)
+    qt5_add_resources(QRC_LOCALE_RESOURCE organiclife_locale.qrc)
 endif()
 
-add_executable(cteam-qt pivx.cpp ${QM} ${QRC_RESOURCE} ${QRC_LOCALE_RESOURCE})
-add_dependencies(cteam-qt translations_target libunivalue libsecp256k1 libzcashrust leveldb crc32c bls)
-target_include_directories(cteam-qt PUBLIC ${ENDIAN_INCLUDES} ${GMP_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${sodium_INCLUDE_DIR})
-target_link_libraries(cteam-qt
+add_executable(organiclife-qt organiclife.cpp ${QM} ${QRC_RESOURCE} ${QRC_LOCALE_RESOURCE})
+add_dependencies(organiclife-qt translations_target libunivalue libsecp256k1 libzcashrust leveldb crc32c bls)
+target_include_directories(organiclife-qt PUBLIC ${ENDIAN_INCLUDES} ${GMP_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${sodium_INCLUDE_DIR})
+target_link_libraries(organiclife-qt
         qt_stuff
         univalue
         SERVER_A WALLET_A COMMON_A ZEROCOIN_A UTIL_A SAPLING_A BITCOIN_CRYPTO_A CLI_A
@@ -248,24 +248,24 @@ target_link_libraries(cteam-qt
         -ldl pthread
         )
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    target_link_libraries(cteam-qt "-framework Cocoa")
+    target_link_libraries(organiclife-qt "-framework Cocoa")
 endif()
 if(ZMQ_FOUND)
-    target_link_libraries(cteam-qt ZMQ_A ${ZMQ_LIB})
-    target_include_directories(cteam-qt PUBLIC ${ZMQ_INCLUDE_DIR})
+    target_link_libraries(organiclife-qt ZMQ_A ${ZMQ_LIB})
+    target_include_directories(organiclife-qt PUBLIC ${ZMQ_INCLUDE_DIR})
 endif()
 if (QRCODE_FOUND)
-    target_link_libraries(cteam-qt ${QRCODE_LIB})
-    target_include_directories(cteam-qt PUBLIC ${QRCODE_INCLUDE_DIR})
+    target_link_libraries(organiclife-qt ${QRCODE_LIB})
+    target_include_directories(organiclife-qt PUBLIC ${QRCODE_INCLUDE_DIR})
 endif()
 if(MINIUPNP_FOUND)
-    target_compile_definitions(cteam-qt PUBLIC "-DSTATICLIB -DMINIUPNP_STATICLIB")
-    target_link_libraries(cteam-qt ${MINIUPNP_LIBRARY})
-    target_include_directories(cteam-qt PUBLIC ${MINIUPNP_INCLUDE_DIR})
+    target_compile_definitions(organiclife-qt PUBLIC "-DSTATICLIB -DMINIUPNP_STATICLIB")
+    target_link_libraries(organiclife-qt ${MINIUPNP_LIBRARY})
+    target_include_directories(organiclife-qt PUBLIC ${MINIUPNP_INCLUDE_DIR})
 endif()
 if(NAT-PMP_FOUND)
-    target_link_libraries(cteam-qt ${NAT-PMP_LIBRARY})
-    target_include_directories(cteam-qt PUBLIC ${NAT-PMP_INCLUDE_DIR})
+    target_link_libraries(organiclife-qt ${NAT-PMP_LIBRARY})
+    target_include_directories(organiclife-qt PUBLIC ${NAT-PMP_INCLUDE_DIR})
 endif()
 
 	# Qt link dependencies are carried via qt_stuff.

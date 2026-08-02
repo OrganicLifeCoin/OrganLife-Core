@@ -14,7 +14,7 @@
 
 #include <atomic>
 #include <cstdint>
-#include "test/test_pivx.h"
+#include "test/test_organiclife.h"
 
 #include <ios>
 #include <string>

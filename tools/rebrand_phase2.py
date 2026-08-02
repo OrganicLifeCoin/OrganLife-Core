@@ -179,7 +179,7 @@ def main():
             if ext in SKIP_EXTS:
                 continue
             p = os.path.join(dirpath, fn)
-            if dry:
+            if dry or os.path.islink(p) or not os.path.isfile(p):
                 continue
             sweep_file(p, stats)
 

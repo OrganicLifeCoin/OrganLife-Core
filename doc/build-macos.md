@@ -38,10 +38,10 @@ Static build for production use:
 ```
 
 Binaries in `src/`:
-- `src/cteamd`
-- `src/cteam-cli`
-- `src/cteam-tx`
-- `src/qt/cteam-qt`
+- `src/organiclifed`
+- `src/organiclife-cli`
+- `src/organiclife-tx`
+- `src/qt/organiclife-qt`
 
 Build (Development)
 -------------------
@@ -56,8 +56,8 @@ brew install berkeley-db@4
 ```
 
 Binaries in `build/`:
-- `build/cteamd`
-- `build/cteam-qt`
+- `build/organiclifed`
+- `build/organiclife-qt`
 
 Build Options
 -------------
@@ -84,17 +84,17 @@ Running
 
 ```bash
 # GUI wallet
-./src/qt/cteam-qt
+./src/qt/organiclife-qt
 
 # Daemon
-./src/cteamd -daemon
-./src/cteam-cli getblockchaininfo
+./src/organiclifed -daemon
+./src/organiclife-cli getblockchaininfo
 ```
 
 Data Directory
 --------------
 
-`~/Library/Application Support/CTEAM/`
+`~/Library/Application Support/OrganicLife/`
 
 Troubleshooting
 ---------------
@@ -130,5 +130,5 @@ Code Signing (Optional)
 For distribution without "unidentified developer" warnings:
 
 ```bash
-codesign --deep --force --verify --verbose --sign "Developer ID" src/qt/cteam-qt
+codesign --deep --force --verify --verbose --sign "Developer ID" src/qt/organiclife-qt
 ```

@@ -2,7 +2,7 @@
 // Copyright (c) 2009-2021 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -846,7 +846,7 @@ public:
 
     /**
      * Return list of available coins and locked coins grouped by non-change output address.
-     * CTEAM: group coins by pair <CTxDestination, Optional<CTxDestination>>. The optional destination
+     * OrganicLife: group coins by pair <CTxDestination, Optional<CTxDestination>>. The optional destination
      * is reserved for the staker address in case of P2CS.
      */
     std::map<std::pair<CTxDestination, Optional<CTxDestination>>, std::vector<COutput>> ListCoins() const;

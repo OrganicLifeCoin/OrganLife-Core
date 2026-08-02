@@ -63,7 +63,7 @@ class BlockchainTest(PivxTestFramework):
         assert_equal(sorted(res.keys()), sorted(keys))
         upgrade_names = list(res['upgrades'].keys())
         assert_equal(any(name.startswith("PIVX ") for name in upgrade_names), False)
-        assert_equal(any(name.startswith("CTEAM ") for name in upgrade_names), True)
+        assert_equal(any(name.startswith("OrganicLife ") for name in upgrade_names), True)
 
     def _test_gettxoutsetinfo(self):
         node = self.nodes[0]

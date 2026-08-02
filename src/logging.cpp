@@ -263,7 +263,7 @@ void BCLog::Logger::ShrinkDebugFile()
         fclose(file);
 }
 
-/// CTEAM
+/// OrganicLife
 
 CBatchedLogger::CBatchedLogger(BCLog::Logger* _logger, BCLog::LogFlags _category, const std::string& _header) :
     logger(_logger),

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# CTEAM Build Script (Linux aarch64 cross-compile from x86_64)
+# OrganicLife Build Script (Linux aarch64 cross-compile from x86_64)
 #
 # Usage: ./build-depends-aarch64.sh [options]
 # This is a wrapper around build-depends.sh that sets up the aarch64 toolchain.

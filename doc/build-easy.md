@@ -1,7 +1,7 @@
 Easy Build Guide
 ================
 
-Quick overview of build methods for CTEAM.
+Quick overview of build methods for OrganicLife.
 
 Build Methods
 -------------
@@ -20,13 +20,13 @@ Quick Start
 Production build:
 ```bash
 ./build-depends.sh
-./src/qt/cteam-qt
+./src/qt/organiclife-qt
 ```
 
 Development build:
 ```bash
 ./build.sh
-./build/cteam-qt
+./build/organiclife-qt
 ```
 
 Prerequisites
@@ -75,16 +75,16 @@ Build Outputs
 
 `build-depends.sh` output in `src/`:
 ```
-src/cteamd        - Daemon
-src/cteam-cli     - CLI client
-src/cteam-tx      - Transaction utility
-src/qt/cteam-qt   - GUI wallet
+src/organiclifed        - Daemon
+src/organiclife-cli     - CLI client
+src/organiclife-tx      - Transaction utility
+src/qt/organiclife-qt   - GUI wallet
 ```
 
 `build.sh` output in `build/`:
 ```
-build/cteamd      - Daemon
-build/cteam-qt    - GUI wallet (convenience copy)
+build/organiclifed      - Daemon
+build/organiclife-qt    - GUI wallet (convenience copy)
 ```
 
 Running
@@ -92,23 +92,23 @@ Running
 
 ```bash
 # GUI wallet
-./src/qt/cteam-qt
+./src/qt/organiclife-qt
 
 # Daemon
-./src/cteamd -daemon
-./src/cteam-cli getblockchaininfo
-./src/cteam-cli stop
+./src/organiclifed -daemon
+./src/organiclife-cli getblockchaininfo
+./src/organiclife-cli stop
 
 # Testnet
-./src/cteamd -testnet -daemon
+./src/organiclifed -testnet -daemon
 ```
 
 Data Directories
 ----------------
 
-- macOS: `~/Library/Application Support/CTEAM/`
-- Linux: `~/.cteam/`
-- Windows: `%APPDATA%\CTEAM\`
+- macOS: `~/Library/Application Support/OrganicLife/`
+- Linux: `~/.organiclife/`
+- Windows: `%APPDATA%\OrganicLife\`
 
 Backup `wallet.dat` - contains private keys.
 

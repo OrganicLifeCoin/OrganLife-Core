@@ -1,6 +1,6 @@
 // Copyright (c) 2018-2021 The Dash Core developers
 // Copyright (c) 2021-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -928,7 +928,7 @@ CDeterministicMNList CDeterministicMNManager::GetListAtChainTip()
 bool CDeterministicMNManager::IsDIP3Enforced(int nHeight) const
 {
     (void)nHeight;
-    // CTEAM never activates deterministic masternodes.
+    // OrganicLife never activates deterministic masternodes.
     return false;
 }
 
@@ -940,7 +940,7 @@ bool CDeterministicMNManager::IsDIP3Enforced() const
 
 bool CDeterministicMNManager::LegacyMNObsolete(int nHeight) const
 {
-    // CTEAM policy: keep legacy masternodes enabled permanently.
+    // OrganicLife policy: keep legacy masternodes enabled permanently.
     // SPORK_21 must never force deterministic-only mode on this network.
     (void)nHeight;
     return false;

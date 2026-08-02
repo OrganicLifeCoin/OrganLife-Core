@@ -2,7 +2,7 @@
 
 This codebase currently ships with a **minimal set of hard-coded seeds** (see `src/chainparams.cpp`). For early networks, you should still provide additional peers and/or run DNS seeders so nodes can find peers reliably.
 
-- **Manual peers**: add known nodes in `CTEAM.conf` using `addnode=` / `seednode=`.
+- **Manual peers**: add known nodes in `organiclifecoin.conf` using `addnode=` / `seednode=`.
 - **Hard-coded IP seeds**: populate `vFixedSeeds` in `src/chainparams.cpp` (advanced).
 - **DNS seeders**: run one (or more) DNS seed services and add hostnames to `vSeeds` in `src/chainparams.cpp`.
 

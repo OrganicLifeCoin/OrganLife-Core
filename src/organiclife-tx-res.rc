@@ -16,14 +16,14 @@ BEGIN
     BEGIN
         BLOCK "040904E4" // U.S. English - multilingual (hex)
         BEGIN
-            VALUE "CompanyName",        "CTEAM"
-            VALUE "FileDescription",    "cteam-cli (OSS RPC client for " PACKAGE_NAME ")"
+            VALUE "CompanyName",        "OrganicLife"
+            VALUE "FileDescription",    "organiclife-tx (CLI OrganicLife transaction editor utility)"
             VALUE "FileVersion",        VER_FILEVERSION_STR
-            VALUE "InternalName",       "cteam-cli"
+            VALUE "InternalName",       "organiclife-tx"
             VALUE "LegalCopyright",     COPYRIGHT_STR
-            VALUE "LegalTrademarks1",   "Distributed under the MIT/X11 software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php."
-            VALUE "OriginalFilename",   "cteam-cli.exe"
-            VALUE "ProductName",        "cteam-cli"
+            VALUE "LegalTrademarks1",   "Distributed under the MIT software license, see the accompanying file COPYING or http://www.opensource.org/licenses/mit-license.php."
+            VALUE "OriginalFilename",   "organiclife-tx.exe"
+            VALUE "ProductName",        "organiclife-tx"
             VALUE "ProductVersion",     VER_PRODUCTVERSION_STR
         END
     END

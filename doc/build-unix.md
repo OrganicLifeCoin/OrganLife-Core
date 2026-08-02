@@ -1,10 +1,10 @@
 UNIX BUILD NOTES
 ====================
-Some notes on how to build CTEAM Core in Unix.
+Some notes on how to build OrganicLife Core in Unix.
 
 Note
 ---------------------
-Always use absolute paths to configure and compile CTEAM Core and the dependencies,
+Always use absolute paths to configure and compile OrganicLife Core and the dependencies,
 For example, when specifying the path of the dependency:
 
 	../dist/configure --enable-cxx --disable-shared --with-pic --prefix=$BDB_PREFIX
@@ -22,7 +22,7 @@ make
 make install # optional
 ```
 
-This will build cteam-qt as well, if the dependencies are met.
+This will build organiclife-qt as well, if the dependencies are met.
 To force Qt6 (if installed), pass `--with-gui=qt6` to `./configure`.
 
 Dependencies
@@ -54,7 +54,7 @@ Memory Requirements
 --------------------
 
 C++ compilers are memory-hungry. It is recommended to have at least 1.5 GB of
-memory available when compiling CTEAM Core. On systems with less, gcc can be
+memory available when compiling OrganicLife Core. On systems with less, gcc can be
 tuned to conserve memory with additional CXXFLAGS:
 
 
@@ -85,7 +85,7 @@ pass `--with-incompatible-bdb` to configure.
 
 Otherwise, you can build from self-compiled `depends` (see above).
 
-To build CTEAM Core without wallet, see [*Disable-wallet mode*](/doc/build-unix.md#disable-wallet-mode)
+To build OrganicLife Core without wallet, see [*Disable-wallet mode*](/doc/build-unix.md#disable-wallet-mode)
 
 
 Optional port mapping libraries (see: `--with-miniupnpc`, and `--enable-upnp-default`, `--with-natpmp`, `--enable-natpmp-default`):
@@ -98,7 +98,7 @@ ZMQ dependencies (provides ZMQ API):
 
 GUI dependencies:
 
-If you want to build cteam-qt, make sure that the required packages for Qt development
+If you want to build organiclife-qt, make sure that the required packages for Qt development
 are installed. The GUI supports Qt 6 (preferred) or Qt 5.
 To build without GUI pass `--without-gui`.
 
@@ -112,7 +112,7 @@ To build with Qt 5 you need the following (Ubuntu/Debian):
 
 **Note:** Ubuntu versions prior to Bionic (18.04), and Debian version prior to Buster, do not have the `libqt5charts5-dev` package. If you are compiling on one of these older versions, you will need to omit `libqt5charts5-dev` from the above command.
 
-Once these are installed, they will be found by configure and a cteam-qt executable will be
+Once these are installed, they will be found by configure and a organiclife-qt executable will be
 built by default.
 
 
@@ -138,7 +138,7 @@ To build with Qt 5 you need the following:
 
 Notes
 -----
-The release is built with GCC and then "strip cteamd" to strip the debug
+The release is built with GCC and then "strip organiclifed" to strip the debug
 symbols, which reduces the executable size by about 90%.
 
 
@@ -198,7 +198,7 @@ If you need to build Boost yourself:
 
 Security
 --------
-To help make your CTEAM Core installation more secure by making certain attacks impossible to
+To help make your OrganicLife Core installation more secure by making certain attacks impossible to
 exploit even if a vulnerability is found, binaries are hardened by default.
 This can be disabled with:
 
@@ -220,7 +220,7 @@ Hardening enables the following features:
 
     To test that you have built PIE executable, install scanelf, part of paxutils, and use:
 
-    	scanelf -e ./cteamd
+    	scanelf -e ./organiclifed
 
     The output should contain:
 
@@ -228,13 +228,13 @@ Hardening enables the following features:
     ET_DYN
 
 * _Non-executable Stack_: If the stack is executable then trivial stack-based buffer overflow exploits are possible if
-    vulnerable buffers are found. By default, CTEAM Core should be built with a non-executable stack
+    vulnerable buffers are found. By default, OrganicLife Core should be built with a non-executable stack
     but if one of the libraries it uses asks for an executable stack or someone makes a mistake
     and uses a compiler extension which requires an executable stack, it will silently build an
     executable without the non-executable stack protection.
 
     To verify that the stack is non-executable after compiling use:
-    `scanelf -e ./cteamd`
+    `scanelf -e ./organiclifed`
 
     The output should contain:
 	STK/REL/PTL
@@ -246,7 +246,7 @@ Disable-wallet mode
 --------------------
 **Note:** This functionality is not yet completely implemented, and compilation using the below option will currently fail.
 
-When the intention is to run only a P2P node without a wallet, CTEAM Core may be compiled in
+When the intention is to run only a P2P node without a wallet, OrganicLife Core may be compiled in
 disable-wallet mode with:
 
     ./configure --disable-wallet

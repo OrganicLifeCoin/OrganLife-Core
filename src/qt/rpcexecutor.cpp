@@ -1,6 +1,6 @@
 // Copyright (c) 2011-2017 The Bitcoin developers
 // Copyright (c) 2015-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 

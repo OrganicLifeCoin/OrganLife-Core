@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    CTEAM Easy Build Script for Windows (WSL)
+    OrganicLife Easy Build Script for Windows (WSL)
 
 .DESCRIPTION
-    Builds CTEAM using vcpkg for dependency management.
+    Builds OrganicLife using vcpkg for dependency management.
     Note: Native Windows build is not supported. This script uses WSL.
 
 .PARAMETER NoGui
@@ -74,7 +74,7 @@ if ($Help) {
 }
 
 Write-Host ""
-Write-Info "=== CTEAM Build Script for Windows ==="
+Write-Info "=== OrganicLife Build Script for Windows ==="
 Write-Host ""
 
 # Check for WSL
@@ -150,9 +150,9 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     Write-Host "Binaries are located in: $scriptDir\build"
     Write-Host ""
-    Write-Host "To run CTEAM from Windows, use WSL:"
-    Write-Host "  wsl ./build/cteamd"
-    Write-Host "  wsl ./build/cteam-qt  (requires WSLg or X server)"
+    Write-Host "To run OrganicLife from Windows, use WSL:"
+    Write-Host "  wsl ./build/organiclifed"
+    Write-Host "  wsl ./build/organiclife-qt  (requires WSLg or X server)"
 } else {
     Write-Error "Build failed. Check the output above for errors."
     exit 1

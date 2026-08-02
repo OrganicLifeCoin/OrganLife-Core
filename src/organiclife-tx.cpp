@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2014 The Bitcoin developers
 // Copyright (c) 2015-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -53,9 +53,9 @@ static int AppInitRawTx(int argc, char* argv[])
 
     if (argc < 2 || gArgs.IsArgSet("-?") || gArgs.IsArgSet("-h") || gArgs.IsArgSet("-help")) {
         // First part of help message is specific to this utility
-        std::string strUsage = PACKAGE_NAME " cteam-tx utility version " + FormatFullVersion() + "\n\n" +
-                               "Usage:  cteam-tx [options] <hex-tx> [commands]  Update hex-encoded CTEAM transaction\n" +
-                               "or:     cteam-tx [options] -create [commands]   Create hex-encoded CTEAM transaction\n" +
+        std::string strUsage = PACKAGE_NAME " organiclife-tx utility version " + FormatFullVersion() + "\n\n" +
+                               "Usage:  organiclife-tx [options] <hex-tx> [commands]  Update hex-encoded OrganicLife transaction\n" +
+                               "or:     organiclife-tx [options] -create [commands]   Create hex-encoded OrganicLife transaction\n" +
                                "\n";
 
         fprintf(stdout, "%s", strUsage.c_str());

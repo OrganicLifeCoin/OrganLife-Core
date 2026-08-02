@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,7 +30,7 @@ class SendMultiRow : public PWidget
     Q_OBJECT
 
 public:
-    explicit SendMultiRow(PIVXGUI* _window, PWidget *parent = nullptr);
+    explicit SendMultiRow(OrganicLifeGUI* _window, PWidget *parent = nullptr);
     ~SendMultiRow();
 
     void hideLabels();

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 /*
  * Copyright 2009 Colin Percival, 2011 ArtForz, 2012-2013 pooler
  * All rights reserved.

@@ -1,6 +1,6 @@
 // Copyright (c) 2011-2013 The Bitcoin developers
 // Copyright (c) 2017-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -44,7 +44,7 @@ public:
     explicit GUIException(const std::string &message) : message(message) {}
 };
 
-/** Utility functions used by the CTEAM Qt UI.
+/** Utility functions used by the OrganicLife Qt UI.
  */
 namespace GUIUtil
 {
@@ -54,7 +54,7 @@ QString dateTimeStrWithSeconds(const QDateTime& date);
 QString dateTimeStr(qint64 nTime);
 QDateTime dateTimeFromTimeT(qint64 nTime);
 
-// Render CTEAM addresses in monospace font
+// Render OrganicLife addresses in monospace font
 QFont bitcoinAddressFont();
 
 // Parse string into a CAmount value.

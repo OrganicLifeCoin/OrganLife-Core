@@ -1,5 +1,5 @@
 // Copyright (c) 2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
@@ -56,7 +56,7 @@ void initPageIndexBtn(QPushButton* btn)
     btn->setVisible(false);
 }
 
-CreateProposalDialog::CreateProposalDialog(PIVXGUI* parent, GovernanceModel* _govModel, WalletModel* _walletModel) :
+CreateProposalDialog::CreateProposalDialog(OrganicLifeGUI* parent, GovernanceModel* _govModel, WalletModel* _walletModel) :
     ContainerDialog(parent),
     ui(new Ui::CreateProposalDialog),
     govModel(_govModel),
@@ -139,7 +139,7 @@ void CreateProposalDialog::setupPageTwo()
     const int64_t cycleSeconds = GetCycleSeconds(govModel);
     ui->labelMessageDest->setText(tr("Add the number of payout cycles, the amount per cycle, and the payee address.\n1 cycle is approximately %1.")
                                           .arg(FormatDurationLabel(cycleSeconds)));
-    setEditBoxStyle(ui->labelAmount, ui->lineEditAmount, "e.g 500 CTEAM");
+    setEditBoxStyle(ui->labelAmount, ui->lineEditAmount, "e.g 500 OLC");
     ui->labelMonths->setText(tr("Cycles"));
     setCssProperty(ui->labelMonths, "text-title");
     setEditBoxStyle(ui->labelAddress, ui->lineEditAddress, "e.g D...something..");
@@ -395,7 +395,7 @@ void CreateProposalDialog::onAddrListClicked()
         menuContacts = new ContactsDropdown(
                 width,
                 height,
-                dynamic_cast<PIVXGUI*>(parent()),
+                dynamic_cast<OrganicLifeGUI*>(parent()),
                 this
         );
         menuContacts->setWalletModel(walletModel, {AddressTableModel::Send, AddressTableModel::Receive});

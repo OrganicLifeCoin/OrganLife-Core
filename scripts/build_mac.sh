@@ -3,7 +3,7 @@
 # Build macOS release artifacts:
 # - Universal ZIP (GUI app + all binaries)
 # - Universal DMG (GUI app)
-# - Universal "daemon-only" ZIP (cteamd, cteam-cli, cteam-tx)
+# - Universal "daemon-only" ZIP (organiclifed, organiclife-cli, organiclife-tx)
 #
 # This script uses the depends system (two builds: arm64 + x86_64) and then
 # merges the resulting binaries via lipo.
@@ -253,14 +253,14 @@ BUILD_DIR_ARM64="${BUILD_DIR_ARM64:-$REPO_ROOT/build-arm64}"
 BUILD_DIR_X86_64="${BUILD_DIR_X86_64:-$REPO_ROOT/build-x86_64}"
 BUILD_STATE_FILE=".build-mac-inputs.sha256"
 
-BASE_UNIVERSAL="CTEAM-macos-universal-qt"
-BASE_DAEMON="CTEAM-macos-universal-daemon"
+BASE_UNIVERSAL="OrganicLife-macos-universal-qt"
+BASE_DAEMON="OrganicLife-macos-universal-daemon"
 OUT_ZIP_UNIVERSAL="$OUT_DIR/${BASE_UNIVERSAL}.zip"
 OUT_ZIP_DAEMON="$OUT_DIR/${BASE_DAEMON}.zip"
 OUT_DMG="$OUT_DIR/${BASE_UNIVERSAL}.dmg"
 
 echo "========================================"
-echo "  CTEAM macOS Universal Build"
+echo "  OrganicLife macOS Universal Build"
 echo "========================================"
 echo "Version:  $VERSION"
 echo "Jobs:     $JOBS"
@@ -420,16 +420,16 @@ build_one() {
 
   # Reuse an existing successful build only when tracked build inputs are unchanged.
   if [[ "$CLEAN_BUILD" != true ]] && \
-     [[ -x "$build_dir/src/cteamd" ]] && \
-     [[ -x "$build_dir/src/cteam-cli" ]] && \
-     [[ -x "$build_dir/src/cteam-tx" ]] && \
-     [[ -x "$build_dir/src/qt/cteam-qt" ]]; then
+     [[ -x "$build_dir/src/organiclifed" ]] && \
+     [[ -x "$build_dir/src/organiclife-cli" ]] && \
+     [[ -x "$build_dir/src/organiclife-tx" ]] && \
+     [[ -x "$build_dir/src/qt/organiclife-qt" ]]; then
     if [[ -f "$build_state_file" ]]; then
       stored_fingerprint="$(tr -d '\n' < "$build_state_file")"
       if [[ "$stored_fingerprint" == "$current_fingerprint" ]]; then
         if [[ -n "$expected_arch" ]]; then
-          check_arch "$expected_arch" "$build_dir/src/qt/cteam-qt"
-          check_arch "$expected_arch" "$build_dir/src/cteamd"
+          check_arch "$expected_arch" "$build_dir/src/qt/organiclife-qt"
+          check_arch "$expected_arch" "$build_dir/src/organiclifed"
         fi
         echo "[BUILD] $host -> $(basename "$build_dir") (reuse: tracked inputs unchanged)"
         return 0
@@ -462,10 +462,10 @@ build_one() {
     make -j"$JOBS"
   )
 
-  test -x "$build_dir/src/cteamd"
-  test -x "$build_dir/src/cteam-cli"
-  test -x "$build_dir/src/cteam-tx"
-  test -x "$build_dir/src/qt/cteam-qt"
+  test -x "$build_dir/src/organiclifed"
+  test -x "$build_dir/src/organiclife-cli"
+  test -x "$build_dir/src/organiclife-tx"
+  test -x "$build_dir/src/qt/organiclife-qt"
   printf '%s\n' "$current_fingerprint" > "$build_state_file"
 }
 
@@ -520,10 +520,10 @@ if [[ "$SKIP_BUILD" == false ]]; then
 fi
 
 for req in \
-  "$BUILD_DIR_ARM64/src/cteamd" \
-  "$BUILD_DIR_X86_64/src/cteamd" \
-  "$BUILD_DIR_ARM64/src/qt/cteam-qt" \
-  "$BUILD_DIR_X86_64/src/qt/cteam-qt"; do
+  "$BUILD_DIR_ARM64/src/organiclifed" \
+  "$BUILD_DIR_X86_64/src/organiclifed" \
+  "$BUILD_DIR_ARM64/src/qt/organiclife-qt" \
+  "$BUILD_DIR_X86_64/src/qt/organiclife-qt"; do
   if [[ ! -x "$req" ]]; then
     echo "ERROR: missing built binary: $req" >&2
     echo "       If you want this script to build, omit --skip-build." >&2
@@ -552,7 +552,7 @@ for p in "${SAPLING_PARAMS[@]}"; do
   cp -f "$PARAMS_SRC_DIR/$p" "$OUT_DIR/$BASE_DAEMON/params/"
 done
 
-declare -a BINS_ALL=("cteamd" "cteam-cli" "cteam-tx")
+declare -a BINS_ALL=("organiclifed" "organiclife-cli" "organiclife-tx")
 for bin in "${BINS_ALL[@]}"; do
   lipo -create \
     "$BUILD_DIR_ARM64/src/$bin" \
@@ -562,23 +562,23 @@ for bin in "${BINS_ALL[@]}"; do
 done
 
 lipo -create \
-  "$BUILD_DIR_ARM64/src/qt/cteam-qt" \
-  "$BUILD_DIR_X86_64/src/qt/cteam-qt" \
-  -output "$OUT_DIR/$BASE_UNIVERSAL/bin/cteam-qt"
+  "$BUILD_DIR_ARM64/src/qt/organiclife-qt" \
+  "$BUILD_DIR_X86_64/src/qt/organiclife-qt" \
+  -output "$OUT_DIR/$BASE_UNIVERSAL/bin/organiclife-qt"
 
-check_arch arm64 "$OUT_DIR/$BASE_UNIVERSAL/bin/cteam-qt"
-check_arch x86_64 "$OUT_DIR/$BASE_UNIVERSAL/bin/cteam-qt"
-check_static_like "$OUT_DIR/$BASE_UNIVERSAL/bin/cteam-qt"
+check_arch arm64 "$OUT_DIR/$BASE_UNIVERSAL/bin/organiclife-qt"
+check_arch x86_64 "$OUT_DIR/$BASE_UNIVERSAL/bin/organiclife-qt"
+check_static_like "$OUT_DIR/$BASE_UNIVERSAL/bin/organiclife-qt"
 
 for bin in "${BINS_ALL[@]}"; do
   check_static_like "$OUT_DIR/$BASE_UNIVERSAL/bin/$bin"
 done
 
 echo "[PACK] Creating app bundle..."
-APP_DISPLAY_NAME="CTEAM"
+APP_DISPLAY_NAME="OrganicLife"
 APP_BUNDLE="$OUT_DIR/$BASE_UNIVERSAL/${APP_DISPLAY_NAME}.app"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
-cp -f "$OUT_DIR/$BASE_UNIVERSAL/bin/cteam-qt" "$APP_BUNDLE/Contents/MacOS/${APP_DISPLAY_NAME}"
+cp -f "$OUT_DIR/$BASE_UNIVERSAL/bin/organiclife-qt" "$APP_BUNDLE/Contents/MacOS/${APP_DISPLAY_NAME}"
 for p in "${SAPLING_PARAMS[@]}"; do
   cp -f "$PARAMS_SRC_DIR/$p" "$APP_BUNDLE/Contents/Resources/$p"
 done
@@ -599,15 +599,15 @@ fi
 
 if [[ -n "$ICON_PNG" ]] && command -v iconutil >/dev/null 2>&1 && command -v sips >/dev/null 2>&1; then
   ICONSET_DIR="$(mktemp -d)"
-  mkdir -p "$ICONSET_DIR/CTEAM.iconset"
+  mkdir -p "$ICONSET_DIR/OrganicLife.iconset"
   for size in 16 32 128 256 512; do
-    sips -z "$size" "$size" "$ICON_PNG" --out "$ICONSET_DIR/CTEAM.iconset/icon_${size}x${size}.png" >/dev/null
-    sips -z "$((size * 2))" "$((size * 2))" "$ICON_PNG" --out "$ICONSET_DIR/CTEAM.iconset/icon_${size}x${size}@2x.png" >/dev/null
+    sips -z "$size" "$size" "$ICON_PNG" --out "$ICONSET_DIR/OrganicLife.iconset/icon_${size}x${size}.png" >/dev/null
+    sips -z "$((size * 2))" "$((size * 2))" "$ICON_PNG" --out "$ICONSET_DIR/OrganicLife.iconset/icon_${size}x${size}@2x.png" >/dev/null
   done
   # 1024x1024 (optional but recommended)
-  sips -z 1024 1024 "$ICON_PNG" --out "$ICONSET_DIR/CTEAM.iconset/icon_512x512@2x.png" >/dev/null || true
+  sips -z 1024 1024 "$ICON_PNG" --out "$ICONSET_DIR/OrganicLife.iconset/icon_512x512@2x.png" >/dev/null || true
 
-  if iconutil -c icns "$ICONSET_DIR/CTEAM.iconset" -o "$APP_BUNDLE/Contents/Resources/CTEAM.icns" >/dev/null 2>&1; then
+  if iconutil -c icns "$ICONSET_DIR/OrganicLife.iconset" -o "$APP_BUNDLE/Contents/Resources/CTEAM.icns" >/dev/null 2>&1; then
     ICON_FILE="CTEAM.icns"
   fi
   rm -rf "$ICONSET_DIR" 2>/dev/null || true
@@ -636,7 +636,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
   <string>${APP_DISPLAY_NAME}</string>
 ${ICON_PLIST_BLOCK}
   <key>CFBundleIdentifier</key>
-  <string>org.cteam.cteam-qt</string>
+  <string>org.organiclife.organiclife-qt</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleDisplayName</key>
@@ -680,7 +680,7 @@ if [[ "$DO_SIGN" == true ]]; then
 
   echo "[SIGN] Signing binaries + app + dmg with: $SIGN_IDENTITY"
   # Hardened runtime + timestamp is required for notarization.
-  for bin in "${BINS_ALL[@]}" "cteam-qt"; do
+  for bin in "${BINS_ALL[@]}" "organiclife-qt"; do
     codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$OUT_DIR/$BASE_UNIVERSAL/bin/$bin"
   done
   for bin in "${BINS_ALL[@]}"; do
@@ -704,7 +704,7 @@ RW_DMG="$TMP_DIR/pack.rw.dmg"
 MOUNT_DIR="$TMP_DIR/mount"
 mkdir -p "$MOUNT_DIR"
 
-hdiutil create -size 1g -fs HFS+ -volname "CTEAM" -type UDIF "$RW_DMG" >/dev/null
+hdiutil create -size 1g -fs HFS+ -volname "OrganicLife" -type UDIF "$RW_DMG" >/dev/null
 DEV="$(hdiutil attach "$RW_DMG" -mountpoint "$MOUNT_DIR" -nobrowse -noverify -noautoopen | awk 'NR==1{print $1}')"
 ditto "$APP_BUNDLE" "$MOUNT_DIR/$(basename "$APP_BUNDLE")"
 ln -s /Applications "$MOUNT_DIR/Applications" 2>/dev/null || true
@@ -746,4 +746,4 @@ echo "Outputs:"
 ls -lh "$OUT_ZIP_UNIVERSAL" "$OUT_ZIP_DAEMON" "$OUT_DMG" | sed 's/^/  /'
 echo ""
 echo "Universal binary:"
-lipo -info "$OUT_DIR/$BASE_UNIVERSAL/bin/cteam-qt" | sed 's/^/  /'
+lipo -info "$OUT_DIR/$BASE_UNIVERSAL/bin/organiclife-qt" | sed 's/^/  /'

@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -69,7 +69,7 @@ MasterNodeWizardDialog::MasterNodeWizardDialog(WalletModel* model, MNModel* _mnM
 
     QString collateralAmountStr = GUIUtil::formatBalance(mnModel->getMNCollateralRequiredAmount());
     ui->labelMessage1a->setText(formatHtmlContent(
-                formatParagraph(tr("To create a CTEAM Masternode you must dedicate %1 "
+                formatParagraph(tr("To create a OrganicLife Masternode you must dedicate %1 "
                         "to the network (however, these coins are still yours and will never leave your possession).").arg(collateralAmountStr)) +
                 formatParagraph(tr("You can deactivate the node and unlock the coins at any time."))));
 

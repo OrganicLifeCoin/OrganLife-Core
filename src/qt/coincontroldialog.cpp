@@ -1,7 +1,7 @@
 // Copyright (c) 2011-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -589,8 +589,8 @@ void CoinControlDialog::updateLabels()
         return;
 
     ui->labelTitle->setText(fSelectTransparent ?
-            "Select CTEAM Outputs to Spend" :
-            "Select Shielded CTEAM to Spend");
+            "Select OrganicLife Outputs to Spend" :
+            "Select Shielded OrganicLife to Spend");
 
     const TotalAmounts& t = getTotals();
 
@@ -680,7 +680,7 @@ void CoinControlDialog::loadAvailableCoin(bool treeMode,
     itemOutput->setFlags(flgCheckbox);
     itemOutput->setCheckState(COLUMN_CHECKBOX, Qt::Unchecked);
 
-    // if listMode or change => show CTEAM address. In tree mode, address is not shown again for direct wallet address outputs
+    // if listMode or change => show OrganicLife address. In tree mode, address is not shown again for direct wallet address outputs
     if (!treeMode) {
         itemOutput->setText(COLUMN_ADDRESS, sWalletAddress);
     }else {

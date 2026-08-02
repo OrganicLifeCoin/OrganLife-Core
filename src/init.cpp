@@ -5,7 +5,7 @@
 // Copyright (c) 2013-2014 The NovaCoin Developers
 // Copyright (c) 2014-2018 The BlackCoin Developers
 // Copyright (c) 2015-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -113,7 +113,7 @@ CClientUIInterface uiInterface;  // Declared but not defined in guiinterface.h
 /**
  * The PID file facilities.
  */
-const char * const PIVX_PID_FILENAME = "cteam.pid";
+const char * const PIVX_PID_FILENAME = "organiclife.pid";
 
 fs::path GetPidFile()
 {
@@ -276,7 +276,7 @@ void Shutdown()
     /// for example if the data directory was found to be locked.
     /// Be sure that anything that writes files or flushes caches only does this if the respective
     /// module was initialized.
-    util::ThreadRename("cteam-shutoff");
+    util::ThreadRename("organiclife-shutoff");
     mempool.AddTransactionsUpdated(1);
     StopHTTPRPC();
     StopREST();
@@ -711,7 +711,7 @@ struct CImportingNow {
 
 void ThreadImport(const std::vector<fs::path>& vImportFiles)
 {
-    util::ThreadRename("cteam-loadblk");
+    util::ThreadRename("organiclife-loadblk");
     CImportingNow imp;
     ScheduleBatchPriority();
 
@@ -785,7 +785,7 @@ void ThreadImport(const std::vector<fs::path>& vImportFiles)
 }
 
 /** Sanity checks
- *  Ensure that CTEAM is running in a usable environment with all
+ *  Ensure that OrganicLife is running in a usable environment with all
  *  necessary library support.
  */
 bool InitSanityCheck(void)
@@ -1220,7 +1220,7 @@ bool AppInitParameterInteraction()
 
 static bool LockDataDirectory(bool probeOnly)
 {
-    // Make sure only a single CTEAM process is using the data directory.
+    // Make sure only a single OrganicLife process is using the data directory.
     fs::path datadir = GetDataDir();
     if (!DirIsWritable(datadir)) {
         return UIError(strprintf(_("Cannot write to data directory '%s'; check permissions."), datadir.string()));
@@ -1285,9 +1285,9 @@ bool AppInitMain()
     // Warn about relative -datadir path.
     if (gArgs.IsArgSet("-datadir") && !fs::path(gArgs.GetArg("-datadir", "")).is_absolute()) {
         LogPrintf("Warning: relative datadir option '%s' specified, which will be interpreted relative to the " /* Continued */
-                  "current working directory '%s'. This is fragile because if CTEAM is started in the future " /* Continued */
+                  "current working directory '%s'. This is fragile because if OrganicLife is started in the future " /* Continued */
                   "from a different location. It will be unable to locate the current data files. There could " /* Continued */
-                  "also be data loss if CTEAM is started while in a temporary directory.\n",
+                  "also be data loss if OrganicLife is started while in a temporary directory.\n",
             gArgs.GetArg("-datadir", ""), fs::current_path().string());
     }
 
@@ -1554,7 +1554,7 @@ bool AppInitMain()
                 pblocktree.reset();
                 pblocktree.reset(new CBlockTreeDB(nBlockTreeDBCache, false, fReset));
 
-                //CTEAM specific: zerocoin and spork DB's
+                //OrganicLife specific: zerocoin and spork DB's
                 zerocoinDB.reset();
                 zerocoinDB.reset(new CZerocoinDB(0, false, fReindex));
                 pSporkDB.reset();
@@ -1570,7 +1570,7 @@ bool AppInitMain()
                 // End loop if shutdown was requested
                 if (ShutdownRequested()) break;
 
-                // CTEAM: load previous sessions sporks if we have them.
+                // OrganicLife: load previous sessions sporks if we have them.
                 uiInterface.InitMessage(_("Loading sporks..."));
                 sporkManager.LoadSporksFromDB();
 

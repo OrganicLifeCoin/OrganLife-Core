@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -88,7 +88,7 @@ bool SendWidget::shouldAutoAbandonFailedCommit(const WalletModel::SendCoinsRetur
            !sendStatus.commitRes.hashTx.IsNull();
 }
 
-SendWidget::SendWidget(PIVXGUI* parent) :
+SendWidget::SendWidget(OrganicLifeGUI* parent) :
     PWidget(parent),
     ui(new Ui::send)
 {
@@ -152,7 +152,7 @@ SendWidget::SendWidget(PIVXGUI* parent) :
     // Uri
     setCssProperty(ui->btnUri, "screen-side-option", true);
     ui->btnUri->setTitleClassAndText("btn-title-grey", tr("Open URI"));
-    ui->btnUri->setSubTitleClassAndText("text-subtitle", tr("Parse a CTEAM URI"));
+    ui->btnUri->setSubTitleClassAndText("text-subtitle", tr("Parse a OrganicLife URI"));
 
     // Shield coins
     setCssProperty(ui->btnShieldCoins, "screen-side-option", true);
@@ -184,7 +184,7 @@ SendWidget::SendWidget(PIVXGUI* parent) :
     setCssProperty(ui->labelTitleTotalRemaining, "text-title");
     setCssProperty(ui->labelAmountRemaining, "text-body1");
 
-    // Coin icon removed - no longer showing CTEAM icon in send widget
+    // Coin icon removed - no longer showing OrganicLife icon in send widget
 
     // Entry
     addEntry();
@@ -867,7 +867,7 @@ void SendWidget::onShieldCoinsClicked()
         ProcessSend(recipients, true, [this](QList<SendCoinsRecipient>& recipients) {
             auto res = walletModel->getNewShieldedAddress("");
             if (!res) {
-                inform(tr("Error generating address to shield CTEAM"));
+                inform(tr("Error generating address to shield OrganicLife"));
                 return false;
             }
             recipients.back().address = QString::fromStdString(res.getObjResult()->ToString());
@@ -875,7 +875,7 @@ void SendWidget::onShieldCoinsClicked()
             return true;
         });
     } else {
-        inform(tr("You don't have any transparent CTEAM to shield."));
+        inform(tr("You don't have any transparent OrganicLife to shield."));
     }
 }
 

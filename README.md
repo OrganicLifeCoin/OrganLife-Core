@@ -1,33 +1,37 @@
-CTEAM Core
+OrganicLife Core
 ==============
 
-Node daemon and Qt wallet for the CTEAM network (PIVX/Bitcoin lineage).
+Node daemon and Qt wallet for the OrganicLife Coin (OLC) network (PIVX/Bitcoin lineage).
 
 Binaries
 --------
 
-- `cteamd` - Full node daemon
-- `cteam-cli` - RPC command-line client  
-- `cteam-tx` - Transaction utility
-- `cteam-qt` - Qt GUI wallet
+- `organiclifed` - Full node daemon
+- `organiclife-cli` - RPC command-line client  
+- `organiclife-tx` - Transaction utility
+- `organiclife-qt` - Qt GUI wallet
 
 Mainnet Parameters
 ------------------
 
 | Parameter | Value |
 |--------|--------|
-| Genesis timestamp | `2026-03-16 00:00:00 UTC` |
+| Ticker | `OLC` |
+| Genesis timestamp | `2026-08-02 16:00:00 UTC` |
+| Genesis block hash | `00000e7a809b258b8a8bb8e79bf69f34209c0b74bfdde08a7a2e0d7c98cc9787` |
+| Address prefixes | P2PKH starts with `o`, script `g`, staking `f` |
+| P2P / RPC ports | `39616` / `39618` (testnet `49616` / `49618`) |
+| BIP44 coin type | `5150` |
 | Target block spacing | `2 minutes` |
-| Supply cap | `177,600,000 CTEAM` |
-| Premine | `102,632,000 CTEAM` at height `1` |
-| Remaining fixed subsidy | `74,968,000 CTEAM` (`7,496,800` blocks, about `28.53` years at 2 minute spacing) |
+| Supply cap | `777,777,777 OLC` |
+| Premine | `264,444,444.18 OLC` at height `1` |
 | PoS activation | Height `10,081` (about `14 days` after genesis) |
-| Block subsidy | `10 CTEAM` until the cap is reached |
-| Masternode collateral | `4,000 CTEAM` |
+| Block subsidy | `10 OLC` until the cap is reached |
+| Masternode collateral | `4,000 OLC` |
 | Post-PoS reward split | `4` to the staker, `6` to the masternode |
 | Governance cycle | `10,080` blocks (`14 days`) |
 
-Mainnet supply is capped in consensus. Transaction fees are paid to miners during the PoW bootstrap phase and burned once PoS is active. Post-v5.5 governance cycles can allocate up to `100,800 CTEAM` per full 14-day cycle.
+Mainnet supply is capped in consensus. Transaction fees are paid to miners during the PoW bootstrap phase and burned once PoS is active. Post-v5.5 governance cycles can allocate up to `55,555 OLC` per month (two 14-day cycles).
 
 Quick Start
 -----------
@@ -36,9 +40,9 @@ For most users:
 
 ```bash
 git clone <repository-url>
-cd CTEAM
+cd OrganicLifeCoin
 ./build-depends.sh
-./src/qt/cteam-qt
+./src/qt/organiclife-qt
 ```
 
 Build Scripts
@@ -106,27 +110,27 @@ Running
 
 GUI wallet:
 ```bash
-./src/qt/cteam-qt          # build-depends.sh output
-./build/cteam-qt           # build.sh output
+./src/qt/organiclife-qt          # build-depends.sh output
+./build/organiclife-qt           # build.sh output
 ```
 
 Daemon:
 ```bash
-./src/cteamd -daemon
-./src/cteam-cli getblockchaininfo
-./src/cteam-cli stop
+./src/organiclifed -daemon
+./src/organiclife-cli getblockchaininfo
+./src/organiclife-cli stop
 ```
 
 Testnet:
 ```bash
-./src/cteamd -testnet -daemon
+./src/organiclifed -testnet -daemon
 ```
 
 Data Directory
 --------------
 
-- macOS: `~/Library/Application Support/CTEAM`
-- Linux: `~/.cteam`
+- macOS: `~/Library/Application Support/OrganicLife`
+- Linux: `~/.organiclifecoin`
 
 Backup `wallet.dat` - it contains your private keys.
 

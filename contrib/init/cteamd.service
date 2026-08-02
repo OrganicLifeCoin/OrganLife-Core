@@ -1,23 +1,23 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit cteamd.service
+# $ systemctl edit organiclifed.service
 # See "man systemd.service" for details.
 
 # Note that almost all daemon options could be specified in
-# /etc/cteam/CTEAM.conf
+# /etc/organiclife/organiclifecoin.conf
 
 [Unit]
-Description=CTEAM daemon
+Description=OrganicLife daemon
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/cteamd -daemon -conf=/etc/cteam/CTEAM.conf -pid=/run/cteamd/cteamd.pid
-# Creates /run/cteamd owned by cteam
-RuntimeDirectory=cteamd
-User=cteam
+ExecStart=/usr/bin/organiclifed -daemon -conf=/etc/organiclife/organiclifecoin.conf -pid=/run/organiclifed/organiclifed.pid
+# Creates /run/organiclifed owned by organiclife
+RuntimeDirectory=organiclifed
+User=organiclife
 Type=forking
-PIDFile=/run/cteamd/cteamd.pid
+PIDFile=/run/organiclifed/organiclifed.pid
 Restart=on-failure
 
 # Hardening measures

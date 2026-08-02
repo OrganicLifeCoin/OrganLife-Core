@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -18,7 +18,7 @@
 #include <QDesktopServices>
 #include <QUrl>
 
-SettingsFaqWidget::SettingsFaqWidget(PIVXGUI* parent, MNModel* mnModel) :
+SettingsFaqWidget::SettingsFaqWidget(OrganicLifeGUI* parent, MNModel* mnModel) :
     QDialog(parent),
     ui(new Ui::SettingsFaqWidget)
 {
@@ -106,7 +106,7 @@ SettingsFaqWidget::SettingsFaqWidget(PIVXGUI* parent, MNModel* mnModel) :
                "package will be lit up and will state \"Staking Enabled\" to indicate "
                "it is staking. Using the command line interface (%1); the command %2 "
                "will confirm that staking is active.")
-                .arg("cteam-cli", "<span style=\"font-style:italic\">getstakingstatus</span>")));
+                .arg("organiclife-cli", "<span style=\"font-style:italic\">getstakingstatus</span>")));
     ui->labelContent_Stake->setText(stakeContent);
 
     QString supportContent = formatFAQContent(
@@ -173,10 +173,10 @@ SettingsFaqWidget::SettingsFaqWidget(PIVXGUI* parent, MNModel* mnModel) :
     connect(ui->pushButton_Support, &QPushButton::clicked, [this](){onFaqClicked(ui->widget_Support);});
     connect(ui->pushButton_Masternode, &QPushButton::clicked, [this](){onFaqClicked(ui->widget_Masternode);});
     connect(ui->pushButton_MNController, &QPushButton::clicked, [this](){onFaqClicked(ui->widget_MNController);});
-    connect(ui->pushButtonWebLink, &QPushButton::clicked, [](){ QDesktopServices::openUrl(QUrl("https://CTEAM.com")); });
+    connect(ui->pushButtonWebLink, &QPushButton::clicked, [](){ QDesktopServices::openUrl(QUrl("https://OrganicLife.com")); });
 
     if (parent)
-        connect(parent, &PIVXGUI::windowResizeEvent, this, &SettingsFaqWidget::windowResizeEvent);
+        connect(parent, &OrganicLifeGUI::windowResizeEvent, this, &SettingsFaqWidget::windowResizeEvent);
 }
 
 void SettingsFaqWidget::showEvent(QShowEvent *event)

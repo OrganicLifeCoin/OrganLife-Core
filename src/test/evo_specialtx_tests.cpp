@@ -1,9 +1,9 @@
 // Copyright (c) 2021-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
-#include "test/test_pivx.h"
+#include "test/test_organiclife.h"
 
 #include "test/data/specialtx_invalid.json.h"
 #include "test/data/specialtx_valid.json.h"

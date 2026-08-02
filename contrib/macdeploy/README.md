@@ -6,7 +6,7 @@ The `macdeployqtplus` script should not be run manually. Instead, after building
 make deploy
 ```
 
-When complete, it will have produced a DMG named after `PACKAGE_NAME` (for example `CTEAM.dmg`).
+When complete, it will have produced a DMG named after `PACKAGE_NAME` (for example `OrganicLife.dmg`).
 
 ## SDK Extraction
 

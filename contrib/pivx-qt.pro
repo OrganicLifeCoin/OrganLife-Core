@@ -373,8 +373,8 @@ SOURCES += src/activemasternode.cpp \
            src/crypter.cpp \
            src/obfuscation-relay.cpp \
            src/obfuscation.cpp \
-           src/pivx-cli.cpp \
-           src/pivx-tx.cpp \
+           src/organiclife-cli.cpp \
+           src/organiclife-tx.cpp \
            src/pivx.cpp \
            src/db.cpp \
            src/eccryptoverify.cpp \
@@ -549,7 +549,7 @@ SOURCES += src/activemasternode.cpp \
            src/test/sighash_tests.cpp \
            src/test/sigopcount_tests.cpp \
            src/test/skiplist_tests.cpp \
-           src/test/test_pivx.cpp \
+           src/test/test_organiclife.cpp \
            src/test/timedata_tests.cpp \
            src/test/transaction_tests.cpp \
            src/test/uint256_tests.cpp \
@@ -640,7 +640,7 @@ SOURCES += src/activemasternode.cpp \
            src/leveldb/helpers/memenv/memenv.cc \
            src/leveldb/helpers/memenv/memenv_test.cc \
            src/secp256k1/src/java/org_bitcoin_NativeSecp256k1.c
-RESOURCES += src/qt/pivx.qrc src/qt/pivx_locale.qrc
+RESOURCES += src/qt/organiclife.qrc src/qt/organiclife_locale.qrc
 
 TRANSLATIONS += src/qt/locale/pivx_bg.ts \
                 src/qt/locale/pivx_de.ts \

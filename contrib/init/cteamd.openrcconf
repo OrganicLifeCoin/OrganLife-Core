@@ -1,25 +1,25 @@
-# /etc/conf.d/cteamd: config file for /etc/init.d/cteamd
+# /etc/conf.d/organiclifed: config file for /etc/init.d/organiclifed
 
 # Config file location
-#BITCOIND_CONFIGFILE="/etc/cteam/CTEAM.conf"
+#BITCOIND_CONFIGFILE="/etc/organiclife/organiclifecoin.conf"
 
 # What directory to write pidfile to?  (created and owned by $BITCOIND_USER)
-#BITCOIND_PIDDIR="/var/run/cteamd"
+#BITCOIND_PIDDIR="/var/run/organiclifed"
 
 # What filename to give the pidfile
-#BITCOIND_PIDFILE="${BITCOIND_PIDDIR}/cteamd.pid"
+#BITCOIND_PIDFILE="${BITCOIND_PIDDIR}/organiclifed.pid"
 
-# Where to write cteamd data (be mindful that the blockchain is large)
-#BITCOIND_DATADIR="/var/lib/cteamd"
+# Where to write organiclifed data (be mindful that the blockchain is large)
+#BITCOIND_DATADIR="/var/lib/organiclifed"
 
-# User and group to own cteamd process
-#BITCOIND_USER="cteam"
-#BITCOIND_GROUP="cteam"
+# User and group to own organiclifed process
+#BITCOIND_USER="organiclife"
+#BITCOIND_GROUP="organiclife"
 
-# Path to cteamd executable
-#BITCOIND_BIN="/usr/bin/cteamd"
+# Path to organiclifed executable
+#BITCOIND_BIN="/usr/bin/organiclifed"
 
-# Nice value to run cteamd under
+# Nice value to run organiclifed under
 #BITCOIND_NICE=0
 
 # Additional options (avoid -conf and -datadir, use flags above)

@@ -205,7 +205,7 @@ def ToHex(obj):
     return obj.serialize().hex()
 
 
-# Objects that map to pivxd objects, which can be serialized/deserialized
+# Objects that map to organiclifed objects, which can be serialized/deserialized
 class CAddress:
     __slots__ = ("net", "ip", "nServices", "port", "time")
 
@@ -1452,7 +1452,7 @@ class msg_headers:
         self.headers = headers if headers is not None else []
 
     def deserialize(self, f):
-        # comment in pivxd indicates these should be deserialized as blocks
+        # comment in organiclifed indicates these should be deserialized as blocks
         blocks = deser_vector(f, CBlock)
         for x in blocks:
             self.headers.append(CBlockHeader(x))

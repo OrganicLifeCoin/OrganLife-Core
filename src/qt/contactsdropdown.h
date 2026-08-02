@@ -29,7 +29,7 @@ class ContactsDropdown : public PWidget
     Q_OBJECT
 public:
     explicit ContactsDropdown(int minWidth, int minHeight, PWidget* parent = nullptr);
-    ContactsDropdown(int minWidth, int minHeight, PIVXGUI* _window = nullptr,
+    ContactsDropdown(int minWidth, int minHeight, OrganicLifeGUI* _window = nullptr,
                      QWidget* parent = nullptr);
 
     void resizeList(int minWidth, int mintHeight);

@@ -10,7 +10,7 @@
 bool DisconnectZerocoinTx(const CTransaction& tx)
 {
     /** UNDO ZEROCOIN DATABASING
-         * note we only undo zerocoin databasing in the following statement, value to and from CTEAM
+         * note we only undo zerocoin databasing in the following statement, value to and from OrganicLife
          * addresses should still be handled by the typical bitcoin based undo code
          * */
     if (tx.ContainsZerocoins()) {

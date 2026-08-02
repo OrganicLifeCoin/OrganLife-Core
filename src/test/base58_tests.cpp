@@ -13,7 +13,7 @@
 #include "key_io.h"
 #include "uint256.h"
 #include "utilstrencodings.h"
-#include "test/test_pivx.h"
+#include "test/test_organiclife.h"
 #include "util/vector.h"
 
 #include <boost/test/unit_test.hpp>

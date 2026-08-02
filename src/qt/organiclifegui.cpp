@@ -1,9 +1,9 @@
 // Copyright (c) 2019-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "pivxgui.h"
+#include "organiclifegui.h"
 
 #ifdef Q_OS_MAC
 #include "macdockiconhandler.h"
@@ -81,9 +81,9 @@ private:
 };
 
 
-const QString PIVXGUI::DEFAULT_WALLET = "~Default";
+const QString OrganicLifeGUI::DEFAULT_WALLET = "~Default";
 
-PIVXGUI::PIVXGUI(const NetworkStyle* networkStyle, QWidget* parent) :
+OrganicLifeGUI::OrganicLifeGUI(const NetworkStyle* networkStyle, QWidget* parent) :
         QMainWindow(parent),
         clientModel(0){
 
@@ -221,7 +221,7 @@ PIVXGUI::PIVXGUI(const NetworkStyle* networkStyle, QWidget* parent) :
 
 }
 
-void PIVXGUI::createActions(const NetworkStyle* networkStyle)
+void OrganicLifeGUI::createActions(const NetworkStyle* networkStyle)
 {
     toggleHideAction = new QAction(networkStyle->getAppIcon(), tr("&Show / Hide"), this);
     toggleHideAction->setStatusTip(tr("Show or hide the main Window"));
@@ -231,14 +231,14 @@ void PIVXGUI::createActions(const NetworkStyle* networkStyle)
     quitAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
     quitAction->setMenuRole(QAction::QuitRole);
 
-    connect(toggleHideAction, &QAction::triggered, this, &PIVXGUI::toggleHidden);
+    connect(toggleHideAction, &QAction::triggered, this, &OrganicLifeGUI::toggleHidden);
     connect(quitAction, &QAction::triggered, qApp, &QApplication::quit);
 }
 
 /**
  * Here add every event connection
  */
-void PIVXGUI::connectActions()
+void OrganicLifeGUI::connectActions()
 {
     QShortcut *consoleShort = new QShortcut(this);
     consoleShort->setKey(QKeySequence(SHORT_KEY | Qt::Key_C));
@@ -247,24 +247,24 @@ void PIVXGUI::connectActions()
         settingsWidget->showDebugConsole();
         goToSettings();
     });
-    connect(topBar, &TopBar::showHide, this, &PIVXGUI::showHide);
-    connect(topBar, &TopBar::themeChanged, this, &PIVXGUI::changeTheme);
+    connect(topBar, &TopBar::showHide, this, &OrganicLifeGUI::showHide);
+    connect(topBar, &TopBar::themeChanged, this, &OrganicLifeGUI::changeTheme);
     connect(topBar, &TopBar::onShowHideColdStakingChanged, navMenu, &NavMenuWidget::onShowHideColdStakingChanged);
-    connect(settingsWidget, &SettingsWidget::showHide, this, &PIVXGUI::showHide);
-    connect(sendWidget, &SendWidget::showHide, this, &PIVXGUI::showHide);
-    connect(receiveWidget, &ReceiveWidget::showHide, this, &PIVXGUI::showHide);
-    connect(addressesWidget, &AddressesWidget::showHide, this, &PIVXGUI::showHide);
-    connect(masterNodesWidget, &MasterNodesWidget::showHide, this, &PIVXGUI::showHide);
-    connect(masterNodesWidget, &MasterNodesWidget::execDialog, this, &PIVXGUI::execDialog);
-    connect(coldStakingWidget, &ColdStakingWidget::showHide, this, &PIVXGUI::showHide);
-    connect(coldStakingWidget, &ColdStakingWidget::execDialog, this, &PIVXGUI::execDialog);
-    connect(governancewidget, &GovernanceWidget::showHide, this, &PIVXGUI::showHide);
-    connect(governancewidget, &GovernanceWidget::execDialog, this, &PIVXGUI::execDialog);
-    connect(settingsWidget, &SettingsWidget::execDialog, this, &PIVXGUI::execDialog);
+    connect(settingsWidget, &SettingsWidget::showHide, this, &OrganicLifeGUI::showHide);
+    connect(sendWidget, &SendWidget::showHide, this, &OrganicLifeGUI::showHide);
+    connect(receiveWidget, &ReceiveWidget::showHide, this, &OrganicLifeGUI::showHide);
+    connect(addressesWidget, &AddressesWidget::showHide, this, &OrganicLifeGUI::showHide);
+    connect(masterNodesWidget, &MasterNodesWidget::showHide, this, &OrganicLifeGUI::showHide);
+    connect(masterNodesWidget, &MasterNodesWidget::execDialog, this, &OrganicLifeGUI::execDialog);
+    connect(coldStakingWidget, &ColdStakingWidget::showHide, this, &OrganicLifeGUI::showHide);
+    connect(coldStakingWidget, &ColdStakingWidget::execDialog, this, &OrganicLifeGUI::execDialog);
+    connect(governancewidget, &GovernanceWidget::showHide, this, &OrganicLifeGUI::showHide);
+    connect(governancewidget, &GovernanceWidget::execDialog, this, &OrganicLifeGUI::execDialog);
+    connect(settingsWidget, &SettingsWidget::execDialog, this, &OrganicLifeGUI::execDialog);
 }
 
 
-void PIVXGUI::createTrayIcon(const NetworkStyle* networkStyle)
+void OrganicLifeGUI::createTrayIcon(const NetworkStyle* networkStyle)
 {
 #ifndef Q_OS_MAC
     trayIcon = new QSystemTrayIcon(this);
@@ -278,7 +278,7 @@ void PIVXGUI::createTrayIcon(const NetworkStyle* networkStyle)
     notificator = new Notificator(QApplication::applicationName(), trayIcon, this);
 }
 
-PIVXGUI::~PIVXGUI()
+OrganicLifeGUI::~OrganicLifeGUI()
 {
     // Unsubscribe from notifications from core
     unsubscribeFromCoreSignals();
@@ -293,14 +293,14 @@ PIVXGUI::~PIVXGUI()
 
 
 /** Get restart command-line parameters and request restart */
-void PIVXGUI::handleRestart(QStringList args)
+void OrganicLifeGUI::handleRestart(QStringList args)
 {
     if (!ShutdownRequested())
         Q_EMIT requestedRestart(args);
 }
 
 
-void PIVXGUI::setClientModel(ClientModel* _clientModel)
+void OrganicLifeGUI::setClientModel(ClientModel* _clientModel)
 {
     m_isShuttingDown = (_clientModel == nullptr);
     this->clientModel = _clientModel;
@@ -317,7 +317,7 @@ void PIVXGUI::setClientModel(ClientModel* _clientModel)
         governancewidget->setClientModel(clientModel);
 
         // Receive and report messages from client model
-        connect(clientModel, &ClientModel::message, this, &PIVXGUI::message);
+        connect(clientModel, &ClientModel::message, this, &OrganicLifeGUI::message);
         connect(clientModel, &ClientModel::showProgress, topBar, &TopBar::setSyncProgress);
         connect(clientModel, &ClientModel::alertsChanged, [this](const QString& _alertStr) {
             message(tr("Alert!"), _alertStr, CClientUIInterface::MSG_WARNING);
@@ -346,7 +346,7 @@ void PIVXGUI::setClientModel(ClientModel* _clientModel)
     }
 }
 
-void PIVXGUI::createTrayIconMenu()
+void OrganicLifeGUI::createTrayIconMenu()
 {
 #ifndef Q_OS_MAC
     // return if trayIcon is unset (only on non-macOSes)
@@ -356,11 +356,11 @@ void PIVXGUI::createTrayIconMenu()
     trayIconMenu = new QMenu(this);
     trayIcon->setContextMenu(trayIconMenu);
 
-    connect(trayIcon, &QSystemTrayIcon::activated, this, &PIVXGUI::trayIconActivated);
+    connect(trayIcon, &QSystemTrayIcon::activated, this, &OrganicLifeGUI::trayIconActivated);
 #else
     // Note: On macOS, the Dock icon is used to provide the tray's functionality.
     MacDockIconHandler* dockIconHandler = MacDockIconHandler::instance();
-    connect(dockIconHandler, &MacDockIconHandler::dockIconClicked, this, &PIVXGUI::macosDockIconActivated);
+    connect(dockIconHandler, &MacDockIconHandler::dockIconClicked, this, &OrganicLifeGUI::macosDockIconActivated);
 
     trayIconMenu = new QMenu(this);
     trayIconMenu->setAsDockMenu();
@@ -377,7 +377,7 @@ void PIVXGUI::createTrayIconMenu()
 }
 
 #ifndef Q_OS_MAC
-void PIVXGUI::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
+void OrganicLifeGUI::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
 {
     if (reason == QSystemTrayIcon::Trigger) {
         // Click on system tray icon triggers show/hide of the main window
@@ -385,7 +385,7 @@ void PIVXGUI::trayIconActivated(QSystemTrayIcon::ActivationReason reason)
     }
 }
 #else
-void PIVXGUI::macosDockIconActivated()
+void OrganicLifeGUI::macosDockIconActivated()
  {
      if (m_isShuttingDown || ShutdownRequested()) {
          ShutdownWindow::raiseShutdownWindow();
@@ -396,7 +396,7 @@ void PIVXGUI::macosDockIconActivated()
  }
 #endif
 
-void PIVXGUI::changeEvent(QEvent* e)
+void OrganicLifeGUI::changeEvent(QEvent* e)
 {
     QMainWindow::changeEvent(e);
 #ifndef Q_OS_MAC // Ignored on Mac
@@ -404,10 +404,10 @@ void PIVXGUI::changeEvent(QEvent* e)
         if (clientModel && clientModel->getOptionsModel() && clientModel->getOptionsModel()->getMinimizeToTray()) {
             QWindowStateChangeEvent* wsevt = static_cast<QWindowStateChangeEvent*>(e);
             if (!(wsevt->oldState() & Qt::WindowMinimized) && isMinimized()) {
-                QTimer::singleShot(0, this, &PIVXGUI::hide);
+                QTimer::singleShot(0, this, &OrganicLifeGUI::hide);
                 e->ignore();
             } else if ((wsevt->oldState() & Qt::WindowMinimized) && !isMinimized()) {
-                QTimer::singleShot(0, this, &PIVXGUI::show);
+                QTimer::singleShot(0, this, &OrganicLifeGUI::show);
                 e->ignore();
             }
         }
@@ -415,7 +415,7 @@ void PIVXGUI::changeEvent(QEvent* e)
 #endif
 }
 
-void PIVXGUI::closeEvent(QCloseEvent* event)
+void OrganicLifeGUI::closeEvent(QCloseEvent* event)
 {
 #ifndef Q_OS_MAC // Ignored on Mac
     if (clientModel && clientModel->getOptionsModel()) {
@@ -432,7 +432,7 @@ void PIVXGUI::closeEvent(QCloseEvent* event)
 }
 
 
-void PIVXGUI::messageInfo(const QString& text)
+void OrganicLifeGUI::messageInfo(const QString& text)
 {
     if (!this->snackBar) this->snackBar = new SnackBar(this, this);
     this->snackBar->setText(text);
@@ -441,7 +441,7 @@ void PIVXGUI::messageInfo(const QString& text)
 }
 
 
-void PIVXGUI::message(const QString& title, const QString& message, unsigned int style, bool* ret)
+void OrganicLifeGUI::message(const QString& title, const QString& message, unsigned int style, bool* ret)
 {
     QString strTitle = QApplication::organizationName();
     if (strTitle.isEmpty()) strTitle = QString{PACKAGE_NAME}; // default title
@@ -494,14 +494,14 @@ void PIVXGUI::message(const QString& title, const QString& message, unsigned int
     } else if (style & CClientUIInterface::MSG_INFORMATION_SNACK) {
         messageInfo(message);
     } else {
-        // Append message type to "CTEAM - "
+        // Append message type to "OrganicLife - "
         if (!msgType.isEmpty())
             strTitle += " - " + msgType;
         notificator->notify(static_cast<Notificator::Class>(nNotifyIcon), strTitle, message);
     }
 }
 
-bool PIVXGUI::openStandardDialog(QString title, QString body, QString okBtn, QString cancelBtn)
+bool OrganicLifeGUI::openStandardDialog(QString title, QString body, QString okBtn, QString cancelBtn)
 {
     DefaultDialog *dialog;
     if (isVisible()) {
@@ -524,7 +524,7 @@ bool PIVXGUI::openStandardDialog(QString title, QString body, QString okBtn, QSt
 }
 
 
-void PIVXGUI::showNormalIfMinimized(bool fToggleHidden)
+void OrganicLifeGUI::showNormalIfMinimized(bool fToggleHidden)
 {
     if (!clientModel)
         return;
@@ -535,12 +535,12 @@ void PIVXGUI::showNormalIfMinimized(bool fToggleHidden)
     }
 }
 
-void PIVXGUI::toggleHidden()
+void OrganicLifeGUI::toggleHidden()
 {
     showNormalIfMinimized(true);
 }
 
-void PIVXGUI::detectShutdown()
+void OrganicLifeGUI::detectShutdown()
 {
     if (ShutdownRequested()) {
         if (rpcConsole)
@@ -553,7 +553,7 @@ void PIVXGUI::detectShutdown()
     }
 }
 
-void PIVXGUI::goToDashboard()
+void OrganicLifeGUI::goToDashboard()
 {
     if (stackedContainer->currentWidget() != dashboard) {
         stackedContainer->setCurrentWidget(dashboard);
@@ -562,54 +562,54 @@ void PIVXGUI::goToDashboard()
     }
 }
 
-void PIVXGUI::goToSend()
+void OrganicLifeGUI::goToSend()
 {
     showTop(sendWidget);
 }
 
-void PIVXGUI::goToAddresses()
+void OrganicLifeGUI::goToAddresses()
 {
     showTop(addressesWidget);
 }
 
-void PIVXGUI::goToMasterNodes()
+void OrganicLifeGUI::goToMasterNodes()
 {
     masterNodesWidget->resetCoinControl();
     showTop(masterNodesWidget);
 }
 
-void PIVXGUI::goToColdStaking()
+void OrganicLifeGUI::goToColdStaking()
 {
     showTop(coldStakingWidget);
 }
 
-void PIVXGUI::goToGovernance()
+void OrganicLifeGUI::goToGovernance()
 {
     showTop(governancewidget);
 }
 
-void PIVXGUI::goToSettings(){
+void OrganicLifeGUI::goToSettings(){
     showTop(settingsWidget);
 }
 
-void PIVXGUI::goToSettingsInfo()
+void OrganicLifeGUI::goToSettingsInfo()
 {
     navMenu->selectSettings();
     settingsWidget->showInformation();
     goToSettings();
 }
 
-void PIVXGUI::goToReceive()
+void OrganicLifeGUI::goToReceive()
 {
     showTop(receiveWidget);
 }
 
-void PIVXGUI::openNetworkMonitor()
+void OrganicLifeGUI::openNetworkMonitor()
 {
     settingsWidget->openNetworkMonitor();
 }
 
-void PIVXGUI::showTop(QWidget* view)
+void OrganicLifeGUI::showTop(QWidget* view)
 {
     if (stackedContainer->currentWidget() != view) {
         stackedContainer->setCurrentWidget(view);
@@ -618,7 +618,7 @@ void PIVXGUI::showTop(QWidget* view)
     }
 }
 
-void PIVXGUI::changeTheme(bool isLightTheme)
+void OrganicLifeGUI::changeTheme(bool isLightTheme)
 {
 
     QString css = GUIUtil::loadStyleSheet();
@@ -633,7 +633,7 @@ void PIVXGUI::changeTheme(bool isLightTheme)
     updateStyle(this);
 }
 
-void PIVXGUI::resizeEvent(QResizeEvent* event)
+void OrganicLifeGUI::resizeEvent(QResizeEvent* event)
 {
     // Parent..
     QMainWindow::resizeEvent(event);
@@ -644,7 +644,7 @@ void PIVXGUI::resizeEvent(QResizeEvent* event)
     Q_EMIT windowResizeEvent(event);
 }
 
-void PIVXGUI::updateContentCornerArc()
+void OrganicLifeGUI::updateContentCornerArc()
 {
     if (!contentCornerArc || !stackedContainer || !contentCornerArc->parentWidget()) return;
     const QPoint topLeft = stackedContainer->mapTo(contentCornerArc->parentWidget(), QPoint(0, 0));
@@ -652,19 +652,19 @@ void PIVXGUI::updateContentCornerArc()
     contentCornerArc->raise();
 }
 
-void PIVXGUI::updateContentCornerArcStyle()
+void OrganicLifeGUI::updateContentCornerArcStyle()
 {
     if (!contentCornerArc) return;
     const QColor arcColor = isLightTheme() ? QColor("#FFF4E8") : QColor("#170D0A");
     contentCornerArc->setFillColor(arcColor);
 }
 
-bool PIVXGUI::execDialog(QDialog *dialog, int xDiv, int yDiv)
+bool OrganicLifeGUI::execDialog(QDialog *dialog, int xDiv, int yDiv)
 {
     return openDialogWithOpaqueBackgroundY(dialog, this);
 }
 
-void PIVXGUI::showHide(bool show)
+void OrganicLifeGUI::showHide(bool show)
 {
     if (!op) {
         op = new QLabel(this);
@@ -695,12 +695,12 @@ void PIVXGUI::showHide(bool show)
     }
 }
 
-int PIVXGUI::getNavWidth()
+int OrganicLifeGUI::getNavWidth()
 {
     return this->navMenu->width();
 }
 
-void PIVXGUI::openFAQ(SettingsFaqWidget::Section section)
+void OrganicLifeGUI::openFAQ(SettingsFaqWidget::Section section)
 {
     showHide(true);
     SettingsFaqWidget* dialog = new SettingsFaqWidget(this, mnModel);
@@ -711,12 +711,12 @@ void PIVXGUI::openFAQ(SettingsFaqWidget::Section section)
 
 
 #ifdef ENABLE_WALLET
-QString PIVXGUI::walletSettingsId(const QString& name)
+QString OrganicLifeGUI::walletSettingsId(const QString& name)
 {
     return name.isEmpty() ? QStringLiteral("__primary__") : name;
 }
 
-void PIVXGUI::applyWalletMetadata(const QString& name, WalletModel* walletModel)
+void OrganicLifeGUI::applyWalletMetadata(const QString& name, WalletModel* walletModel)
 {
     if (!walletModel) {
         return;
@@ -726,7 +726,7 @@ void PIVXGUI::applyWalletMetadata(const QString& name, WalletModel* walletModel)
     walletModel->setProperty("walletPrimary", isPrimaryWallet(name));
 }
 
-void PIVXGUI::refreshWalletMetadata()
+void OrganicLifeGUI::refreshWalletMetadata()
 {
     for (const auto& [name, walletModel] : walletStack) {
         if (!walletModel.isNull()) {
@@ -739,14 +739,14 @@ void PIVXGUI::refreshWalletMetadata()
     }
 }
 
-void PIVXGUI::setGovModel(GovernanceModel* govModel)
+void OrganicLifeGUI::setGovModel(GovernanceModel* govModel)
 {
     if (!stackedContainer || !clientModel) return;
     this->govModel = govModel;
     governancewidget->setGovModel(govModel);
 }
 
-void PIVXGUI::setMNModel(MNModel* _mnModel)
+void OrganicLifeGUI::setMNModel(MNModel* _mnModel)
 {
     if (!stackedContainer || !clientModel) return;
     mnModel = _mnModel;
@@ -754,7 +754,7 @@ void PIVXGUI::setMNModel(MNModel* _mnModel)
     masterNodesWidget->setMNModel(mnModel);
 }
 
-bool PIVXGUI::addWallet(const QString& name, WalletModel* walletModel)
+bool OrganicLifeGUI::addWallet(const QString& name, WalletModel* walletModel)
 {
     if (!stackedContainer || !clientModel || !walletModel)
         return false;
@@ -763,22 +763,22 @@ bool PIVXGUI::addWallet(const QString& name, WalletModel* walletModel)
     applyWalletMetadata(name, walletModel);
 
     if (!walletUiSignalsConnected) {
-        connect(masterNodesWidget, &MasterNodesWidget::message, this, &PIVXGUI::message);
-        connect(coldStakingWidget, &ColdStakingWidget::message, this, &PIVXGUI::message);
-        connect(topBar, &TopBar::message, this, &PIVXGUI::message);
-        connect(sendWidget, &SendWidget::message,this, &PIVXGUI::message);
-        connect(receiveWidget, &ReceiveWidget::message,this, &PIVXGUI::message);
-        connect(addressesWidget, &AddressesWidget::message,this, &PIVXGUI::message);
-        connect(governancewidget, &GovernanceWidget::message,this, &PIVXGUI::message);
-        connect(settingsWidget, &SettingsWidget::message, this, &PIVXGUI::message);
-        connect(dashboard, &DashboardWidget::incomingTransaction, this, &PIVXGUI::incomingTransaction);
+        connect(masterNodesWidget, &MasterNodesWidget::message, this, &OrganicLifeGUI::message);
+        connect(coldStakingWidget, &ColdStakingWidget::message, this, &OrganicLifeGUI::message);
+        connect(topBar, &TopBar::message, this, &OrganicLifeGUI::message);
+        connect(sendWidget, &SendWidget::message,this, &OrganicLifeGUI::message);
+        connect(receiveWidget, &ReceiveWidget::message,this, &OrganicLifeGUI::message);
+        connect(addressesWidget, &AddressesWidget::message,this, &OrganicLifeGUI::message);
+        connect(governancewidget, &GovernanceWidget::message,this, &OrganicLifeGUI::message);
+        connect(settingsWidget, &SettingsWidget::message, this, &OrganicLifeGUI::message);
+        connect(dashboard, &DashboardWidget::incomingTransaction, this, &OrganicLifeGUI::incomingTransaction);
         walletUiSignalsConnected = true;
     }
 
     return true;
 }
 
-bool PIVXGUI::setCurrentWallet(const QString& name)
+bool OrganicLifeGUI::setCurrentWallet(const QString& name)
 {
     if (!stackedContainer || !clientModel)
         return false;
@@ -806,14 +806,14 @@ bool PIVXGUI::setCurrentWallet(const QString& name)
 
     if (walletMessageConnection) disconnect(walletMessageConnection);
     if (walletProgressConnection) disconnect(walletProgressConnection);
-    walletMessageConnection = connect(walletModel, &WalletModel::message, this, &PIVXGUI::message);
+    walletMessageConnection = connect(walletModel, &WalletModel::message, this, &OrganicLifeGUI::message);
     walletProgressConnection = connect(walletModel, &WalletModel::showProgress, topBar, &TopBar::setSyncProgress);
 
     walletModel->emitBalanceChanged();
     return true;
 }
 
-WalletModel* PIVXGUI::removeWallet(const QString& name)
+WalletModel* OrganicLifeGUI::removeWallet(const QString& name)
 {
     const auto it = walletStack.find(name);
     if (it == walletStack.end()) {
@@ -848,7 +848,7 @@ WalletModel* PIVXGUI::removeWallet(const QString& name)
     return walletModel;
 }
 
-void PIVXGUI::removeAllWallets()
+void OrganicLifeGUI::removeAllWallets()
 {
     if (walletMessageConnection) disconnect(walletMessageConnection);
     if (walletProgressConnection) disconnect(walletProgressConnection);
@@ -871,7 +871,7 @@ void PIVXGUI::removeAllWallets()
     if (rpcConsole) rpcConsole->setWalletModel(nullptr);
 }
 
-QStringList PIVXGUI::getWalletNames() const
+QStringList OrganicLifeGUI::getWalletNames() const
 {
     QStringList names;
     for (const auto& [name, walletModel] : walletStack) {
@@ -882,23 +882,23 @@ QStringList PIVXGUI::getWalletNames() const
     return names;
 }
 
-QString PIVXGUI::currentWalletName() const
+QString OrganicLifeGUI::currentWalletName() const
 {
     return currentWallet;
 }
 
-WalletModel* PIVXGUI::getWallet(const QString& name) const
+WalletModel* OrganicLifeGUI::getWallet(const QString& name) const
 {
     const auto it = walletStack.find(name);
     return (it == walletStack.end() || it->second.isNull()) ? nullptr : it->second.data();
 }
 
-WalletModel* PIVXGUI::currentWalletModel() const
+WalletModel* OrganicLifeGUI::currentWalletModel() const
 {
     return getWallet(currentWallet);
 }
 
-QString PIVXGUI::walletDisplayName(const QString& name) const
+QString OrganicLifeGUI::walletDisplayName(const QString& name) const
 {
     QSettings settings;
     const QString displayNameKey = QStringLiteral("walletMetadata/displayName/%1").arg(walletSettingsId(name));
@@ -909,7 +909,7 @@ QString PIVXGUI::walletDisplayName(const QString& name) const
     return name.isEmpty() ? tr("Primary") : name;
 }
 
-void PIVXGUI::setWalletDisplayName(const QString& name, const QString& displayName)
+void OrganicLifeGUI::setWalletDisplayName(const QString& name, const QString& displayName)
 {
     QSettings settings;
     const QString displayNameKey = QStringLiteral("walletMetadata/displayName/%1").arg(walletSettingsId(name));
@@ -922,7 +922,7 @@ void PIVXGUI::setWalletDisplayName(const QString& name, const QString& displayNa
     refreshWalletMetadata();
 }
 
-QString PIVXGUI::primaryWalletName() const
+QString OrganicLifeGUI::primaryWalletName() const
 {
     QSettings settings;
     if (settings.contains(QStringLiteral("walletMetadata/primaryWallet"))) {
@@ -931,7 +931,7 @@ QString PIVXGUI::primaryWalletName() const
     return QString();
 }
 
-bool PIVXGUI::isPrimaryWallet(const QString& name) const
+bool OrganicLifeGUI::isPrimaryWallet(const QString& name) const
 {
     QSettings settings;
     if (settings.contains(QStringLiteral("walletMetadata/primaryWallet"))) {
@@ -940,20 +940,20 @@ bool PIVXGUI::isPrimaryWallet(const QString& name) const
     return name.isEmpty();
 }
 
-void PIVXGUI::setPrimaryWalletName(const QString& name)
+void OrganicLifeGUI::setPrimaryWalletName(const QString& name)
 {
     QSettings settings;
     settings.setValue(QStringLiteral("walletMetadata/primaryWallet"), name);
     refreshWalletMetadata();
 }
 
-QStringList PIVXGUI::autoloadWalletNames() const
+QStringList OrganicLifeGUI::autoloadWalletNames() const
 {
     QSettings settings;
     return settings.value(QStringLiteral("walletMetadata/autoloadWallets")).toStringList();
 }
 
-void PIVXGUI::addAutoloadWalletName(const QString& walletName)
+void OrganicLifeGUI::addAutoloadWalletName(const QString& walletName)
 {
     const QString trimmedWalletName = walletName.trimmed();
     if (trimmedWalletName.isEmpty()) {
@@ -965,7 +965,7 @@ void PIVXGUI::addAutoloadWalletName(const QString& walletName)
     persistAutoloadWalletNames(walletNames);
 }
 
-void PIVXGUI::removeAutoloadWalletName(const QString& walletName)
+void OrganicLifeGUI::removeAutoloadWalletName(const QString& walletName)
 {
     const QString trimmedWalletName = walletName.trimmed();
     if (trimmedWalletName.isEmpty()) {
@@ -977,7 +977,7 @@ void PIVXGUI::removeAutoloadWalletName(const QString& walletName)
     persistAutoloadWalletNames(walletNames);
 }
 
-void PIVXGUI::persistAutoloadWalletNames(const QStringList& walletNames)
+void OrganicLifeGUI::persistAutoloadWalletNames(const QStringList& walletNames)
 {
     QStringList dedupedWallets;
     for (const QString& walletName : walletNames) {
@@ -993,7 +993,7 @@ void PIVXGUI::persistAutoloadWalletNames(const QStringList& walletNames)
     settings.setValue(QStringLiteral("walletMetadata/autoloadWallets"), dedupedWallets);
 }
 
-void PIVXGUI::incomingTransaction(const QString& date, int unit, const CAmount& amount, const QString& type, const QString& address)
+void OrganicLifeGUI::incomingTransaction(const QString& date, int unit, const CAmount& amount, const QString& type, const QString& address)
 {
     // Only send notifications when not disabled
     if (!bdisableSystemnotifications) {
@@ -1014,7 +1014,7 @@ void PIVXGUI::incomingTransaction(const QString& date, int unit, const CAmount& 
 #endif // ENABLE_WALLET
 
 
-static bool ThreadSafeMessageBox(PIVXGUI* gui, const std::string& message, const std::string& caption, unsigned int style)
+static bool ThreadSafeMessageBox(OrganicLifeGUI* gui, const std::string& message, const std::string& caption, unsigned int style)
 {
     bool modal = (style & CClientUIInterface::MODAL);
     // The SECURE flag has no effect in the Qt GUI.
@@ -1033,13 +1033,13 @@ static bool ThreadSafeMessageBox(PIVXGUI* gui, const std::string& message, const
 }
 
 
-void PIVXGUI::subscribeToCoreSignals()
+void OrganicLifeGUI::subscribeToCoreSignals()
 {
     // Connect signals to client
     m_handler_message_box = interfaces::MakeHandler(uiInterface.ThreadSafeMessageBox.connect(std::bind(ThreadSafeMessageBox, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3)));
 }
 
-void PIVXGUI::unsubscribeFromCoreSignals()
+void OrganicLifeGUI::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from client
     m_handler_message_box->disconnect();

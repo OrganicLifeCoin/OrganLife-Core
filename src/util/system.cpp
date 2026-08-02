@@ -2,7 +2,7 @@
 // Copyright (c) 2009-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -80,11 +80,11 @@
 #include <mach-o/dyld.h>
 #endif
 
-const char * const PIVX_CONF_FILENAME = "CTEAM.conf";
+const char * const PIVX_CONF_FILENAME = "organiclifecoin.conf";
 const char * const PIVX_MASTERNODE_CONF_FILENAME = "masternode.conf";
 
 
-// CTEAM only features
+// OrganicLife only features
 // Masternode
 std::atomic<bool> fMasterNode{false};
 
@@ -232,7 +232,7 @@ public:
         std::pair<bool,std::string> found_result(false, std::string());
 
         // We pass "true" to GetArgHelper in order to return the last
-        // argument value seen from the command line (so "pivxd -foo=bar
+        // argument value seen from the command line (so "organiclifed -foo=bar
         // -foo=baz" gives GetArg(am,"foo")=={true,"baz"}
         found_result = GetArgHelper(am.m_override_args, arg, true);
         if (found_result.first) {
@@ -515,7 +515,7 @@ static std::string FormatException(const std::exception* pex, const char* pszThr
     char pszModule[MAX_PATH] = "";
     GetModuleFileNameA(nullptr, pszModule, sizeof(pszModule));
 #else
-    const char* pszModule = "pivx";
+    const char* pszModule = "organiclife";
 #endif
     if (pex)
         return strprintf(
@@ -534,13 +534,13 @@ void PrintExceptionContinue(const std::exception* pex, const char* pszThread)
 
 fs::path GetDefaultDataDir()
 {
-// Windows < Vista: C:\Documents and Settings\Username\Application Data\CTEAM
-// Windows >= Vista: C:\Users\Username\AppData\Roaming\CTEAM
-// Mac: ~/Library/Application Support/CTEAM
-// Unix: ~/.pivx
+// Windows < Vista: C:\Documents and Settings\Username\Application Data\OrganicLife
+// Windows >= Vista: C:\Users\Username\AppData\Roaming\OrganicLife
+// Mac: ~/Library/Application Support/OrganicLife
+// Unix: ~/.organiclifecoin
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "CTEAM";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "OrganicLife";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -552,10 +552,10 @@ fs::path GetDefaultDataDir()
     // Mac
     pathRet /= "Library/Application Support";
     TryCreateDirectories(pathRet);
-    return pathRet / "CTEAM";
+    return pathRet / "OrganicLife";
 #else
     // Unix
-    return pathRet / ".CTEAM";
+    return pathRet / ".organiclifecoin";
 #endif
 #endif
 }
@@ -617,13 +617,13 @@ static bool CopyFileIfMissing(const fs::path& src, const fs::path& dst)
 static fs::path ZC_GetBaseParamsDir()
 {
     // Copied from GetDefaultDataDir and adapter for zcash params.
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\PIVXParams
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\PIVXParams
-    // Mac: ~/Library/Application Support/PIVXParams
-    // Unix: ~/.pivx-params
+    // Windows < Vista: C:\Documents and Settings\Username\Application Data\OrganicLifeParams
+    // Windows >= Vista: C:\Users\Username\AppData\Roaming\OrganicLifeParams
+    // Mac: ~/Library/Application Support/OrganicLifeParams
+    // Unix: ~/.organiclifecoin-params
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "CTEAMParams";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "OrganicLifeParams";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -635,10 +635,10 @@ static fs::path ZC_GetBaseParamsDir()
     // Mac
     pathRet /= "Library/Application Support";
     TryCreateDirectories(pathRet);
-    return pathRet / "CTEAMParams";
+    return pathRet / "OrganicLifeParams";
 #else
     // Unix
-    return pathRet / ".CTEAM-params";
+    return pathRet / ".organiclifecoin-params";
 #endif
 #endif
 }
@@ -923,7 +923,7 @@ void ArgsManager::ReadConfigFile(const std::string& confPath)
                         "# Created because no config file was found.\n"
                         "#\n"
                         "# RPC credentials (rpcpassword was randomly generated):\n"
-                        "rpcuser=cteamrpc\n"
+                        "rpcuser=organicliferpc\n"
                         "rpcpassword=" << rpcpassword << "\n"
                         "rpcallowip=127.0.0.1\n"
                         "\n"

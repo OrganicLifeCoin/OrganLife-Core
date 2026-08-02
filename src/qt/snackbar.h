@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2020 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,7 +10,7 @@
 #include <QResizeEvent>
 #include <QTimer>
 
-class PIVXGUI;
+class OrganicLifeGUI;
 class QEvent;
 class QMouseEvent;
 
@@ -23,7 +23,7 @@ class SnackBar : public QDialog
     Q_OBJECT
 
 public:
-    explicit SnackBar(PIVXGUI* _window = nullptr, QWidget *parent = nullptr);
+    explicit SnackBar(OrganicLifeGUI* _window = nullptr, QWidget *parent = nullptr);
     ~SnackBar();
 
     virtual void showEvent(QShowEvent *event) override;
@@ -37,7 +37,7 @@ private Q_SLOTS:
     void windowResizeEvent(QResizeEvent* event);
 private:
     Ui::SnackBar *ui;
-    PIVXGUI* window = nullptr;
+    OrganicLifeGUI* window = nullptr;
     QTimer* hideTimer = nullptr;
     bool isHiding = false;
     int timeout;

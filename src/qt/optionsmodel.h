@@ -12,7 +12,7 @@
 #include <QAbstractListModel>
 #include <QSettings>
 
-/** Interface from Qt to configuration data structure for CTEAM client.
+/** Interface from Qt to configuration data structure for OrganicLife client.
    To Qt, the options are presented as a list with the different options
    laid out vertically.
    This can be changed to a tree once the settings become sufficiently

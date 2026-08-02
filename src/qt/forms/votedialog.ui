@@ -276,7 +276,7 @@
            </size>
           </property>
           <property name="text">
-           <string notr="true">CTEAM-MBD-Jan-2021</string>
+           <string notr="true">OrganicLife-MBD-Jan-2021</string>
           </property>
           <property name="alignment">
            <set>Qt::AlignCenter</set>
@@ -337,7 +337,7 @@
          <item>
           <widget class="QLabel" name="labelAmount">
            <property name="text">
-            <string notr="true">5,000 CTEAM</string>
+            <string notr="true">5,000 OLC</string>
            </property>
           </widget>
          </item>
@@ -510,7 +510,7 @@
               </size>
              </property>
              <property name="placeholderText">
-              <string>Amount in CTEAM</string>
+              <string>Amount in OrganicLife</string>
              </property>
             </widget>
            </item>
@@ -615,7 +615,7 @@
            <item>
             <widget class="QLabel" name="labelCoinProposalCapValue">
              <property name="text">
-              <string>0.00 CTEAM</string>
+              <string>0.00 OLC</string>
              </property>
             </widget>
            </item>
@@ -649,7 +649,7 @@
            <item>
             <widget class="QLabel" name="labelCoinLockableBalanceValue">
              <property name="text">
-              <string>0.00 CTEAM</string>
+              <string>0.00 OLC</string>
              </property>
             </widget>
            </item>

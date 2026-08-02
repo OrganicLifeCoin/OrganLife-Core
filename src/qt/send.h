@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -21,7 +21,7 @@
 
 static const int MAX_SEND_POPUP_ENTRIES = 8;
 
-class PIVXGUI;
+class OrganicLifeGUI;
 class ClientModel;
 class OperationResult;
 class WalletModel;
@@ -37,7 +37,7 @@ class SendWidget : public PWidget
     Q_OBJECT
 
 public:
-    explicit SendWidget(PIVXGUI* parent);
+    explicit SendWidget(OrganicLifeGUI* parent);
     ~SendWidget();
     static bool shouldRequirePeerConnections(bool hasClientModel, int peersCount);
     static bool shouldAutoAbandonFailedCommit(const WalletModel::SendCoinsReturn& sendStatus);

@@ -441,7 +441,7 @@ private:
 };
 
 //! Utility function to add all of a transaction's outputs to a cache.
-// CTEAM: When check is false, this assumes that overwrites are never possible due to BIP34 always in effect
+// OrganicLife: When check is false, this assumes that overwrites are never possible due to BIP34 always in effect
 // When check is true, the underlying view may be queried to determine whether an addition is
 // an overwrite.
 // When fSkipInvalid is true, the invalid_out list is checked before adding the coin.

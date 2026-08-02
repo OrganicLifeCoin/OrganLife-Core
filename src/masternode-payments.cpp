@@ -1,6 +1,6 @@
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -456,7 +456,7 @@ void CMasternodePayments::FillBlockPayee(CMutableTransaction& txCoinbase, CMutab
     const bool fPayCoinstake = fProofOfStake && !Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0);
     const bool fPayCoinbase = fProofOfStake && !fPayCoinstake;
 
-    // Starting from CTEAM v6.0 masternode and budgets are paid in the coinbase tx.
+    // Starting from OrganicLife v6.0 masternode and budgets are paid in the coinbase tx.
     // Keep a valid empty coinbase if there is no payee yet on a small or unsynced network.
     if (fPayCoinbase) txCoinbase.vout.clear();
 

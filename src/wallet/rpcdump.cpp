@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -260,7 +260,7 @@ UniValue importaddress(const JSONRPCRequest& request)
             std::vector<unsigned char> data(ParseHex(request.params[0].get_str()));
             ImportScript(pwallet, CScript(data.begin(), data.end()), strLabel, fP2SH);
         } else {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid CTEAM address or script");
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid OrganicLife address or script");
         }
     }
     if (fRescan) {
@@ -386,7 +386,7 @@ UniValue importwallet(const JSONRPCRequest& request)
                 continue;
 
             // Sapling keys
-            // Let's see if the address is a valid CTEAM spending key
+            // Let's see if the address is a valid OrganicLife spending key
             if (pwallet->HasSaplingSPKM()) {
                 libzcash::SpendingKey spendingkey = KeyIO::DecodeSpendingKey(vstr[0]);
                 int64_t nTime = DecodeDumpTime(vstr[1]);
@@ -485,7 +485,7 @@ UniValue dumpprivkey(const JSONRPCRequest& request)
     std::string strAddress = request.params[0].get_str();
     CTxDestination dest = DecodeDestination(strAddress);
     if (!IsValidDestination(dest))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid CTEAM address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid OrganicLife address");
     const CKeyID* keyID = boost::get<CKeyID>(&dest);
     if (!keyID)
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");
@@ -569,7 +569,7 @@ UniValue dumpwallet(const JSONRPCRequest& request)
 
     CBlockIndex* tip = chainActive.Tip();
     // produce output
-    file << strprintf("# Wallet dump created by CTEAM %s\n", CLIENT_BUILD);
+    file << strprintf("# Wallet dump created by OrganicLife %s\n", CLIENT_BUILD);
     file << strprintf("# * Created on %s\n", FormatISO8601DateTime(GetTime()));
     if (tip) {
         file << strprintf("# * Best block at time of backup was %i (%s),\n", tip->nHeight,
@@ -1100,7 +1100,7 @@ UniValue importmulti(const JSONRPCRequest& mainRequest)
                                                           "block from time %d, which is after or within %d seconds of key creation, and "
                                                           "could contain transactions pertaining to the key. As a result, transactions "
                                                           "and coins using this key may not appear in the wallet. This error could be "
-                                                          "caused by pruning or data corruption (see cteamd log for details) and could "
+                                                          "caused by pruning or data corruption (see organiclifed log for details) and could "
                                                           "be dealt with by downloading and rescanning the relevant blocks (see -reindex "
                                                           "and -rescan options).",
                                                           GetImportTimestamp(request, now), scannedTime - TIMESTAMP_WINDOW - 1, TIMESTAMP_WINDOW)));
@@ -1147,7 +1147,7 @@ UniValue bip38encrypt(const JSONRPCRequest& request)
 
     CTxDestination address = DecodeDestination(strAddress);
     if (!IsValidDestination(address))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid CTEAM address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid OrganicLife address");
     const CKeyID* keyID = boost::get<CKeyID>(&address);
     if (!keyID)
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");

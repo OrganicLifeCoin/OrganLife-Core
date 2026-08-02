@@ -1,9 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-  "name": "cteam",
+  "name": "organiclife",
   "version-string": "5.6.99",
-  "description": "CTEAM Core",
-  "homepage": "https://github.com/FreedomBuzz/CTEAM",
+  "description": "OrganicLife Core",
+  "homepage": "https://github.com/FreedomBuzz/OrganicLife",
   "license": "MIT",
   "supports": "linux | osx | windows",
   "builtin-baseline": "66c0373dc7fca549e5803087b9487edfe3aca0a1",
@@ -23,7 +23,7 @@
   "default-features": ["gui"],
   "features": {
     "gui": {
-      "description": "Build cteam-Qt GUI wallet",
+      "description": "Build organiclife-Qt GUI wallet",
       "dependencies": [
         "qtbase",
         "qttools",

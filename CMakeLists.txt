@@ -118,12 +118,12 @@ elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
         message(STATUS "Compiling on WSL")
         set(ENV{DISPLAY} ":0")
         set(ENV{LIBGL_ALWAYS_INDIRECT} 1)
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY /home/$ENV{USER}/cteam-run)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY /home/$ENV{USER}/organiclife-run)
         message(WARNING "WSL Runtime support requires VcXsrv to be installed and running")
     elseif(${_SYSTEM_VERSION_PARSED} MATCHES "microsoft")
         message(STATUS "Compiling on WSL2")
         message(STATUS "WSL2 Runtime support requires a WSLg compatible system")
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY /home/$ENV{USER}/cteam-run)
+        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY /home/$ENV{USER}/organiclife-run)
     else()
         message(STATUS "Compiling on Linux")
     endif()
@@ -689,13 +689,13 @@ link_directories(
 
 link_directories(${CMAKE_BINARY_DIR})
 
-set(pivx-cli_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/pivx-cli.cpp)
+set(organiclife-cli_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/organiclife-cli.cpp)
 if($ENV{target} MATCHES "Windows")
-    list(APPEND pivx-cli_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/pivx-cli-res.rc)
+    list(APPEND organiclife-cli_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/organiclife-cli-res.rc)
 endif()
-add_executable(cteam-cli ${pivx-cli_SOURCES})
-add_dependencies(cteam-cli libunivalue libzcashrust bls)
-target_link_libraries(cteam-cli
+add_executable(organiclife-cli ${organiclife-cli_SOURCES})
+add_dependencies(organiclife-cli libunivalue libzcashrust bls)
+target_link_libraries(organiclife-cli
         CLI_A
         univalue
         UTIL_A
@@ -706,19 +706,19 @@ target_link_libraries(cteam-cli
         ${Boost_LIBRARIES} ${LIBEVENT_LIB} ${sodium_LIBRARY_RELEASE} -ldl pthread
         )
 if($ENV{target} MATCHES "Windows")
-    target_link_libraries(cteam-cli ${WINDOWS_LDADD})
+    target_link_libraries(organiclife-cli ${WINDOWS_LDADD})
 endif()
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    target_link_libraries(cteam-cli "-framework Cocoa")
+    target_link_libraries(organiclife-cli "-framework Cocoa")
 endif()
 
-set(pivx-tx_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/pivx-tx.cpp)
+set(organiclife-tx_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/organiclife-tx.cpp)
 if($ENV{target} MATCHES "Windows")
-    list(APPEND pivx-tx_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/pivx-tx-res.rc)
+    list(APPEND organiclife-tx_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/organiclife-tx-res.rc)
 endif()
-add_executable(cteam-tx ${pivx-tx_SOURCES})
-add_dependencies(cteam-tx libunivalue libsecp256k1 libzcashrust bls)
-target_link_libraries(cteam-tx
+add_executable(organiclife-tx ${organiclife-tx_SOURCES})
+add_dependencies(organiclife-tx libunivalue libsecp256k1 libzcashrust bls)
+target_link_libraries(organiclife-tx
         univalue
         COMMON_A
         ZEROCOIN_A
@@ -731,25 +731,25 @@ target_link_libraries(cteam-tx
         ${Boost_LIBRARIES} ${LIBEVENT_LIB} ${sodium_LIBRARY_RELEASE} ${GMP_LIBRARY} -ldl pthread
         )
 if($ENV{target} MATCHES "Windows")
-    target_link_libraries(cteam-tx ${WINDOWS_LDADD})
+    target_link_libraries(organiclife-tx ${WINDOWS_LDADD})
 endif()
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    target_link_libraries(cteam-tx "-framework Cocoa")
+    target_link_libraries(organiclife-tx "-framework Cocoa")
 endif()
 
-set(pivxd_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/pivxd.cpp)
+set(organiclifed_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/organiclifed.cpp)
 if($ENV{target} MATCHES "Windows")
-    list(APPEND pivxd_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/pivxd-res.rc)
+    list(APPEND organiclifed_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/organiclifed-res.rc)
 endif()
-add_executable(cteamd ${pivxd_SOURCES} ${BitcoinHeaders})
-add_dependencies(cteamd libunivalue libsecp256k1 libzcashrust leveldb crc32c bls)
-target_include_directories(cteamd PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
+add_executable(organiclifed ${organiclifed_SOURCES} ${BitcoinHeaders})
+add_dependencies(organiclifed libunivalue libsecp256k1 libzcashrust leveldb crc32c bls)
+target_include_directories(organiclifed PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/leveldb
         ${CMAKE_CURRENT_SOURCE_DIR}/src/leveldb/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src/leveldb/helpers/memenv
         ${LIBEVENT_INCLUDE_DIR}
         ${GMP_INCLUDE_DIR})
-target_link_libraries(cteamd
+target_link_libraries(organiclifed
         pthread
         SERVER_A
         WALLET_A
@@ -768,27 +768,27 @@ target_link_libraries(cteamd
         )
 if($ENV{target} MATCHES "Windows")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wstack-protector -fstack-protector-all -fPIE -pipe -O2 -pthread -Wl,--dynamicbase -Wl,--nxcompat -Wl,--high-entropy-va -pie --static")
-    target_link_libraries(cteamd ${WINDOWS_LDADD})
+    target_link_libraries(organiclifed ${WINDOWS_LDADD})
 endif()
 if(ZMQ_FOUND)
-    target_link_libraries(cteamd ZMQ_A ${ZMQ_LIB})
-    target_include_directories(cteamd PUBLIC ${ZMQ_INCLUDE_DIR})
+    target_link_libraries(organiclifed ZMQ_A ${ZMQ_LIB})
+    target_include_directories(organiclifed PUBLIC ${ZMQ_INCLUDE_DIR})
 endif()
 if(MINIUPNP_FOUND)
-    target_compile_definitions(cteamd PUBLIC "-DSTATICLIB -DMINIUPNP_STATICLIB")
-    target_link_libraries(cteamd ${MINIUPNP_LIBRARY})
-    target_include_directories(cteamd PUBLIC ${MINIUPNP_INCLUDE_DIR})
+    target_compile_definitions(organiclifed PUBLIC "-DSTATICLIB -DMINIUPNP_STATICLIB")
+    target_link_libraries(organiclifed ${MINIUPNP_LIBRARY})
+    target_include_directories(organiclifed PUBLIC ${MINIUPNP_INCLUDE_DIR})
 endif()
 if(NAT-PMP_FOUND)
-    target_link_libraries(cteamd ${NAT-PMP_LIBRARY})
-    target_include_directories(cteamd PUBLIC ${NAT-PMP_INCLUDE_DIR})
+    target_link_libraries(organiclifed ${NAT-PMP_LIBRARY})
+    target_include_directories(organiclifed PUBLIC ${NAT-PMP_INCLUDE_DIR})
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    target_link_libraries(cteamd "-framework Cocoa")
+    target_link_libraries(organiclifed "-framework Cocoa")
 endif()
 
-target_link_libraries(cteamd ${sodium_LIBRARY_RELEASE} -ldl -lpthread)
+target_link_libraries(organiclifed ${sodium_LIBRARY_RELEASE} -ldl -lpthread)
 
 if(NOT DEFINED ENV{NO_QT})
   add_subdirectory(src/qt)

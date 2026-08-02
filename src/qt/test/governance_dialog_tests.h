@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -70,7 +70,7 @@ private Q_SLOTS:
     void voteDialogActionButtonsUseDedicatedModernClasses();
     void voteDialogBodyUsesModernPanelClasses();
     void voteDialogModernBodyCssExistsInBothThemes();
-    void voteDialogHeaderUsesCteamAccentToneInBothThemes();
+    void voteDialogHeaderUsesOrganicLifeAccentToneInBothThemes();
     void voteDialogCloseButtonUsesThemeAwareIconClass();
     void voteDialogHeaderTitleUsesThemeAwareReadableColor();
     void containerDialogHeaderTitleUsesReadableDarkThemeColor();

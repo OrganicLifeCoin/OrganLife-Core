@@ -1,7 +1,7 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit pivxd.service
+# $ systemctl edit organiclifed.service
 # See "man systemd.service" for details.
 
 # Note that almost all daemon options could be specified in
@@ -12,12 +12,12 @@ Description=PIVX daemon
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/pivxd -daemon -datadir=/var/lib/pivx -conf=/etc/pivx/pivx.conf -pid=/run/pivxd/pivxd.pid
-# Creates /run/pivxd owned by pivx
-RuntimeDirectory=pivxd
+ExecStart=/usr/bin/organiclifed -daemon -datadir=/var/lib/pivx -conf=/etc/pivx/pivx.conf -pid=/run/organiclifed/organiclifed.pid
+# Creates /run/organiclifed owned by pivx
+RuntimeDirectory=organiclifed
 User=pivx
 Type=forking
-PIDFile=/run/pivxd/pivxd.pid
+PIDFile=/run/organiclifed/organiclifed.pid
 Restart=on-failure
 
 # Hardening measures

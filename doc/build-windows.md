@@ -44,7 +44,7 @@ Build
 
 ```bash
 git clone <repository-url>
-cd CTEAM
+cd OrganicLife
 
 # Strip Windows PATH to avoid issues
 PATH=$(echo "$PATH" | sed -e 's/:\/mnt.*//g')
@@ -69,10 +69,10 @@ Output
 ------
 
 Windows executables in `src/`:
-- `src/cteamd.exe`
-- `src/cteam-cli.exe`
-- `src/cteam-tx.exe`
-- `src/qt/cteam-qt.exe`
+- `src/organiclifed.exe`
+- `src/organiclife-cli.exe`
+- `src/organiclife-tx.exe`
+- `src/qt/organiclife-qt.exe`
 
 Create Installer
 ----------------
@@ -81,13 +81,13 @@ Create Installer
 make deploy
 ```
 
-Creates `cteam-*-win64-setup.exe` in the root directory.
+Creates `organiclife-*-win64-setup.exe` in the root directory.
 
 Install to Windows Directory
 ----------------------------
 
 ```bash
-make install DESTDIR=/mnt/c/cteam
+make install DESTDIR=/mnt/c/organiclife
 ```
 
 Important Notes
@@ -146,7 +146,7 @@ pacman -S --needed git base-devel autoconf automake libtool make pkgconf \
 
 ```bash
 git clone <repository-url>
-cd CTEAM
+cd OrganicLife
 ./autogen.sh
 ./configure --with-gui=qt6
 make -j$(nproc)

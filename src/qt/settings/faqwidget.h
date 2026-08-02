@@ -8,7 +8,7 @@
 #include <QDialog>
 
 class MNModel;
-class PIVXGUI;
+class OrganicLifeGUI;
 
 namespace Ui {
 class SettingsFaqWidget;
@@ -27,7 +27,7 @@ public:
         MNCONTROLLER
     };
 
-    explicit SettingsFaqWidget(PIVXGUI* parent, MNModel* _model);
+    explicit SettingsFaqWidget(OrganicLifeGUI* parent, MNModel* _model);
     ~SettingsFaqWidget();
 
     void showEvent(QShowEvent *event) override;

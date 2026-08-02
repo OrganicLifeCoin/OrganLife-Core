@@ -1,5 +1,5 @@
 // Copyright (c) 2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
@@ -15,7 +15,7 @@ class QPushButton;
 
 class ContactsDropdown;
 class GovernanceModel;
-class PIVXGUI;
+class OrganicLifeGUI;
 class SnackBar;
 class WalletModel;
 
@@ -24,7 +24,7 @@ class CreateProposalDialog : public ContainerDialog
     Q_OBJECT
 
 public:
-    explicit CreateProposalDialog(PIVXGUI* parent, GovernanceModel* _govModel, WalletModel* _walletModel);
+    explicit CreateProposalDialog(OrganicLifeGUI* parent, GovernanceModel* _govModel, WalletModel* _walletModel);
     ~CreateProposalDialog() override;
 protected:
     void keyPressEvent(QKeyEvent* e) override;

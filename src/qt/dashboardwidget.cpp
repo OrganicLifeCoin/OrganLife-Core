@@ -1,5 +1,5 @@
 // Copyright (c) 2019-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -112,7 +112,7 @@ bool ToChartBucketMode(const ChartShowType type, ChartBucketMode& mode)
 }
 } // namespace
 
-DashboardWidget::DashboardWidget(PIVXGUI* parent) :
+DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     PWidget(parent),
     ui(new Ui::DashboardWidget)
 {
@@ -386,7 +386,7 @@ bool hasCharts = false;
     connect(ui->pushButtonMonth, &QPushButton::clicked, [this](){setChartShow(MONTH);});
     connect(ui->pushButtonAll, &QPushButton::clicked, [this](){setChartShow(ALL);});
     if (window)
-        connect(window, &PIVXGUI::windowResizeEvent, this, &DashboardWidget::windowResizeEvent);
+        connect(window, &OrganicLifeGUI::windowResizeEvent, this, &DashboardWidget::windowResizeEvent);
 #endif
 
     if (hasCharts) {

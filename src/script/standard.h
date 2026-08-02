@@ -67,7 +67,7 @@ public:
  *  * CKeyID: TX_PUBKEYHASH destination
  *  * CExchangeKeyID: CKeyID for exchange key
  *  * CScriptID: TX_SCRIPTHASH destination
- *  A CTxDestination is the internal data type encoded in a CTEAM address
+ *  A CTxDestination is the internal data type encoded in a OrganicLife address
  */
 typedef boost::variant<CNoDestination, CKeyID, CScriptID, CExchangeKeyID> CTxDestination;
 
@@ -110,7 +110,7 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet,
 bool ExtractDestinations(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<CTxDestination>& addressRet, int& nRequiredRet);
 
 /**
- * Generate a CTEAM scriptPubKey for the given CTxDestination. Returns a P2PKH
+ * Generate a OrganicLife scriptPubKey for the given CTxDestination. Returns a P2PKH
  * script for a CKeyID destination, a P2SH script for a CScriptID, and an empty
  * script for CNoDestination.
  */

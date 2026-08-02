@@ -27,13 +27,13 @@ Source1:	http://download.oracle.com/berkeley-db/db-%{bdbv}.NC.tar.gz
 Source10:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/contrib/debian/examples/pivx.conf
 
 #man pages
-Source20:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/doc/man/pivxd.1
-Source21:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/doc/man/pivx-cli.1
-Source22:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/doc/man/pivx-qt.1
+Source20:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/doc/man/organiclifed.1
+Source21:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/doc/man/organiclife-cli.1
+Source22:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/doc/man/organiclife-qt.1
 
 #selinux
 Source30:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/contrib/rpm/pivx.te
-# Source31 - what about pivx-tx and bench_pivx ???
+# Source31 - what about organiclife-tx and bench_pivx ???
 Source31:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/contrib/rpm/pivx.fc
 Source32:	https://raw.githubusercontent.com/pivx-project/pivx/v%{version}/contrib/rpm/pivx.if
 
@@ -141,8 +141,8 @@ Group:		Applications/System
 This package provides several command line utilities for interacting with a
 pivx-core daemon.
 
-The pivx-cli utility allows you to communicate and control a pivx daemon
-over RPC, the pivx-tx utility allows you to create a custom transaction, and
+The organiclife-cli utility allows you to communicate and control a pivx daemon
+over RPC, the organiclife-tx utility allows you to create a custom transaction, and
 the bench_pivx utility can be used to perform some benchmarks.
 
 This package contains utilities needed by the pivx-server package.
@@ -182,12 +182,12 @@ popd
 make install DESTDIR=%{buildroot}
 
 mkdir -p -m755 %{buildroot}%{_sbindir}
-mv %{buildroot}%{_bindir}/pivxd %{buildroot}%{_sbindir}/pivxd
+mv %{buildroot}%{_bindir}/organiclifed %{buildroot}%{_sbindir}/organiclifed
 
 # systemd stuff
 mkdir -p %{buildroot}%{_tmpfilesdir}
 cat <<EOF > %{buildroot}%{_tmpfilesdir}/pivx.conf
-d /run/pivxd 0750 pivx pivx -
+d /run/organiclifed 0750 pivx pivx -
 EOF
 touch -a -m -t 201504280000 %{buildroot}%{_tmpfilesdir}/pivx.conf
 
@@ -202,7 +202,7 @@ OPTIONS=""
 # Don't change these unless you know what you're doing.
 CONFIG_FILE="%{_sysconfdir}/pivx/pivx.conf"
 DATA_DIR="%{_localstatedir}/lib/pivx"
-PID_FILE="/run/pivxd/pivxd.pid"
+PID_FILE="/run/organiclifed/organiclifed.pid"
 EOF
 touch -a -m -t 201504280000 %{buildroot}%{_sysconfdir}/sysconfig/pivx
 
@@ -214,7 +214,7 @@ After=syslog.target network.target
 
 [Service]
 Type=forking
-ExecStart=%{_sbindir}/pivxd -daemon -conf=\${CONFIG_FILE} -datadir=\${DATA_DIR} -pid=\${PID_FILE} \$OPTIONS
+ExecStart=%{_sbindir}/organiclifed -daemon -conf=\${CONFIG_FILE} -datadir=\${DATA_DIR} -pid=\${PID_FILE} \$OPTIONS
 EnvironmentFile=%{_sysconfdir}/sysconfig/pivx
 User=pivx
 Group=pivx
@@ -269,7 +269,7 @@ Name=Bitcoin
 Comment=Bitcoin P2P Cryptocurrency
 Comment[fr]=Bitcoin, monnaie virtuelle cryptographique pair à pair
 Comment[tr]=Bitcoin, eşten eşe kriptografik sanal para birimi
-Exec=pivx-qt %u
+Exec=organiclife-qt %u
 Terminal=false
 Type=Application
 Icon=pivx128
@@ -284,7 +284,7 @@ touch -a -m -t 201511100546 %{buildroot}%{_datadir}/applications/pivx-core.deskt
 mkdir -p %{buildroot}%{_datadir}/kde4/services
 cat <<EOF > %{buildroot}%{_datadir}/kde4/services/pivx-core.protocol
 [Protocol]
-exec=pivx-qt '%u'
+exec=organiclife-qt '%u'
 protocol=pivx
 input=none
 output=none
@@ -300,10 +300,10 @@ touch -a -m -t 201511100546 %{buildroot}%{_datadir}/kde4/services/pivx-core.prot
 %endif
 
 # man pages
-install -D -p %{SOURCE20} %{buildroot}%{_mandir}/man1/pivxd.1
-install -p %{SOURCE21} %{buildroot}%{_mandir}/man1/pivx-cli.1
+install -D -p %{SOURCE20} %{buildroot}%{_mandir}/man1/organiclifed.1
+install -p %{SOURCE21} %{buildroot}%{_mandir}/man1/organiclife-cli.1
 %if %{_buildqt}
-install -p %{SOURCE22} %{buildroot}%{_mandir}/man1/pivx-qt.1
+install -p %{SOURCE22} %{buildroot}%{_mandir}/man1/organiclife-qt.1
 %endif
 
 # nuke these, we do extensive testing of binaries in %%check before packaging
@@ -376,7 +376,7 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %license COPYING db-%{bdbv}.NC-LICENSE
 %doc COPYING pivx.conf.example doc/README.md doc/bips.md doc/files.md doc/multiwallet-qt.md doc/reduce-traffic.md doc/release-notes.md doc/tor.md
-%attr(0755,root,root) %{_bindir}/pivx-qt
+%attr(0755,root,root) %{_bindir}/organiclife-qt
 %attr(0644,root,root) %{_datadir}/applications/pivx-core.desktop
 %attr(0644,root,root) %{_datadir}/kde4/services/pivx-core.protocol
 %attr(0644,root,root) %{_datadir}/pixmaps/*.ico
@@ -384,7 +384,7 @@ rm -rf %{buildroot}
 %attr(0644,root,root) %{_datadir}/pixmaps/*.svg
 %attr(0644,root,root) %{_datadir}/pixmaps/*.png
 %attr(0644,root,root) %{_datadir}/pixmaps/*.xpm
-%attr(0644,root,root) %{_mandir}/man1/pivx-qt.1*
+%attr(0644,root,root) %{_mandir}/man1/organiclife-qt.1*
 %endif
 
 %files libs
@@ -407,23 +407,23 @@ rm -rf %{buildroot}
 %defattr(-,root,root,-)
 %license COPYING db-%{bdbv}.NC-LICENSE
 %doc COPYING pivx.conf.example doc/README.md doc/REST-interface.md doc/bips.md doc/dnsseed-policy.md doc/files.md doc/reduce-traffic.md doc/release-notes.md doc/tor.md
-%attr(0755,root,root) %{_sbindir}/pivxd
+%attr(0755,root,root) %{_sbindir}/organiclifed
 %attr(0644,root,root) %{_tmpfilesdir}/pivx.conf
 %attr(0644,root,root) %{_unitdir}/pivx.service
 %dir %attr(0750,pivx,pivx) %{_sysconfdir}/pivx
 %dir %attr(0750,pivx,pivx) %{_localstatedir}/lib/pivx
 %config(noreplace) %attr(0600,root,root) %{_sysconfdir}/sysconfig/pivx
 %attr(0644,root,root) %{_datadir}/selinux/*/*.pp
-%attr(0644,root,root) %{_mandir}/man1/pivxd.1*
+%attr(0644,root,root) %{_mandir}/man1/organiclifed.1*
 
 %files utils
 %defattr(-,root,root,-)
 %license COPYING
 %doc COPYING pivx.conf.example doc/README.md
-%attr(0755,root,root) %{_bindir}/pivx-cli
-%attr(0755,root,root) %{_bindir}/pivx-tx
+%attr(0755,root,root) %{_bindir}/organiclife-cli
+%attr(0755,root,root) %{_bindir}/organiclife-tx
 %attr(0755,root,root) %{_bindir}/bench_pivx
-%attr(0644,root,root) %{_mandir}/man1/pivx-cli.1*
+%attr(0644,root,root) %{_mandir}/man1/organiclife-cli.1*
 
 
 

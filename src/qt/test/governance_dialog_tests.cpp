@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -21,7 +21,7 @@
 #include "mnmodel.h"
 #include "networkstyle.h"
 #include "optionbutton.h"
-#include "pivxgui.h"
+#include "organiclifegui.h"
 #include "proposalcard.h"
 #include "proposalinfodialog.h"
 #include "receivedialog.h"
@@ -419,7 +419,7 @@ void GovernanceDialogTests::topBarConnectionStyleTracksCurrentCount()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     TopBar topBar(&mainWindow);
 
     auto* connectionButton = topBar.findChild<ExpandableButton*>("pushButtonConnection");
@@ -525,7 +525,7 @@ void GovernanceDialogTests::loadingDialogFullScreenHelperKeepsDialogInsideWallet
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(920, 620);
     mainWindow.move(210, 130);
     mainWindow.show();
@@ -562,7 +562,7 @@ void GovernanceDialogTests::loadingDialogFullScreenHelperKeepsDialogInsideWallet
     QVERIFY2(qtUtilsSourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read qtutils.cpp");
     const QString qtUtilsSource = QString::fromUtf8(qtUtilsSourceFile.readAll());
 
-    const QString startToken = QStringLiteral("bool openDialogWithOpaqueBackgroundFullScreen(QDialog* widget, PIVXGUI* gui)");
+    const QString startToken = QStringLiteral("bool openDialogWithOpaqueBackgroundFullScreen(QDialog* widget, OrganicLifeGUI* gui)");
     const QString endToken = QStringLiteral("bool openDialogCentered(");
     const int start = qtUtilsSource.indexOf(startToken);
     const int end = qtUtilsSource.indexOf(endToken, start);
@@ -837,31 +837,31 @@ void GovernanceDialogTests::qtStartupSetsGovernanceModelBeforeInitialWalletBindi
 
 void GovernanceDialogTests::guiTracksWalletRegistryAndSupportsCurrentWalletSwitching()
 {
-    const QString guiSourcePath = resolveQtSourceFile("pivxgui.cpp");
-    QVERIFY2(!guiSourcePath.isEmpty(), "Unable to resolve src/qt/pivxgui.cpp");
+    const QString guiSourcePath = resolveQtSourceFile("organiclifegui.cpp");
+    QVERIFY2(!guiSourcePath.isEmpty(), "Unable to resolve src/qt/organiclifegui.cpp");
     QFile sourceFile(guiSourcePath);
-    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read pivxgui.cpp");
+    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read organiclifegui.cpp");
     const QString source = QString::fromUtf8(sourceFile.readAll());
 
-    const int addWalletStart = source.indexOf(QStringLiteral("bool PIVXGUI::addWallet(const QString& name, WalletModel* walletModel)"));
-    QVERIFY2(addWalletStart >= 0, "Missing PIVXGUI::addWallet implementation");
-    const int setWalletStart = source.indexOf(QStringLiteral("bool PIVXGUI::setCurrentWallet(const QString& name)"), addWalletStart);
-    QVERIFY2(setWalletStart > addWalletStart, "Unable to isolate PIVXGUI::addWallet implementation");
+    const int addWalletStart = source.indexOf(QStringLiteral("bool OrganicLifeGUI::addWallet(const QString& name, WalletModel* walletModel)"));
+    QVERIFY2(addWalletStart >= 0, "Missing OrganicLifeGUI::addWallet implementation");
+    const int setWalletStart = source.indexOf(QStringLiteral("bool OrganicLifeGUI::setCurrentWallet(const QString& name)"), addWalletStart);
+    QVERIFY2(setWalletStart > addWalletStart, "Unable to isolate OrganicLifeGUI::addWallet implementation");
     const QString addWalletBody = source.mid(addWalletStart, setWalletStart - addWalletStart);
     QVERIFY2(addWalletBody.contains(QStringLiteral("walletStack.emplace(name, walletModel);")),
-             "PIVXGUI::addWallet must persist wallet models in a registry");
+             "OrganicLifeGUI::addWallet must persist wallet models in a registry");
     QVERIFY2(!addWalletBody.contains(QStringLiteral("Single wallet supported for now")),
-             "PIVXGUI::addWallet must no longer advertise single-wallet-only behavior");
+             "OrganicLifeGUI::addWallet must no longer advertise single-wallet-only behavior");
 
-    const int removeWalletsStart = source.indexOf(QStringLiteral("void PIVXGUI::removeAllWallets()"), setWalletStart);
-    QVERIFY2(removeWalletsStart > setWalletStart, "Unable to isolate PIVXGUI::setCurrentWallet implementation");
+    const int removeWalletsStart = source.indexOf(QStringLiteral("void OrganicLifeGUI::removeAllWallets()"), setWalletStart);
+    QVERIFY2(removeWalletsStart > setWalletStart, "Unable to isolate OrganicLifeGUI::setCurrentWallet implementation");
     const QString setWalletBody = source.mid(setWalletStart, removeWalletsStart - setWalletStart);
     QVERIFY2(setWalletBody.contains(QStringLiteral("currentWallet = name;")),
-             "PIVXGUI::setCurrentWallet must update the active wallet key");
+             "OrganicLifeGUI::setCurrentWallet must update the active wallet key");
     QVERIFY2(setWalletBody.contains(QStringLiteral("topBar->setWalletModel(walletModel)")),
-             "PIVXGUI::setCurrentWallet must rebind the top bar to the selected wallet");
+             "OrganicLifeGUI::setCurrentWallet must rebind the top bar to the selected wallet");
     QVERIFY2(setWalletBody.contains(QStringLiteral("rpcConsole->setWalletModel(walletModel)")),
-             "PIVXGUI::setCurrentWallet must retarget the RPC console to the selected wallet");
+             "OrganicLifeGUI::setCurrentWallet must retarget the RPC console to the selected wallet");
 }
 
 void GovernanceDialogTests::multiWalletStakingStartsOneThreadPerLoadedWallet()
@@ -941,7 +941,7 @@ void GovernanceDialogTests::rpcConsoleDefaultsToPrimaryWalletWhenMultipleWallets
     QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read rpcconsole.cpp");
     const QString source = QString::fromUtf8(sourceFile.readAll());
 
-    QVERIFY2(source.contains(QStringLiteral("qobject_cast<PIVXGUI*>(parentWidget())")),
+    QVERIFY2(source.contains(QStringLiteral("qobject_cast<OrganicLifeGUI*>(parentWidget())")),
              "RPCConsole must inspect its owning main window when choosing the implicit wallet context");
     QVERIFY2(source.contains(QStringLiteral("window->getWallet(window->primaryWalletName())")),
              "RPCConsole must prefer the configured primary wallet for implicit wallet-scoped RPC calls");
@@ -988,7 +988,7 @@ void GovernanceDialogTests::topBarExposesDedicatedWalletSelectorControl()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     TopBar topBar(&mainWindow);
     topBar.show();
     QTest::qWait(20);
@@ -1094,10 +1094,10 @@ void GovernanceDialogTests::walletSelectorDialogExposesManageWalletsEntry()
 
 void GovernanceDialogTests::walletMetadataUsesPersistentQSettingsKeys()
 {
-    const QString guiSourcePath = resolveQtSourceFile("pivxgui.cpp");
-    QVERIFY2(!guiSourcePath.isEmpty(), "Unable to resolve src/qt/pivxgui.cpp");
+    const QString guiSourcePath = resolveQtSourceFile("organiclifegui.cpp");
+    QVERIFY2(!guiSourcePath.isEmpty(), "Unable to resolve src/qt/organiclifegui.cpp");
     QFile sourceFile(guiSourcePath);
-    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read pivxgui.cpp");
+    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read organiclifegui.cpp");
     const QString source = QString::fromUtf8(sourceFile.readAll());
 
     QVERIFY2(source.contains(QStringLiteral("QSettings settings;")),
@@ -1112,26 +1112,26 @@ void GovernanceDialogTests::walletMetadataUsesPersistentQSettingsKeys()
 
 void GovernanceDialogTests::walletMetadataExposesAutoloadMutationHelpers()
 {
-    const QString guiHeaderPath = resolveQtSourceFile("pivxgui.h");
-    QVERIFY2(!guiHeaderPath.isEmpty(), "Unable to resolve src/qt/pivxgui.h");
+    const QString guiHeaderPath = resolveQtSourceFile("organiclifegui.h");
+    QVERIFY2(!guiHeaderPath.isEmpty(), "Unable to resolve src/qt/organiclifegui.h");
     QFile guiHeaderFile(guiHeaderPath);
-    QVERIFY2(guiHeaderFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read pivxgui.h");
+    QVERIFY2(guiHeaderFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read organiclifegui.h");
     const QString headerSource = QString::fromUtf8(guiHeaderFile.readAll());
 
-    const QString guiSourcePath = resolveQtSourceFile("pivxgui.cpp");
-    QVERIFY2(!guiSourcePath.isEmpty(), "Unable to resolve src/qt/pivxgui.cpp");
+    const QString guiSourcePath = resolveQtSourceFile("organiclifegui.cpp");
+    QVERIFY2(!guiSourcePath.isEmpty(), "Unable to resolve src/qt/organiclifegui.cpp");
     QFile guiSourceFile(guiSourcePath);
-    QVERIFY2(guiSourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read pivxgui.cpp");
+    QVERIFY2(guiSourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read organiclifegui.cpp");
     const QString source = QString::fromUtf8(guiSourceFile.readAll());
 
     QVERIFY2(headerSource.contains(QStringLiteral("void addAutoloadWalletName(const QString& walletName);")),
-             "PIVXGUI must expose an explicit helper to add a wallet name to autoload state");
+             "OrganicLifeGUI must expose an explicit helper to add a wallet name to autoload state");
     QVERIFY2(headerSource.contains(QStringLiteral("void removeAutoloadWalletName(const QString& walletName);")),
-             "PIVXGUI must expose an explicit helper to remove a wallet name from autoload state");
-    QVERIFY2(source.contains(QStringLiteral("void PIVXGUI::addAutoloadWalletName(const QString& walletName)")),
-             "PIVXGUI must implement explicit autoload addition");
-    QVERIFY2(source.contains(QStringLiteral("void PIVXGUI::removeAutoloadWalletName(const QString& walletName)")),
-             "PIVXGUI must implement explicit autoload removal");
+             "OrganicLifeGUI must expose an explicit helper to remove a wallet name from autoload state");
+    QVERIFY2(source.contains(QStringLiteral("void OrganicLifeGUI::addAutoloadWalletName(const QString& walletName)")),
+             "OrganicLifeGUI must implement explicit autoload addition");
+    QVERIFY2(source.contains(QStringLiteral("void OrganicLifeGUI::removeAutoloadWalletName(const QString& walletName)")),
+             "OrganicLifeGUI must implement explicit autoload removal");
 }
 
 void GovernanceDialogTests::manageWalletsDialogOnlyShowsLoadedWallets()
@@ -1291,7 +1291,7 @@ void GovernanceDialogTests::toastNotificationsDoNotUseFocusableToolWindows()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.show();
     QTest::qWait(20);
     QCoreApplication::processEvents();
@@ -1510,7 +1510,7 @@ void GovernanceDialogTests::voteDialogHeaderRemainsFixedWhileBodyScrolls()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(560, 340);
     mainWindow.show();
     QTest::qWait(40);
@@ -1553,7 +1553,7 @@ void GovernanceDialogTests::voteDialogHeaderDragMovesDialogButBodyDragDoesNot()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(900, 700);
     mainWindow.show();
     QTest::qWait(40);
@@ -1827,8 +1827,8 @@ void GovernanceDialogTests::dialogIconClassesResolveToExistingQrcAliases()
         return QString::fromUtf8(file.readAll());
     };
 
-    const QString qrcSource = readSource(qtSourceDir + "/pivx.qrc");
-    QVERIFY2(!qrcSource.isEmpty(), "Unable to read pivx.qrc");
+    const QString qrcSource = readSource(qtSourceDir + "/organiclife.qrc");
+    QVERIFY2(!qrcSource.isEmpty(), "Unable to read organiclife.qrc");
 
     std::set<QString> qrcAliases;
     QRegularExpressionMatchIterator aliasIt =
@@ -2393,7 +2393,7 @@ void GovernanceDialogTests::voteDialogOpensFullyInsideSmallParentViewport()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(640, 420);
     mainWindow.show();
     QTest::qWait(20);
@@ -2456,7 +2456,7 @@ void GovernanceDialogTests::voteDialogFooterReachableWithDpiScaledFonts()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(560, 340);
     mainWindow.show();
     QTest::qWait(30);
@@ -2523,7 +2523,7 @@ void GovernanceDialogTests::voteDialogHeaderAndBodyDoNotOverlapAtScaledFonts()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(520, 300);
     mainWindow.show();
     QTest::qWait(40);
@@ -2578,7 +2578,7 @@ void GovernanceDialogTests::voteDialogUsesWiderLayoutAndNoHorizontalListScrollba
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(1280, 900);
     mainWindow.show();
     QTest::qWait(40);
@@ -2618,7 +2618,7 @@ void GovernanceDialogTests::voteDialogAutoExpandsToEliminateBodyHorizontalOverfl
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(980, 720);
     mainWindow.show();
     QTest::qWait(40);
@@ -2683,7 +2683,7 @@ void GovernanceDialogTests::voteDialogCentersOnParentWindowWithoutParentClamping
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(420, 300);
     mainWindow.move(180, 120);
     mainWindow.show();
@@ -2736,7 +2736,7 @@ void GovernanceDialogTests::voteDialogRemainsCenteredWhenOpenedViaOpaqueBackgrou
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(460, 320);
     mainWindow.move(220, 140);
     mainWindow.show();
@@ -2779,7 +2779,7 @@ void GovernanceDialogTests::opaqueBackgroundHelperCentersOwnPositionDialogs()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     mainWindow.resize(460, 320);
     mainWindow.move(240, 140);
     mainWindow.show();
@@ -2985,7 +2985,7 @@ void GovernanceDialogTests::voteDialogModernBodyCssExistsInBothThemes()
     QVERIFY(cssHasModernVoteBodyStyles(darkSource));
 }
 
-void GovernanceDialogTests::voteDialogHeaderUsesCteamAccentToneInBothThemes()
+void GovernanceDialogTests::voteDialogHeaderUsesOrganicLifeAccentToneInBothThemes()
 {
     const auto cssHasAccentHeader = [](const QString& cssPath, const QString& expectedColor) {
         QFile f(cssPath);
@@ -4436,7 +4436,7 @@ void GovernanceDialogTests::premiumHeadersRemainExpandableWithScaledFonts()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
 
     SendWidget sendWidget(&mainWindow);
     ReceiveWidget receiveWidget(&mainWindow);
@@ -4501,7 +4501,7 @@ void GovernanceDialogTests::dashboardWidgetUsesPremiumDashboardClasses()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
     widget.show();
@@ -4591,7 +4591,7 @@ void GovernanceDialogTests::dashboardWidgetHeaderRemainsExpandableWithScaledFont
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
     widget.show();
@@ -4636,7 +4636,7 @@ void GovernanceDialogTests::dashboardWidgetMergesRewardStatsAndChartIntoSidebarM
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
     widget.show();
@@ -4677,7 +4677,7 @@ void GovernanceDialogTests::dashboardWidgetRestoresTransactionListVisibilityAfte
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
     widget.show();
@@ -4724,7 +4724,7 @@ void GovernanceDialogTests::masternodeWidgetRefreshesWhenModelLoadsConfiguredMas
         ~MasternodeConfigRestorer() { masternodeConfig.clear(); }
     } restorer;
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     MasterNodesWidget widget(&mainWindow);
     MNModel mnModel(nullptr);
     widget.setMNModel(&mnModel);
@@ -4771,7 +4771,7 @@ void GovernanceDialogTests::dashboardWidgetUsesSelfDescribingRewardTiles()
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
     widget.show();
@@ -4828,7 +4828,7 @@ void GovernanceDialogTests::dashboardWidgetPrioritizesChartHeightWithProminentRe
         return;
     }
 
-    PIVXGUI mainWindow(networkStyle.get(), nullptr);
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
     widget.show();

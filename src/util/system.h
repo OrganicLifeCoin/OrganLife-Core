@@ -2,7 +2,7 @@
 // Copyright (c) 2009-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
@@ -18,11 +18,11 @@
 #endif
 
 #if !defined(PACKAGE_NAME)
-#define PACKAGE_NAME "CTEAM"
+#define PACKAGE_NAME "OrganicLife"
 #endif
 
 #if !defined(PACKAGE_TARNAME)
-#define PACKAGE_TARNAME "cteam"
+#define PACKAGE_TARNAME "organiclife"
 #endif
 
 #include "fs.h"
@@ -61,7 +61,7 @@ extern const char * const PIVX_PID_FILENAME;
 extern const char * const PIVX_MASTERNODE_CONF_FILENAME;
 extern const char * const DEFAULT_DEBUGLOGFILE;
 
-//CTEAM only features
+//OrganicLife only features
 
 extern std::atomic<bool> fMasterNode;
 
@@ -278,7 +278,7 @@ void SetThreadPriority(int nPriority);
 template <typename Callable>
 void TraceThread(const std::string name, Callable func)
 {
-    std::string s = "cteam-" + name;
+    std::string s = "organiclife-" + name;
     util::ThreadRename(s.c_str());
     try {
         LogPrintf("%s thread start\n", name);

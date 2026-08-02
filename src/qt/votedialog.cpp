@@ -1,5 +1,5 @@
 // Copyright (c) 2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
@@ -687,7 +687,7 @@ void VoteDialog::showEvent(QShowEvent *event)
 
 void VoteDialog::onMnSelectionClicked()
 {
-    PIVXGUI* window = dynamic_cast<PIVXGUI*>(parent());
+    OrganicLifeGUI* window = dynamic_cast<OrganicLifeGUI*>(parent());
     if (!mnSelectionDialog) {
         mnSelectionDialog = new MnSelectionDialog(window);
         mnSelectionDialog->setModel(mnModel, govModel->getProposalVoteUpdateMinTime());
@@ -1184,11 +1184,11 @@ void VoteDialog::inform(const QString& text)
     if (!snackBar) snackBar = new SnackBar(nullptr, this);
     snackBar->setText(text);
     snackBar->resize(this->width(), snackBar->height());
-    PIVXGUI* gui = dynamic_cast<PIVXGUI*>(parentWidget());
+    OrganicLifeGUI* gui = dynamic_cast<OrganicLifeGUI*>(parentWidget());
     if (!gui) {
         QWidget* parent = parentWidget();
         while (parent && !gui) {
-            gui = dynamic_cast<PIVXGUI*>(parent);
+            gui = dynamic_cast<OrganicLifeGUI*>(parent);
             parent = parent->parentWidget();
         }
     }

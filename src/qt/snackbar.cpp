@@ -1,11 +1,11 @@
 // Copyright (c) 2019-2020 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "snackbar.h"
 #include "ui_snackbar.h"
-#include "pivxgui.h"
+#include "organiclifegui.h"
 
 #include <QEvent>
 #include <QMouseEvent>
@@ -15,7 +15,7 @@
 #include <algorithm>
 
 
-SnackBar::SnackBar(PIVXGUI* _window, QWidget *parent) :
+SnackBar::SnackBar(OrganicLifeGUI* _window, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::SnackBar),
     window(_window),
@@ -38,7 +38,7 @@ SnackBar::SnackBar(PIVXGUI* _window, QWidget *parent) :
     hideTimer->setSingleShot(true);
     connect(hideTimer, &QTimer::timeout, this, &SnackBar::hideAnim);
     if (window)
-        connect(window, &PIVXGUI::windowResizeEvent, this, &SnackBar::windowResizeEvent);
+        connect(window, &OrganicLifeGUI::windowResizeEvent, this, &SnackBar::windowResizeEvent);
 
     ui->pushButton->hide();
     ui->pushButton->setFixedSize(0, 0);

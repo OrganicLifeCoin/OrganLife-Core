@@ -1,7 +1,7 @@
 // Copyright (c) 2011-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -27,7 +27,7 @@
 
 
 const int BITCOIN_IPC_CONNECT_TIMEOUT = 1000; // milliseconds
-const QString BITCOIN_IPC_PREFIX("cteam:");
+const QString BITCOIN_IPC_PREFIX("organiclife:");
 
 //
 // Create a name that is unique for:
@@ -36,7 +36,7 @@ const QString BITCOIN_IPC_PREFIX("cteam:");
 //
 static QString ipcServerName()
 {
-    QString name("PIVXQt");
+    QString name("OrganicLifeQt");
 
     // Append a simple hash of the datadir
     // Note that GetDataDir(true) returns a different path
@@ -209,7 +209,7 @@ void PaymentServer::handleURIOrFile(const QString& s)
                     Q_EMIT receivedPaymentRequest(recipient);
             } else
                 Q_EMIT message(tr("URI handling"),
-                    tr("URI cannot be parsed! This can be caused by an invalid CTEAM address or malformed URI parameters."),
+                    tr("URI cannot be parsed! This can be caused by an invalid OrganicLife address or malformed URI parameters."),
                     CClientUIInterface::ICON_WARNING);
 
             return;

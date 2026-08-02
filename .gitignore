@@ -6,18 +6,18 @@ reset-files.bash
 *.tar.gz
 
 *.exe
-src/pivx
-src/pivxd
-src/pivx-cli
-src/pivx-tx
-src/cteamd
-src/cteam-cli
-src/cteam-tx
-src/qt/cteam-qt
-src/bench/bench_pivx
-src/test/test_pivx
-src/test/test_pivx_fuzzy
-src/qt/test/test_pivx-qt
+src/organiclife
+src/organiclifed
+src/organiclife-cli
+src/organiclife-tx
+src/organiclifed
+src/organiclife-cli
+src/organiclife-tx
+src/qt/organiclife-qt
+src/bench/bench_organiclife
+src/test/test_organiclife
+src/test/test_organiclife_fuzzy
+src/qt/test/test_organiclife-qt
 src/test/fuzz/address_deserialize
 src/test/fuzz/addrman_deserialize
 src/test/fuzz/banentry_deserialize
@@ -92,7 +92,7 @@ src/qt/test/moc*.cpp
 *.pyc
 *.o
 *.o-*
-.pivx
+.organiclifecoin
 *.a
 *.pb.cc
 *.pb.h
@@ -118,10 +118,10 @@ src/qt/test/moc*.cpp
 *.qm
 Makefile
 !depends/Makefile
-pivx-qt
+organiclife-qt
 PIVX-Qt.app
-cteam-qt
-CTEAM-Qt.app
+organiclife-qt
+OrganicLife-Qt.app
 background.tiff*
 
 # Rust
@@ -132,7 +132,7 @@ vendor/
 
 # Unit-tests
 Makefile.test
-pivx-qt_test
+organiclife-qt_test
 src/test/buildenv.py
 
 # Resources cpp
@@ -163,7 +163,7 @@ src/chiabls/contrib/relic/include/relic_conf_autoconf.h.in
 #lcov
 *.gcno
 /*.info
-test_pivx.coverage/
+test_organiclife.coverage/
 total.coverage/
 coverage_percent.txt
 
@@ -224,26 +224,26 @@ to_backport.txt
 .ci-cppcheck/
 .mypy_cache/
 *.old
-/cteam-windows-x86_64.zip
-/cteam-linux-x86_64.zip
-/cteam-macos-universal.zip
-/cteam-macos-universal-daemon.zip
-/cteam-macos-universal-daemon/bin/cteam-cli
-/cteam-macos-universal-daemon/bin/cteam-tx
-/cteam-macos-universal-daemon/bin/cteamd
-/cteam-macos-universal-daemon/params/sapling-output.params
-/cteam-macos-universal-daemon/params/sapling-spend.params
-/cteam-macos-universal/CTEAM.app/Contents/_CodeSignature/CodeResources
-/cteam-macos-universal/CTEAM.app/Contents/MacOS/CTEAM
-/cteam-macos-universal/CTEAM.app/Contents/Resources/CTEAM.icns
-/cteam-macos-universal/CTEAM.app/Contents/CodeResources
-/cteam-macos-universal/bin/cteam-cli
-/cteam-macos-universal/bin/cteam-tx
-/cteam-macos-universal/bin/cteamd
-/cteam-macos-universal/params/sapling-output.params
-/cteam-macos-universal/params/sapling-spend.params
-/CTEAM-macos-universal-daemon.zip
-/CTEAM-macos-universal-daemon/
-/CTEAM-macos-universal-qt.zip
-/CTEAM-macos-universal-qt.dmg
-/CTEAM-macos-universal-qt/
+/organiclife-windows-x86_64.zip
+/organiclife-linux-x86_64.zip
+/organiclife-macos-universal.zip
+/organiclife-macos-universal-daemon.zip
+/organiclife-macos-universal-daemon/bin/organiclife-cli
+/organiclife-macos-universal-daemon/bin/organiclife-tx
+/organiclife-macos-universal-daemon/bin/organiclifed
+/organiclife-macos-universal-daemon/params/sapling-output.params
+/organiclife-macos-universal-daemon/params/sapling-spend.params
+/organiclife-macos-universal/OrganicLife.app/Contents/_CodeSignature/CodeResources
+/organiclife-macos-universal/OrganicLife.app/Contents/MacOS/OrganicLife
+/organiclife-macos-universal/OrganicLife.app/Contents/Resources/CTEAM.icns
+/organiclife-macos-universal/OrganicLife.app/Contents/CodeResources
+/organiclife-macos-universal/bin/organiclife-cli
+/organiclife-macos-universal/bin/organiclife-tx
+/organiclife-macos-universal/bin/organiclifed
+/organiclife-macos-universal/params/sapling-output.params
+/organiclife-macos-universal/params/sapling-spend.params
+/OrganicLife-macos-universal-daemon.zip
+/OrganicLife-macos-universal-daemon/
+/OrganicLife-macos-universal-qt.zip
+/OrganicLife-macos-universal-qt.dmg
+/OrganicLife-macos-universal-qt/

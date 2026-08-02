@@ -1,7 +1,7 @@
 // Copyright (c) 2011-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2021 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -55,7 +55,7 @@
 #include <QUrlQuery>
 #include <QMouseEvent>
 
-#define URI_SCHEME "cteam"
+#define URI_SCHEME "organiclife"
 #define URI_SCHEME_FALLBACK "pivx"
 
 #if defined(Q_OS_MAC)
@@ -143,7 +143,7 @@ void setupAddressWidget(QValidatedLineEdit* widget, QWidget* parent)
     widget->setFont(bitcoinAddressFont());
     // We don't want translators to use own addresses in translations
     // and this is the only place, where this address is supplied.
-    widget->setPlaceholderText(QObject::tr("Enter CTEAM address (e.g. %1)").arg("D7VFR83SQbiezrW72hjcWJtcfip5krte2Z"));
+    widget->setPlaceholderText(QObject::tr("Enter OrganicLife address (e.g. %1)").arg("oULX35HtD1ZBvyenzfbGuv62NowZduE996"));
     widget->setValidator(new BitcoinAddressEntryValidator(parent));
     widget->setCheckValidator(new BitcoinAddressCheckValidator(parent));
 }
@@ -219,7 +219,7 @@ bool parseBitcoinURI(QString uri, SendCoinsRecipient* out)
 {
     // Normalize known URI prefixes to a QUrl-compatible scheme.
     //
-    // cteam starts with a digit and is not a valid URI scheme for QUrl parsing, so map it
+    // organiclife starts with a digit and is not a valid URI scheme for QUrl parsing, so map it
     // to an internal fallback scheme before parsing.
     if (uri.startsWith(URI_SCHEME "://", Qt::CaseInsensitive)) {
         uri.replace(0, std::strlen(URI_SCHEME) + 3, URI_SCHEME_FALLBACK ":");
@@ -482,16 +482,16 @@ fs::path static StartupShortcutPath()
 {
     std::string chain = gArgs.GetChainName();
     if (chain == CBaseChainParams::TESTNET)
-        return GetSpecialFolderPath(CSIDL_STARTUP) / "CTEAM (testnet).lnk";
+        return GetSpecialFolderPath(CSIDL_STARTUP) / "OrganicLife (testnet).lnk";
     else if (chain == CBaseChainParams::REGTEST)
-        return GetSpecialFolderPath(CSIDL_STARTUP) / "CTEAM (regtest).lnk";
+        return GetSpecialFolderPath(CSIDL_STARTUP) / "OrganicLife (regtest).lnk";
 
-    return GetSpecialFolderPath(CSIDL_STARTUP) / "CTEAM.lnk";
+    return GetSpecialFolderPath(CSIDL_STARTUP) / "OrganicLife.lnk";
 }
 
 bool GetStartOnSystemStartup()
 {
-    // check for CTEAM*.lnk
+    // check for OrganicLife*.lnk
     return fs::exists(StartupShortcutPath());
 }
 
@@ -603,11 +603,11 @@ bool SetStartOnSystemStartup(bool fAutoStart)
         optionFile << "[Desktop Entry]\n";
         optionFile << "Type=Application\n";
         if (gArgs.GetBoolArg("-testnet", false))
-            optionFile << "Name=CTEAM (testnet)\n";
+            optionFile << "Name=OrganicLife (testnet)\n";
         else if (gArgs.GetBoolArg("-regtest", false))
-            optionFile << "Name=CTEAM (regtest)\n";
+            optionFile << "Name=OrganicLife (regtest)\n";
         else
-            optionFile << "Name=CTEAM\n";
+            optionFile << "Name=OrganicLife\n";
         optionFile << "Exec=" << pszExePath << strprintf(" -min -testnet=%d -regtest=%d\n", gArgs.GetBoolArg("-testnet", false), gArgs.GetBoolArg("-regtest", false));
         optionFile << "Terminal=false\n";
         optionFile << "Hidden=false\n";

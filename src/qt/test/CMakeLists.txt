@@ -11,9 +11,9 @@ set(QT_TEST_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/governance_dialog_tests.cpp
 )
 
-add_executable(test_cteam-qt ${QT_TEST_SOURCES})
-add_dependencies(test_cteam-qt qt_stuff translations_target libunivalue libsecp256k1 libzcashrust leveldb crc32c bls)
-target_include_directories(test_cteam-qt PRIVATE
+add_executable(test_organiclife-qt ${QT_TEST_SOURCES})
+add_dependencies(test_organiclife-qt qt_stuff translations_target libunivalue libsecp256k1 libzcashrust leveldb crc32c bls)
+target_include_directories(test_organiclife-qt PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/univalue/include
     ${CMAKE_SOURCE_DIR}/src/leveldb/include
@@ -29,7 +29,7 @@ target_include_directories(test_cteam-qt PRIVATE
     ${GMP_INCLUDE_DIR}
     ${LIBEVENT_INCLUDE_DIR}
 )
-target_link_libraries(test_cteam-qt PRIVATE
+target_link_libraries(test_organiclife-qt PRIVATE
     qt_stuff
     SERVER_A
     WALLET_A
@@ -51,21 +51,21 @@ target_link_libraries(test_cteam-qt PRIVATE
     -ldl pthread
 )
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    target_link_libraries(test_cteam-qt PRIVATE "-framework Cocoa")
+    target_link_libraries(test_organiclife-qt PRIVATE "-framework Cocoa")
 endif()
 if(ZMQ_FOUND)
-    target_link_libraries(test_cteam-qt PRIVATE ZMQ_A ${ZMQ_LIB})
-    target_include_directories(test_cteam-qt PRIVATE ${ZMQ_INCLUDE_DIR})
+    target_link_libraries(test_organiclife-qt PRIVATE ZMQ_A ${ZMQ_LIB})
+    target_include_directories(test_organiclife-qt PRIVATE ${ZMQ_INCLUDE_DIR})
 endif()
 if(MINIUPNP_FOUND)
-    target_compile_definitions(test_cteam-qt PRIVATE "-DSTATICLIB -DMINIUPNP_STATICLIB")
-    target_link_libraries(test_cteam-qt PRIVATE ${MINIUPNP_LIBRARY})
-    target_include_directories(test_cteam-qt PRIVATE ${MINIUPNP_INCLUDE_DIR})
+    target_compile_definitions(test_organiclife-qt PRIVATE "-DSTATICLIB -DMINIUPNP_STATICLIB")
+    target_link_libraries(test_organiclife-qt PRIVATE ${MINIUPNP_LIBRARY})
+    target_include_directories(test_organiclife-qt PRIVATE ${MINIUPNP_INCLUDE_DIR})
 endif()
 if(NAT-PMP_FOUND)
-    target_link_libraries(test_cteam-qt PRIVATE ${NAT-PMP_LIBRARY})
-    target_include_directories(test_cteam-qt PRIVATE ${NAT-PMP_INCLUDE_DIR})
+    target_link_libraries(test_organiclife-qt PRIVATE ${NAT-PMP_LIBRARY})
+    target_include_directories(test_organiclife-qt PRIVATE ${NAT-PMP_INCLUDE_DIR})
 endif()
 
 enable_testing()
-add_test(NAME btest_cteam-qt COMMAND test_cteam-qt)
+add_test(NAME btest_organiclife-qt COMMAND test_organiclife-qt)

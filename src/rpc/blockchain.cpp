@@ -2,7 +2,7 @@
 // Copyright (c) 2009-2014 The Bitcoin developers
 // Copyright (c) 2014-2015 The Dash developers
 // Copyright (c) 2015-2022 The PIVX Core developers
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
@@ -1029,7 +1029,7 @@ static std::string NetworkUpgradeDisplayName(const std::string& rawName)
 {
     std::string name = rawName;
     if (name.rfind("PIVX_", 0) == 0) {
-        name.replace(0, 5, "CTEAM_");
+        name.replace(0, 5, "OrganicLife_");
     }
     std::replace(name.begin(), name.end(), '_', ' ');
     return name;

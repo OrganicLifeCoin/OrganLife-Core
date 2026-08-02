@@ -1,10 +1,10 @@
-# bash programmable completion for cteam-cli(1)
+# bash programmable completion for organiclife-cli(1)
 # Copyright (c) 2012-2016 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-# call $cteam-cli for RPC
-_cteam_rpc() {
+# call $organiclife-cli for RPC
+_organiclife_rpc() {
     # determine already specified args necessary for RPC
     local rpcargs=()
     for i in ${COMP_LINE}; do
@@ -18,18 +18,18 @@ _cteam_rpc() {
 }
 
 # Add wallet accounts to COMPREPLY
-_cteam_accounts() {
+_organiclife_accounts() {
     local accounts
-    accounts=$(_cteam_rpc listaccounts | awk -F '"' '{ print $2 }')
+    accounts=$(_organiclife_rpc listaccounts | awk -F '"' '{ print $2 }')
     COMPREPLY=( "${COMPREPLY[@]}" $( compgen -W "$accounts" -- "$cur" ) )
 }
 
-_cteam_cli() {
+_organiclife_cli() {
     local cur prev words=() cword
     local cash_cli
 
-    # save and use original argument to invoke cteam-cli for -help, help and RPC
-    # as cteam-cli might not be in $PATH
+    # save and use original argument to invoke organiclife-cli for -help, help and RPC
+    # as organiclife-cli might not be in $PATH
     cash_cli="$1"
 
     COMPREPLY=()
@@ -60,7 +60,7 @@ _cteam_cli() {
     if ((cword > 3)); then
         case ${words[cword-3]} in
             addmultisigaddress)
-                _cteam_accounts
+                _organiclife_accounts
                 return 0
                 ;;
             getbalance|gettxout|importaddress|importpubkey|importprivkey|listreceivedbyaccount|listreceivedbyaddress|listsinceblock)
@@ -130,7 +130,7 @@ _cteam_cli() {
 
             # only parse help if senseful
             if [[ -z "$cur" || "$cur" =~ ^[a-z] ]]; then
-                commands=$(_cteam_rpc help 2>/dev/null | awk '$1 ~ /^[a-z]/ { print $1; }')
+                commands=$(_organiclife_rpc help 2>/dev/null | awk '$1 ~ /^[a-z]/ { print $1; }')
             fi
 
             COMPREPLY=( $( compgen -W "$helpopts $commands" -- "$cur" ) )
@@ -143,7 +143,7 @@ _cteam_cli() {
             ;;
     esac
 } &&
-complete -F _cteam_cli cteam-cli
+complete -F _organiclife_cli organiclife-cli
 
 # Local variables:
 # mode: shell-script
