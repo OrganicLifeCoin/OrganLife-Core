@@ -1331,7 +1331,7 @@ QPushButton[cssClass="btn-check-right"]:checked:hover {
 
 QPushButton[cssClass="btn-check-right"]:checked:pressed {
     border: none;
-    background-color: rgba(200, 59, 8, 0.9);
+    background-color: rgba(196, 85, 42, 0.9);
     font-size:18px;
     color: #FFFFFF;
     border-top-right-radius:8px;
@@ -1386,7 +1386,7 @@ QPushButton[cssClass="btn-check-left"]:checked:hover {
 
 QPushButton[cssClass="btn-check-left"]:checked:pressed {
     border: none;
-    background-color: rgba(200, 59, 8, 0.9);
+    background-color: rgba(196, 85, 42, 0.9);
     font-size:18px;
     color: #FFFFFF;
     border-top-left-radius:8px;
@@ -1453,7 +1453,7 @@ QPushButton[cssClass="btn-primary"]:hover {
 
 QPushButton[cssClass="btn-primary"]:pressed {
     border: none;
-    background-color:rgba(200, 59, 8, 0.9);
+    background-color:rgba(196, 85, 42, 0.9);
     font-size:18px;
     padding:8px 20px;
     color: #FFFFFF;
@@ -2180,7 +2180,7 @@ QPushButton[cssClass="btn-check-time"]:disabled {
 
 *[cssClass="dashboard-shell-left"] {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(255, 248, 245, 0.98),
+        stop:0 rgba(250, 252, 240, 0.98),
         stop:0.24 rgba(248, 250, 234, 0.98),
         stop:1 rgba(255, 255, 255, 0.98));
     border: 1px solid #e4eac6;
@@ -2189,9 +2189,9 @@ QPushButton[cssClass="btn-check-time"]:disabled {
 
 *[cssClass="dashboard-shell-right"] {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(255, 247, 244, 0.98),
+        stop:0 rgba(249, 251, 238, 0.98),
         stop:0.18 rgba(248, 250, 234, 0.98),
-        stop:1 rgba(255, 248, 245, 0.98));
+        stop:1 rgba(250, 252, 240, 0.98));
     border: 1px solid #e4eac6;
     border-radius: 22px;
 }
@@ -2200,7 +2200,7 @@ QPushButton[cssClass="btn-check-time"]:disabled {
     border: 1px solid #e4eac6;
     border-radius: 18px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(255, 225, 211, 0.92),
+        stop:0 rgba(225, 235, 203, 0.92),
         stop:0.2 rgba(248, 250, 234, 0.98),
         stop:1 rgba(255, 255, 255, 0.95));
 }
@@ -2214,7 +2214,7 @@ QPushButton[cssClass="btn-check-time"]:disabled {
 }
 
 *[cssClass="dashboard-warning-pill"] {
-    background-color: rgba(255, 247, 237, 0.98);
+    background-color: rgba(248, 250, 230, 0.98);
     border: 1px solid rgba(79, 122, 46, 0.28);
     border-radius: 14px;
 }
@@ -2226,7 +2226,7 @@ QPushButton[cssClass="btn-check-time"]:disabled {
 }
 
 QComboBox[cssClass="dashboard-filter-pill"] {
-    background-color: rgba(250, 247, 245, 0.98);
+    background-color: rgba(248, 250, 240, 0.98);
     padding: 7px 14px 7px 12px;
     font-size: 14px;
     font-weight: 600;
@@ -2237,12 +2237,12 @@ QComboBox[cssClass="dashboard-filter-pill"] {
 }
 
 QComboBox[cssClass="dashboard-filter-pill"]:hover {
-    border: 1px solid #F0BFA9;
+    border: 1px solid #A8C48A;
     background-color: #FFFFFF;
 }
 
 QComboBox[cssClass="dashboard-filter-pill"]:on {
-    border: 1px solid #F0BFA9;
+    border: 1px solid #A8C48A;
     background-color: #FFFFFF;
 }
 
@@ -2277,7 +2277,7 @@ QListView[cssClass="dashboard-transactions-list"] {
 }
 
 QListView[cssClass="dashboard-transactions-list"] QScrollBar:vertical {
-    background: rgba(243, 216, 204, 0.52);
+    background: rgba(222, 232, 199, 0.52);
     width: 10px;
     border-radius: 5px;
     margin: 4px 2px 4px 2px;
@@ -2290,7 +2290,7 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::handle:vertical {
 }
 
 QListView[cssClass="dashboard-transactions-list"] QScrollBar::handle:vertical:hover {
-    background: rgba(200, 59, 8, 0.58);
+    background: rgba(196, 85, 42, 0.58);
 }
 
 QListView[cssClass="dashboard-transactions-list"] QScrollBar::add-line:vertical,
@@ -2305,7 +2305,7 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 *[cssClass="dashboard-analytics-card"] {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
         stop:0 rgba(255, 255, 255, 0.94),
-        stop:1 rgba(247, 241, 238, 0.92));
+        stop:1 rgba(242, 247, 230, 0.92));
     border: 1px solid #e4eac6;
     border-radius: 18px;
 }
@@ -2315,9 +2315,10 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 }
 
 *[cssClass="dashboard-reward-tile"] {
-    background-color: rgba(250, 247, 245, 0.82);
-    border: 1px solid rgba(243, 216, 204, 0.72);
-    border-radius: 14px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #FFFFFF, stop:1 #F4F7E9);
+    border: 1px solid #dfe6c8;
+    border-radius: 16px;
 }
 
 *[cssClass="dashboard-reward-tile-label"] {
@@ -2390,20 +2391,20 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 }
 
 *[cssClass="dashboard-tx-row"] {
-    background-color: #FFFFFF;
-    border: 1px solid rgba(234, 210, 190, 0.68);
+    background-color: #FCFDF6;
+    border: 1px solid rgba(214, 228, 186, 0.9);
     border-radius: 16px;
 }
 
 *[cssClass="dashboard-tx-row-hover"] {
-    background-color: rgba(255, 225, 211, 0.68);
-    border: 1px solid rgba(240, 191, 169, 0.88);
+    background-color: rgba(225, 235, 203, 0.55);
+    border: 1px solid rgba(168, 196, 138, 0.9);
     border-radius: 16px;
 }
 
 *[cssClass="dashboard-tx-row-selected"] {
-    background-color: rgba(255, 225, 211, 0.96);
-    border: 1px solid rgba(255, 176, 122, 0.92);
+    background-color: rgba(201, 214, 164, 0.5);
+    border: 1px solid rgba(143, 179, 95, 0.95);
     border-radius: 16px;
 }
 
@@ -2635,14 +2636,14 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="screen-header-band"] {
-    border: 1px solid rgba(243, 216, 204, 0.92);
+    border: 1px solid rgba(222, 232, 199, 0.92);
     border-top-left-radius: 22px;
     border-top-right-radius: 22px;
     border-bottom: 1px solid #e2e6d2;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
         stop:0 rgba(248, 250, 234, 0.98),
-        stop:0.52 rgba(255, 241, 234, 0.96),
-        stop:1 rgba(250, 247, 245, 0.92));
+        stop:0.52 rgba(243, 248, 228, 0.96),
+        stop:1 rgba(248, 250, 240, 0.92));
 }
 
 *[cssClass="screen-header-title"] {
@@ -2665,7 +2666,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="screen-side-card"] {
-    border: 1px solid rgba(243, 216, 204, 0.96);
+    border: 1px solid rgba(222, 232, 199, 0.96);
     border-radius: 16px;
     background-color: #FFFFFF;
 }
@@ -2682,8 +2683,8 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     border-bottom: 1px solid #e2e6d2;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
         stop:0 rgba(248, 250, 234, 0.98),
-        stop:0.52 rgba(255, 241, 234, 0.96),
-        stop:1 rgba(250, 247, 245, 0.92));
+        stop:0.52 rgba(243, 248, 228, 0.96),
+        stop:1 rgba(248, 250, 240, 0.92));
 }
 
 *[cssClass="governance-dashboard-filter-shell"] {
@@ -2773,7 +2774,7 @@ OptionButton[cssClass="screen-side-option"] QWidget#layoutOptions2 {
 }
 
 OptionButton[cssClass="screen-side-option"] QWidget#layoutOptions2[hovered="true"] {
-    border: 1px solid #F0BFA9;
+    border: 1px solid #A8C48A;
     background-color: #FFFFFF;
 }
 
@@ -2813,16 +2814,16 @@ OptionButton[cssClass="governance-header-cta"] QWidget#layoutOptions2 {
     border: 1px solid #e4eac6;
     border-radius: 18px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(255, 225, 211, 0.92),
+        stop:0 rgba(225, 235, 203, 0.92),
         stop:0.22 rgba(248, 250, 234, 0.98),
         stop:1 rgba(255, 255, 255, 0.94));
 }
 
 OptionButton[cssClass="governance-header-cta"] QWidget#layoutOptions2[hovered="true"] {
-    border: 1px solid #F0BFA9;
+    border: 1px solid #A8C48A;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(255, 225, 211, 0.98),
-        stop:0.22 rgba(255, 248, 245, 1.0),
+        stop:0 rgba(225, 235, 203, 0.98),
+        stop:0.22 rgba(250, 252, 240, 1.0),
         stop:1 rgba(255, 255, 255, 0.98));
 }
 
@@ -3011,7 +3012,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="card-btn-vote"]:hover {
-    background-color:rgba(255, 225, 211, 0.70);
+    background-color:rgba(225, 235, 203, 0.70);
     border: 1px solid #4f7a2e;
  }
 
@@ -3104,7 +3105,7 @@ QPushButton[cssClass="vote-inline-selector"]:pressed {
 }
 
 *[cssClass="vote-progress"]::chunk:horizontal {
-    background: rgba(255, 225, 211, 0.55);
+    background: rgba(225, 235, 203, 0.55);
     border-right:1px solid  #c6c8b8;
 }
 
@@ -3117,7 +3118,7 @@ QPushButton[cssClass="vote-inline-selector"]:pressed {
 }
 
 *[cssClass="vote-progress-no"]::chunk:horizontal {
-    background: rgba(255, 225, 211, 0.55);
+    background: rgba(225, 235, 203, 0.55);
     border-radius: 14px;
 }
 

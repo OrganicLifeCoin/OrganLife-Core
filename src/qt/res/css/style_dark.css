@@ -2245,7 +2245,7 @@ QPushButton[cssClass="btn-check-time"]:disabled {
 }
 
 *[cssClass="dashboard-warning-pill"] {
-    background-color: rgba(120, 53, 15, 0.18);
+    background-color: rgba(196, 85, 42, 0.16);
     border: 1px solid rgba(143, 179, 95, 0.28);
     border-radius: 14px;
 }
@@ -2860,7 +2860,7 @@ OptionButton[cssClass="governance-header-cta"] QWidget#layoutOptions2 {
 OptionButton[cssClass="governance-header-cta"] QWidget#layoutOptions2[hovered="true"] {
     border: 1px solid rgba(143, 179, 95, 0.30);
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-        stop:0 rgba(200, 59, 8, 0.24),
+        stop:0 rgba(196, 85, 42, 0.24),
         stop:0.2 rgba(42, 51, 25, 0.96),
         stop:1 rgba(45, 28, 18, 0.90));
 }
@@ -2971,7 +2971,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="card-status-no-votes"] {
-    color:rgba(247, 241, 238, 0.88);
+    color:rgba(242, 247, 230, 0.88);
     font-size:11px;
     border-radius:11px;
     background-color:rgba(143, 179, 95, 0.14);
@@ -3162,7 +3162,7 @@ QPushButton[cssClass="vote-inline-selector"]:pressed {
 
 
 *[cssClass="vote-progress-no"]::chunk:horizontal {
-    background: rgba(255, 225, 211, 0.55);
+    background: rgba(225, 235, 203, 0.55);
     border-radius: 14px;
 }
 
