@@ -136,8 +136,11 @@ BOOST_AUTO_TEST_CASE(subsidy_limit_test)
     const CAmount maxMoneyOut = Params().GetConsensus().nMaxMoneyOut;
     const CAmount premine = GetBlockValue(1);
     const CAmount subsidy = GetBlockValue(2);
+    const CAmount expectedPremine = 264444444 * COIN + 18 * CENT;
 
-    BOOST_CHECK_EQUAL(premine, 102632000 * COIN);
+    BOOST_CHECK_EQUAL(maxMoneyOut, 777777777 * COIN);
+    BOOST_CHECK_EQUAL(premine, expectedPremine);
+    BOOST_CHECK_EQUAL(premine * 100, maxMoneyOut * 34);
     BOOST_CHECK_EQUAL(subsidy, 10 * COIN);
     BOOST_CHECK(Params().GetConsensus().MoneyRange(premine));
     BOOST_CHECK(Params().GetConsensus().MoneyRange(subsidy));
@@ -174,12 +177,14 @@ BOOST_AUTO_TEST_CASE(subsidy_limit_test)
 
 BOOST_AUTO_TEST_CASE(subsidy_policy_scope_test)
 {
+    const CAmount expectedPremine = 264444444 * COIN + 18 * CENT;
+
     SelectParams(CBaseChainParams::MAIN);
-    BOOST_CHECK_EQUAL(GetBlockValue(1), 102632000 * COIN);
+    BOOST_CHECK_EQUAL(GetBlockValue(1), expectedPremine);
     BOOST_CHECK_EQUAL(GetBlockValue(2), 10 * COIN);
 
     SelectParams(CBaseChainParams::TESTNET);
-    BOOST_CHECK_EQUAL(GetBlockValue(1), 102632000 * COIN);
+    BOOST_CHECK_EQUAL(GetBlockValue(1), expectedPremine);
     BOOST_CHECK_EQUAL(GetBlockValue(2), 10 * COIN);
 
     SelectParams(CBaseChainParams::MAIN);
@@ -265,10 +270,25 @@ BOOST_AUTO_TEST_CASE(mainnet_genesis_retime_lock_test)
 {
     SelectParams(CBaseChainParams::MAIN);
 
-    BOOST_CHECK_EQUAL(Params().GenesisBlock().nTime, 1785060000U);
+    BOOST_CHECK_EQUAL(Params().GenesisBlock().nTime, 1785744000U);
+    BOOST_CHECK_EQUAL(Params().GetConsensus().hashGenesisBlock,
+                      uint256S("0x00000e7a809b258b8a8bb8e79bf69f34209c0b74bfdde08a7a2e0d7c98cc9787"));
+    BOOST_CHECK_EQUAL(Params().GenesisBlock().hashMerkleRoot,
+                      uint256S("0x33f4424ac84d7e801d2b09fc982a24c9228747a3f01f7402029a4664f1e63a44"));
     BOOST_CHECK_EQUAL(Params().Checkpoints().mapCheckpoints->at(0), Params().GetConsensus().hashGenesisBlock);
     BOOST_CHECK_EQUAL(Params().GetConsensus().nTargetSpacing, 2 * 60);
     BOOST_CHECK_EQUAL(Params().GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight, 10081);
+}
+
+BOOST_AUTO_TEST_CASE(mainnet_message_start_isolated_from_retired_chain_test)
+{
+    SelectParams(CBaseChainParams::MAIN);
+
+    const auto& messageStart = Params().MessageStart();
+    BOOST_CHECK_EQUAL(messageStart[0], 0xf6);
+    BOOST_CHECK_EQUAL(messageStart[1], 0x2f);
+    BOOST_CHECK_EQUAL(messageStart[2], 0x01);
+    BOOST_CHECK_EQUAL(messageStart[3], 0x8a);
 }
 
 BOOST_AUTO_TEST_CASE(testnet_staking_peer_threshold_test)
@@ -292,11 +312,8 @@ BOOST_AUTO_TEST_CASE(testnet_fixed_seed_policy_test)
 {
     SelectParams(CBaseChainParams::TESTNET);
 
-    const std::vector<uint8_t> masternodeSeed{
-        0x01, 0x04, 0x59, 0xA7, 0x10, 0xCA, 0xA2, 0x90
-    };
-    const std::vector<uint8_t>& fixedSeeds = Params().FixedSeeds();
-    BOOST_CHECK(std::search(fixedSeeds.begin(), fixedSeeds.end(), masternodeSeed.begin(), masternodeSeed.end()) != fixedSeeds.end());
+    // Fixed seeds are intentionally empty until public OrganicLife seed nodes are deployed.
+    BOOST_CHECK(Params().FixedSeeds().empty());
 
     SelectParams(CBaseChainParams::MAIN);
 }

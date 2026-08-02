@@ -1,0 +1,27 @@
+{
+  "prefixes": {
+    "pkh": 115,
+    "script": 98,
+    "staking": 95,
+    "secret": 45
+  },
+  "magic": {
+    "mainnet": "0xf6 0x2f 0x01 0x8a",
+    "testnet": "0xa9 0xf2 0x5f 0xe6",
+    "regtest": "0x9b 0xcf 0x21 0x1d"
+  },
+  "spork": {
+    "mainnet": {
+      "pub": "048a5bba528a0f0f3247292ee1982314ff73748d87eea60db16dab1da3e709b354d9101637cd5512703fa2025d40f510225657bef40c5922f7c4dd44dbf7c5bef2",
+      "priv": "534d804278c512ecc6501c1b48355e83566b949ed814dd7178f1d2edccb11c37",
+      "wif": "2X7Bo7xVXLazHa3rCSNXKTZTUfozbsQovrg7fFPqdHsvC6uthyn",
+      "addr": "oQHUxZ38FnnSGTijucFU1J6DMF57iEteSa"
+    },
+    "testnet": {
+      "pub": "04b3eeab517656ae716e2508977cf5d7c92c43db6c3d496cd5104e351015d3e981fed67d7eaf4f3fd7fc68b388f5051da76f2ec30e3732a1c1c60bcf9578ab2dac",
+      "priv": "3358d98cbc73e90238e7d71e3293ee08966345ed3e9edff2e487266005eb3f0b",
+      "wif": "2Ws7Xmc9vzvDKSvcQiGDXZY6CrUKEqbBYs3SUCFV1igdfXAFE4J",
+      "addr": "oHmrmTTxtpftPKNCzd8usy5QyesrGfS2Yi"
+    }
+  }
+}

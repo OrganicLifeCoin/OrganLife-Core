@@ -44,10 +44,11 @@ void CChainParams::UpdateNetworkUpgradeParameters(Consensus::UpgradeIndex idx, i
 
 namespace {
 static constexpr int64_t GOVERNANCE_CYCLE_SECONDS = 14 * 24 * 60 * 60;
-// CTEAM targets a 55,555 monthly treasury while retaining the existing two 14-day governance cycles.
+// OrganicLife targets a 55,555 monthly treasury while retaining the existing two 14-day governance cycles.
 static constexpr CAmount MONTHLY_GOVERNANCE_BUDGET = 55555 * COIN;
 static constexpr CAmount GOVERNANCE_CYCLE_BUDGET = MONTHLY_GOVERNANCE_BUDGET / 2;
 static constexpr int GOVERNANCE_MAX_CYCLE_PAYMENTS = 26; // ~1 year at 14-day cycles
+static constexpr CAmount ORGANICLIFE_PUBLIC_PREMINE = 264444444 * COIN + 18 * CENT;
 
 static int BudgetCycleBlocksFromTargetSpacing(int64_t targetSpacing)
 {
@@ -63,7 +64,7 @@ static int BudgetCycleBlocksFromTargetSpacing(int64_t targetSpacing)
  *
  * Note: the genesis coinbase output is not spendable in this codebase.
  */
-static CBlock CreateCteamGenesisBlock(const char* pszTimestamp, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
+static CBlock CreateOrganicLifeGenesisBlock(const char* pszTimestamp, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
 {
     const CScript genesisOutputScript = CScript() << ParseHex("04c10e83b2703ccf322f7dbd62dd5855ac7c10bd055814ce121ba32607d573b8810c02c0582aed05b4deb9c4b77b26d92428c61256cd42774babea0a073b2ed0c9") << OP_CHECKSIG;
     return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
@@ -71,7 +72,7 @@ static CBlock CreateCteamGenesisBlock(const char* pszTimestamp, uint32_t nTime, 
 
 static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
 {
-    return CreateCteamGenesisBlock("CTEAM Genesis 2026-05-05", nTime, nNonce, nBits, nVersion, genesisReward);
+    return CreateOrganicLifeGenesisBlock("OrganicLife Coin Regtest Genesis 2026-08-02", nTime, nNonce, nBits, nVersion, genesisReward);
 }
 
 // this one is for testing only
@@ -171,30 +172,30 @@ static Consensus::LLMQParams llmq400_85 = {
  * + Contains no strange transactions
  */
 static MapCheckpoints mapCheckpoints = {
-    {0, uint256S("0x00000139749a73940de839fba1b9f4bd88d0631905dd8895e1a253f9f77feeb6")},
+    {0, uint256S("0x00000e7a809b258b8a8bb8e79bf69f34209c0b74bfdde08a7a2e0d7c98cc9787")},
 };
 
 static const CCheckpointData data = {
     &mapCheckpoints,
-    1785060000, // * UNIX timestamp of genesis checkpoint block (0)
+    1785744000, // * UNIX timestamp of genesis checkpoint block (0)
     0,          // * total number of transactions between genesis and last checkpoint
     1800        // * estimated number of transactions per day after checkpoint
 };
 
 static MapCheckpoints mapCheckpointsTestnet = {
-    {0, uint256S("0x00000822d999b4de60f7ee1f939d3c5faded88d9bf5a1c7cdf3d3f15ef5a3a67")},
+    {0, uint256S("0x00000afe2c73a7367385c4378a7a31af8159e667b1270b8dd96e98536da44ad9")},
 };
 
 static const CCheckpointData dataTestnet = {
     &mapCheckpointsTestnet,
-    1778491633,  // timestamp of genesis checkpoint block (0)
+    1785743999,  // timestamp of genesis checkpoint block (0)
     0,           // estimated tx count
     500};        // estimated tx per day
 
-static MapCheckpoints mapCheckpointsRegtest = {{0, uint256S("0x7610e035d4e7332401d6b40c7a3bf8bb3445d768823f5fe577921b6cd21ad3b4")}};
+static MapCheckpoints mapCheckpointsRegtest = {{0, uint256S("0x1f0193048e95830f9c3e87524f8cfd8a63e47fc9b0e0fda8fb9944db67ee762d")}};
 static const CCheckpointData dataRegtest = {
     &mapCheckpointsRegtest,
-    1768953602,
+    1785743998,
     1,
     100};
 
@@ -205,10 +206,10 @@ public:
     {
         strNetworkID = "main";
 
-        genesis = CreateCteamGenesisBlock("CTEAM Genesis 2026-07-26", 1785060000, 3838157, 0x1e0ffff0, 1, 0 * COIN);
+        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin Genesis 2026-08-02", 1785744000, 1823964, 0x1e0ffff0, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x00000139749a73940de839fba1b9f4bd88d0631905dd8895e1a253f9f77feeb6"));
-        assert(genesis.hashMerkleRoot == uint256S("0x8dc7b1a1a094ad0a9b724e4e93c118454c15fe8063d4a476e4f50a2ddc1ac05c"));
+        assert(consensus.hashGenesisBlock == uint256S("0x00000e7a809b258b8a8bb8e79bf69f34209c0b74bfdde08a7a2e0d7c98cc9787"));
+        assert(genesis.hashMerkleRoot == uint256S("0x33f4424ac84d7e801d2b09fc982a24c9228747a3f01f7402029a4664f1e63a44"));
 
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.fPowNoRetargeting = false;
@@ -220,7 +221,7 @@ public:
         consensus.nFutureTimeDriftPoW = 7200;  // 2 hours - generous clock skew tolerance
         consensus.nFutureTimeDriftPoS = 900;   // 15 minutes (7.5 blocks for 2-min blocks) - for network latency
         consensus.nMaxMoneyOut = 777777777 * COIN;
-        consensus.nPremineReward = 102632000 * COIN;
+        consensus.nPremineReward = ORGANICLIFE_PUBLIC_PREMINE;
         consensus.nBlockSubsidy = 10 * COIN;
         consensus.nMNCollateralAmt = 4000 * COIN;
         // Masternode rewards are only paid after PoS starts (see GetMasternodePayment()).
@@ -239,15 +240,15 @@ public:
         consensus.nMaxProposalPayments = GOVERNANCE_MAX_CYCLE_PAYMENTS;
 
         // spork keys
-        consensus.strSporkPubKey = "04940746698f987968da312a7e15d861c14c08a85c6c2675fb0f692903d98aa8bb403869173cbdd8766a107f5c3493f46d50163cb195ac98288c7f483730eb51e9";
-        consensus.strSporkPubKeyOld = "040F129DE6546FE405995329A887329BED4321325B1A73B0A257423C05C1FCFE9E40EF0678AEF59036A22C42E61DFD29DF7EFB09F56CC73CADF64E05741880E3E7";
-        consensus.nTime_EnforceNewSporkKey = 1608512400;    //!> December 21, 2020 01:00:00 AM GMT
-        consensus.nTime_RejectOldSporkKey = 1614560400;     //!> March 1, 2021 01:00:00 AM GMT
+        consensus.strSporkPubKey = "048a5bba528a0f0f3247292ee1982314ff73748d87eea60db16dab1da3e709b354d9101637cd5512703fa2025d40f510225657bef40c5922f7c4dd44dbf7c5bef2";
+        consensus.strSporkPubKeyOld = "";
+        consensus.nTime_EnforceNewSporkKey = 0;
+        consensus.nTime_RejectOldSporkKey = 0;
 
-        // height-based activations
-        consensus.height_last_invalid_UTXO = 894538;
-        consensus.height_last_ZC_AccumCheckpoint = 1686240;
-        consensus.height_last_ZC_WrappedSerials = 1686229;
+        // height-based activations (no legacy chain history on OrganicLife)
+        consensus.height_last_invalid_UTXO = -1;
+        consensus.height_last_ZC_AccumCheckpoint = -1;
+        consensus.height_last_ZC_WrappedSerials = -1;
 
         consensus.nPivxBadBlockTime = 0;
         consensus.nPivxBadBlockBits = 0;
@@ -293,48 +294,42 @@ public:
          * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
          * a large 4-byte int at any alignment.
          */
-        pchMessageStart[0] = 0xc4;
-        pchMessageStart[1] = 0x17;
-        pchMessageStart[2] = 0x76;
-        pchMessageStart[3] = 0xca;
-        nDefaultPort = 31616;
+        pchMessageStart[0] = 0xf6;
+        pchMessageStart[1] = 0x2f;
+        pchMessageStart[2] = 0x01;
+        pchMessageStart[3] = 0x8a;
+        nDefaultPort = 39616;
 
-        // Seed nodes (bootstrap). Keep this list small and reliable.
-        // DNS seeds (mainnet)
-        vSeeds.emplace_back("seed.CTEAM.cash", true);
-        // Direct IP seeds (mainnet public listeners)
-        vSeeds.emplace_back("65.108.85.215");
-        vSeeds.emplace_back("89.167.108.88");
+        // Seed nodes (bootstrap). TODO(launch): add OrganicLife seed nodes here,
+        // e.g. vSeeds.emplace_back("seed.organiclifecoin.example", true);
+        // and/or direct IP seeds: vSeeds.emplace_back("1.2.3.4");
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 28);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 25);
-        base58Prefixes[STAKING_ADDRESS] = std::vector<unsigned char>(1, 57);
-        base58Prefixes[EXCHANGE_ADDRESS] = {0x02, 0x17, 0x76};
-        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1, 184);
-        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x17, 0x76, 0xCA};
-        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x17, 0x76, 0xCB};
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 115);   // addresses start with 'o'
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 98);    // addresses start with 'g'
+        base58Prefixes[STAKING_ADDRESS] = std::vector<unsigned char>(1, 95);   // addresses start with 'f'
+        base58Prefixes[EXCHANGE_ADDRESS] = {0x02, 0x21, 0x0C};
+        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1, 45);        // WIF starts with 'K'
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x21, 0x0C, 0x01};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x21, 0x0C, 0x02};
         // BIP44 coin type is from https://github.com/satoshilabs/slips/blob/master/slip-0044.md
-        base58Prefixes[EXT_COIN_TYPE] = {0x80, 0x00, 0x06, 0xF0}; // 1776
+        base58Prefixes[EXT_COIN_TYPE] = {0x80, 0x00, 0x14, 0x1E}; // 5150 (unassigned in SLIP-0044 at time of writing)
 
-        // Fixed seeds for CTEAM mainnet (BIP155 format: networkID, length, IP, port)
-        // Public listener set: 65.108.85.215, 89.167.108.88
-        vFixedSeeds = {
-            0x01, 0x04, 0x41, 0x6C, 0x55, 0xD7, 0x7B, 0x80,  // 65.108.85.215:31616
-            0x01, 0x04, 0x59, 0xA7, 0x6C, 0x58, 0x7B, 0x80,  // 89.167.108.88:31616
-        };
+        // Fixed seeds for OrganicLife mainnet (BIP155 format: networkID, length, IP, port)
+        // TODO(launch): add fixed seeds once public listeners exist.
+        vFixedSeeds = {};
 
         // Reject non-standard transactions by default
         fRequireStandard = true;
 
         // Sapling
-        bech32HRPs[SAPLING_PAYMENT_ADDRESS]      = "c7";
-        bech32HRPs[SAPLING_FULL_VIEWING_KEY]     = "c1776views";
-        bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "c1776ivks";
-        bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "c1776-secret-spending-key-main";
-        bech32HRPs[SAPLING_EXTENDED_FVK]         = "c1776xviews";
+        bech32HRPs[SAPLING_PAYMENT_ADDRESS]      = "olc";
+        bech32HRPs[SAPLING_FULL_VIEWING_KEY]     = "olcviews";
+        bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "olcivks";
+        bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "olc-secret-spending-key-main";
+        bech32HRPs[SAPLING_EXTENDED_FVK]         = "olcxviews";
 
-        bech32HRPs[BLS_SECRET_KEY]               = "c1776-bls-sk";
-        bech32HRPs[BLS_PUBLIC_KEY]               = "c1776-bls-pk";
+        bech32HRPs[BLS_SECRET_KEY]               = "olc-bls-sk";
+        bech32HRPs[BLS_PUBLIC_KEY]               = "olc-bls-pk";
 
         // long living quorum params
         consensus.llmqs[Consensus::LLMQ_50_60] = llmq50_60;
@@ -368,10 +363,10 @@ public:
     {
         strNetworkID = "test";
 
-        genesis = CreateCteamGenesisBlock("CTEAM Testnet Genesis 2026-05-05", 1778491633, 839634, 0x1e0ffff0, 1, 0 * COIN);
+        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin Testnet Genesis 2026-08-02", 1785743999, 109128, 0x1e0ffff0, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x00000723b58e921e858251185dc07ad0c8fa2ffeb3dca130683e3794c28bceb5"));
-        assert(genesis.hashMerkleRoot == uint256S("0xefa13ba9757a15d94955f1d6d35e3b6800d915f93c3c7b565f35ba66a9b09878"));
+        assert(consensus.hashGenesisBlock == uint256S("0x00000afe2c73a7367385c4378a7a31af8159e667b1270b8dd96e98536da44ad9"));
+        assert(genesis.hashMerkleRoot == uint256S("0x1d359659f716789e16106511749b0555742154f0efa325fac559c9136aaa9272"));
 
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = false;
@@ -383,7 +378,7 @@ public:
         consensus.nFutureTimeDriftPoW = 600;  // Increased for better tolerance across regions
         consensus.nFutureTimeDriftPoS = 900;  // Increased for better tolerance across regions
         consensus.nMaxMoneyOut = 777777777 * COIN;
-        consensus.nPremineReward = 102632000 * COIN;
+        consensus.nPremineReward = ORGANICLIFE_PUBLIC_PREMINE;
         consensus.nBlockSubsidy = 10 * COIN;
         consensus.nMNCollateralAmt = 4000 * COIN;
         // Masternode rewards are only paid after PoS starts (see GetMasternodePayment()).
@@ -403,10 +398,10 @@ public:
         consensus.nMaxProposalPayments = GOVERNANCE_MAX_CYCLE_PAYMENTS;
 
         // spork keys
-        consensus.strSporkPubKey = "04677c34726c491117265f4b1c83cef085684f36c8df5a97a3a42fc499316d0c4e63959c9eca0dba239d9aaaf72011afffeb3ef9f51b9017811dec686e412eb504";
-        consensus.strSporkPubKeyOld = "04E88BB455E2A04E65FCC41D88CD367E9CCE1F5A409BE94D8C2B4B35D223DED9C8E2F4E061349BA3A38839282508066B6DC4DB72DD432AC4067991E6BF20176127";
-        consensus.nTime_EnforceNewSporkKey = 1608512400;    //!> December 21, 2020 01:00:00 AM GMT
-        consensus.nTime_RejectOldSporkKey = 1614560400;     //!> March 1, 2021 01:00:00 AM GMT
+        consensus.strSporkPubKey = "04b3eeab517656ae716e2508977cf5d7c92c43db6c3d496cd5104e351015d3e981fed67d7eaf4f3fd7fc68b388f5051da76f2ec30e3732a1c1c60bcf9578ab2dac";
+        consensus.strSporkPubKeyOld = "";
+        consensus.nTime_EnforceNewSporkKey = 0;
+        consensus.nTime_RejectOldSporkKey = 0;
 
         // height based activations
         consensus.height_last_invalid_UTXO = -1;
@@ -455,49 +450,39 @@ public:
          * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
          * a large 4-byte int at any alignment.
          */
-        pchMessageStart[0] = 0xc2;
-        pchMessageStart[1] = 0x17;
-        pchMessageStart[2] = 0x76;
-        pchMessageStart[3] = 0xca;
-        nDefaultPort = 41616;
+        pchMessageStart[0] = 0xa9;
+        pchMessageStart[1] = 0xf2;
+        pchMessageStart[2] = 0x5f;
+        pchMessageStart[3] = 0xe6;
+        nDefaultPort = 49616;
 
-        // Seed nodes (bootstrap). Keep this list small and reliable.
-        // DNS seeds (testnet)
-        vSeeds.emplace_back("seed.CTEAM.cash", true);
-        // Direct IP seeds (testnet)
-        vSeeds.emplace_back("65.108.85.215");
-        vSeeds.emplace_back("89.167.108.88");
-        vSeeds.emplace_back("89.167.16.202");
+        // Seed nodes (bootstrap). TODO(launch): add OrganicLife testnet seed nodes here.
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 38);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 25);
-        base58Prefixes[STAKING_ADDRESS] = std::vector<unsigned char>(1, 57);
-        base58Prefixes[EXCHANGE_ADDRESS] = {0x02, 0x17, 0x76};
-        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1, 184);
-        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x17, 0x76, 0xCA};
-        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x17, 0x76, 0xCB};
-        // Testnet pivx BIP44 coin type is '1' (All coin's testnet default)
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 127);   // testnet addresses start with 't'
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 196);   // testnet script addresses start with '2'
+        base58Prefixes[STAKING_ADDRESS] = std::vector<unsigned char>(1, 138);  // testnet staking addresses start with 'x'
+        base58Prefixes[EXCHANGE_ADDRESS] = {0x03, 0x21, 0x0C};
+        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1, 239);
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x21, 0x0C, 0x11};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x21, 0x0C, 0x12};
+        // Testnet BIP44 coin type is '1' (all coins' testnet default)
         base58Prefixes[EXT_COIN_TYPE] = {0x80, 0x00, 0x00, 0x01};
 
-        // Fixed seeds for CTEAM testnet (BIP155 format: networkID, length, IP, port)
-        // 65.108.85.215:41616, 89.167.108.88:41616, 89.167.16.202:41616
-        vFixedSeeds = {
-            0x01, 0x04, 0x41, 0x6C, 0x55, 0xD7, 0xA2, 0x90,  // 65.108.85.215:41616
-            0x01, 0x04, 0x59, 0xA7, 0x6C, 0x58, 0xA2, 0x90,  // 89.167.108.88:41616
-            0x01, 0x04, 0x59, 0xA7, 0x10, 0xCA, 0xA2, 0x90,  // 89.167.16.202:41616
-        };
+        // Fixed seeds for OrganicLife testnet
+        // TODO(launch): add fixed seeds once public testnet listeners exist.
+        vFixedSeeds = {};
 
         fRequireStandard = false;
 
-        // Sapling - use "tc7" prefix for testnet to distinguish from mainnet
-        bech32HRPs[SAPLING_PAYMENT_ADDRESS]      = "tc7";
-        bech32HRPs[SAPLING_FULL_VIEWING_KEY]     = "tc1776views";
-        bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "tc1776ivks";
-        bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "c1776-secret-spending-key-test";
-        bech32HRPs[SAPLING_EXTENDED_FVK]         = "tc1776xviews";
+        // Sapling - use "tolc" prefixes for testnet to distinguish from mainnet
+        bech32HRPs[SAPLING_PAYMENT_ADDRESS]      = "tolc";
+        bech32HRPs[SAPLING_FULL_VIEWING_KEY]     = "tolcviews";
+        bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "tolcivks";
+        bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "olc-secret-spending-key-test";
+        bech32HRPs[SAPLING_EXTENDED_FVK]         = "tolcxviews";
 
-        bech32HRPs[BLS_SECRET_KEY]               = "c1776-bls-sk-test";
-        bech32HRPs[BLS_PUBLIC_KEY]               = "c1776-bls-pk-test";
+        bech32HRPs[BLS_SECRET_KEY]               = "olc-bls-sk-test";
+        bech32HRPs[BLS_PUBLIC_KEY]               = "olc-bls-pk-test";
 
         // long living quorum params
         consensus.llmqs[Consensus::LLMQ_50_60] = llmq50_60;
@@ -529,10 +514,10 @@ public:
     {
         strNetworkID = "regtest";
 
-        genesis = CreateGenesisBlock(1778491634, 0, 0x207fffff, 1, 0 * COIN);
+        genesis = CreateGenesisBlock(1785743998, 0, 0x207fffff, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x33928ba611fd2bdc184827aec28969d5507114d4d3a7757d0ee2a292c6a23dcb"));
-        assert(genesis.hashMerkleRoot == uint256S("0xc10e5c519df766e11290d700ce084d8c339bed1e56b068dade382784940c41bb"));
+        assert(consensus.hashGenesisBlock == uint256S("0x1f0193048e95830f9c3e87524f8cfd8a63e47fc9b0e0fda8fb9944db67ee762d"));
+        assert(genesis.hashMerkleRoot == uint256S("0xfdd9758d1b3adffe58ecb6abe2c50a9458ada72ce9617665772c70c537d1e1d5"));
 
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = true;
@@ -619,34 +604,34 @@ public:
          * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
          * a large 4-byte int at any alignment.
          */
-        pchMessageStart[0] = 0xc3;
-        pchMessageStart[1] = 0x17;
-        pchMessageStart[2] = 0x76;
-        pchMessageStart[3] = 0xca;
-        nDefaultPort = 51616;
+        pchMessageStart[0] = 0x9b;
+        pchMessageStart[1] = 0xcf;
+        pchMessageStart[2] = 0x21;
+        pchMessageStart[3] = 0x1d;
+        nDefaultPort = 59616;
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 38);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 25);
-        base58Prefixes[STAKING_ADDRESS] = std::vector<unsigned char>(1, 57);
-        base58Prefixes[EXCHANGE_ADDRESS] = {0x02, 0x17, 0x76};
-        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1, 184);
-        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x17, 0x76, 0xCA};
-        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x17, 0x76, 0xCB};
-        // Testnet pivx BIP44 coin type is '1' (All coin's testnet default)
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 127);   // regtest mirrors testnet prefixes
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 196);
+        base58Prefixes[STAKING_ADDRESS] = std::vector<unsigned char>(1, 138);
+        base58Prefixes[EXCHANGE_ADDRESS] = {0x03, 0x21, 0x0C};
+        base58Prefixes[SECRET_KEY] = std::vector<unsigned char>(1, 239);
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x21, 0x0C, 0x11};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x21, 0x0C, 0x12};
+        // Testnet BIP44 coin type is '1' (all coins' testnet default)
         base58Prefixes[EXT_COIN_TYPE] = {0x80, 0x00, 0x00, 0x01};
 
         // Reject non-standard transactions by default
         fRequireStandard = true;
 
-        // Sapling - use "rc7" prefix for regtest to distinguish from mainnet/testnet
-        bech32HRPs[SAPLING_PAYMENT_ADDRESS]      = "rc7";
-        bech32HRPs[SAPLING_FULL_VIEWING_KEY]     = "rc1776views";
-        bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "rc1776ivks";
-        bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "c1776-secret-spending-key-regtest";
-        bech32HRPs[SAPLING_EXTENDED_FVK]         = "rc1776xviews";
+        // Sapling - use "rolc" prefixes for regtest to distinguish from mainnet/testnet
+        bech32HRPs[SAPLING_PAYMENT_ADDRESS]      = "rolc";
+        bech32HRPs[SAPLING_FULL_VIEWING_KEY]     = "rolcviews";
+        bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "rolcivks";
+        bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "olc-secret-spending-key-regtest";
+        bech32HRPs[SAPLING_EXTENDED_FVK]         = "rolcxviews";
 
-        bech32HRPs[BLS_SECRET_KEY]               = "c1776-bls-sk-regtest";
-        bech32HRPs[BLS_PUBLIC_KEY]               = "c1776-bls-pk-regtest";
+        bech32HRPs[BLS_SECRET_KEY]               = "olc-bls-sk-regtest";
+        bech32HRPs[BLS_PUBLIC_KEY]               = "olc-bls-pk-regtest";
 
         // long living quorum params
         consensus.llmqs[Consensus::LLMQ_TEST] = llmq_test;
