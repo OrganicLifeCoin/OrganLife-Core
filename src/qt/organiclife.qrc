@@ -131,9 +131,9 @@
         <file alias="ic-nav-address-active">res/images/ic-nav-address-active.svg</file>
         <file alias="ic-nav-address-hover">res/images/ic-nav-address-hover.svg</file>
         <file alias="ic-nav-address">res/images/ic-nav-address.svg</file>
-        <file alias="ic-chip-available">res/images/ic-chip-available.png</file>
-        <file alias="ic-chip-staking">res/images/ic-chip-staking.png</file>
-        <file alias="ic-chip-rewards">res/images/ic-chip-rewards.png</file>
+        <file alias="ic-chip-available">res/images/ic-chip-available.svg</file>
+        <file alias="ic-chip-staking">res/images/ic-chip-staking.svg</file>
+        <file alias="ic-chip-rewards">res/images/ic-chip-rewards.svg</file>
         <file alias="ic-rail-dashboard">res/images/ic-rail-dashboard.png</file>
         <file alias="ic-rail-dashboard-active">res/images/ic-rail-dashboard-active.png</file>
         <file alias="ic-rail-send">res/images/ic-rail-send.png</file>

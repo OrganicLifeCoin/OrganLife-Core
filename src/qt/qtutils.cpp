@@ -1111,7 +1111,7 @@ void setSortTxTypeFilter(QComboBox* filter, SortEdit* lineEditType)
 void setupSettings(QSettings* settings)
 {
     if (!settings->contains("theme")) {
-        settings->setValue("theme", "default");
+        settings->setValue("theme", "default-dark");
     }
     if (!settings->contains("lightTheme")) {
         const QString theme = settings->value("theme", "default").toString().toLower();
