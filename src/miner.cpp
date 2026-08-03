@@ -354,7 +354,7 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
                 }
             }
 
-            if (Params().IsTestnet()) {
+            if (Params().IsTestnet() || Params().IsRegTestNet()) {
                 const int64_t nNextStakeTime = pindexPrev->GetBlockTime() + consensus.nTargetSpacing;
                 const int64_t nWaitSeconds = nNextStakeTime - GetAdjustedTime();
                 if (nWaitSeconds > 0) {
