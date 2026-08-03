@@ -10,6 +10,21 @@
         <file alias="ic-transaction-staked">res/icons/ic-transaction-staked.svg</file>
         <file alias="lock_closed">res/icons/lock_closed.png</file>
         <file alias="lock_open">res/icons/lock_open.png</file>
+        <file alias="tx_mined">res/icons/ic-transaction-staked.svg</file>
+        <file alias="tx_input">res/icons/ic-transaction-received.svg</file>
+        <file alias="tx_output">res/icons/ic-transaction-sent.svg</file>
+        <file alias="tx_inout">res/icons/ic-transaction-received.svg</file>
+        <file alias="transaction_0">res/images/ic-time.svg</file>
+        <file alias="transaction_1">res/images/ic-time.svg</file>
+        <file alias="transaction_2">res/images/ic-time.svg</file>
+        <file alias="transaction_3">res/images/ic-time.svg</file>
+        <file alias="transaction_4">res/images/ic-time.svg</file>
+        <file alias="transaction_5">res/images/ic-time.svg</file>
+        <file alias="transaction_confirmed">res/images/ic-check-active.svg</file>
+        <file alias="transaction_conflicted">res/images/ic-close.svg</file>
+        <file alias="eye">res/images/ic-watch-password.svg</file>
+        <file alias="export">res/images/ic-folder.svg</file>
+        <file alias="quit">res/images/ic-close.svg</file>
     </qresource>
     <qresource prefix="/css">
         <file>res/css/default.css</file>
@@ -42,6 +57,7 @@
         <file alias="ic-add-purple">res/images/ic-add-purple.svg</file>
         <file alias="ic-add">res/images/ic-add.svg</file>
         <file alias="ic-address-book-grey">res/images/ic-address-book-grey.svg</file>
+        <file alias="ic-address_book_grey">res/images/ic-address-book-grey.svg</file>
         <file alias="ic-address-book-white">res/images/ic-address-book-white.svg</file>
         <file alias="ic-address-book">res/images/ic-address-book.svg</file>
         <file alias="ic-address-send-white">res/images/ic-address-send-white.svg</file>
