@@ -31,7 +31,7 @@
 
 #define DECORATION_SIZE 65
 #define NUM_ITEMS 3
-#define SHOW_EMPTY_CHART_VIEW_THRESHOLD 4000
+#define SHOW_EMPTY_CHART_VIEW_THRESHOLD 0
 #define REQUEST_LOAD_TASK 1
 #define CHART_LOAD_MIN_TIME_INTERVAL 15
 
@@ -118,8 +118,8 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout22->setSpacing(12);
     ui->left_top_container->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->left_top_container, "dashboard-header-band");
-    ui->left_top_container->setMinimumHeight(108);
-    ui->horizontalLayout->setContentsMargins(24, 14, 24, 14);
+    ui->left_top_container->setMinimumHeight(96);
+    ui->horizontalLayout->setContentsMargins(24, 12, 24, 12);
     ui->horizontalLayout->setSpacing(12);
     ui->verticalLayout_5->setContentsMargins(0, 0, 0, 0);
     ui->verticalLayout_5->setSpacing(4);
@@ -140,6 +140,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->labelSubtitle->setWordWrap(true);
     setCssProperty(ui->labelMessage, "dashboard-side-subtitle");
     ui->labelMessage->setWordWrap(true);
+    ui->labelMessage->setVisible(false);
 
     // Staking Information
     setCssProperty(ui->labelSquarePiv, "square-chart-piv");
@@ -190,7 +191,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     rewardSummaryRow->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(rewardSummaryRow, "dashboard-reward-summary");
     rewardSummaryRow->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
-    rewardSummaryRow->setMaximumHeight(96);
+    rewardSummaryRow->setMaximumHeight(88);
     auto* rewardSummaryLayout = new QHBoxLayout(rewardSummaryRow);
     rewardSummaryLayout->setContentsMargins(0, 0, 0, 0);
     rewardSummaryLayout->setSpacing(6);
@@ -295,14 +296,14 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     statRow->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(statRow, "dashboard-stat-row");
     auto* statRowLayout = new QHBoxLayout(statRow);
-    statRowLayout->setContentsMargins(0, 18, 14, 14);
+    statRowLayout->setContentsMargins(20, 12, 20, 10);
     statRowLayout->setSpacing(14);
     auto makeTile = [&](const QString& chipRes, const QString& caption, QLabel*& valueOut) {
         auto* tile = new QWidget(statRow);
         tile->setAttribute(Qt::WA_StyledBackground, true);
         setCssProperty(tile, "dashboard-stat-tile");
         auto* lay = new QHBoxLayout(tile);
-        lay->setContentsMargins(20, 14, 20, 14);
+        lay->setContentsMargins(20, 10, 20, 10);
         tile->setMinimumWidth(230);
         lay->setSpacing(12);
         auto* chip = new QLabel(tile);
@@ -358,7 +359,9 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     feedRowsLayout->setContentsMargins(0, 6, 0, 0);
     feedRowsLayout->setSpacing(0);
     feedCardLayout->addLayout(feedRowsLayout);
-    ui->verticalLayout_2->setSpacing(12);
+    feedCard->setMaximumHeight(210);
+    feedCard->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+    ui->verticalLayout_2->setSpacing(10);
     ui->verticalLayout_2->insertWidget(0, feedCard, 0);
     updateFeedNotes();
 
@@ -599,7 +602,7 @@ void DashboardWidget::updateFeedNotes()
 
     const int unit = walletModel && walletModel->getOptionsModel()
         ? walletModel->getOptionsModel()->getDisplayUnit() : 0;
-    const int rows = std::min(4, filter->rowCount());
+    const int rows = std::min(3, filter->rowCount());
     for (int i = 0; i < rows; ++i) {
         const QModelIndex idx = filter->index(i, TransactionTableModel::ToAddress);
         if (!idx.isValid()) continue;
@@ -624,8 +627,9 @@ void DashboardWidget::updateFeedNotes()
         auto* row = new QWidget(this);
         row->setAttribute(Qt::WA_StyledBackground, true);
         setCssProperty(row, "dashboard-feed-row");
+        row->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
         auto* lay = new QHBoxLayout(row);
-        lay->setContentsMargins(0, 9, 0, 9);
+        lay->setContentsMargins(2, 7, 2, 7);
         lay->setSpacing(10);
         auto* dot = new QLabel(row);
         dot->setFixedSize(10, 10);
@@ -635,15 +639,17 @@ void DashboardWidget::updateFeedNotes()
         texts->setContentsMargins(0, 0, 0, 0);
         texts->setSpacing(1);
         auto* typeLabel = new QLabel(label, row);
-        setCssProperty(typeLabel, "dashboard-feed-type");
+        typeLabel->setStyleSheet(QString("color:%1;font-weight:600;font-size:13px;background:transparent;")
+                                 .arg(isLightTheme() ? "#22331a" : "#f4f6e2"));
         auto* dateLabel = new QLabel(date.date().toString("MMM d"), row);
-        setCssProperty(dateLabel, "dashboard-feed-date");
+        dateLabel->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;")
+                                 .arg(isLightTheme() ? "#5c6b4a" : "#c2c7ae"));
         texts->addWidget(typeLabel);
         texts->addWidget(dateLabel);
         lay->addLayout(texts, 1);
         auto* amountLabel = new QLabel(QString("%1%2").arg(amount >= 0 ? "+" : "")
                                        .arg(GUIUtil::formatBalance(std::abs(amount), unit)), row);
-        amountLabel->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;").arg(color));
+        amountLabel->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;background:transparent;").arg(color));
         lay->addWidget(amountLabel, 0, Qt::AlignVCenter | Qt::AlignRight);
         feedRowsLayout->addWidget(row);
     }
@@ -881,8 +887,9 @@ void DashboardWidget::initChart()
     chartView->setRenderHint(QPainter::Antialiasing);
     chartView->setRubberBand(QChartView::HorizontalRubberBand);
     chartView->setContentsMargins(0,0,0,0);
+    chartView->setMinimumHeight(120);
 
-    QHBoxLayout *baseScreensContainer = new QHBoxLayout(this);
+    QHBoxLayout *baseScreensContainer = new QHBoxLayout();
     baseScreensContainer->setContentsMargins(0, 0, 0, 0);
     baseScreensContainer->addWidget(chartView);
     ui->chartContainer->setLayout(baseScreensContainer);
@@ -1401,7 +1408,6 @@ void DashboardWidget::onHideChartsChanged(bool fHide)
             stakesFilter->setTypeFilter(TransactionFilterProxy::TYPE(TransactionRecord::StakeMint) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::StakeZPIV) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::StakeDelegated) |
-                                        TransactionFilterProxy::TYPE(TransactionRecord::Generated) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::MNReward) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::BudgetPayment));
         }

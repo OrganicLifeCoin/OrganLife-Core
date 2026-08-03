@@ -222,12 +222,10 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     border-radius: 10px;
     background-color: rgba(79, 122, 46, 0.1);
     border: none;
-    transition: background-color 200ms ease-out, transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 *[cssClass="container-qr"]:hover {
     background-color: rgba(79, 122, 46, 0.2);
-    transform: scale(1.05);
 }
 
 QPushButton[cssClass="btn-qr"] {

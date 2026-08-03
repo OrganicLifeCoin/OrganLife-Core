@@ -498,7 +498,7 @@ TopBar::TopBar(OrganicLifeGUI* _mainWindow, QWidget *parent) :
     // Set parent stylesheet
     this->setStyleSheet(_mainWindow->styleSheet());
     /* Containers */
-    ui->containerTop->setContentsMargins(10, 4, 10, 10);
+    ui->containerTop->setContentsMargins(0, 4, 0, 10);
     ui->containerTop->setProperty("cssClass", ui->bottom_container->isVisible() ? "container-top-home" : "container-top");
 
     std::initializer_list<QWidget*> lblTitles = {ui->labelTitle1, ui->labelTitle3, ui->labelTitle4, ui->labelTrans, ui->labelShield};

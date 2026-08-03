@@ -35,10 +35,10 @@
 #include <QWindowStateChangeEvent>
 
 
-#define BASE_WINDOW_WIDTH 1200
-#define BASE_WINDOW_HEIGHT 740
-#define BASE_WINDOW_MIN_HEIGHT 620
-#define BASE_WINDOW_MIN_WIDTH 1100
+#define BASE_WINDOW_WIDTH 1280
+#define BASE_WINDOW_HEIGHT 800
+#define BASE_WINDOW_MIN_HEIGHT 780
+#define BASE_WINDOW_MIN_WIDTH 1180
 
 class ContentCornerArcWidget : public QWidget
 {
@@ -150,7 +150,7 @@ OrganicLifeGUI::OrganicLifeGUI(const NetworkStyle* networkStyle, QWidget* parent
         centralWidgetLayouot->addWidget(container);
 
         // Then topbar + the stackedWidget
-        QVBoxLayout *baseScreensContainer = new QVBoxLayout(this);
+        QVBoxLayout *baseScreensContainer = new QVBoxLayout();
         baseScreensContainer->setContentsMargins(0, 0, 0, 0);
         baseScreensContainer->setSpacing(0);
         container->setLayout(baseScreensContainer);
