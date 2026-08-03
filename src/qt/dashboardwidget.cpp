@@ -303,7 +303,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
         tile->setAttribute(Qt::WA_StyledBackground, true);
         setCssProperty(tile, "dashboard-stat-tile");
         auto* lay = new QHBoxLayout(tile);
-        lay->setContentsMargins(20, 10, 20, 10);
+        lay->setContentsMargins(12, 10, 16, 10);
         tile->setMinimumWidth(230);
         lay->setSpacing(12);
         auto* chip = new QLabel(tile);
