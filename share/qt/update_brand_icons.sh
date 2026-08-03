@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Regenerate app icons for all platforms from the canonical branding image.
 #
-# Preferred source (ignored/local): ./CTEAMCoin.png
-# Fallback source (tracked):        src/qt/res/images/ic-coin-cteam.png
+# Preferred source (tracked):       ./organiclifecoin-logo.png
+# Fallback source (tracked):        src/qt/res/images/img-logo-organiclife@3x.png
 # Outputs updated:
 #   - Qt GUI resources: src/qt/res/icons/bitcoin*.png + .ico + .icns
 #   - Linux/packaging:  share/pixmaps/pivx*.png + cteam.ico + pivx.ico + bitcoin*.png + bitcoin.icns
@@ -14,9 +14,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SRC_ICON="${ROOT_DIR}/CTEAMCoin.png"
+SRC_ICON="${ROOT_DIR}/organiclifecoin-logo.png"
 if [[ ! -f "$SRC_ICON" ]]; then
-  SRC_ICON="${ROOT_DIR}/src/qt/res/images/ic-coin-cteam.png"
+  SRC_ICON="${ROOT_DIR}/src/qt/res/images/img-logo-organiclife@3x.png"
 fi
 
 if [[ ! -f "$SRC_ICON" ]]; then
