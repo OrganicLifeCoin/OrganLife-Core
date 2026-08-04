@@ -170,6 +170,11 @@ private:
     QPushButton* feedToggle{nullptr};
     bool feedExpanded{false};
     void setFeedExpanded(bool expanded);
+    QWidget* chartBody{nullptr};
+    QPushButton* chartToggle{nullptr};
+    bool chartExpanded{true};
+    void setChartExpanded(bool expanded);
+    void animateSection(QWidget* body, bool expand, const std::function<void()>& onFinish = nullptr);
     void updateStatBalances(const interfaces::WalletBalances& balances);
     void updateStatRewards();
     void updateFeedNotes();

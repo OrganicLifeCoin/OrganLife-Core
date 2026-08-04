@@ -28,6 +28,7 @@
 #include <QThread>
 #include <QTime>
 #include <QVBoxLayout>
+#include <functional>
 
 #define DECORATION_SIZE 65
 #define NUM_ITEMS 3
@@ -272,10 +273,28 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_2->removeWidget(ui->layoutChart);
     ui->verticalLayout_2->removeWidget(ui->emptyContainerChart);
 
+    chartBody = new QWidget(analyticsModule);
+    chartBody->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(chartBody, "dashboard-chart-body");
+    auto* chartBodyLayout = new QVBoxLayout(chartBody);
+    chartBodyLayout->setContentsMargins(0, 0, 0, 0);
+    chartBodyLayout->setSpacing(2);
+    chartBodyLayout->addWidget(ui->layoutChart, 1);
+    chartBodyLayout->addWidget(ui->emptyContainerChart, 1);
+
     analyticsLayout->addWidget(rewardSummaryRow);
-    analyticsLayout->addWidget(ui->layoutChart, 1);
-    analyticsLayout->addWidget(ui->emptyContainerChart, 1);
+    analyticsLayout->addWidget(chartBody, 1);
     ui->verticalLayout_2->addWidget(analyticsModule, 1);
+
+    // Collapse toggle on the "Staking/MN Rewards" title row
+    chartToggle = new QPushButton(ui->right);
+    chartToggle->setCursor(Qt::PointingHandCursor);
+    chartToggle->setFlat(true);
+    chartToggle->setFixedSize(28, 28);
+    setCssProperty(chartToggle, "dashboard-feed-toggle");
+    chartToggle->setText("▾");
+    ui->horizontalLayout_3->addWidget(chartToggle, 0, Qt::AlignVCenter);
+    connect(chartToggle, &QPushButton::clicked, this, [this]() { setChartExpanded(!chartExpanded); });
 
     ui->layoutChart->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->layoutChart, "dashboard-chart-content");
@@ -384,7 +403,9 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_2->setSpacing(10);
     ui->verticalLayout_2->insertWidget(0, feedCard, 0);
     connect(feedToggle, &QPushButton::clicked, this, [this]() { setFeedExpanded(!feedExpanded); });
-    setFeedExpanded(false);
+    feedBody->setMaximumHeight(0);
+    feedBody->setVisible(false);
+    feedToggle->setText("▸");
     updateFeedNotes();
 
 #ifdef USE_QTCHARTS
@@ -606,11 +627,47 @@ void DashboardWidget::showList()
     updateTransactionViewState(hasTransactions, hasVisibleTransactions);
 }
 
+void DashboardWidget::animateSection(QWidget* body, bool expand, const std::function<void()>& onFinish)
+{
+    if (!body) { if (onFinish) onFinish(); return; }
+    auto* anim = new QPropertyAnimation(body, "maximumHeight", body);
+    anim->setDuration(220);
+    anim->setEasingCurve(QEasingCurve::InOutCubic);
+    const int contentH = body->sizeHint().height();
+    if (expand) {
+        body->setMaximumHeight(0);
+        body->setVisible(true);
+        anim->setStartValue(0);
+        anim->setEndValue(contentH > 0 ? contentH : 200);
+    } else {
+        anim->setStartValue(body->height());
+        anim->setEndValue(0);
+    }
+    connect(anim, &QPropertyAnimation::finished, body, [body, expand, onFinish]() {
+        if (expand) {
+            body->setMaximumHeight(QWIDGETSIZE_MAX);
+        } else {
+            body->setVisible(false);
+        }
+        if (onFinish) onFinish();
+    });
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
 void DashboardWidget::setFeedExpanded(bool expanded)
 {
+    if (feedExpanded == expanded && feedBody && feedBody->isVisible() == expanded) return;
     feedExpanded = expanded;
-    if (feedBody) feedBody->setVisible(expanded);
     if (feedToggle) feedToggle->setText(expanded ? "▾" : "▸");
+    animateSection(feedBody, expanded);
+}
+
+void DashboardWidget::setChartExpanded(bool expanded)
+{
+    if (chartExpanded == expanded && chartBody && chartBody->isVisible() == expanded) return;
+    chartExpanded = expanded;
+    if (chartToggle) chartToggle->setText(expanded ? "▾" : "▸");
+    animateSection(chartBody, expanded);
 }
 
 void DashboardWidget::updateFeedNotes()

@@ -5287,6 +5287,10 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     background: transparent;
 }
 
+*[cssClass="dashboard-chart-body"] {
+    background: transparent;
+}
+
 *[cssClass="dashboard-feed-toggle"] {
     color: #5c6b4a;
     background: #eef1e0;
