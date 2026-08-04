@@ -172,7 +172,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->right->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->right, "dashboard-shell-right");
     ui->right->setContentsMargins(0,0,0,0);
-    ui->verticalLayout_31->setContentsMargins(12, 0, 0, 0);
+    ui->verticalLayout_31->setContentsMargins(12, 0, 12, 0);
     ui->verticalLayout_31->setSpacing(0);
     ui->verticalLayout_2->setContentsMargins(8, 8, 8, 8);
     ui->verticalLayout_2->setSpacing(8);
