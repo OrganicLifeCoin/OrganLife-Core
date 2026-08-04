@@ -342,27 +342,49 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     rootV->addWidget(statRow);
     rootV->addLayout(columnsLayout, 1);
 
-    // --- V2: "Field notes" activity feed, top of the right column ---
+    // --- V2: "Field notes" activity feed, top of the right column (collapsible) ---
     auto* feedCard = new QWidget(ui->right);
     feedCard->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(feedCard, "dashboard-feed-card");
     auto* feedCardLayout = new QVBoxLayout(feedCard);
-    feedCardLayout->setContentsMargins(20, 16, 20, 14);
+    feedCardLayout->setContentsMargins(20, 10, 20, 10);
     feedCardLayout->setSpacing(2);
+    auto* feedHeader = new QHBoxLayout();
+    feedHeader->setContentsMargins(0, 0, 0, 0);
+    feedHeader->setSpacing(8);
+    auto* feedTitleCol = new QVBoxLayout();
+    feedTitleCol->setContentsMargins(0, 0, 0, 0);
+    feedTitleCol->setSpacing(1);
     auto* feedTitle = new QLabel(tr("Field notes"), feedCard);
     setCssProperty(feedTitle, "dashboard-feed-title");
     auto* feedSubtitle = new QLabel(tr("recent activity"), feedCard);
     setCssProperty(feedSubtitle, "dashboard-feed-subtitle");
-    feedCardLayout->addWidget(feedTitle);
-    feedCardLayout->addWidget(feedSubtitle);
+    feedTitleCol->addWidget(feedTitle);
+    feedTitleCol->addWidget(feedSubtitle);
+    feedHeader->addLayout(feedTitleCol, 1);
+    feedToggle = new QPushButton(feedCard);
+    feedToggle->setCursor(Qt::PointingHandCursor);
+    feedToggle->setFlat(true);
+    feedToggle->setFixedSize(28, 28);
+    setCssProperty(feedToggle, "dashboard-feed-toggle");
+    feedHeader->addWidget(feedToggle, 0, Qt::AlignVCenter);
+    feedCardLayout->addLayout(feedHeader);
+    feedBody = new QWidget(feedCard);
+    feedBody->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(feedBody, "dashboard-feed-body");
+    auto* feedBodyLayout = new QVBoxLayout(feedBody);
+    feedBodyLayout->setContentsMargins(0, 0, 0, 0);
+    feedBodyLayout->setSpacing(0);
     feedRowsLayout = new QVBoxLayout();
     feedRowsLayout->setContentsMargins(0, 6, 0, 0);
     feedRowsLayout->setSpacing(0);
-    feedCardLayout->addLayout(feedRowsLayout);
-    feedCard->setMaximumHeight(210);
+    feedBodyLayout->addLayout(feedRowsLayout);
+    feedCardLayout->addWidget(feedBody);
     feedCard->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
     ui->verticalLayout_2->setSpacing(10);
     ui->verticalLayout_2->insertWidget(0, feedCard, 0);
+    connect(feedToggle, &QPushButton::clicked, this, [this]() { setFeedExpanded(!feedExpanded); });
+    setFeedExpanded(false);
     updateFeedNotes();
 
 #ifdef USE_QTCHARTS
@@ -582,6 +604,13 @@ void DashboardWidget::showList()
     const bool hasTransactions = txModel && txModel->size() > 0;
     const bool hasVisibleTransactions = filter && filter->rowCount() > 0;
     updateTransactionViewState(hasTransactions, hasVisibleTransactions);
+}
+
+void DashboardWidget::setFeedExpanded(bool expanded)
+{
+    feedExpanded = expanded;
+    if (feedBody) feedBody->setVisible(expanded);
+    if (feedToggle) feedToggle->setText(expanded ? "▾" : "▸");
 }
 
 void DashboardWidget::updateFeedNotes()

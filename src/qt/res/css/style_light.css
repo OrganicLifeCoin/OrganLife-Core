@@ -5282,3 +5282,22 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     font-size: 12px;
     padding: 10px 0 6px 0;
 }
+
+*[cssClass="dashboard-feed-body"] {
+    background: transparent;
+}
+
+*[cssClass="dashboard-feed-toggle"] {
+    color: #5c6b4a;
+    background: #eef1e0;
+    border: none;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    padding-bottom: 2px;
+}
+
+*[cssClass="dashboard-feed-toggle"]:hover {
+    background: #e3e8ce;
+    color: #2b2b1a;
+}

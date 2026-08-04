@@ -48,6 +48,7 @@ using namespace QtCharts;
 class OrganicLifeGUI;
 class WalletModel;
 class QLabel;
+class QPushButton;
 class QVBoxLayout;
 class GovernanceDialogTests;
 
@@ -165,6 +166,10 @@ private:
     QLabel* statValueStaking{nullptr};
     QLabel* statValueRewards{nullptr};
     QVBoxLayout* feedRowsLayout{nullptr};
+    QWidget* feedBody{nullptr};
+    QPushButton* feedToggle{nullptr};
+    bool feedExpanded{false};
+    void setFeedExpanded(bool expanded);
     void updateStatBalances(const interfaces::WalletBalances& balances);
     void updateStatRewards();
     void updateFeedNotes();
