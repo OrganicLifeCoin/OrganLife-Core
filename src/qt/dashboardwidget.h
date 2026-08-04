@@ -171,6 +171,7 @@ private:
     bool feedExpanded{false};
     void setFeedExpanded(bool expanded);
     QWidget* chartBody{nullptr};
+    QWidget* analyticsCard{nullptr};
     QPushButton* chartToggle{nullptr};
     bool chartExpanded{true};
     void setChartExpanded(bool expanded);

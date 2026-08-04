@@ -176,7 +176,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_31->setSpacing(0);
     ui->verticalLayout_2->setContentsMargins(8, 8, 8, 8);
     ui->verticalLayout_2->setSpacing(8);
-    ui->horizontalLayout_3->setContentsMargins(10, 8, 10, 0);
+    ui->horizontalLayout_3->setContentsMargins(10, 8, 20, 0);
     ui->horizontalLayout_3->setSpacing(12);
 
     auto* analyticsModule = new QWidget(ui->right);
@@ -284,6 +284,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
 
     analyticsLayout->addWidget(rewardSummaryRow);
     analyticsLayout->addWidget(chartBody, 1);
+    analyticsCard = analyticsModule;
     ui->verticalLayout_2->addWidget(analyticsModule, 1);
 
     // Collapse toggle on the "Staking/MN Rewards" title row
@@ -403,9 +404,19 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_2->setSpacing(10);
     ui->verticalLayout_2->insertWidget(0, feedCard, 0);
     connect(feedToggle, &QPushButton::clicked, this, [this]() { setFeedExpanded(!feedExpanded); });
-    feedBody->setMaximumHeight(0);
-    feedBody->setVisible(false);
-    feedToggle->setText("▸");
+    {
+        QSettings settings;
+        feedExpanded = settings.value("dashboardFeedExpanded", false).toBool();
+        chartExpanded = settings.value("dashboardChartExpanded", true).toBool();
+    }
+    feedBody->setMaximumHeight(feedExpanded ? QWIDGETSIZE_MAX : 0);
+    feedBody->setVisible(feedExpanded);
+    feedToggle->setText(feedExpanded ? "▾" : "▸");
+    if (analyticsCard) {
+        analyticsCard->setMaximumHeight(chartExpanded ? QWIDGETSIZE_MAX : 0);
+        analyticsCard->setVisible(chartExpanded);
+    }
+    if (chartToggle) chartToggle->setText(chartExpanded ? "▾" : "▸");
     updateFeedNotes();
 
 #ifdef USE_QTCHARTS
@@ -659,15 +670,19 @@ void DashboardWidget::setFeedExpanded(bool expanded)
     if (feedExpanded == expanded && feedBody && feedBody->isVisible() == expanded) return;
     feedExpanded = expanded;
     if (feedToggle) feedToggle->setText(expanded ? "▾" : "▸");
+    QSettings settings;
+    settings.setValue("dashboardFeedExpanded", expanded);
     animateSection(feedBody, expanded);
 }
 
 void DashboardWidget::setChartExpanded(bool expanded)
 {
-    if (chartExpanded == expanded && chartBody && chartBody->isVisible() == expanded) return;
+    if (chartExpanded == expanded && analyticsCard && analyticsCard->isVisible() == expanded) return;
     chartExpanded = expanded;
     if (chartToggle) chartToggle->setText(expanded ? "▾" : "▸");
-    animateSection(chartBody, expanded);
+    QSettings settings;
+    settings.setValue("dashboardChartExpanded", expanded);
+    animateSection(analyticsCard, expanded);
 }
 
 void DashboardWidget::updateFeedNotes()
