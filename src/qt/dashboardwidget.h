@@ -173,6 +173,7 @@ private:
     QWidget* chartBody{nullptr};
     QWidget* analyticsCard{nullptr};
     QPushButton* chartToggle{nullptr};
+    int chartBottomStretchIdx{-1};
     bool chartExpanded{true};
     void setChartExpanded(bool expanded);
     void animateSection(QWidget* body, bool expand, const std::function<void()>& onFinish = nullptr);

@@ -286,6 +286,8 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     analyticsLayout->addWidget(chartBody, 1);
     analyticsCard = analyticsModule;
     ui->verticalLayout_2->addWidget(analyticsModule, 1);
+    ui->verticalLayout_2->addStretch(0);
+    chartBottomStretchIdx = ui->verticalLayout_2->count() - 1;
 
     // Collapse toggle on the "Staking/MN Rewards" title row
     chartToggle = new QPushButton(ui->right);
@@ -415,6 +417,10 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     if (analyticsCard) {
         analyticsCard->setMaximumHeight(chartExpanded ? QWIDGETSIZE_MAX : 0);
         analyticsCard->setVisible(chartExpanded);
+        if (chartBottomStretchIdx >= 0) {
+            ui->verticalLayout_2->setStretchFactor(analyticsCard, chartExpanded ? 1 : 0);
+            ui->verticalLayout_2->setStretch(chartBottomStretchIdx, chartExpanded ? 0 : 1);
+        }
     }
     if (chartToggle) chartToggle->setText(chartExpanded ? "▾" : "▸");
     updateFeedNotes();
@@ -682,6 +688,12 @@ void DashboardWidget::setChartExpanded(bool expanded)
     if (chartToggle) chartToggle->setText(expanded ? "▾" : "▸");
     QSettings settings;
     settings.setValue("dashboardChartExpanded", expanded);
+    // Keep the title row pinned to the top: hand the leftover stretch
+    // to a bottom spacer while the card is collapsed.
+    if (analyticsCard && chartBottomStretchIdx >= 0) {
+        ui->verticalLayout_2->setStretchFactor(analyticsCard, expanded ? 1 : 0);
+        ui->verticalLayout_2->setStretch(chartBottomStretchIdx, expanded ? 0 : 1);
+    }
     animateSection(analyticsCard, expanded);
 }
 
