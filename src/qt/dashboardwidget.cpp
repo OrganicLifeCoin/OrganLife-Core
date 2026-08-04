@@ -172,7 +172,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->right->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->right, "dashboard-shell-right");
     ui->right->setContentsMargins(0,0,0,0);
-    ui->verticalLayout_31->setContentsMargins(12, 0, 12, 0);
+    ui->verticalLayout_31->setContentsMargins(12, 12, 12, 12);
     ui->verticalLayout_31->setSpacing(0);
     ui->verticalLayout_2->setContentsMargins(8, 8, 8, 8);
     ui->verticalLayout_2->setSpacing(8);
@@ -302,7 +302,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->layoutChart->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->layoutChart, "dashboard-chart-content");
     ui->verticalLayout_8->setContentsMargins(0, 0, 0, 0);
-    ui->verticalLayout_8->setSpacing(6);
+    ui->verticalLayout_8->setSpacing(10);
     ui->verticalWidgetChart->setAttribute(Qt::WA_StyledBackground, true);
     ui->verticalWidgetChart->setMinimumHeight(220);
     setCssProperty(ui->verticalWidgetChart, "dashboard-chart-content");
@@ -984,7 +984,7 @@ void DashboardWidget::initChart()
     chart->legend()->setVisible(false);
     chart->legend()->setAlignment(Qt::AlignTop);
     chart->layout()->setContentsMargins(0, 0, 0, 0);
-    chart->setMargins({0, 0, 0, 0});
+    chart->setMargins({0, 0, 0, 16});
     chart->setBackgroundRoundness(0);
     chart->setAnimationOptions(QChart::NoAnimation);
     chart->setAnimationDuration(0);

@@ -2242,17 +2242,25 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 QGroupBox#container_chart_dropboxes {
     color:#e2e6d2;
     border:0;
-    margin-top:0px;
+    margin-top:18px;
 }
 
 QGroupBox#groupBoxChart {
-    margin-top:0px;
+    margin-top:18px;
+}
+
+QGroupBox#groupBoxChart::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 0px;
+    padding: 0 4px 4px 0;
 }
 
 QGroupBox#container_chart_dropboxes::title {
     subcontrol-origin: margin;
+    subcontrol-position: top left;
     left: 0px;
-    padding: 0 4px;
+    padding: 0 4px 4px 0;
     color:#e2e6d2;
 }
 
