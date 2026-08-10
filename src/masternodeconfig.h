@@ -35,6 +35,9 @@ public:
         const std::string& getPrivKey() const { return privKey; }
         const std::string& getTxHash() const { return txHash; }
         const std::string& getIp() const { return ip; }
+        // Returns true if the entry's key is a bech32 BLS operator key (deterministic masternode),
+        // false if it is a legacy WIF masternode key.
+        bool IsDeterministic() const;
     };
 
     CMasternodeConfig() { entries = std::vector<CMasternodeEntry>(); }

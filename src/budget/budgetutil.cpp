@@ -4,9 +4,9 @@
 
 #include "budget/budgetutil.h"
 
+#include "activemasternode.h"
 #include "budget/budgetmanager.h"
-#include "masternodeman.h"
-#include "masternodeconfig.h"
+#include "evo/deterministicmns.h"
 #include "util/validation.h"
 
 #ifdef ENABLE_WALLET
@@ -118,55 +118,8 @@ static UniValue voteFinalBudget(const uint256& budgetHash,
     return packVoteReturnValue(resultsObj, success, failed);
 }
 
-// Legacy masternodes
-static mnKeyList getMNKeys(const Optional<std::string>& mnAliasFilter,
-                           UniValue& resultsObj, int& failed)
-{
-    mnKeyList mnKeys;
-    for (const CMasternodeConfig::CMasternodeEntry& mne : masternodeConfig.getEntries()) {
-        if (mnAliasFilter && *mnAliasFilter != mne.getAlias()) continue;
-        CKey mnKey; CPubKey mnPubKey;
-        const std::string& mnAlias = mne.getAlias();
-        if (!CMessageSigner::GetKeysFromSecret(mne.getPrivKey(), mnKey, mnPubKey)) {
-            resultsObj.push_back(packErrorRetStatus(mnAlias, "Could not get key from masternode.conf"));
-            failed++;
-            continue;
-        }
-        CMasternode* pmn = mnodeman.Find(mnPubKey);
-        if (!pmn) {
-            resultsObj.push_back(packErrorRetStatus(mnAlias, "Can't find masternode by pubkey"));
-            failed++;
-            continue;
-        }
-        mnKeys.emplace_back(mnAlias, &pmn->vin.prevout, mnKey);
-    }
-    return mnKeys;
-}
-
-static mnKeyList getMNKeysForActiveMasternode(UniValue& resultsObj)
-{
-    // local node must be a masternode
-    if (!fMasterNode) {
-        throw std::runtime_error(_("This is not a masternode. 'local' option disabled."));
-    }
-
-    if (activeMasternode.vin == nullopt) {
-        throw std::runtime_error(_("Active Masternode not initialized."));
-    }
-
-    CKey mnKey; CPubKey mnPubKey;
-    activeMasternode.GetKeys(mnKey, mnPubKey);
-    CMasternode* pmn = mnodeman.Find(mnPubKey);
-    if (!pmn) {
-        resultsObj.push_back(packErrorRetStatus("local", "Can't find masternode by pubkey"));
-        return mnKeyList();
-    }
-
-    return {MnKeyData("local", &pmn->vin.prevout, mnKey)};
-}
-
 // Deterministic masternodes
-static mnKeyList getDMNVotingKeys(CWallet* const pwallet, const Optional<std::string>& mnAliasFilter, bool fFinal, UniValue& resultsObj, int& failed)
+static mnKeyList getDMNVotingKeys(CWallet* const pwallet, const Optional<std::string>& mnAliasFilter, UniValue& resultsObj, int& failed)
 {
     if (!pwallet) {
         throw std::runtime_error( "Wallet (with voting key) not found.");
@@ -190,10 +143,6 @@ static mnKeyList getDMNVotingKeys(CWallet* const pwallet, const Optional<std::st
     mnList.ForEachMN(true, [&](const CDeterministicMNCPtr& dmn) {
         bool filtered = mnFilter && dmn->proTxHash == mnFilter->proTxHash;
         if (!mnFilter || filtered) {
-            if (fFinal) {
-                // We should never get here. BLS operator key (for active mn) is needed.
-                throw std::runtime_error("Finalized budget voting is allowed only locally, from the masternode");
-            }
             // Get voting key from the wallet
             LOCK(pwallet->cs_wallet);
             CKey mnKey;
@@ -229,44 +178,38 @@ static mnKeyList getDMNKeysForActiveMasternode(UniValue& resultsObj)
     return {MnKeyData("local", &dmn->collateralOutpoint, sk)};
 }
 
-// vote on proposal (finalized budget, if fFinal=true) with all possible keys or a single mn (mnAliasFilter)
-// Note: for DMNs only proposal voting is allowed with the voting key
+// vote on proposal with all possible keys or a single mn (mnAliasFilter)
+// Note: only proposal voting is allowed with the voting key
 // (finalized budget voting requires the operator BLS key)
-UniValue mnBudgetVoteInner(CWallet* const pwallet, bool fLegacyMN, const uint256& budgetHash, bool fFinal,
+UniValue mnBudgetVoteInner(CWallet* const pwallet, const uint256& budgetHash, bool fFinal,
                                   const CBudgetVote::VoteDirection& nVote, const Optional<std::string>& mnAliasFilter)
 {
-    if (fFinal && !fLegacyMN) {
+    if (fFinal) {
         throw std::runtime_error("Finalized budget voting is allowed only locally, from the masternode");
     }
     UniValue resultsObj(UniValue::VARR);
     int failed = 0;
 
-    mnKeyList mnKeys = fLegacyMN ? getMNKeys(mnAliasFilter, resultsObj, failed)
-                                 : getDMNVotingKeys(pwallet, mnAliasFilter, fFinal, resultsObj, failed);
+    mnKeyList mnKeys = getDMNVotingKeys(pwallet, mnAliasFilter, resultsObj, failed);
 
     if (mnKeys.empty()) {
         return packVoteReturnValue(resultsObj, 0, failed);
     }
 
-    return (fFinal ? voteFinalBudget(budgetHash, mnKeys, resultsObj, failed)
-                   : voteProposal(budgetHash, nVote, mnKeys, resultsObj, failed));
+    return voteProposal(budgetHash, nVote, mnKeys, resultsObj, failed);
 }
 
-// vote on proposal (finalized budget, if fFinal=true) with the active local masternode
-// Note: for DMNs only finalized budget voting is allowed with the operator key
-// (proposal voting requires the voting key)
-UniValue mnLocalBudgetVoteInner(bool fLegacyMN, const uint256& budgetHash, bool fFinal,
-                                       const CBudgetVote::VoteDirection& nVote)
+// vote on a finalized budget with the active local masternode
+// Note: finalized budget voting is allowed only with the operator key
+UniValue mnLocalBudgetVoteInner(const uint256& budgetHash)
 {
     UniValue resultsObj(UniValue::VARR);
 
-    mnKeyList mnKeys = fLegacyMN ? getMNKeysForActiveMasternode(resultsObj)
-                                 : getDMNKeysForActiveMasternode(resultsObj);
+    mnKeyList mnKeys = getDMNKeysForActiveMasternode(resultsObj);
 
     if (mnKeys.empty()) {
         return packVoteReturnValue(resultsObj, 0, 1);
     }
 
-    return (fFinal ? voteFinalBudget(budgetHash, mnKeys, resultsObj, 0)
-                   : voteProposal(budgetHash, nVote, mnKeys, resultsObj, 0));
+    return voteFinalBudget(budgetHash, mnKeys, resultsObj, 0);
 }

@@ -33,10 +33,7 @@ void TxViewHolder::init(QWidget* holder, const QModelIndex &index, bool isHovere
     bool hasDoubleAmount = type == TransactionRecord::SendToSelfShieldedAddress || type == TransactionRecord::SendToSelfShieldToTransparent;
     txRow->showHideSecondAmount(hasDoubleAmount);
 
-    if (type != TransactionRecord::ZerocoinMint &&
-            type !=  TransactionRecord::ZerocoinSpend_Change_zPiv &&
-            type !=  TransactionRecord::StakeZPIV &&
-            type != TransactionRecord::Other) {
+    if (type != TransactionRecord::Other) {
 
         QString address = rIndex.data(Qt::DisplayRole).toString();
         if (!address.isEmpty()) {

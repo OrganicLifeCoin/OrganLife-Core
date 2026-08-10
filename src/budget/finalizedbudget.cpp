@@ -6,7 +6,7 @@
 #include "budget/finalizedbudget.h"
 
 #include "budget/budgetvoteutil.h"
-#include "masternodeman.h"
+#include "key_io.h"
 #include "net.h"
 #include "validation.h"
 

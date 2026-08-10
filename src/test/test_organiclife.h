@@ -6,6 +6,7 @@
 #define PIVX_TEST_TEST_PIVX_H
 
 #include "fs.h"
+#include "random.h"
 #include "scheduler.h"
 #include "txdb.h"
 

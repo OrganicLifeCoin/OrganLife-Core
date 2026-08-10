@@ -165,8 +165,7 @@ BITCOIN_TESTS =\
   test/util_tests.cpp \
   test/sha256compress_tests.cpp \
   test/upgrades_tests.cpp \
-  test/validation_block_tests.cpp \
-  test/zerocoindb_tests.cpp
+  test/validation_block_tests.cpp
 
 SAPLING_TESTS =\
     test/librust/libsapling_utils_tests.cpp \
@@ -201,7 +200,7 @@ if ENABLE_WALLET
 test_test_organiclife_LDADD += $(LIBBITCOIN_WALLET)
 endif
 
-test_test_organiclife_LDADD += $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CRYPTO) $(LIBUNIVALUE) $(LIBBITCOIN_ZEROCOIN) \
+test_test_organiclife_LDADD += $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CRYPTO) $(LIBUNIVALUE) \
   $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(LIBSECP256K1) $(LIBSAPLING) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS)
 
 test_test_organiclife_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
@@ -220,7 +219,7 @@ test_test_organiclife_fuzzy_LDADD =
 if ENABLE_ZMQ
 test_test_organiclife_fuzzy_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
 endif
-test_test_organiclife_fuzzy_LDADD += $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_ZEROCOIN) $(LIBBITCOIN_UTIL) $(LIBUNIVALUE) \
+test_test_organiclife_fuzzy_LDADD += $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBUNIVALUE) \
   $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) $(BOOST_LIBS) $(LIBSECP256K1) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS) $(BLS_LIBS)
 if ENABLE_WALLET
 test_test_organiclife_fuzzy_LDADD += $(LIBBITCOIN_WALLET)

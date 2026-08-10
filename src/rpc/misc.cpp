@@ -205,12 +205,8 @@ UniValue mnsync(const JSONRPCRequest& request)
         obj.pushKV("lastBudgetItem", g_tiertwo_sync_state.GetlastBudgetItem());
         obj.pushKV("lastFailure", masternodeSync.lastFailure);
         obj.pushKV("nCountFailures", masternodeSync.nCountFailures);
-        obj.pushKV("sumMasternodeList", masternodeSync.sumMasternodeList);
-        obj.pushKV("sumMasternodeWinner", masternodeSync.sumMasternodeWinner);
         obj.pushKV("sumBudgetItemProp", masternodeSync.sumBudgetItemProp);
         obj.pushKV("sumBudgetItemFin", masternodeSync.sumBudgetItemFin);
-        obj.pushKV("countMasternodeList", masternodeSync.countMasternodeList);
-        obj.pushKV("countMasternodeWinner", masternodeSync.countMasternodeWinner);
         obj.pushKV("countBudgetItemProp", masternodeSync.countBudgetItemProp);
         obj.pushKV("countBudgetItemFin", masternodeSync.countBudgetItemFin);
         obj.pushKV("RequestedMasternodeAssets", g_tiertwo_sync_state.GetSyncPhase());

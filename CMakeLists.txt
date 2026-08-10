@@ -159,7 +159,6 @@ endif()
 find_package(Boost COMPONENTS system filesystem chrono thread unit_test_framework REQUIRED)
 
 # Other required library dependencies
-find_package(GMP REQUIRED)
 find_package(LibEvent REQUIRED)
 find_package(Sodium REQUIRED)
 
@@ -191,7 +190,6 @@ else()
     set(ZMQ_FOUND FALSE)
 endif()
 
-include_directories(${GMP_INCLUDE_DIR})
 
 # run autogen.sh if missing header files from configure on Linux/Mac
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/configure")
@@ -368,8 +366,7 @@ set(SERVER_SOURCES
         ./src/interfaces/handler.cpp
         ./src/interfaces/wallet.cpp
         ./src/dbwrapper.cpp
-        ./src/legacy/validation_zerocoin_legacy.cpp
-        ./src/llmq/quorums.cpp
+                ./src/llmq/quorums.cpp
         ./src/llmq/quorums_chainlocks.cpp
         ./src/llmq/quorums_signing.cpp
         ./src/llmq/quorums_signing_shares.cpp
@@ -385,7 +382,7 @@ set(SERVER_SOURCES
         ./src/pow.cpp
         ./src/rest.cpp
         ./src/rpc/blockchain.cpp
-        ./src/rpc/masternode.cpp
+        ./src/rpc/
         ./src/rpc/budget.cpp
         ./src/rpc/mining.cpp
         ./src/rpc/misc.cpp
@@ -450,8 +447,6 @@ set(WALLET_SOURCES
         ./src/wallet/wallet.cpp
         ./src/wallet/walletdb.cpp
         ./src/wallet/walletutil.cpp
-        ./src/zpiv/zpivmodule.cpp
-        ./src/zpiv/zpos.cpp
         ./src/stakeinput.cpp
         )
 add_library(WALLET_A STATIC ${BitcoinHeaders} ${WALLET_SOURCES})
@@ -462,7 +457,7 @@ target_include_directories(WALLET_A PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/chiabls/src
         ${relic_SOURCE_DIR}/include
         ${relic_BINARY_DIR}/include
-        ${BerkeleyDB_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} ${sodium_INCLUDE_DIR} ${GMP_INCLUDE_DIR}
+        ${BerkeleyDB_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} ${sodium_INCLUDE_DIR}
         )
 
 set(BITCOIN_CRYPTO_SOURCES
@@ -507,30 +502,9 @@ set(BITCOIN_CRYPTO_SOURCES
 add_library(BITCOIN_CRYPTO_A STATIC ${BITCOIN_CRYPTO_SOURCES})
 target_include_directories(BITCOIN_CRYPTO_A PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-set(ZEROCOIN_SOURCES
-        ./src/libzerocoin/bignum.h
-        ./src/libzerocoin/bignum.cpp
-        ./src/libzerocoin/Coin.h
-        ./src/libzerocoin/CoinRandomnessSchnorrSignature.h
-        ./src/libzerocoin/CoinSpend.h
-        ./src/libzerocoin/Commitment.h
-        ./src/libzerocoin/Denominations.h
-        ./src/libzerocoin/ParamGeneration.h
-        ./src/libzerocoin/Params.h
-        ./src/libzerocoin/SpendType.h
-        ./src/libzerocoin/ZerocoinDefines.h
-        ./src/libzerocoin/Coin.cpp
-        ./src/libzerocoin/CoinRandomnessSchnorrSignature.cpp
-        ./src/libzerocoin/Denominations.cpp
-        ./src/libzerocoin/CoinSpend.cpp
-        ./src/libzerocoin/ParamGeneration.cpp
-        ./src/libzerocoin/Params.cpp
-        )
-add_library(ZEROCOIN_A STATIC ${ZEROCOIN_SOURCES})
-target_include_directories(ZEROCOIN_A PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${GMP_INCLUDE_DIR} ${Boost_INCLUDE_DIRS})
 
 set(COMMON_SOURCES
-        ./src/activemasternode.cpp
+        ./src/active
         ./src/base58.cpp
         ./src/bip38.cpp
         ./src/bls/bls_ies.cpp
@@ -567,7 +541,6 @@ set(COMMON_SOURCES
         ./src/llmq/quorums_init.cpp
         ./src/llmq/quorums_utils.cpp
         ./src/consensus/merkle.cpp
-        ./src/consensus/zerocoin_verify.cpp
         ./src/primitives/block.cpp
         ./src/primitives/transaction.cpp
         ./src/core_read.cpp
@@ -576,12 +549,7 @@ set(COMMON_SOURCES
         ./src/invalid.cpp
         ./src/key.cpp
         ./src/keystore.cpp
-        ./src/masternode.cpp
-        ./src/masternode-payments.cpp
-        ./src/masternode-sync.cpp
-        ./src/masternodeconfig.cpp
-        ./src/masternodeman.cpp
-        ./src/messagesigner.cpp
+                                                ./src/messagesigner.cpp
         ./src/netaddress.cpp
         ./src/netbase.cpp
         ./src/policy/feerate.cpp
@@ -721,14 +689,14 @@ add_dependencies(organiclife-tx libunivalue libsecp256k1 libzcashrust bls)
 target_link_libraries(organiclife-tx
         univalue
         COMMON_A
-        ZEROCOIN_A
+       
         UTIL_A
         BITCOIN_CRYPTO_A
         secp256k1
         bls
         SAPLING_A
         rustzcash
-        ${Boost_LIBRARIES} ${LIBEVENT_LIB} ${sodium_LIBRARY_RELEASE} ${GMP_LIBRARY} -ldl pthread
+        ${Boost_LIBRARIES} ${LIBEVENT_LIB} ${sodium_LIBRARY_RELEASE} -ldl pthread
         )
 if($ENV{target} MATCHES "Windows")
     target_link_libraries(organiclife-tx ${WINDOWS_LDADD})
@@ -748,14 +716,14 @@ target_include_directories(organiclifed PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/src/leveldb/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src/leveldb/helpers/memenv
         ${LIBEVENT_INCLUDE_DIR}
-        ${GMP_INCLUDE_DIR})
+       )
 target_link_libraries(organiclifed
         pthread
         SERVER_A
         WALLET_A
         COMMON_A
         univalue
-        ZEROCOIN_A
+       
         UTIL_A
         SAPLING_A
         BITCOIN_CRYPTO_A
@@ -764,7 +732,7 @@ target_link_libraries(organiclifed
         secp256k1
         bls
         rustzcash
-        ${BerkeleyDB_LIBRARIES} ${Boost_LIBRARIES} ${LIBEVENT_LIB} ${GMP_LIBRARY} pthread
+        ${BerkeleyDB_LIBRARIES} ${Boost_LIBRARIES} ${LIBEVENT_LIB} pthread
         )
 if($ENV{target} MATCHES "Windows")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wstack-protector -fstack-protector-all -fPIE -pipe -O2 -pthread -Wl,--dynamicbase -Wl,--nxcompat -Wl,--high-entropy-va -pie --static")

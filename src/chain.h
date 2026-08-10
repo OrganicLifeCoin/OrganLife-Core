@@ -18,7 +18,6 @@
 #include "tinyformat.h"
 #include "uint256.h"
 #include "util/system.h"
-#include "libzerocoin/Denominations.h"
 
 #include <vector>
 
@@ -304,60 +303,6 @@ public:
             if (obj.nVersion >= 8) {
                 READWRITE(obj.hashFinalSaplingRoot);
                 READWRITE(obj.nSaplingValue);
-            }
-        } else if (nSerVersion > DBI_OLD_SER_VERSION && ser_action.ForRead()) {
-            // Serialization with CLIENT_VERSION = 4009901
-            std::map<libzerocoin::CoinDenomination, int64_t> mapZerocoinSupply;
-            int64_t nMoneySupply = 0;
-            READWRITE(nMoneySupply);
-            READWRITE(obj.nFlags);
-            READWRITE(obj.nVersion);
-            READWRITE(obj.vStakeModifier);
-            READWRITE(obj.hashPrev);
-            READWRITE(obj.hashMerkleRoot);
-            READWRITE(obj.nTime);
-            READWRITE(obj.nBits);
-            READWRITE(obj.nNonce);
-            if (obj.nVersion > 3) {
-                READWRITE(mapZerocoinSupply);
-                if (obj.nVersion < 7) READWRITE(obj.nAccumulatorCheckpoint);
-            }
-        } else if (ser_action.ForRead()) {
-            // Serialization with CLIENT_VERSION = 4009900-
-            int64_t nMint = 0;
-            uint256 hashNext{};
-            int64_t nMoneySupply = 0;
-            READWRITE(nMint);
-            READWRITE(nMoneySupply);
-            READWRITE(obj.nFlags);
-            if (!Params().GetConsensus().NetworkUpgradeActive(obj.nHeight, Consensus::UPGRADE_V3_4)) {
-                uint64_t nStakeModifier = 0;
-                READWRITE(nStakeModifier);
-                SER_READ(obj, obj.SetStakeModifier(nStakeModifier, obj.GeneratedStakeModifier()));
-            } else {
-                uint256 nStakeModifierV2;
-                READWRITE(nStakeModifierV2);
-                SER_READ(obj, obj.SetStakeModifier(nStakeModifierV2));
-            }
-            if (obj.IsProofOfStake()) {
-                COutPoint prevoutStake;
-                unsigned int nStakeTime = 0;
-                READWRITE(prevoutStake);
-                READWRITE(nStakeTime);
-            }
-            READWRITE(obj.nVersion);
-            READWRITE(obj.hashPrev);
-            READWRITE(hashNext);
-            READWRITE(obj.hashMerkleRoot);
-            READWRITE(obj.nTime);
-            READWRITE(obj.nBits);
-            READWRITE(obj.nNonce);
-            if (obj.nVersion > 3) {
-                std::map<libzerocoin::CoinDenomination, int64_t> mapZerocoinSupply;
-                std::vector<libzerocoin::CoinDenomination> vMintDenominationsInBlock;
-                READWRITE(obj.nAccumulatorCheckpoint);
-                READWRITE(mapZerocoinSupply);
-                READWRITE(vMintDenominationsInBlock);
             }
         }
     }

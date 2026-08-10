@@ -8,7 +8,6 @@
 #define PIVX_CONSENSUS_PARAMS_H
 
 #include "amount.h"
-#include "libzerocoin/Params.h"
 #include "optional.h"
 #include "uint256.h"
 #include <map>
@@ -28,10 +27,7 @@ enum UpgradeIndex : uint32_t {
     BASE_NETWORK,
     UPGRADE_POS,
     UPGRADE_POS_V2,
-    UPGRADE_ZC,
-    UPGRADE_ZC_V2,
     UPGRADE_BIP65,
-    UPGRADE_ZC_PUBLIC,
     UPGRADE_V3_4,
     UPGRADE_V4_0,
     UPGRADE_V5_0,
@@ -207,8 +203,6 @@ struct Params {
 
     // height-based activations
     int height_last_invalid_UTXO;
-    int height_last_ZC_AccumCheckpoint;
-    int height_last_ZC_WrappedSerials;
 
     // validation by-pass
     int64_t nPivxBadBlockTime;
@@ -247,30 +241,6 @@ struct Params {
             return (utxoFromBlockTime + nStakeMinAge <= contextTime);
         // with stake modifier V2+, we require the utxo to be nStakeMinDepth deep in the chain
         return (contextHeight - utxoFromBlockHeight >= nStakeMinDepth);
-    }
-
-
-    /*
-     * (Legacy) Zerocoin consensus params
-     */
-    std::string ZC_Modulus;  // parsed in Zerocoin_Params (either as hex or dec string)
-    int ZC_MaxPublicSpendsPerTx;
-    int ZC_MaxSpendsPerTx;
-    int ZC_MinMintConfirmations;
-    CAmount ZC_MinMintFee;
-    int ZC_MinStakeDepth;
-    int ZC_TimeStart;
-    int ZC_HeightStart;
-
-    libzerocoin::ZerocoinParams* Zerocoin_Params(bool useModulusV1) const
-    {
-        static CBigNum bnHexModulus = 0;
-        if (!bnHexModulus) bnHexModulus.SetHex(ZC_Modulus);
-        static libzerocoin::ZerocoinParams ZCParamsHex = libzerocoin::ZerocoinParams(bnHexModulus);
-        static CBigNum bnDecModulus = 0;
-        if (!bnDecModulus) bnDecModulus.SetDec(ZC_Modulus);
-        static libzerocoin::ZerocoinParams ZCParamsDec = libzerocoin::ZerocoinParams(bnDecModulus);
-        return (useModulusV1 ? &ZCParamsHex : &ZCParamsDec);
     }
 
     /**

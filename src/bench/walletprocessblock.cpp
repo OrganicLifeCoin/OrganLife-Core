@@ -106,7 +106,6 @@ static void initBasics()
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
     GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
 
-    zerocoinDB.reset(new CZerocoinDB(0, true));
     pSporkDB.reset(new CSporkDB(0, true));
     pblocktree.reset(new CBlockTreeDB(1 << 20, true));
     pcoinsdbview.reset(new CCoinsViewDB(1 << 23, true));
@@ -207,7 +206,6 @@ static void WalletProcessBlockBench(benchmark::State& state)
     pcoinsTip.reset();
     pcoinsdbview.reset();
     pblocktree.reset();
-    zerocoinDB.reset();
     pSporkDB.reset();
 }
 

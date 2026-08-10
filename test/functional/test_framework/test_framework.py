@@ -356,7 +356,15 @@ class PivxTestFramework():
         def find_conn(node, peer_subversion, inbound):
             return next(filter(lambda peer: peer['subver'] == peer_subversion and peer['inbound'] == inbound, node.getpeerinfo()), None)
 
-        wait_until(lambda: find_conn(from_connection, to_connection_subver, inbound=False) is not None)
+        def connect():
+            # "onetry" connections are not retried by the node: if the first
+            # attempt raced a node that was still starting up, the socket dies
+            # and the peer never connects. Re-issue the attempt until it sticks.
+            if find_conn(from_connection, to_connection_subver, inbound=False) is None:
+                from_connection.addnode(ip_port, "onetry")
+            return find_conn(from_connection, to_connection_subver, inbound=False) is not None
+
+        wait_until(connect)
         wait_until(lambda: find_conn(to_connection, from_connection_subver, inbound=True) is not None)
 
         def check_bytesrecv(peer, msg_type, min_bytes_recv):
@@ -529,7 +537,7 @@ class PivxTestFramework():
             node_0_datadir = os.path.join(get_datadir_path(cachedir, 0), "regtest")
             for i in range(from_num, MAX_NODES):
                 node_i_datadir = os.path.join(get_datadir_path(cachedir, i), "regtest")
-                for subdir in ["blocks", "chainstate", "evodb", "sporks", "zerocoin"]:
+                for subdir in ["blocks", "chainstate", "evodb", "sporks"]:
                     copy_and_overwrite(os.path.join(node_0_datadir, subdir),
                                     os.path.join(node_i_datadir, subdir))
                 initialize_datadir(cachedir, i)  # Overwrite port/rpcport in pivx.conf
@@ -549,7 +557,7 @@ class PivxTestFramework():
 
             for i in range(MAX_NODES):
                 for entry in os.listdir(cache_path(i)):
-                    if entry not in ['wallet.dat', 'chainstate', 'blocks', 'sporks', 'evodb', 'zerocoin', 'backups', "wallets", "llmq"]:
+                    if entry not in ['wallet.dat', 'chainstate', 'blocks', 'sporks', 'evodb', 'backups', "wallets", "llmq"]:
                         os.remove(cache_path(i, entry))
 
         def clean_cache_dir():
@@ -1702,16 +1710,16 @@ class PivxTier2TestFramework(PivxTestFramework):
         self.minerPos = 4
         self.remoteDMN1Pos = 5
 
-        self.extra_args = [["-nuparams=v5_shield:249", "-nuparams=PIVX_v5.5:250", "-nuparams=v6_evo:250", "-whitelist=127.0.0.1"]] * self.num_nodes
+        self.extra_args = [["-nuparams=v5_shield:249", "-nuparams=OLC_v5.5:250", "-nuparams=v6_evo:250", "-whitelist=127.0.0.1"]] * self.num_nodes
         for i in [self.remoteOnePos, self.remoteTwoPos, self.remoteDMN1Pos]:
             self.extra_args[i] += ["-listen", "-externalip=127.0.0.1"]
-        self.extra_args[self.minerPos].append("-sporkkey=7C7LXuERaWY3cnfKZn345cAQnz7BqT5FStjid79GXPU3r3sMhRM")
+        self.extra_args[self.minerPos].append("-sporkkey=932HEevBSujW2ud7RfB1YF91AFygbBRQj3de3LyaCRqNzKKgWXi")
 
         self.masternodeOneAlias = "mnOne"
         self.masternodeTwoAlias = "mntwo"
 
-        self.mnOnePrivkey = "7B9B1SPPxQNKR4b6Hq5jhJEzPq3egHWLoNkqK6SfijrNi3jtdRh"
-        self.mnTwoPrivkey = "7BNowr8HYtRmJWJmFHHiyRqGb2HnDX8DwNUvUdia3uLTs1HvmPN"
+        self.mnOnePrivkey = "cNB3ufZSBWHJhrkqQJgg6ECJ2LzmK8ufcfb6aVKeA5oAjNdXScjh"
+        self.mnTwoPrivkey = "cNkMbZ8f8SSMrNLzVAtB9JZEVW5rDYNdx9YF68pdKKDx3MybLZDX"
 
         # Updated in setup_3_masternodes_network() to be called at the start of run_test
         self.ownerOne = None        # self.nodes[self.ownerOnePos]

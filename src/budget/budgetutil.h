@@ -15,13 +15,12 @@
 
 class CWallet;
 
-// vote on proposal (finalized budget, if fFinal=true) with the active local masternode
-// Note: for DMNs only finalized budget voting is allowed with the operator key
-// (proposal voting requires the voting key)
-UniValue mnLocalBudgetVoteInner(bool fLegacyMN, const uint256& budgetHash, bool fFinal,
-                                       const CBudgetVote::VoteDirection& nVote);
+// vote on a finalized budget with the active local masternode
+// Note: finalized budget voting is allowed only with the operator key
+UniValue mnLocalBudgetVoteInner(const uint256& budgetHash);
 
-UniValue mnBudgetVoteInner(CWallet* const pwallet, bool fLegacyMN, const uint256& budgetHash, bool fFinal,
+// vote on a proposal with the wallet (voting key) of all masternodes, or a single one (mnAliasFilter)
+UniValue mnBudgetVoteInner(CWallet* const pwallet, const uint256& budgetHash, bool fFinal,
                                   const CBudgetVote::VoteDirection& nVote, const Optional<std::string>& mnAliasFilter);
 
 #endif // PIVX_BUDGET_BUDGETUTIL_H

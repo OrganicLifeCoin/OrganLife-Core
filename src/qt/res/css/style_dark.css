@@ -3661,16 +3661,6 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     border-radius: 12px;
 }
 
-*[cssClass="coin-icon-zpiv"] {
-    qproperty-icon: url("://ic-coin-zpiv") off,
-    url("://ic-coin-zpiv") on ;
-    qproperty-iconSize: 28px 28px;
-    background-position:center;
-    background-repeat:no-repeat;
-    background-color: #FFFFFF;
-    border:  2px solid #0d1008;
-    border-radius: 12px;
-}
 
 
 
@@ -5375,4 +5365,43 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 *[cssClass="dashboard-feed-toggle"]:hover {
     background: rgba(255, 255, 255, 0.12);
     color: #f4f6e2;
+}
+
+/*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+HH       V2 RIGHT COLUMN SCROLL
+HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
+
+QScrollArea[cssClass="dashboard-right-scroll"] {
+    background: transparent;
+    border: none;
+}
+
+*[cssClass="dashboard-right-scroll-content"] {
+    background: transparent;
+}
+
+QScrollArea[cssClass="dashboard-right-scroll"] QScrollBar:vertical {
+    background: rgba(42, 51, 25, 0.14);
+    width: 10px;
+    border-radius: 5px;
+    margin: 4px 2px 4px 2px;
+}
+
+QScrollArea[cssClass="dashboard-right-scroll"] QScrollBar::handle:vertical {
+    background: rgba(143, 179, 95, 0.40);
+    min-height: 34px;
+    border-radius: 5px;
+}
+
+QScrollArea[cssClass="dashboard-right-scroll"] QScrollBar::handle:vertical:hover {
+    background: rgba(143, 179, 95, 0.52);
+}
+
+QScrollArea[cssClass="dashboard-right-scroll"] QScrollBar::add-line:vertical,
+QScrollArea[cssClass="dashboard-right-scroll"] QScrollBar::sub-line:vertical,
+QScrollArea[cssClass="dashboard-right-scroll"] QScrollBar::add-page:vertical,
+QScrollArea[cssClass="dashboard-right-scroll"] QScrollBar::sub-page:vertical {
+    background: transparent;
+    border: 0;
+    height: 0;
 }

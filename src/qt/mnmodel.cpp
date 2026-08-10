@@ -5,23 +5,37 @@
 
 #include "mnmodel.h"
 
-#include "coincontrol.h"
-#include "guitransactionsutils.h"
-#include "masternode.h"
-#include "masternodeman.h"
+#include "chainparams.h"
+#include "evo/deterministicmns.h"
 #include "net.h" // for validateMasternodeIP
-#include "primitives/transaction.h"
-#include "qt/bitcoinunits.h"
-#include "qt/optionsmodel.h"
+#include "netbase.h"
+#include "optional.h"
 #include "qt/walletmodel.h"
-#include "qt/walletmodeltransaction.h"
+#include "rpc/rpcevo.h"
 #include "tiertwo/tiertwo_sync_state.h"
-#include "uint256.h"
 
-#include <QFile>
 #include <QHostAddress>
 
 MNModel::MNModel(QObject *parent) : QAbstractTableModel(parent) {}
+
+// Returns the DMN for the given conf entry at the chain tip, or null if the
+// entry is not (yet) registered.
+static CDeterministicMNCPtr findDMN(const CMasternodeConfig::CMasternodeEntry& mne)
+{
+    CService service;
+    if (!Lookup(mne.getIp(), service, Params().GetDefaultPort(), false)) return nullptr;
+    return deterministicMNManager->GetListAtChainTip().GetMNByService(service);
+}
+
+// Returns the conf entry for the given alias, if found.
+static Optional<CMasternodeConfig::CMasternodeEntry> getMasternodeEntry(const QString& mnAlias)
+{
+    const std::string alias = mnAlias.toStdString();
+    for (const auto& mne : masternodeConfig.getEntries()) {
+        if (mne.getAlias() == alias) return mne;
+    }
+    return nullopt;
+}
 
 void MNModel::init()
 {
@@ -31,24 +45,17 @@ void MNModel::init()
 void MNModel::updateMNList()
 {
     beginResetModel();
-    int mnMinConf = getMasternodeCollateralMinConf();
     nodes.clear();
     collateralTxAccepted.clear();
+    const auto& mnList = deterministicMNManager->GetListAtChainTip();
     for (const CMasternodeConfig::CMasternodeEntry& mne : masternodeConfig.getEntries()) {
-        int nIndex;
-        if (!mne.castOutputIndex(nIndex))
-            continue;
-        const uint256& txHash = uint256S(mne.getTxHash());
-        CTxIn txIn(txHash, uint32_t(nIndex));
-        CMasternode* pmn = mnodeman.Find(txIn.prevout);
-        if (!pmn) {
-            pmn = new CMasternode();
-            pmn->vin = txIn;
+        CDeterministicMNCPtr dmn = nullptr;
+        CService service;
+        if (Lookup(mne.getIp(), service, Params().GetDefaultPort(), false)) {
+            dmn = mnList.GetMNByService(service);
         }
-        nodes.insert(QString::fromStdString(mne.getAlias()), std::make_pair(QString::fromStdString(mne.getIp()), pmn));
-        if (walletModel) {
-            collateralTxAccepted.insert(mne.getTxHash(), walletModel->getWalletTxDepth(txHash) >= mnMinConf);
-        }
+        nodes.insert(QString::fromStdString(mne.getAlias()), std::make_pair(QString::fromStdString(mne.getIp()), dmn));
+        collateralTxAccepted.insert(mne.getAlias(), dmn != nullptr);
     }
     endResetModel();
 }
@@ -73,47 +80,34 @@ QVariant MNModel::data(const QModelIndex &index, int role) const
     if (!index.isValid())
             return QVariant();
 
-    // rec could be null, always verify it.
-    CMasternode* rec = static_cast<CMasternode*>(index.internalPointer());
-    bool isAvailable = rec;
     int row = index.row();
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
+        if (row < 0 || row >= nodes.size())
+            return QVariant();
+        const QString mnAlias = nodes.keys().value(row);
+        const std::pair<QString, CDeterministicMNCPtr>& pair = nodes.values().value(row);
+        const CDeterministicMNCPtr& dmn = pair.second;
         switch (index.column()) {
             case ALIAS:
-                return nodes.keys().value(row);
+                return mnAlias;
             case ADDRESS:
-                return nodes.values().value(row).first;
+                return pair.first;
             case PUB_KEY:
-                return (isAvailable) ? QString::fromStdString(nodes.values().value(row).second->pubKeyMasternode.GetHash().GetHex()) : "Not available";
+                return (dmn) ? QString::fromStdString(dmn->pdmnState->pubKeyOperator.Get().GetHash().GetHex()) : "Not available";
             case COLLATERAL_ID:
-                return (isAvailable) ? QString::fromStdString(rec->vin.prevout.hash.GetHex()) : "Not available";
+                return (dmn) ? QString::fromStdString(dmn->collateralOutpoint.hash.GetHex()) : "Not available";
             case COLLATERAL_OUT_INDEX:
-                return (isAvailable) ? QString::number(rec->vin.prevout.n) : "Not available";
+                return (dmn) ? QString::number(dmn->collateralOutpoint.n) : "Not available";
             case STATUS: {
-                std::pair<QString, CMasternode*> pair = nodes.values().value(row);
-                std::string status = "MISSING";
-                if (pair.second) {
-                    status = pair.second->Status();
-                    // updateMNList() uses REMOVE without a collateral pubkey for local entries
-                    // that are configured but not present in the network list.
-                    if (status == "REMOVE" && !pair.second->pubKeyCollateralAddress.IsValid()) {
-                        return "MISSING";
-                    }
-                }
-                return QString::fromStdString(status);
+                if (!dmn) return tr("MISSING");
+                return dmn->IsPoSeBanned() ? tr("POSE_BANNED") : tr("ENABLED");
             }
             case PRIV_KEY: {
-                if (isAvailable) {
-                    for (CMasternodeConfig::CMasternodeEntry mne : masternodeConfig.getEntries()) {
-                        if (mne.getTxHash().compare(rec->vin.prevout.hash.GetHex()) == 0) {
-                            return QString::fromStdString(mne.getPrivKey());
-                        }
-                    }
-                }
-                return "Not available";
+                const Optional<CMasternodeConfig::CMasternodeEntry>& mne = getMasternodeEntry(mnAlias);
+                return (mne) ? QString::fromStdString(mne->getPrivKey()) : "Not available";
             }
             case WAS_COLLATERAL_ACCEPTED:{
-                return isAvailable && collateralTxAccepted.value(rec->vin.prevout.hash.GetHex());
+                return collateralTxAccepted.value(mnAlias.toStdString());
             }
         }
     }
@@ -123,15 +117,9 @@ QVariant MNModel::data(const QModelIndex &index, int role) const
 QModelIndex MNModel::index(int row, int column, const QModelIndex& parent) const
 {
     Q_UNUSED(parent);
-    std::pair<QString, CMasternode*> pair = nodes.values().value(row);
-    CMasternode* data = pair.second;
-    if (data) {
-        return createIndex(row, column, data);
-    } else if (!pair.first.isEmpty()) {
-        return createIndex(row, column, nullptr);
-    } else {
+    if (row < 0 || row >= nodes.size())
         return QModelIndex();
-    }
+    return createIndex(row, column, nullptr);
 }
 
 
@@ -148,41 +136,31 @@ bool MNModel::removeMn(const QModelIndex& modelIndex)
 
 bool MNModel::addMn(CMasternodeConfig::CMasternodeEntry* mne)
 {
-    beginInsertRows(QModelIndex(), nodes.size(), nodes.size());
-    int nIndex;
-    if (!mne->castOutputIndex(nIndex))
-        return false;
+    if (!mne) return false;
 
-    CMasternode* pmn = mnodeman.Find(COutPoint(uint256S(mne->getTxHash()), uint32_t(nIndex)));
-    nodes.insert(QString::fromStdString(mne->getAlias()), std::make_pair(QString::fromStdString(mne->getIp()), pmn));
+    beginInsertRows(QModelIndex(), nodes.size(), nodes.size());
+    nodes.insert(QString::fromStdString(mne->getAlias()),
+                 std::make_pair(QString::fromStdString(mne->getIp()), nullptr));
     endInsertRows();
     return true;
 }
 
-int MNModel::getMNState(const QString& mnAlias)
-{
-    QMap<QString, std::pair<QString, CMasternode*>>::const_iterator it = nodes.find(mnAlias);
-    if (it != nodes.end()) return it.value().second->GetActiveState();
-    throw std::runtime_error(std::string("Masternode alias not found"));
-}
-
 bool MNModel::isMNInactive(const QString& mnAlias)
 {
-    int activeState = getMNState(mnAlias);
-    return activeState == CMasternode::MASTERNODE_EXPIRED || activeState == CMasternode::MASTERNODE_REMOVE;
+    return !isMNActive(mnAlias);
 }
 
 bool MNModel::isMNActive(const QString& mnAlias)
 {
-    int activeState = getMNState(mnAlias);
-    return activeState == CMasternode::MASTERNODE_PRE_ENABLED || activeState == CMasternode::MASTERNODE_ENABLED;
+    const Optional<CMasternodeConfig::CMasternodeEntry>& mne = getMasternodeEntry(mnAlias);
+    if (!mne) return false;
+    return findDMN(*mne) != nullptr;
 }
 
 bool MNModel::isMNCollateralMature(const QString& mnAlias)
 {
-    QMap<QString, std::pair<QString, CMasternode*>>::const_iterator it = nodes.find(mnAlias);
-    if (it != nodes.end()) return collateralTxAccepted.value(it.value().second->vin.prevout.hash.GetHex());
-    throw std::runtime_error(std::string("Masternode alias not found"));
+    // The collateral is created inside the registration tx, always mature.
+    return true;
 }
 
 bool MNModel::isMNsNetworkSynced()
@@ -200,89 +178,25 @@ CAmount MNModel::getMNCollateralRequiredAmount()
     return Params().GetConsensus().nMNCollateralAmt;
 }
 
-int MNModel::getMasternodeCollateralMinConf()
+bool MNModel::startDMN(const CMasternodeConfig::CMasternodeEntry& mne, std::string& strError)
 {
-    return Params().GetConsensus().MasternodeCollateralMinConf();
+    if (!walletModel || !walletModel->getWallet()) {
+        strError = tr("walletModel not set").toStdString();
+        return false;
+    }
+    try {
+        std::string txid;
+        if (!StartDeterministicMasternode(*walletModel->getWallet(), mne, txid, strError))
+            return false;
+        return true;
+    } catch (const std::exception& e) {
+        strError = e.what();
+        return false;
+    }
 }
 
-bool MNModel::createMNCollateral(
-        const QString& alias,
-        const QString& addr,
-        COutPoint& ret_outpoint,
-        QString& ret_error)
-{
-    SendCoinsRecipient sendCoinsRecipient(addr, alias, getMNCollateralRequiredAmount(), "");
-
-    // Send the 10 tx to one of your address
-    QList<SendCoinsRecipient> recipients;
-    recipients.append(sendCoinsRecipient);
-    WalletModelTransaction currentTransaction(recipients);
-    WalletModel::SendCoinsReturn prepareStatus;
-
-    // no P2CS delegations
-    prepareStatus = walletModel->prepareTransaction(&currentTransaction, coinControl, false);
-    QString returnMsg = tr("Unknown error");
-    // process prepareStatus and on error generate message shown to user
-    CClientUIInterface::MessageBoxFlags informType;
-    returnMsg = GuiTransactionsUtils::ProcessSendCoinsReturn(
-            prepareStatus,
-            walletModel,
-            informType, // this flag is not needed
-            BitcoinUnits::formatWithUnit(walletModel->getOptionsModel()->getDisplayUnit(),
-                                         currentTransaction.getTransactionFee()),
-            true
-    );
-
-    if (prepareStatus.status != WalletModel::OK) {
-        ret_error = tr("Prepare master node failed.\n\n%1\n").arg(returnMsg);
-        return false;
-    }
-
-    WalletModel::SendCoinsReturn sendStatus = walletModel->sendCoins(currentTransaction);
-    // process sendStatus and on error generate message shown to user
-    returnMsg = GuiTransactionsUtils::ProcessSendCoinsReturn(sendStatus, walletModel, informType);
-
-    if (sendStatus.status != WalletModel::OK) {
-        ret_error = tr("Cannot send collateral transaction.\n\n%1").arg(returnMsg);
-        return false;
-    }
-
-    // look for the tx index of the collateral
-    CTransactionRef walletTx = currentTransaction.getTransaction();
-    std::string txID = walletTx->GetHash().GetHex();
-    int indexOut = -1;
-    for (int i=0; i < (int)walletTx->vout.size(); i++) {
-        const CTxOut& out = walletTx->vout[i];
-        if (out.nValue == getMNCollateralRequiredAmount()) {
-            indexOut = i;
-            break;
-        }
-    }
-    if (indexOut == -1) {
-        ret_error = tr("Invalid collateral output index");
-        return false;
-    }
-    // save the collateral outpoint
-    ret_outpoint = COutPoint(walletTx->GetHash(), indexOut);
-    return true;
-}
-
-bool MNModel::startLegacyMN(const CMasternodeConfig::CMasternodeEntry& mne, int chainHeight, std::string& strError)
-{
-    CMasternodeBroadcast mnb;
-    if (!CMasternodeBroadcast::Create(mne.getIp(), mne.getPrivKey(), mne.getTxHash(), mne.getOutputIndex(), strError, mnb, false, chainHeight))
-        return false;
-
-    mnodeman.UpdateMasternodeList(mnb);
-    if (activeMasternode.pubKeyMasternode == mnb.GetPubKey()) {
-        activeMasternode.EnableHotColdMasterNode(mnb.vin, mnb.addr);
-    }
-    mnb.Relay();
-    return true;
-}
-
-void MNModel::startAllLegacyMNs(bool onlyMissing, int& amountOfMnFailed, int& amountOfMnStarted,
-                                std::string* aliasFilter, std::string* error_ret)
+void MNModel::startAllMNs(bool onlyMissing, int& amountOfMnFailed, int& amountOfMnStarted,
+                          std::string* aliasFilter, std::string* error_ret)
 {
     for (const auto& mne : masternodeConfig.getEntries()) {
         if (!aliasFilter) {
@@ -293,17 +207,12 @@ void MNModel::startAllLegacyMNs(bool onlyMissing, int& amountOfMnFailed, int& am
                     amountOfMnFailed++;
                 continue;
             }
-
-            if (!isMNCollateralMature(mnAlias)) {
-                amountOfMnFailed++;
-                continue;
-            }
         } else if (*aliasFilter != mne.getAlias()){
             continue;
         }
 
         std::string ret_str;
-        if (!startLegacyMN(mne, walletModel->getLastBlockProcessedNum(), ret_str)) {
+        if (!startDMN(mne, ret_str)) {
             amountOfMnFailed++;
             if (error_ret) *error_ret = ret_str;
         } else {
@@ -312,11 +221,10 @@ void MNModel::startAllLegacyMNs(bool onlyMissing, int& amountOfMnFailed, int& am
     }
 }
 
-CMasternodeConfig::CMasternodeEntry* MNModel::createLegacyMN(COutPoint& collateralOut,
-                             const std::string& alias,
-                             std::string& serviceAddr,
+CMasternodeConfig::CMasternodeEntry* MNModel::createDMNEntry(const std::string& alias,
+                             const std::string& serviceAddr,
                              const std::string& port,
-                             const std::string& mnKeyString,
+                             const std::string& operatorKeyString,
                              QString& ret_error)
 {
     // Update the conf file
@@ -359,7 +267,8 @@ CMasternodeConfig::CMasternodeEntry* MNModel::createLegacyMN(COutPoint& collater
         if (!(iss >> alias >> ip >> privKey >> txHash >> outputIndex)) {
             iss.str(line);
             iss.clear();
-            if (!(iss >> alias >> ip >> privKey >> txHash >> outputIndex)) {
+            // Tolerate deterministic (3-field) entries when copying existing lines.
+            if (!(iss >> alias >> ip >> privKey)) {
                 streamConfig.close();
                 ret_error = tr("Error parsing %1 file").arg(strConfFileQt);
                 return nullptr;
@@ -378,19 +287,19 @@ CMasternodeConfig::CMasternodeEntry* MNModel::createLegacyMN(COutPoint& collater
 
     streamConfig.close();
 
-    std::string txID = collateralOut.hash.ToString();
-    std::string indexOutStr = std::to_string(collateralOut.n);
-
     // Check IP address type
-    QHostAddress hostAddress(QString::fromStdString(serviceAddr));
+    std::string ipAddress = serviceAddr;
+    QHostAddress hostAddress(QString::fromStdString(ipAddress));
     QAbstractSocket::NetworkLayerProtocol layerProtocol = hostAddress.protocol();
     if (layerProtocol == QAbstractSocket::IPv6Protocol) {
-        serviceAddr = "["+serviceAddr+"]";
+        ipAddress = "["+ipAddress+"]";
     }
 
+    // Deterministic entries carry only 3 fields: alias IP:port BLS-operator-key.
+    // No collateral output is created here: the registration tx embeds and locks it.
     fs::path pathConfigFile = AbsPathForConfigVal(fs::path("masternode_temp.conf"));
     FILE* configFile = fopen(pathConfigFile.string().c_str(), "w");
-    lineCopy += alias+" "+serviceAddr+":"+port+" "+mnKeyString+" "+txID+" "+indexOutStr+"\n";
+    lineCopy += alias+" "+ipAddress+":"+port+" "+operatorKeyString+"\n";
     fwrite(lineCopy.c_str(), std::strlen(lineCopy.c_str()), 1, configFile);
     fclose(configFile);
 
@@ -403,102 +312,7 @@ CMasternodeConfig::CMasternodeEntry* MNModel::createLegacyMN(COutPoint& collater
     fs::path pathNewConfFile = AbsPathForConfigVal(fs::path(strConfFile));
     rename(pathConfigFile, pathNewConfFile);
 
-    auto ret_mn_entry = masternodeConfig.add(alias, serviceAddr+":"+port, mnKeyString, txID, indexOutStr);
-
-    // Lock collateral output
-    walletModel->lockCoin(collateralOut.hash, collateralOut.n);
-    return ret_mn_entry;
-}
-
-bool MNModel::removeLegacyMN(const std::string& alias_to_remove, const std::string& tx_id, unsigned int out_index, QString& ret_error)
-{
-    QString strConfFileQt(PIVX_MASTERNODE_CONF_FILENAME);
-    std::string strConfFile = strConfFileQt.toStdString();
-    std::string strDataDir = GetDataDir().string();
-    fs::path conf_file_path(strConfFile);
-    if (strConfFile != conf_file_path.filename().string()) {
-        throw std::runtime_error(strprintf(_("%s %s resides outside data directory %s"), strConfFile, strConfFile, strDataDir));
-    }
-
-    fs::path pathBootstrap = GetDataDir() / strConfFile;
-    if (!fs::exists(pathBootstrap)) {
-        ret_error = tr("%1 file doesn't exists").arg(strConfFileQt);
-        return false;
-    }
-
-    fs::path pathMasternodeConfigFile = GetMasternodeConfigFile();
-    fsbridge::ifstream streamConfig(pathMasternodeConfigFile);
-
-    if (!streamConfig.good()) {
-        ret_error = tr("Invalid %1 file").arg(strConfFileQt);
-        return false;
-    }
-
-    int lineNumToRemove = -1;
-    int linenumber = 1;
-    std::string lineCopy;
-    for (std::string line; std::getline(streamConfig, line); linenumber++) {
-        if (line.empty()) continue;
-
-        std::istringstream iss(line);
-        std::string comment, alias, ip, privKey, txHash, outputIndex;
-
-        if (iss >> comment) {
-            if (comment.at(0) == '#') continue;
-            iss.str(line);
-            iss.clear();
-        }
-
-        if (!(iss >> alias >> ip >> privKey >> txHash >> outputIndex)) {
-            iss.str(line);
-            iss.clear();
-            if (!(iss >> alias >> ip >> privKey >> txHash >> outputIndex)) {
-                streamConfig.close();
-                ret_error = tr("Error parsing %1 file").arg(strConfFileQt);
-                return false;
-            }
-        }
-
-        if (alias_to_remove == alias) {
-            lineNumToRemove = linenumber;
-        } else
-            lineCopy += line + "\n";
-
-    }
-
-    if (lineCopy.empty()) {
-        lineCopy = "# Masternode config file\n"
-                   "# Format: alias IP:port masternodeprivkey collateral_output_txid collateral_output_index\n"
-                   "# Example: mn1 127.0.0.2:31616 93HaYBVUCYjEMeeH1Y4sBGLALQZE1Yc1K64xiqgX37tGBDQL8Xg 2bcd3c84c84f87eaa86e4e56834c92927a07f9e18718810b92e0d0324456a67c 0\n";
-    }
-
-    streamConfig.close();
-
-    if (lineNumToRemove == -1) {
-        ret_error = tr("MN alias %1 not found in %2 file").arg(QString::fromStdString(alias_to_remove)).arg(strConfFileQt);
-        return false;
-    }
-
-    // Update file
-    fs::path pathConfigFile = AbsPathForConfigVal(fs::path("masternode_temp.conf"));
-    FILE* configFile = fsbridge::fopen(pathConfigFile, "w");
-    fwrite(lineCopy.c_str(), std::strlen(lineCopy.c_str()), 1, configFile);
-    fclose(configFile);
-
-    fs::path pathOldConfFile = AbsPathForConfigVal(fs::path("old_masternode.conf"));
-    if (fs::exists(pathOldConfFile)) {
-        fs::remove(pathOldConfFile);
-    }
-    rename(pathMasternodeConfigFile, pathOldConfFile);
-
-    fs::path pathNewConfFile = AbsPathForConfigVal(fs::path(strConfFile));
-    rename(pathConfigFile, pathNewConfFile);
-
-    // Unlock collateral
-    walletModel->unlockCoin(uint256S(tx_id), out_index);
-    // Remove alias
-    masternodeConfig.remove(alias_to_remove);
-    return true;
+    return masternodeConfig.add(alias, ipAddress+":"+port, operatorKeyString, "", "");
 }
 
 void MNModel::setCoinControl(CCoinControl* coinControl)

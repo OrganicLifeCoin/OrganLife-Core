@@ -6,12 +6,13 @@
 #include "masternodewizarddialog.h"
 #include "ui_masternodewizarddialog.h"
 
-#include "key_io.h"
+#include "bls/bls_wrapper.h"
+#include "bls/key_io.h"
+#include "chainparams.h"
 #include "mnmodel.h"
 #include "qt/walletmodel.h"
 #include "qtutils.h"
 
-#include <QIntValidator>
 #include <QLabel>
 #include <QRegularExpression>
 
@@ -78,9 +79,8 @@ MasterNodeWizardDialog::MasterNodeWizardDialog(WalletModel* model, MNModel* _mnM
     setCssProperty(ui->labelMessage3, "text-main-grey");
 
     ui->labelMessage3->setText(formatHtmlContent(
-                formatParagraph(tr("A transaction of %1 will be made").arg(collateralAmountStr)) +
-                formatParagraph(tr("to a new empty address in your wallet.")) +
-                formatParagraph(tr("The Address is labeled under the master node's name."))));
+                formatParagraph(tr("The registration transaction will embed the %1 collateral, "
+                        "which remains yours and is locked while the node runs.").arg(collateralAmountStr))));
 
     initCssEditLine(ui->lineEditName);
     // MN alias must not contain spaces or "#" character
@@ -204,40 +204,37 @@ bool MasterNodeWizardDialog::createMN()
     std::string ipAddress = addressStr.toStdString();
     std::string port = portStr.toStdString();
 
-    // create the mn key
-    CKey secret;
-    secret.MakeNewKey(false);
-    std::string mnKeyString = KeyIO::EncodeSecret(secret);
+    // Deterministic masternode flow: generate the BLS operator key, write the
+    // 3-field conf entry and submit the registration. The registration
+    // transaction embeds and locks the collateral, so no collateral tx is
+    // created here.
+    CBLSSecretKey operatorKey;
+    operatorKey.MakeNewKey();
+    std::string opKey = bls::EncodeSecret(Params(), operatorKey);
 
-    // Look for a valid collateral utxo
-    COutPoint collateralOut;
-
-    // If not found create a new collateral tx
-    if (!walletModel->getMNCollateralCandidate(collateralOut)) {
-        // New receive address
-        auto r = walletModel->getNewAddress(alias);
-        if (!r) {
-            // generate address fail
-            returnStr = tr(r.getError().c_str());
-            return false;
-        }
-
-        if (!mnModel->createMNCollateral(addressLabel,
-                                         QString::fromStdString(r.getObjResult()->ToString()),
-                                         collateralOut,
-                                         returnStr)) {
-            // error str set internally
-            return false;
-        }
-    }
-
-    mnEntry = mnModel->createLegacyMN(collateralOut, alias, ipAddress, port, mnKeyString, returnStr);
+    mnEntry = mnModel->createDMNEntry(alias, ipAddress, port, opKey, returnStr);
     if (!mnEntry) {
-        // error str set inside createLegacyMN
+        // error str set inside createDMNEntry
         return false;
     }
 
-    returnStr = tr("Masternode created! Wait %1 confirmations before starting it.").arg(mnModel->getMasternodeCollateralMinConf());
+    std::string strError;
+    if (!mnModel->startDMN(*mnEntry, strError)) {
+        returnStr = tr("Masternode entry created but could not be started:\n%1").arg(QString::fromStdString(strError));
+        return false;
+    }
+
+    returnStr = tr("Deterministic masternode started! To configure the VPS, add to organiclifecoin.conf:\n\n"
+                   "-mnoperatorprivatekey=%1\n\n"
+                   "masternode.conf entry:\n\n"
+                   "%2 %3:%4 %1\n\n"
+                   "The registration transaction embeds the %5 collateral and locks it "
+                   "while the node runs.").arg(
+                       QString::fromStdString(opKey),
+                       addressLabel,
+                       addressStr,
+                       portStr,
+                       GUIUtil::formatBalance(mnModel->getMNCollateralRequiredAmount()));
     return true;
 }
 

@@ -142,11 +142,6 @@ const char* GetOpName(opcodetype opcode)
     case OP_NOP9                   : return "OP_NOP9";                  // OP_NOP9
     case OP_NOP10                  : return "OP_NOP10";                 // OP_NOP10
 
-    // zerocoin
-    case OP_ZEROCOINMINT           : return "OP_ZEROCOINMINT";
-    case OP_ZEROCOINSPEND          : return "OP_ZEROCOINSPEND";
-    case OP_ZEROCOINPUBLICSPEND    : return "OP_ZEROCOINPUBLICSPEND";
-
     // cold staking
     case OP_CHECKCOLDSTAKEVERIFY_LOF   : return "OP_CHECKCOLDSTAKEVERIFY_LOF";
     case OP_CHECKCOLDSTAKEVERIFY       : return "OP_CHECKCOLDSTAKEVERIFY";
@@ -265,21 +260,6 @@ bool CScript::IsPayToExchangeAddress() const
 bool CScript::StartsWithOpcode(const opcodetype opcode) const
 {
     return (!this->empty() && (*this)[0] == opcode);
-}
-
-bool CScript::IsZerocoinMint() const
-{
-    return StartsWithOpcode(OP_ZEROCOINMINT);
-}
-
-bool CScript::IsZerocoinSpend() const
-{
-    return StartsWithOpcode(OP_ZEROCOINSPEND);
-}
-
-bool CScript::IsZerocoinPublicSpend() const
-{
-    return StartsWithOpcode(OP_ZEROCOINPUBLICSPEND);
 }
 
 bool CScript::IsPushOnly(const_iterator pc) const

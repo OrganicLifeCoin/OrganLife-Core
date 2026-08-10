@@ -19,7 +19,7 @@ class DkgPoseTest(PivxDMNTestFramework):
     def set_test_params(self):
         self.set_base_test_params()
         self.extra_args = [["-nuparams=v5_shield:1", "-nuparams=v6_evo:130", "-debug=llmq", "-debug=dkg", "-debug=net"]] * self.num_nodes
-        self.extra_args[0].append("-sporkkey=7C7LXuERaWY3cnfKZn345cAQnz7BqT5FStjid79GXPU3r3sMhRM")
+        self.extra_args[0].append("-sporkkey=932HEevBSujW2ud7RfB1YF91AFygbBRQj3de3LyaCRqNzKKgWXi")
 
     def disable_network_for_node(self, node):
         node.setnetworkactive(False)

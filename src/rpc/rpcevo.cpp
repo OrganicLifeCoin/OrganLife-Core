@@ -13,7 +13,6 @@
 #include "evo/specialtx_validation.h"
 #include "evo/providertx.h"
 #include "key_io.h"
-#include "masternode.h"
 #include "messagesigner.h"
 #include "netbase.h"
 #include "operationresult.h"
@@ -26,9 +25,12 @@
 #include "utilmoneystr.h"
 
 #ifdef ENABLE_WALLET
+#include "addressbook.h"
 #include "coincontrol.h"
-#include "wallet/wallet.h"
+#include "masternodeconfig.h"
+#include "rpc/rpcevo.h"
 #include "wallet/rpcwallet.h"
+#include "wallet/wallet.h"
 
 extern void TryATMP(const CMutableTransaction& mtx, bool fOverrideFees);
 extern void RelayTx(const uint256& hashTx);
@@ -670,6 +672,141 @@ UniValue protx_register_fund(const JSONRPCRequest& request)
     pl.vchSig.clear();
     // check the payload, add the tx inputs sigs, and send the tx.
     return SignAndSendSpecialTx(pwallet, tx, pl);
+}
+
+// Finds the transparent address labeled with `alias` in the wallet address book.
+static bool GetAddressByLabel(CWallet* pwallet, const std::string& alias, CTxDestination& destOut)
+{
+    AssertLockHeld(pwallet->cs_wallet);
+    for (auto it = pwallet->NewAddressBookIterator(); it.IsValid(); it.Next()) {
+        const AddressBook::CAddressBookData& data = it.GetValue();
+        if (data.name == alias) {
+            const CTxDestination* pDest = it.GetCTxDestKey();
+            if (pDest && IsValidDestination(*pDest)) {
+                destOut = *pDest;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+CTxDestination GetOrCreateOwnerAddress(CWallet* pwallet, const std::string& alias)
+{
+    {
+        LOCK(pwallet->cs_wallet);
+        CTxDestination dest;
+        if (GetAddressByLabel(pwallet, alias, dest)) {
+            return dest;
+        }
+    }
+    const CallResult<CTxDestination>& res = pwallet->getNewAddress(
+        alias, AddressBook::AddressBookPurpose::MASTERNODE, CChainParams::Base58Type::PUBKEY_ADDRESS);
+    if (!res) {
+        throw JSONRPCError(RPC_WALLET_ERROR, res.getError());
+    }
+    return *res.getObjResult();
+}
+
+bool StartDeterministicMasternode(CWallet& wallet,
+                                  const CMasternodeConfig::CMasternodeEntry& entry,
+                                  std::string& txidOut,
+                                  std::string& errorOut)
+{
+    const auto& chainparams = Params();
+    const int nHeight = WITH_LOCK(cs_main, return chainActive.Height(); );
+    if (!chainparams.GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0)) {
+        errorOut = strprintf("Deterministic masternodes are not enforced yet (current height %d)", nHeight);
+        return false;
+    }
+    if (wallet.IsLocked()) {
+        errorOut = "wallet is locked";
+        return false;
+    }
+    wallet.BlockUntilSyncedToCurrentChain();
+
+    try {
+        // owner address (also voting key; payout is a distinct address below)
+        const CTxDestination& ownerDest = GetOrCreateOwnerAddress(&wallet, entry.getAlias());
+        const CKeyID* ownerKeyID = boost::get<CKeyID>(&ownerDest);
+        if (!ownerKeyID) {
+            errorOut = strprintf("unexpected owner address type for alias %s", entry.getAlias());
+            return false;
+        }
+
+        // operator BLS key from the conf entry
+        CBLSSecretKey operatorKey = ParseBLSSecretKey(chainparams, entry.getPrivKey());
+
+        // collateral address: a fresh wallet address
+        const CallResult<CTxDestination>& collRes = wallet.getNewAddress(
+            strprintf("%s-collateral", entry.getAlias()),
+            AddressBook::AddressBookPurpose::RECEIVE,
+            CChainParams::Base58Type::PUBKEY_ADDRESS);
+        if (!collRes) {
+            errorOut = collRes.getError();
+            return false;
+        }
+        const CTxDestination& collateralDest = *collRes.getObjResult();
+        const CScript& collateralScript = GetScriptForDestination(collateralDest);
+        const CAmount collAmt = chainparams.GetConsensus().nMNCollateralAmt;
+
+        // payout address: must differ from the owner/voting key (consensus rule
+        // "bad-protx-payee-reuse"); reuse the alias-payout label if it exists.
+        CTxDestination payoutDest;
+        {
+            LOCK(wallet.cs_wallet);
+            if (!GetAddressByLabel(&wallet, entry.getAlias() + "-payout", payoutDest)) {
+                const CallResult<CTxDestination>& payoutRes = wallet.getNewAddress(
+                    strprintf("%s-payout", entry.getAlias()),
+                    AddressBook::AddressBookPurpose::RECEIVE,
+                    CChainParams::Base58Type::PUBKEY_ADDRESS);
+                if (!payoutRes) {
+                    errorOut = payoutRes.getError();
+                    return false;
+                }
+                payoutDest = *payoutRes.getObjResult();
+            }
+        }
+
+        // Build the ProReg payload
+        ProRegPL pl;
+        pl.nVersion = ProRegPL::CURRENT_VERSION;
+        if (!Lookup(entry.getIp(), pl.addr, chainparams.GetDefaultPort(), false)) {
+            errorOut = strprintf("invalid network address %s", entry.getIp());
+            return false;
+        }
+        pl.keyIDOwner = *ownerKeyID;
+        pl.pubKeyOperator = operatorKey.GetPublicKey();
+        pl.keyIDVoting = *ownerKeyID;
+        pl.scriptPayout = GetScriptForDestination(payoutDest);
+
+        // fund and register (protx_register_fund pattern)
+        CMutableTransaction tx;
+        tx.nVersion = CTransaction::TxVersion::SAPLING;
+        tx.nType = CTransaction::TxType::PROREG;
+        tx.vout.emplace_back(collAmt, collateralScript);
+
+        FundSpecialTx(&wallet, tx, pl);
+        for (uint32_t i = 0; i < tx.vout.size(); i++) {
+            if (tx.vout[i].nValue == collAmt && tx.vout[i].scriptPubKey == collateralScript) {
+                pl.collateralOutpoint.n = i;
+                break;
+            }
+        }
+        if (pl.collateralOutpoint.n == (uint32_t)-1) {
+            errorOut = "failed to locate collateral output in funded registration";
+            return false;
+        }
+        pl.vchSig.clear();
+        txidOut = SignAndSendSpecialTx(&wallet, tx, pl);
+
+        // lock the collateral output so it can't be spent
+        WITH_LOCK(wallet.cs_wallet, wallet.LockCoin(pl.collateralOutpoint));
+        return true;
+    } catch (const std::exception& e) {
+        errorOut = e.what();
+        return false;
+    }
 }
 
 #endif  //ENABLE_WALLET

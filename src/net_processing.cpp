@@ -17,9 +17,8 @@
 #include "llmq/quorums_dkgsessionmgr.h"
 #include "llmq/quorums_signing.h"
 #include "masternode-payments.h"
-#include "masternode-sync.h"
-#include "masternodeman.h"
 #include "merkleblock.h"
+#include "masternode-sync.h"
 #include "netbase.h"
 #include "netmessagemaker.h"
 #include "primitives/block.h"
@@ -1283,12 +1282,6 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
         return true;
     case MSG_SPORK:
         return mapSporks.count(inv.hash);
-    case MSG_MASTERNODE_WINNER:
-        if (masternodePayments.HasMasternodeWinner(inv.hash)) {
-            g_tiertwo_sync_state.AddedMasternodeWinner(inv.hash);
-            return true;
-        }
-        return false;
     case MSG_BUDGET_VOTE:
         if (g_budgetman.HaveSeenProposalVote(inv.hash)) {
             g_tiertwo_sync_state.AddedBudgetItem(inv.hash);
@@ -1313,14 +1306,6 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
             return true;
         }
         return false;
-    case MSG_MASTERNODE_ANNOUNCE:
-        if (mnodeman.HasSeenMasternodeBroadcast(inv.hash)) {
-            g_tiertwo_sync_state.AddedMasternodeList(inv.hash);
-            return true;
-        }
-        return false;
-    case MSG_MASTERNODE_PING:
-        return mnodeman.HasSeenMasternodePing(inv.hash);
     case MSG_QUORUM_FINAL_COMMITMENT:
         return llmq::quorumBlockProcessor->HasMinableCommitment(inv.hash);
     case MSG_QUORUM_CONTRIB:
@@ -1444,18 +1429,6 @@ bool static PushTierTwoGetDataRequest(const CInv& inv,
         }
     }
 
-    // !TODO: remove when transition to DMN is complete
-    if (inv.type == MSG_MASTERNODE_WINNER && !deterministicMNManager->LegacyMNObsolete()) {
-        CMasternodePaymentWinner winner;
-        if (masternodePayments.GetMasternodeWinner(inv.hash, winner)) {
-            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss.reserve(1000);
-            ss << winner;
-            connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::MNWINNER, ss));
-            return true;
-        }
-    }
-
     if (inv.type == MSG_BUDGET_VOTE) {
         if (g_budgetman.HaveSeenProposalVote(inv.hash)) {
             connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::BUDGETVOTE, g_budgetman.GetProposalVoteSerialized(inv.hash)));
@@ -1484,31 +1457,6 @@ bool static PushTierTwoGetDataRequest(const CInv& inv,
         }
     }
 
-    // !TODO: remove when transition to DMN is complete
-    if (inv.type == MSG_MASTERNODE_ANNOUNCE && !deterministicMNManager->LegacyMNObsolete()) {
-        CMasternodeBroadcast mnb;
-        if (mnodeman.GetSeenMasternodeBroadcast(inv.hash, mnb)) {
-            int version = !mnb.addr.IsAddrV1Compatible() ? PROTOCOL_VERSION | ADDRV2_FORMAT : PROTOCOL_VERSION;
-            CDataStream ss(SER_NETWORK, version);
-            ss.reserve(1000);
-            ss << mnb;
-            std::string msgType = !mnb.addr.IsAddrV1Compatible() ? NetMsgType::MNBROADCAST2 : NetMsgType::MNBROADCAST;
-            connman->PushMessage(pfrom, msgMaker.Make(msgType, ss));
-            return true;
-        }
-    }
-
-    // !TODO: remove when transition to DMN is complete
-    if (inv.type == MSG_MASTERNODE_PING && !deterministicMNManager->LegacyMNObsolete()) {
-        CMasternodePing mnp;
-        if (mnodeman.GetSeenMasternodePing(inv.hash, mnp)) {
-            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss.reserve(1000);
-            ss << mnp;
-            connman->PushMessage(pfrom, msgMaker.Make(NetMsgType::MNPING, ss));
-            return true;
-        }
-    }
     if (inv.type == MSG_QUORUM_RECOVERED_SIG) {
         if (!deterministicMNManager->IsDIP3Enforced()) return false;
         llmq::CRecoveredSig o;
@@ -1602,13 +1550,10 @@ void static ProcessGetBlockData(CNode* pfrom, const CInv& inv, CConnman* connman
 bool static IsTierTwoInventoryTypeKnown(int type)
 {
     return type == MSG_SPORK ||
-           type == MSG_MASTERNODE_WINNER ||
            type == MSG_BUDGET_VOTE ||
            type == MSG_BUDGET_PROPOSAL ||
            type == MSG_BUDGET_FINALIZED ||
            type == MSG_BUDGET_FINALIZED_VOTE ||
-           type == MSG_MASTERNODE_ANNOUNCE ||
-           type == MSG_MASTERNODE_PING ||
            type == MSG_QUORUM_FINAL_COMMITMENT ||
            type == MSG_QUORUM_CONTRIB ||
            type == MSG_QUORUM_COMPLAINT ||
@@ -2249,12 +2194,6 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
             mapAlreadyAskedFor.erase(inv);
         }
 
-        if (ptx->ContainsZerocoins()) {
-            // Don't even try to check zerocoins at all.
-            Misbehaving(pfrom->GetId(), 100, strprintf("received a zc transaction"));
-            return false;
-        }
-
         if (AcceptToMemoryPool(mempool, state, ptx, true, &fMissingInputs, false, ignoreFees)) {
             mempool.check(pcoinsTip.get());
             RelayTransaction(tx, connman);
@@ -2654,43 +2593,34 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
         // Tier two msg type search
         const std::vector<std::string>& allMessages = getTierTwoNetMessageTypes();
         if (std::find(allMessages.begin(), allMessages.end(), strCommand) != allMessages.end()) {
-            // Check if the dispatcher can process this message first. If not, try going with the old flow.
+            // Check if the dispatcher can process this message first. The
+            // dispatcher handles spork/budget/quorum/mnauth messages,
+            // including during IBD (sporks must work before chain sync).
             if (!masternodeSync.MessageDispatcher(pfrom, strCommand, vRecv)) {
                 if (IsInitialBlockDownload()) {
                     LogPrint(BCLog::MASTERNODE, "Ignoring tier-two message %s from peer=%d during IBD\n", strCommand, pfrom->GetId());
                     return true;
                 }
 
-                // Probably one the extensions, future: encapsulate all of this inside tiertwo_networksync.
-                int dosScore{0};
-                if (!mnodeman.ProcessMessage(pfrom, strCommand, vRecv, dosScore)) {
-                    WITH_LOCK(cs_main, Misbehaving(pfrom->GetId(), dosScore));
-                    return false;
-                }
-                if (!g_budgetman.ProcessMessage(pfrom, strCommand, vRecv, dosScore)) {
-                    WITH_LOCK(cs_main, Misbehaving(pfrom->GetId(), dosScore));
-                    return false;
-                }
-                CValidationState state_payments;
-                if (!masternodePayments.ProcessMessageMasternodePayments(pfrom, strCommand, vRecv, state_payments)) {
-                    if (state_payments.IsInvalid(dosScore)) {
-                        WITH_LOCK(cs_main, Misbehaving(pfrom->GetId(), dosScore));
-                    }
-                    return false;
-                }
-                if (!sporkManager.ProcessSpork(pfrom, strCommand, vRecv, dosScore)) {
-                    WITH_LOCK(cs_main, Misbehaving(pfrom->GetId(), dosScore));
-                    return false;
-                }
+            // Probably one the extensions, future: encapsulate all of this inside tiertwo_networksync.
+            int dosScore{0};
+            if (!g_budgetman.ProcessMessage(pfrom, strCommand, vRecv, dosScore)) {
+                WITH_LOCK(cs_main, Misbehaving(pfrom->GetId(), dosScore));
+                return false;
+            }
+            if (!sporkManager.ProcessSpork(pfrom, strCommand, vRecv, dosScore)) {
+                WITH_LOCK(cs_main, Misbehaving(pfrom->GetId(), dosScore));
+                return false;
+            }
 
-                CValidationState mnauthState;
-                if (!CMNAuth::ProcessMessage(pfrom, strCommand, vRecv, *connman, mnauthState)) {
-                    int dosScore{0};
-                    if (mnauthState.IsInvalid(dosScore) && dosScore > 0) {
-                        LOCK(cs_main);
-                        Misbehaving(pfrom->GetId(), dosScore, mnauthState.GetRejectReason());
-                    }
+            CValidationState mnauthState;
+            if (!CMNAuth::ProcessMessage(pfrom, strCommand, vRecv, *connman, mnauthState)) {
+                int dosScore{0};
+                if (mnauthState.IsInvalid(dosScore) && dosScore > 0) {
+                    LOCK(cs_main);
+                    Misbehaving(pfrom->GetId(), dosScore, mnauthState.GetRejectReason());
                 }
+            }
             }
         } else {
             // Ignore unknown commands for extensibility

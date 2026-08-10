@@ -41,18 +41,12 @@ const char* FILTERCLEAR = "filterclear";
 const char* SENDHEADERS = "sendheaders";
 const char* SPORK = "spork";
 const char* GETSPORKS = "getsporks";
-const char* MNBROADCAST = "mnb";
-const char* MNBROADCAST2 = "mnb2"; // BIP155 support
-const char* MNPING = "mnp";
-const char* MNWINNER = "mnw";
-const char* GETMNWINNERS = "mnget";
 const char* BUDGETPROPOSAL = "mprop";
 const char* BUDGETVOTE = "mvote";
 const char* BUDGETVOTESYNC = "mnvs";
 const char* FINALBUDGET = "fbs";
 const char* FINALBUDGETVOTE = "fbvote";
 const char* SYNCSTATUSCOUNT = "ssc";
-const char* GETMNLIST = "dseg";
 const char* QFCOMMITMENT = "qfcommit";
 const char* QSENDRECSIGS = "qsendrecsigs";
 const char* MNAUTH = "mnauth";
@@ -101,22 +95,16 @@ const static std::string allNetMessageTypes[] = {
     "ix",              // deprecated
     "txlvote",         // deprecated
     NetMsgType::SPORK, // --- tiertwoNetMessageTypes start here ---
-    NetMsgType::MNWINNER,
     "mnodescanerr",
     NetMsgType::BUDGETVOTE,
     NetMsgType::BUDGETPROPOSAL,
     NetMsgType::FINALBUDGET,
     NetMsgType::FINALBUDGETVOTE,
     "mnq",
-    NetMsgType::MNBROADCAST,
-    NetMsgType::MNPING,
     "dstx", // deprecated
-    NetMsgType::GETMNWINNERS,
-    NetMsgType::GETMNLIST,
     NetMsgType::BUDGETVOTESYNC,
     NetMsgType::GETSPORKS,
     NetMsgType::SYNCSTATUSCOUNT,
-    NetMsgType::MNBROADCAST2,
     NetMsgType::QFCOMMITMENT,
     NetMsgType::QSENDRECSIGS,
     NetMsgType::MNAUTH,
@@ -219,15 +207,12 @@ std::string CInv::GetCommand() const
         case MSG_TXLOCK_REQUEST:    return cmd.append("ix");       // Deprecated
         case MSG_TXLOCK_VOTE:       return cmd.append("txlvote");  // Deprecated
         case MSG_SPORK:             return cmd.append(NetMsgType::SPORK);
-        case MSG_MASTERNODE_WINNER: return cmd.append(NetMsgType::MNWINNER);
         case MSG_MASTERNODE_SCANNING_ERROR: return cmd.append("mnodescanerr"); // Deprecated
         case MSG_BUDGET_VOTE: return cmd.append(NetMsgType::BUDGETVOTE);
         case MSG_BUDGET_PROPOSAL: return cmd.append(NetMsgType::BUDGETPROPOSAL);
         case MSG_BUDGET_FINALIZED: return cmd.append(NetMsgType::FINALBUDGET);
         case MSG_BUDGET_FINALIZED_VOTE: return cmd.append(NetMsgType::FINALBUDGETVOTE);
         case MSG_MASTERNODE_QUORUM: return cmd.append("mnq"); // Unused
-        case MSG_MASTERNODE_ANNOUNCE: return cmd.append(NetMsgType::MNBROADCAST); // or MNBROADCAST2
-        case MSG_MASTERNODE_PING: return cmd.append(NetMsgType::MNPING);
         case MSG_DSTX: return cmd.append("dstx"); // Deprecated
         case MSG_QUORUM_FINAL_COMMITMENT: return cmd.append(NetMsgType::QFCOMMITMENT);
         case MSG_QUORUM_CONTRIB: return cmd.append(NetMsgType::QCONTRIB);

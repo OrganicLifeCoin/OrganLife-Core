@@ -237,15 +237,14 @@ endif()
 
 add_executable(organiclife-qt organiclife.cpp ${QM} ${QRC_RESOURCE} ${QRC_LOCALE_RESOURCE})
 add_dependencies(organiclife-qt translations_target libunivalue libsecp256k1 libzcashrust leveldb crc32c bls)
-target_include_directories(organiclife-qt PUBLIC ${ENDIAN_INCLUDES} ${GMP_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${sodium_INCLUDE_DIR})
+target_include_directories(organiclife-qt PUBLIC ${ENDIAN_INCLUDES} ${Boost_INCLUDE_DIRS} ${sodium_INCLUDE_DIR})
 target_link_libraries(organiclife-qt
         qt_stuff
         univalue
-        SERVER_A WALLET_A COMMON_A ZEROCOIN_A UTIL_A SAPLING_A BITCOIN_CRYPTO_A CLI_A
+        SERVER_A WALLET_A COMMON_A UTIL_A SAPLING_A BITCOIN_CRYPTO_A CLI_A
         leveldb crc32c secp256k1 rustzcash bls
         ${BerkeleyDB_LIBRARIES} ${Boost_LIBRARIES} ${LIBEVENT_LIB}
-        ${sodium_LIBRARY_RELEASE} ${GMP_LIBRARY}
-        -ldl pthread
+        ${sodium_LIBRARY_RELEASE}         -ldl pthread
         )
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     target_link_libraries(organiclife-qt "-framework Cocoa")

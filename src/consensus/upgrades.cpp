@@ -27,20 +27,8 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
                 /*.strInfo =*/ "New selection for stake modifier",
         },
         {
-                /*.strName =*/ "Zerocoin",
-                /*.strInfo =*/ "ZeroCoin protocol activation - start block v4",
-        },
-        {
-                /*.strName =*/ "Zerocoin_v2",
-                /*.strInfo =*/ "New zerocoin serials and zPOS start",
-        },
-        {
                 /*.strName =*/ "BIP65",
                 /*.strInfo =*/ "CLTV (BIP65) activation - start block v5",
-        },
-        {
-                /*.strName =*/ "Zerocoin_Public",
-                /*.strInfo =*/ "Activation of zerocoin public spends (spend v3)",
         },
         {
                 /*.strName =*/ "OLC_v3.4",
@@ -48,7 +36,7 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
         },
         {
                 /*.strName =*/ "OLC_v4.0",
-                /*.strInfo =*/ "New message sigs - start block v7 - time protocol - zc spend v4",
+                /*.strInfo =*/ "New message sigs - start block v7 - time protocol",
         },
         {
                 /*.strName =*/ "v5_shield",

@@ -10,7 +10,6 @@
 #include "llmq/quorums_dkgsessionmgr.h"
 #include "llmq/quorums_signing.h"
 #include "llmq/quorums_signing_shares.h"
-#include "masternodeman.h"  // for mnodeman
 #include "net_processing.h" // for Misbehaving
 #include "netmessagemaker.h"
 #include "spork.h"   // for sporkManager
@@ -93,18 +92,6 @@ bool CMasternodeSync::MessageDispatcher(CNode* pfrom, std::string& strCommand, C
         llmq::chainLocksHandler->ProcessMessage(pfrom, strCommand, vRecv, *g_connman);
     }
 
-    if (strCommand == NetMsgType::GETMNLIST) {
-        // Get Masternode list or specific entry
-        CTxIn vin;
-        vRecv >> vin;
-        int banScore = mnodeman.ProcessGetMNList(pfrom, vin);
-        if (banScore > 0) {
-            LOCK(cs_main);
-            Misbehaving(pfrom->GetId(), banScore);
-        }
-        return true;
-    }
-
     if (strCommand == NetMsgType::SPORK) {
         // as there is no completion message, this is using a SPORK_INVALID as final message for now.
         // which is just a hack, should be replaced with another message, guard it until the protocol gets deployed on mainnet and
@@ -122,9 +109,9 @@ bool CMasternodeSync::MessageDispatcher(CNode* pfrom, std::string& strCommand, C
             // This could happen because of the message thread is requesting the sporks alone..
             // So.. for now, can just update the peer status and move it to the next state if the end message arrives
             if (spork.nSporkID == SPORK_INVALID) {
-                if (g_tiertwo_sync_state.GetSyncPhase() < MASTERNODE_SYNC_LIST) {
+                if (g_tiertwo_sync_state.GetSyncPhase() < MASTERNODE_SYNC_BUDGET) {
                     // future note: use internal cs for RequestedMasternodeAssets.
-                    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_LIST);
+                    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_BUDGET);
                 }
             }
         }
@@ -145,14 +132,6 @@ bool CMasternodeSync::MessageDispatcher(CNode* pfrom, std::string& strCommand, C
 
         // this means we will receive no further communication on the first sync
         switch (nItemID) {
-            case MASTERNODE_SYNC_LIST: {
-                UpdatePeerSyncState(pfrom->GetId(), NetMsgType::GETMNLIST, GetNextAsset(nItemID));
-                return true;
-            }
-            case MASTERNODE_SYNC_MNW: {
-                UpdatePeerSyncState(pfrom->GetId(), NetMsgType::GETMNWINNERS, GetNextAsset(nItemID));
-                return true;
-            }
             case MASTERNODE_SYNC_BUDGET_PROP: {
                 // TODO: This could be a MASTERNODE_SYNC_BUDGET_FIN as well, possibly should decouple the finalization budget sync
                 //  from the MASTERNODE_SYNC_BUDGET_PROP (both are under the BUDGETVOTESYNC message)
@@ -220,25 +199,13 @@ void CMasternodeSync::RequestDataTo(CNode* pnode, const char* msg, bool forceReq
 
 void CMasternodeSync::SyncRegtest(CNode* pnode)
 {
-    // skip mn list and winners sync if legacy mn are obsolete
-    int syncPhase = g_tiertwo_sync_state.GetSyncPhase();
-    if (deterministicMNManager->LegacyMNObsolete() &&
-            (syncPhase == MASTERNODE_SYNC_LIST || syncPhase == MASTERNODE_SYNC_MNW)) {
-        g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_BUDGET);
-        syncPhase = g_tiertwo_sync_state.GetSyncPhase();
-    }
-
     // Initial sync, verify that the other peer answered to all of the messages successfully
-    if (syncPhase == MASTERNODE_SYNC_SPORKS) {
+    if (g_tiertwo_sync_state.GetSyncPhase() == MASTERNODE_SYNC_SPORKS) {
         RequestDataTo(pnode, NetMsgType::GETSPORKS, false);
-    } else if (syncPhase == MASTERNODE_SYNC_LIST) {
-        RequestDataTo(pnode, NetMsgType::GETMNLIST, false, CTxIn());
-    } else if (syncPhase == MASTERNODE_SYNC_MNW) {
-        RequestDataTo(pnode, NetMsgType::GETMNWINNERS, false, mnodeman.CountEnabled());
-    } else if (syncPhase == MASTERNODE_SYNC_BUDGET) {
+    } else if (g_tiertwo_sync_state.GetSyncPhase() == MASTERNODE_SYNC_BUDGET) {
         // sync masternode votes
         RequestDataTo(pnode, NetMsgType::BUDGETVOTESYNC, false, uint256());
-    } else if (syncPhase == MASTERNODE_SYNC_FINISHED) {
+    } else if (g_tiertwo_sync_state.GetSyncPhase() == MASTERNODE_SYNC_FINISHED) {
         LogPrintf("REGTEST SYNC FINISHED!\n");
     }
 }

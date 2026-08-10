@@ -79,7 +79,6 @@ public:
         Other = 0,
         Generated,
         StakeMint,
-        StakeZPIV,
         SendToAddress,
         SendToOther,
         RecvWithAddress,
@@ -87,11 +86,6 @@ public:
         BudgetPayment,
         RecvFromOther,
         SendToSelf,
-        ZerocoinMint,
-        ZerocoinSpend,
-        RecvFromZerocoinSpend,
-        ZerocoinSpend_Change_zPiv,
-        ZerocoinSpend_FromMe,
         StakeDelegated, // Received cold stake (owner)
         StakeHot, // Staked via a delegated P2CS.
         P2CSDelegation, // Non-spendable P2CS, staker side.
@@ -131,10 +125,6 @@ public:
 
     /// Helpers
     static bool decomposeCoinStake(const CWallet* wallet, const CWalletTx& wtx,
-                                   const CAmount& nCredit, const CAmount& nDebit,
-                                   std::vector<TransactionRecord>& parts);
-
-    static bool decomposeZcSpendTx(const CWallet* wallet, const CWalletTx& wtx,
                                    const CAmount& nCredit, const CAmount& nDebit,
                                    std::vector<TransactionRecord>& parts);
 

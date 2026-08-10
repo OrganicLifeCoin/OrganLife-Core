@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 The CTEAM Core developers */
+/* Copyright (c) 2026 The Bitcoin Core developers */
 /*************************************************************************
  * Copyright (c) 2020-2021 Elichai Turkel                                *
  * Distributed under the CC0 software license, see the accompanying file *

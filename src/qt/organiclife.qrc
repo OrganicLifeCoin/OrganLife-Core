@@ -114,7 +114,6 @@
         <file alias="ic-close-white">res/images/ic-close-white.svg</file>
         <file alias="ic-close">res/images/ic-close.svg</file>
         <file alias="ic-coin-piv">res/images/ic-coin-organiclife.png</file>
-        <file alias="ic-coin-zpiv">res/images/ic-coin-organiclife.png</file>
         <file alias="ic-combo-box">res/images/ic-combo-box.svg</file>
         <file alias="ic-connect">res/images/ic-connect.svg</file>
         <file alias="ic-copy-liliac">res/images/ic-copy-liliac.svg</file>

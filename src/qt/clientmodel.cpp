@@ -15,9 +15,9 @@
 #include "chainparams.h"
 #include "checkpoints.h"
 #include "clientversion.h"
+#include "evo/deterministicmns.h"
 #include "interfaces/handler.h"
 #include "mapport.h"
-#include "masternodeman.h"
 #include "net.h"
 #include "netbase.h"
 #include "guiinterface.h"
@@ -85,16 +85,27 @@ bool ClientModel::shouldEmitNumConnectionsChanged(int previousCount, int newCoun
 QString ClientModel::getMasternodeCountString()
 {
     try {
-        const auto& info = mnodeman.getMNsInfo();
-        int unknown = std::max(0, info.total - info.ipv4 - info.ipv6 - info.onion);
-        m_cached_masternodes_count = info.total;
-        if (info.total == 0 && info.ipv4 == 0 && info.ipv6 == 0 && info.onion == 0) {
+        if (!deterministicMNManager) return tr("Loading...");
+        const auto& mnList = deterministicMNManager->GetListAtChainTip();
+        int total = mnList.GetAllMNsCount();
+        int ipv4 = 0;
+        int ipv6 = 0;
+        int onion = 0;
+        mnList.ForEachMN(false, [&](const CDeterministicMNCPtr& dmn) {
+            const CService& addr = dmn->pdmnState->addr;
+            if (addr.IsIPv4()) ipv4++;
+            else if (addr.IsIPv6()) ipv6++;
+            else if (addr.IsTor()) onion++;
+        });
+        int unknown = std::max(0, total - ipv4 - ipv6 - onion);
+        m_cached_masternodes_count = total;
+        if (total == 0 && ipv4 == 0 && ipv6 == 0 && onion == 0) {
             return tr("Loading...");
         }
-        return tr("Total: %1 (IPv4: %2 / IPv6: %3 / Tor: %4 / Unknown: %5)").arg(QString::number(info.total))
-                                                                            .arg(QString::number(info.ipv4))
-                                                                            .arg(QString::number(info.ipv6))
-                                                                            .arg(QString::number(info.onion))
+        return tr("Total: %1 (IPv4: %2 / IPv6: %3 / Tor: %4 / Unknown: %5)").arg(QString::number(total))
+                                                                            .arg(QString::number(ipv4))
+                                                                            .arg(QString::number(ipv6))
+                                                                            .arg(QString::number(onion))
                                                                             .arg(QString::number(unknown));
     } catch (...) {
         return tr("Loading...");

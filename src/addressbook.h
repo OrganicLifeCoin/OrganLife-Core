@@ -21,6 +21,7 @@ namespace AddressBook {
         extern const std::string SHIELDED_RECEIVE;
         extern const std::string SHIELDED_SEND;
         extern const std::string EXCHANGE_ADDRESS;
+        extern const std::string MASTERNODE;
     }
 
     bool IsColdStakingPurpose(const std::string& purpose);

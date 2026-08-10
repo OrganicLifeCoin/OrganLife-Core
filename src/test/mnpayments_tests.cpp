@@ -5,23 +5,28 @@
 
 #include "test/test_organiclife.h"
 
-#include "arith_uint256.h"
+#include "bls/bls_wrapper.h"
 #include "blockassembler.h"
 #include "consensus/merkle.h"
+#include "consensus/upgrades.h"
+#include "evo/deterministicmns.h"
+#include "evo/providertx.h"
+#include "evo/specialtx_validation.h"
 #include "masternode-payments.h"
-#include "masternodeman.h"
-#include "spork.h"
-#include "test/util/blocksutil.h"
-#include "tiertwo/tiertwo_sync_state.h"
+#include "netbase.h"
 #include "primitives/transaction.h"
-#include "utilmoneystr.h"
+#include "script/sign.h"
+#include "spork.h"
+#include "tiertwo/tiertwo_sync_state.h"
 #include "util/blockstatecatcher.h"
+#include "utilmoneystr.h"
 #include "validation.h"
 
-#include <algorithm>
-#include <atomic>
 #include <boost/test/unit_test.hpp>
-#include <thread>
+
+#include <algorithm>
+#include <limits>
+#include <map>
 
 BOOST_AUTO_TEST_SUITE(mnpayments_tests)
 
@@ -55,218 +60,268 @@ void enableMnSyncAndMNPayments()
     BOOST_CHECK(sporkManager.IsSporkActive(SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT));
 }
 
-static bool CreateMNWinnerPayment(const CTxIn& mnVinVoter, int paymentBlockHeight, const CScript& payeeScript,
-                                  const CKey& signerKey, const CPubKey& signerPubKey, CValidationState& state)
+// -----------------------------------------------------------------------------
+// DMN test infrastructure. Mirrors the ProReg-based setup used by
+// evo_deterministicmns_tests: register masternodes through on-chain ProReg
+// special transactions and resolve the payee through the DMN list.
+// -----------------------------------------------------------------------------
+
+// static 0.1 PIV fee used for the special txes in these tests
+static const CAmount fee = 10000000;
+
+struct SimpleUTXO
 {
-    CMasternodePaymentWinner mnWinner(mnVinVoter, paymentBlockHeight);
-    mnWinner.AddPayee(payeeScript);
-    BOOST_CHECK(mnWinner.Sign(signerKey, signerPubKey.GetID()));
-    return masternodePayments.ProcessMNWinner(mnWinner, nullptr, state);
-}
-
-class MNdata
-{
-public:
-    COutPoint collateralOut;
-    CKey mnPrivKey;
-    CPubKey mnPubKey;
-    CPubKey collateralPubKey;
-    CScript mnPayeeScript;
-
-    MNdata(const COutPoint& collateralOut, const CKey& mnPrivKey, const CPubKey& mnPubKey,
-           const CPubKey& collateralPubKey, const CScript& mnPayeeScript) :
-           collateralOut(collateralOut), mnPrivKey(mnPrivKey), mnPubKey(mnPubKey),
-           collateralPubKey(collateralPubKey), mnPayeeScript(mnPayeeScript) {}
-
-
+    int nHeight;
+    CAmount nValue;
+    bool fCoinbase;
 };
 
-CMasternode buildMN(const MNdata& data, const uint256& tipHash, uint64_t tipTime)
+typedef std::map<COutPoint, SimpleUTXO> SimpleUTXOMap;
+
+static bool IsSpendableBy(const CTxOut& out, const CKey& spendKey)
 {
-    CMasternode mn;
-    mn.vin = CTxIn(data.collateralOut);
-    mn.pubKeyCollateralAddress = data.mnPubKey;
-    mn.pubKeyMasternode = data.collateralPubKey;
-    mn.sigTime = GetTime() - 8000 - 1; // MN_WINNER_MINIMUM_AGE = 8000.
-    mn.lastPing = CMasternodePing(mn.vin, tipHash, tipTime);
-    return mn;
+    const CScript p2pk = CScript() << ToByteVector(spendKey.GetPubKey()) << OP_CHECKSIG;
+    const CScript p2pkh = GetScriptForDestination(spendKey.GetPubKey().GetID());
+    return out.scriptPubKey == p2pk || out.scriptPubKey == p2pkh;
 }
 
-class FakeMasternode {
-public:
-    explicit FakeMasternode(CMasternode& mn, const MNdata& data) : mn(mn), data(data) {}
-    CMasternode mn;
-    MNdata data;
-};
-
-std::vector<FakeMasternode> buildMNList(const uint256& tipHash, uint64_t tipTime, int size)
+static void AddSpendableOutputs(SimpleUTXOMap& utxos, const CTransaction& tx, int nHeight, const CKey& spendKey, bool fCoinbase)
 {
-    std::vector<FakeMasternode> ret;
-    for (int i=0; i < size; i++) {
-        CKey mnKey;
-        mnKey.MakeNewKey(true);
-        const CPubKey& mnPubKey = mnKey.GetPubKey();
-        const CScript& mnPayeeScript = GetScriptForDestination(mnPubKey.GetID());
-        // Fake collateral out and key for now
-        COutPoint mnCollateral(GetRandHash(), 0);
-        const CPubKey& collateralPubKey = mnPubKey;
-
-        // Now add the MN
-        MNdata mnData(mnCollateral, mnKey, mnPubKey, collateralPubKey, mnPayeeScript);
-        CMasternode mn = buildMN(mnData, tipHash, tipTime);
-        BOOST_CHECK(mnodeman.Add(mn));
-        ret.emplace_back(mn, mnData);
+    for (size_t j = 0; j < tx.vout.size(); j++) {
+        if (!IsSpendableBy(tx.vout[j], spendKey)) continue;
+        utxos.emplace(std::piecewise_construct,
+                      std::forward_as_tuple(tx.GetHash(), j),
+                      std::forward_as_tuple(SimpleUTXO{nHeight, tx.vout[j].nValue, fCoinbase}));
     }
-    return ret;
 }
 
-FakeMasternode findMNData(std::vector<FakeMasternode>& mnList, const MasternodeRef& ref)
+static SimpleUTXOMap BuildSimpleUtxoMap(const std::vector<CTransaction>& txs, const CKey& spendKey)
 {
-    for (const auto& item : mnList) {
-        if (item.data.mnPubKey == ref->pubKeyMasternode) {
-            return item;
+    SimpleUTXOMap utxos;
+    for (size_t i = 0; i < txs.size(); i++) {
+        AddSpendableOutputs(utxos, txs[i], /*nHeight=*/(int)i + 1, spendKey, /*fCoinbase=*/true);
+    }
+    return utxos;
+}
+
+static std::vector<COutPoint> SelectUTXOs(SimpleUTXOMap& utxos, CAmount amount, CAmount& changeRet)
+{
+    changeRet = 0;
+    amount += fee;
+
+    std::vector<COutPoint> selectedUtxos;
+    CAmount selectedAmount = 0;
+    int chainHeight = WITH_LOCK(cs_main, return chainActive.Height(); );
+    while (!utxos.empty()) {
+        const int maturity = Params().GetConsensus().nCoinbaseMaturity;
+
+        auto bestNonCoinbaseIt = utxos.end();
+        auto bestCoinbaseIt = utxos.end();
+        for (auto it = utxos.begin(); it != utxos.end(); ++it) {
+            if (!it->second.fCoinbase) {
+                if (bestNonCoinbaseIt == utxos.end() || it->second.nValue > bestNonCoinbaseIt->second.nValue) {
+                    bestNonCoinbaseIt = it;
+                }
+                continue;
+            }
+            if (chainHeight - it->second.nHeight < maturity) continue;
+            if (bestCoinbaseIt == utxos.end() || it->second.nValue > bestCoinbaseIt->second.nValue) {
+                bestCoinbaseIt = it;
+            }
+        }
+
+        auto chosenIt = bestNonCoinbaseIt != utxos.end() ? bestNonCoinbaseIt : bestCoinbaseIt;
+        if (chosenIt == utxos.end()) {
+            int minHeight{std::numeric_limits<int>::max()};
+            int maxHeight{std::numeric_limits<int>::min()};
+            size_t coinbaseCount{0};
+            size_t nonCoinbaseCount{0};
+            for (const auto& entry : utxos) {
+                minHeight = std::min(minHeight, entry.second.nHeight);
+                maxHeight = std::max(maxHeight, entry.second.nHeight);
+                if (entry.second.fCoinbase) {
+                    coinbaseCount++;
+                } else {
+                    nonCoinbaseCount++;
+                }
+            }
+            BOOST_REQUIRE_MESSAGE(false,
+                                  strprintf("SelectUTXOs: no eligible UTXO found (chainHeight=%d maturity=%d utxos=%u coinbase=%u noncoinbase=%u minHeight=%d maxHeight=%d)",
+                                            chainHeight, maturity, utxos.size(), coinbaseCount, nonCoinbaseCount,
+                                            minHeight == std::numeric_limits<int>::max() ? -1 : minHeight,
+                                            maxHeight == std::numeric_limits<int>::min() ? -1 : maxHeight));
+        }
+
+        selectedAmount += chosenIt->second.nValue;
+        selectedUtxos.emplace_back(chosenIt->first);
+        utxos.erase(chosenIt);
+        if (selectedAmount >= amount) {
+            changeRet = selectedAmount - amount;
+            break;
         }
     }
-    throw std::runtime_error("MN not found");
+
+    BOOST_REQUIRE_MESSAGE(selectedAmount >= amount,
+                          strprintf("SelectUTXOs: insufficient funds (selected=%s required=%s utxos_remaining=%u)",
+                                    FormatMoney(selectedAmount), FormatMoney(amount), utxos.size()));
+    return selectedUtxos;
 }
 
-bool findStrError(CValidationState& state, const std::string& str)
+static void FundTransaction(CMutableTransaction& tx, SimpleUTXOMap& utxos, const CScript& scriptPayout, const CScript& scriptChange, CAmount amount)
 {
-    return state.GetRejectReason().find(str) != std::string::npos;
+    CAmount change;
+    auto inputs = SelectUTXOs(utxos, amount, change);
+    for (size_t i = 0; i < inputs.size(); i++) {
+        tx.vin.emplace_back(inputs[i]);
+    }
+    tx.vout.emplace_back(CTxOut(amount, scriptPayout));
+    if (change != 0) {
+        tx.vout.emplace_back(change, scriptChange);
+    }
 }
 
-BOOST_FIXTURE_TEST_CASE(mnwinner_test, TestChain100Setup)
+static void SignTransaction(CMutableTransaction& tx, const CKey& coinbaseKey)
 {
-    CreateAndProcessBlock({}, coinbaseKey);
-    CBlock tipBlock = CreateAndProcessBlock({}, coinbaseKey);
+    CBasicKeyStore tempKeystore;
+    tempKeystore.AddKeyPubKey(coinbaseKey, coinbaseKey.GetPubKey());
+
+    for (size_t i = 0; i < tx.vin.size(); i++) {
+        CTransactionRef txFrom;
+        uint256 hashBlock;
+        BOOST_ASSERT(GetTransaction(tx.vin[i].prevout.hash, txFrom, hashBlock));
+        BOOST_ASSERT(SignSignature(tempKeystore, *txFrom, tx, i, SIGHASH_ALL));
+    }
+}
+
+static CKey GetRandomKey()
+{
+    CKey keyRet;
+    keyRet.MakeNewKey(true);
+    return keyRet;
+}
+
+static CBLSSecretKey GetRandomBLSKey()
+{
+    CBLSSecretKey sk;
+    sk.MakeNewKey();
+    return sk;
+}
+
+static CScript GenerateRandomAddress()
+{
+    CKey key;
+    key.MakeNewKey(false);
+    return GetScriptForDestination(key.GetPubKey().GetID());
+}
+
+// Creates a ProRegTx with a new collateral in the first output of the tx.
+static CMutableTransaction CreateProRegTx(SimpleUTXOMap& utxos, int port, const CScript& scriptPayout, const CKey& coinbaseKey,
+                                          const CKey& ownerKey,
+                                          const CBLSPublicKey& operatorPubKey)
+{
+    ProRegPL pl;
+    pl.collateralOutpoint = COutPoint(UINT256_ZERO, 0);
+    pl.addr = LookupNumeric("1.1.1.1", port);
+    pl.keyIDOwner = ownerKey.GetPubKey().GetID();
+    pl.pubKeyOperator = operatorPubKey;
+    pl.keyIDVoting = ownerKey.GetPubKey().GetID();
+    pl.scriptPayout = scriptPayout;
+    pl.nOperatorReward = 0;
+
+    CMutableTransaction tx;
+    tx.nVersion = CTransaction::TxVersion::SAPLING;
+    tx.nType = CTransaction::TxType::PROREG;
+    FundTransaction(tx, utxos, scriptPayout,
+                    GetScriptForDestination(coinbaseKey.GetPubKey().GetID()),
+                    Params().GetConsensus().nMNCollateralAmt);
+
+    pl.inputsHash = CalcTxInputsHash(tx);
+    SetTxPayload(tx, pl);
+    SignTransaction(tx, coinbaseKey);
+
+    return tx;
+}
+
+static bool IsMNPayeeInBlock(const CBlock& block, const CScript& expected)
+{
+    for (const auto& txout : block.vtx[0]->vout) {
+        if (txout.scriptPubKey == expected) return true;
+    }
+    return false;
+}
+
+BOOST_FIXTURE_TEST_CASE(dmn_payee_test, TestChain100Setup)
+{
     enableMnSyncAndMNPayments();
-    masternodePayments.Clear();
-    mnodeman.Clear();
-    int nextBlockHeight = 103;
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V5_3, nextBlockHeight - 1);
 
-    // MN list.
-    std::vector<FakeMasternode> mnList = buildMNList(tipBlock.GetHash(), tipBlock.GetBlockTime(), 40);
-    std::vector<std::pair<int64_t, MasternodeRef>> mnRank = mnodeman.GetMasternodeRanks(nextBlockHeight - 100);
+    // Advance the chain and enable v6 (deterministic) masternode payments.
+    CreateAndProcessBlock({}, coinbaseKey);
+    CBlockIndex* chainTip = chainActive.Tip();
+    int nHeight = chainTip->nHeight; // 101
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, nHeight + 2);
+    CreateAndProcessBlock({}, coinbaseKey); // last pre-v6 block
+    chainTip = chainActive.Tip();
+    BOOST_CHECK_EQUAL(chainTip->nHeight, ++nHeight);
 
-    // Test mnwinner failure for non-existent MN voter.
-    CTxIn dummyVoter;
-    CScript dummyPayeeScript;
-    CKey dummyKey;
-    dummyKey.MakeNewKey(true);
-    CValidationState state0;
-    BOOST_CHECK(!CreateMNWinnerPayment(dummyVoter, nextBlockHeight, dummyPayeeScript,
-                                       dummyKey, dummyKey.GetPubKey(), state0));
-    BOOST_CHECK_MESSAGE(findStrError(state0, "Non-existent mnwinner voter"), state0.GetRejectReason());
+    // Build the UTXO set from the 100 pre-mined coinbase outputs (250 PIV each on regtest).
+    SimpleUTXOMap utxos = BuildSimpleUtxoMap(coinbaseTxns, coinbaseKey);
 
-    // Take the first MN
-    auto firstMN = findMNData(mnList, mnRank[0].second);
-    CTxIn mnVinVoter(firstMN.mn.vin);
-    int paymentBlockHeight = nextBlockHeight;
-    CScript payeeScript = firstMN.data.mnPayeeScript;
-    CMasternode* pFirstMN = mnodeman.Find(firstMN.mn.vin.prevout);
-    pFirstMN->sigTime += 8000 + 1; // MN_WINNER_MINIMUM_AGE = 8000.
-    // Voter MN1, fail because the sigTime - GetAdjustedTime() is not greater than MN_WINNER_MINIMUM_AGE.
-    CValidationState state1;
-    BOOST_CHECK(!CreateMNWinnerPayment(mnVinVoter, paymentBlockHeight, payeeScript,
-                                       firstMN.data.mnPrivKey, firstMN.data.mnPubKey, state1));
-    // future: add specific error cause
-    BOOST_CHECK_MESSAGE(findStrError(state1, "Masternode not in the top"), state1.GetRejectReason());
+    // Register three DMNs, one per block (v6 active from height 103).
+    CCoinsViewCache* view = pcoinsTip.get();
+    int port = 1;
+    for (int i = 0; i < 3; i++) {
+        const CKey& ownerKey = GetRandomKey();
+        const CBLSSecretKey& operatorKey = GetRandomBLSKey();
+        auto tx = CreateProRegTx(utxos, port++, GenerateRandomAddress(), coinbaseKey, ownerKey, operatorKey.GetPublicKey());
+        const uint256& txid = tx.GetHash();
 
-    // Voter MN2, fail because MN2 doesn't match with the signing keys.
-    auto secondMn = findMNData(mnList, mnRank[1].second);
-    CMasternode* pSecondMN = mnodeman.Find(secondMn.mn.vin.prevout);
-    mnVinVoter = CTxIn(pSecondMN->vin);
-    payeeScript = secondMn.data.mnPayeeScript;
-    CValidationState state2;
-    BOOST_CHECK(!CreateMNWinnerPayment(mnVinVoter, paymentBlockHeight, payeeScript,
-                                       firstMN.data.mnPrivKey, firstMN.data.mnPubKey, state2));
-    BOOST_CHECK_MESSAGE(findStrError(state2, "invalid voter mnwinner signature"), state2.GetRejectReason());
+        CValidationState dummyState;
+        BOOST_CHECK(WITH_LOCK(cs_main, return CheckSpecialTx(tx, chainTip, view, dummyState); ));
 
-    // Voter MN2, fail because mnwinner height is too far in the future.
-    mnVinVoter = CTxIn(pSecondMN->vin);
-    CValidationState state2_5;
-    BOOST_CHECK(!CreateMNWinnerPayment(mnVinVoter, paymentBlockHeight + 20, payeeScript,
-                                       secondMn.data.mnPrivKey, secondMn.data.mnPubKey, state2_5));
-    BOOST_CHECK_MESSAGE(findStrError(state2_5, "block height out of range"), state2_5.GetRejectReason());
+        CreateAndProcessBlock({tx}, coinbaseKey);
+        chainTip = chainActive.Tip();
+        BOOST_CHECK_EQUAL(chainTip->nHeight, nHeight + 1);
+        BOOST_CHECK(deterministicMNManager->GetListAtChainTip().HasMN(txid));
 
-
-    // Voter MN2, fail because MN2 is not enabled
-    pSecondMN->SetSpent();
-    BOOST_CHECK(!pSecondMN->IsEnabled());
-    CValidationState state3;
-    BOOST_CHECK(!CreateMNWinnerPayment(mnVinVoter, paymentBlockHeight, payeeScript,
-                                       secondMn.data.mnPrivKey, secondMn.data.mnPubKey, state3));
-    // future: could add specific error cause.
-    BOOST_CHECK_MESSAGE(findStrError(state3, "Masternode not in the top"), state3.GetRejectReason());
-
-    // Voter MN3, fail because the payeeScript is not a P2PKH
-    auto thirdMn = findMNData(mnList, mnRank[2].second);
-    CMasternode* pThirdMN = mnodeman.Find(thirdMn.mn.vin.prevout);
-    mnVinVoter = CTxIn(pThirdMN->vin);
-    CScript scriptDummy = CScript() << OP_TRUE;
-    CValidationState state4;
-    BOOST_CHECK(!CreateMNWinnerPayment(mnVinVoter, paymentBlockHeight, scriptDummy,
-                                       thirdMn.data.mnPrivKey, thirdMn.data.mnPubKey, state4));
-    BOOST_CHECK_MESSAGE(findStrError(state4, "payee must be a P2PKH"), state4.GetRejectReason());
-
-    // Voter MN15 pays to MN3, fail because the voter is not in the top ten.
-    auto voterPos15 = findMNData(mnList, mnRank[14].second);
-    CMasternode* p15dMN = mnodeman.Find(voterPos15.mn.vin.prevout);
-    mnVinVoter = CTxIn(p15dMN->vin);
-    payeeScript = thirdMn.data.mnPayeeScript;
-    CValidationState state6;
-    BOOST_CHECK(!CreateMNWinnerPayment(mnVinVoter, paymentBlockHeight, payeeScript,
-                                       voterPos15.data.mnPrivKey, voterPos15.data.mnPubKey, state6));
-    BOOST_CHECK_MESSAGE(findStrError(state6, "Masternode not in the top"), state6.GetRejectReason());
-
-    // Voter MN3, passes
-    mnVinVoter = CTxIn(pThirdMN->vin);
-    CValidationState state7;
-    BOOST_CHECK(CreateMNWinnerPayment(mnVinVoter, paymentBlockHeight, payeeScript,
-                                      thirdMn.data.mnPrivKey, thirdMn.data.mnPubKey, state7));
-    BOOST_CHECK_MESSAGE(state7.IsValid(), state7.GetRejectReason());
-
-    // Create block and check that is being paid properly.
-    tipBlock = CreateAndProcessBlock({}, coinbaseKey);
-    BOOST_CHECK_MESSAGE(HasPayeeOutput(tipBlock.vtx[0], payeeScript), "error: block not paying to proper MN");
-    nextBlockHeight++;
-
-    // Now let's push two valid winner payments and make every MN in the top ten vote for them (having more votes in mnwinnerA than in mnwinnerB).
-    mnRank = mnodeman.GetMasternodeRanks(nextBlockHeight - 100);
-    CScript firstRankedPayee = GetScriptForDestination(mnRank[0].second->pubKeyCollateralAddress.GetID());
-    CScript secondRankedPayee = GetScriptForDestination(mnRank[1].second->pubKeyCollateralAddress.GetID());
-
-    // Let's vote with the first 6 nodes for MN ranked 1
-    // And with the last 4 nodes for MN ranked 2
-    payeeScript = firstRankedPayee;
-    for (int i=0; i<10; i++) {
-        if (i > 5) {
-            payeeScript = secondRankedPayee;
-        }
-        auto voterMn = findMNData(mnList, mnRank[i].second);
-        CMasternode* pVoterMN = mnodeman.Find(voterMn.mn.vin.prevout);
-        mnVinVoter = CTxIn(pVoterMN->vin);
-        CValidationState stateInternal;
-        BOOST_CHECK(CreateMNWinnerPayment(mnVinVoter, nextBlockHeight, payeeScript,
-                                                             voterMn.data.mnPrivKey, voterMn.data.mnPubKey, stateInternal));
-        BOOST_CHECK_MESSAGE(stateInternal.IsValid(), stateInternal.GetRejectReason());
+        AddSpendableOutputs(utxos, CTransaction(tx), nHeight + 1, coinbaseKey, /*fCoinbase=*/false);
+        nHeight++;
     }
 
-    // Check the votes count for each mnwinner.
-    CMasternodeBlockPayees blockPayees = masternodePayments.mapMasternodeBlocks.at(nextBlockHeight);
-    BOOST_CHECK_MESSAGE(blockPayees.HasPayeeWithVotes(firstRankedPayee, 6), "first ranked payee with no enough votes");
-    BOOST_CHECK_MESSAGE(blockPayees.HasPayeeWithVotes(secondRankedPayee, 4), "second ranked payee with no enough votes");
+    // Mine 20 blocks: each coinbase must pay the expected DMN payee, and
+    // GetMasternodeTxOuts must resolve to the same payee for that block.
+    for (int i = 0; i < 20; i++) {
+        auto mnList = deterministicMNManager->GetListAtChainTip();
+        auto dmnExpectedPayee = mnList.GetMNPayee();
+        BOOST_REQUIRE(dmnExpectedPayee);
 
-    // let's try to create a bad block paying to the second most voted MN.
+        std::vector<CTxOut> vecMnOuts;
+        BOOST_CHECK(masternodePayments.GetMasternodeTxOuts(chainActive.Tip(), vecMnOuts));
+        BOOST_REQUIRE(!vecMnOuts.empty());
+        BOOST_CHECK_EQUAL(vecMnOuts.size(), 1); // no operator reward configured
+        BOOST_CHECK(vecMnOuts[0].scriptPubKey == dmnExpectedPayee->pdmnState->scriptPayout);
+        BOOST_CHECK_EQUAL(vecMnOuts[0].nValue, GetMasternodePayment(chainActive.Tip()->nHeight + 1));
+
+        CBlock block = CreateAndProcessBlock({}, coinbaseKey);
+        BOOST_CHECK_MESSAGE(IsMNPayeeInBlock(block, dmnExpectedPayee->pdmnState->scriptPayout),
+                            "error: block not paying to the deterministic masternode payee");
+        nHeight++;
+    }
+    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height();), nHeight);
+
+    // A block paying to a different script instead of the DMN payee must be rejected.
+    auto mnList = deterministicMNManager->GetListAtChainTip();
+    auto dmnExpectedPayee = mnList.GetMNPayee();
+    BOOST_REQUIRE(dmnExpectedPayee);
+    const CScript& payeeScript = dmnExpectedPayee->pdmnState->scriptPayout;
+
     CBlock badBlock = CreateBlock({}, coinbaseKey);
     CMutableTransaction coinbase(*badBlock.vtx[0]);
-    ReplacePayeeOutput(coinbase, firstRankedPayee, secondRankedPayee);
+    ReplacePayeeOutput(coinbase, payeeScript, GenerateRandomAddress());
     badBlock.vtx[0] = MakeTransactionRef(coinbase);
     badBlock.hashMerkleRoot = BlockMerkleRoot(badBlock);
     {
         auto pBadBlock = std::make_shared<CBlock>(badBlock);
-        SolveBlock(pBadBlock, nextBlockHeight);
+        SolveBlock(pBadBlock, nHeight + 1);
         BlockStateCatcherWrapper sc(pBadBlock->GetHash());
         sc.registerEvent();
         ProcessNewBlock(pBadBlock, nullptr);
@@ -274,262 +329,6 @@ BOOST_FIXTURE_TEST_CASE(mnwinner_test, TestChain100Setup)
         BOOST_CHECK_EQUAL(sc.get().state.GetRejectReason(), "bad-cb-payee");
     }
     BOOST_CHECK(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash();) != badBlock.GetHash());
-
-
-    // And let's verify that the most voted one is the one being paid.
-    tipBlock = CreateAndProcessBlock({}, coinbaseKey);
-    BOOST_CHECK_MESSAGE(HasPayeeOutput(tipBlock.vtx[0], firstRankedPayee), "error: block not paying to first ranked MN");
-    nextBlockHeight++;
-
-    //
-    // Generate 125 blocks paying to different MNs to load the payments cache.
-    for (int i = 0; i < 125; i++) {
-        mnRank = mnodeman.GetMasternodeRanks(nextBlockHeight - 100);
-        payeeScript = GetScriptForDestination(mnRank[0].second->pubKeyCollateralAddress.GetID());
-        for (int j=0; j<7; j++) { // votes
-            auto voterMn = findMNData(mnList, mnRank[j].second);
-            CMasternode* pVoterMN = mnodeman.Find(voterMn.mn.vin.prevout);
-            mnVinVoter = CTxIn(pVoterMN->vin);
-            CValidationState stateInternal;
-            BOOST_CHECK(CreateMNWinnerPayment(mnVinVoter, nextBlockHeight, payeeScript,
-                                              voterMn.data.mnPrivKey, voterMn.data.mnPubKey, stateInternal));
-            BOOST_CHECK_MESSAGE(stateInternal.IsValid(), stateInternal.GetRejectReason());
-        }
-        // Create block and check that is being paid properly.
-        tipBlock = CreateAndProcessBlock({}, coinbaseKey);
-        BOOST_CHECK_MESSAGE(HasPayeeOutput(tipBlock.vtx[0], payeeScript), "error: block not paying to proper MN");
-        nextBlockHeight++;
-    }
-    // Check chain height.
-    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height();), nextBlockHeight - 1);
-
-    // Let's now verify what happen if a previously paid MN goes offline but still have scheduled a payment in the future.
-    // The current system allows it (up to a certain point) as payments are scheduled ahead of time and a MN can go down in the
-    // [proposedWinnerHeightTime < currentHeight < currentHeight + 20] window.
-
-    // 1) Schedule payment and vote for it with the first 6 MNs.
-    mnRank = mnodeman.GetMasternodeRanks(nextBlockHeight - 100);
-    MasternodeRef mnToPay = mnRank[0].second;
-    payeeScript = GetScriptForDestination(mnToPay->pubKeyCollateralAddress.GetID());
-    for (int i=0; i<6; i++) {
-        auto voterMn = findMNData(mnList, mnRank[i].second);
-        CMasternode* pVoterMN = mnodeman.Find(voterMn.mn.vin.prevout);
-        mnVinVoter = CTxIn(pVoterMN->vin);
-        CValidationState stateInternal;
-        BOOST_CHECK(CreateMNWinnerPayment(mnVinVoter, nextBlockHeight, payeeScript,
-                                          voterMn.data.mnPrivKey, voterMn.data.mnPubKey, stateInternal));
-        BOOST_CHECK_MESSAGE(stateInternal.IsValid(), stateInternal.GetRejectReason());
-    }
-
-    // 2) Remove payee MN from the MN list and try to emit a vote from MN7 to the same payee.
-    // it should still be accepted because the MN was scheduled when it was online.
-    mnodeman.Remove(mnToPay->vin.prevout);
-    BOOST_CHECK_MESSAGE(!mnodeman.Find(mnToPay->vin.prevout), "error: removed MN is still available");
-
-    // Now emit the vote from MN7
-    auto voterMn = findMNData(mnList, mnRank[7].second);
-    CMasternode* pVoterMN = mnodeman.Find(voterMn.mn.vin.prevout);
-    mnVinVoter = CTxIn(pVoterMN->vin);
-    CValidationState stateInternal;
-    BOOST_CHECK(CreateMNWinnerPayment(mnVinVoter, nextBlockHeight, payeeScript,
-                                      voterMn.data.mnPrivKey, voterMn.data.mnPubKey, stateInternal));
-    BOOST_CHECK_MESSAGE(stateInternal.IsValid(), stateInternal.GetRejectReason());
-}
-
-BOOST_FIXTURE_TEST_CASE(mnwinner_accessors_test, TestChain100Setup)
-{
-    masternodePayments.Clear();
-
-    CKey payeeKey;
-    payeeKey.MakeNewKey(true);
-
-    CMasternodePaymentWinner winner(CTxIn(COutPoint(GetRandHash(), 0)), 101);
-    winner.AddPayee(GetScriptForDestination(payeeKey.GetPubKey().GetID()));
-    masternodePayments.AddWinningMasternode(winner);
-
-    BOOST_CHECK(masternodePayments.HasMasternodeWinner(winner.GetHash()));
-
-    CMasternodePaymentWinner storedWinner;
-    BOOST_CHECK(masternodePayments.GetMasternodeWinner(winner.GetHash(), storedWinner));
-    BOOST_CHECK_EQUAL(storedWinner.GetHash().ToString(), winner.GetHash().ToString());
-    BOOST_CHECK_EQUAL(storedWinner.nBlockHeight, winner.nBlockHeight);
-}
-
-BOOST_FIXTURE_TEST_CASE(legacy_mn_payment_skips_payee_when_no_enabled_mn, TestChain100Setup)
-{
-    CBlock tipBlock = CreateAndProcessBlock({}, coinbaseKey);
-    CreateAndProcessBlock({}, coinbaseKey);
-
-    masternodePayments.Clear();
-    mnodeman.Clear();
-
-    std::vector<FakeMasternode> mnList = buildMNList(tipBlock.GetHash(), tipBlock.GetBlockTime(), 4);
-    BOOST_REQUIRE_EQUAL(mnList.size(), 4U);
-
-    // Non-enabled legacy MNs must not be used as a local-only payment fallback.
-    for (const auto& fakeMn : mnList) {
-        CMasternode* mn = mnodeman.Find(fakeMn.mn.vin.prevout);
-        BOOST_REQUIRE(mn != nullptr);
-        mn->SetSpent();
-        BOOST_CHECK(!mn->IsEnabled());
-    }
-
-    const int nextHeight = WITH_LOCK(cs_main, return chainActive.Height()) + 1;
-    const int originalPosHeight = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight;
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, nextHeight);
-    std::vector<CTxOut> vecMnOuts;
-    BOOST_CHECK_MESSAGE(!masternodePayments.GetLegacyMasternodeTxOut(nextHeight, vecMnOuts),
-                        "non-enabled legacy masternodes must not be selected as payees");
-    BOOST_CHECK(vecMnOuts.empty());
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, originalPosHeight);
-}
-
-BOOST_FIXTURE_TEST_CASE(getnext_payment_queue_handles_small_eligible_sets, TestChain100Setup)
-{
-    masternodePayments.Clear();
-    mnodeman.Clear();
-
-    CBlock tipBlock = CreateAndProcessBlock({}, coinbaseKey);
-    CreateAndProcessBlock({}, coinbaseKey);
-
-    std::vector<FakeMasternode> mnList = buildMNList(tipBlock.GetHash(), tipBlock.GetBlockTime(), 4);
-    BOOST_REQUIRE_EQUAL(mnList.size(), 4U);
-
-    const int nextHeight = WITH_LOCK(cs_main, return chainActive.Height()) + 1;
-    int eligibleCount = 0;
-    MasternodeRef winner = mnodeman.GetNextMasternodeInQueueForPayment(nextHeight, true, eligibleCount);
-
-    BOOST_CHECK_EQUAL(eligibleCount, 4);
-    BOOST_CHECK_MESSAGE(winner != nullptr, "small masternode sets should still produce a payment winner");
-}
-
-BOOST_FIXTURE_TEST_CASE(pre_pos_legacy_mn_payout_block_is_accepted, TestChain100Setup)
-{
-    enableMnSyncAndMNPayments();
-
-    CBlock tipBlock = CreateAndProcessBlock({}, coinbaseKey);
-    CreateAndProcessBlock({}, coinbaseKey);
-
-    masternodePayments.Clear();
-    mnodeman.Clear();
-
-    std::vector<FakeMasternode> mnList = buildMNList(tipBlock.GetHash(), tipBlock.GetBlockTime(), 4);
-    BOOST_REQUIRE_EQUAL(mnList.size(), 4U);
-
-    const int nextHeight = WITH_LOCK(cs_main, return chainActive.Height()) + 1;
-    // Regtest allows masternode payments before PoS for unit-test coverage.
-    BOOST_CHECK(GetMasternodePayment(nextHeight) > 0);
-
-    const uint256& hash = mnodeman.GetHashAtHeight(nextHeight - 1);
-    MasternodeRef winningNode = mnodeman.GetCurrentMasterNode(hash);
-    if (!winningNode) {
-        winningNode = mnodeman.GetCurrentMasterNode(hash, /*onlyEnabled=*/false);
-    }
-    BOOST_REQUIRE(winningNode);
-
-    // In regtest, a pre-PoS block that pays the correct legacy MN is accepted.
-    CBlock goodBlock = CreateAndProcessBlock({}, coinbaseKey);
-    BOOST_CHECK_MESSAGE(HasPayeeOutput(goodBlock.vtx[0], winningNode->GetPayeeScript()),
-                        "error: pre-PoS block not paying to proper legacy MN");
-}
-
-static uint256 StressHash(uint32_t worker, uint32_t iter)
-{
-    arith_uint256 n = arith_uint256(worker);
-    n <<= 32;
-    n += iter + 1;
-    return ArithToUint256(n);
-}
-
-BOOST_FIXTURE_TEST_CASE(mnpayments_concurrent_read_cleanup_stress, TestChain100Setup)
-{
-    masternodePayments.Clear();
-    mnodeman.Clear();
-
-    CBlock tipBlock = CreateAndProcessBlock({}, coinbaseKey);
-    const int nextBlockHeight = WITH_LOCK(cs_main, return chainActive.Height();) + 1;
-    std::vector<FakeMasternode> mnList = buildMNList(tipBlock.GetHash(), tipBlock.GetBlockTime(), 20);
-    std::vector<std::pair<int64_t, MasternodeRef>> mnRank = mnodeman.GetMasternodeRanks(nextBlockHeight - 100);
-    BOOST_REQUIRE(!mnRank.empty());
-    const MasternodeRef payeeMn = mnRank[0].second;
-    BOOST_REQUIRE(payeeMn);
-
-    for (int i = 0; i < 2500; ++i) {
-        const COutPoint voterOut(GetRandHash(), 0);
-        CMasternodePaymentWinner winner(CTxIn(voterOut), 30000 + i);
-        winner.AddPayee(payeeMn->GetPayeeScript());
-        masternodePayments.AddWinningMasternode(winner);
-    }
-
-    const CBlockIndex* chainTip = WITH_LOCK(cs_main, return chainActive.Tip());
-    BOOST_REQUIRE(chainTip != nullptr);
-
-    std::atomic<bool> go{false};
-    std::thread reader([&]() {
-        while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
-        for (int i = 0; i < 4000; ++i) {
-            (void)mnodeman.GetLastPaid(payeeMn, mnodeman.CountEnabled(), chainTip);
-        }
-    });
-    std::thread cleaner([&]() {
-        while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
-        for (int i = 0; i < 4000; ++i) {
-            masternodePayments.CleanPaymentList(1, 40000 + i);
-        }
-    });
-
-    go.store(true, std::memory_order_release);
-    reader.join();
-    cleaner.join();
-
-    BOOST_CHECK(true);
-}
-
-BOOST_FIXTURE_TEST_CASE(masternodeman_seen_cache_thread_safety_stress, TestChain100Setup)
-{
-    mnodeman.Clear();
-
-    std::atomic<bool> go{false};
-    CMasternodeBroadcast mnb;
-    CMasternodePing mnp;
-    constexpr int kWriterThreads = 4;
-    constexpr int kIterations = 5000;
-
-    std::vector<std::thread> workers;
-    workers.reserve(kWriterThreads + 1);
-
-    for (int worker = 0; worker < kWriterThreads; ++worker) {
-        workers.emplace_back([&, worker]() {
-            while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
-            for (int i = 0; i < kIterations; ++i) {
-                const uint256 hash = StressHash(worker + 1, i);
-                mnodeman.AddSeenMasternodeBroadcast(hash, mnb);
-                mnodeman.AddSeenMasternodePing(hash, mnp);
-                if ((i % 2) == 0) {
-                    mnodeman.UpdateSeenMasternodeBroadcastPing(hash, mnp);
-                }
-                if ((i % 3) == 0) {
-                    mnodeman.RemoveSeenMasternodeBroadcast(hash);
-                }
-                (void)mnodeman.HasSeenMasternodeBroadcast(hash);
-                (void)mnodeman.HasSeenMasternodePing(hash);
-            }
-        });
-    }
-
-    workers.emplace_back([&]() {
-        while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
-        for (int i = 0; i < kIterations; ++i) {
-            mnodeman.CleanupInvalidSeenBroadcasts();
-        }
-    });
-
-    go.store(true, std::memory_order_release);
-    for (auto& thread : workers) {
-        thread.join();
-    }
-
-    BOOST_CHECK(true);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

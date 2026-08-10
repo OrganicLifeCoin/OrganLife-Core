@@ -740,12 +740,6 @@ QWidget#PrivacyDialog QLabel {
 border:0px solid #2b2b1a;
 }
 
-QWidget#PrivacyDialog QLabel#zPIVLabel {
-font-size:14px;
-color:#ffffff;
-background-color:#4f7a2e;
-}
-
 QWidget#PrivacyDialog QLabel#oPIVLabel {
 font-size:14px;
 color:#ffffff;
@@ -944,11 +938,6 @@ min-width:400px;
 background-color:#ffffff;
 }
 
-QWidget .QFrame#frame_ZerocoinBalances { /* Lower left side */
-min-width:400px;
-background-color:#ffffff;
-}
-
 QWidget .QFrame#frame_CombinedBalances { /* Lower left side */
 min-width:400px;
 background-color:#ffffff;
@@ -1111,91 +1100,6 @@ QWidget .QFrame#frame_Balances .QLabel#labelWatchLocked { /* Available zPIV Bala
 qproperty-alignment: 'AlignVCenter | AlignLeft';
 font-size:12px;
 margin-left:16px;
-}
-
-/* Zerocoin additions start here ***********************************************/
-
-QWidget .QFrame#frame_ZerocoinBalances .QLabel#label_5z_3 { /* Zerocoin Balance Label */
-qproperty-alignment: 'AlignVCenter | AlignLeft';
-min-width:160px;
-background-color:transparent;
-color:#2b2b1a;
-font-weight:bold;
-font-size:14px;
-margin-right:5px;
-padding-right:5px;
-}
-
-QWidget .QFrame#frame_ZerocoinBalances .QLabel#labelzBalanceText { /* Available zPIV Label */
-qproperty-alignment: 'AlignVCenter | AlignLeft';
-min-width:160px;
-color:#2b2b1a;
-margin-right:5px;
-padding-right:5px;
-font-weight:bold;
-font-size:12px;
-}
-
-QWidget .QFrame#frame_ZerocoinBalances .QLabel#labelzBalance { /* Available zPIV Balance */
-qproperty-alignment: 'AlignVCenter | AlignLeft';
-font-size:12px;
-font-weight:bold;
-color:#4f7a2e;
-margin-left:0px;
-}
-
-QWidget .QFrame#frame_ZerocoinBalances .QLabel#labelzBalanceUnconfirmedText { /* Unconfirmed zPIV Label */
-qproperty-alignment: 'AlignVCenter | AlignLeft';
-min-width:160px;
-color:#2b2b1a;
-margin-right:5px;
-padding-right:5px;
-font-weight:bold;
-font-size:12px;
-}
-
-QWidget .QFrame#frame_ZerocoinBalances .QLabel#labelzBalanceUnconfirmed { /* Unconfirmed zPIV Balance */
-qproperty-alignment: 'AlignVCenter | AlignLeft';
-font-size:12px;
-font-weight:bold;
-color:#4f7a2e;
-margin-left:0px;
-}
-
-QWidget .QFrame#frame_ZerocoinBalances .QLabel#labelzBalanceMatureText { /* Mature zPIV Label */
-qproperty-alignment: 'AlignVCenter | AlignLeft';
-min-width:160px;
-color:#2b2b1a;
-margin-right:5px;
-padding-right:5px;
-font-weight:bold;
-font-size:12px;
-}
-
-QWidget .QFrame#frame_ZerocoinBalances .QLabel#labelzBalanceMature { /* Mature zPIV Balance */
-qproperty-alignment: 'AlignVCenter | AlignLeft';
-font-size:12px;
-font-weight:bold;
-color:#4f7a2e;
-margin-left:0px;
-}
-
-QWidget .QFrame#frame_ZerocoinBalances .QLabel#labelzBalanceImmatureText { /* Immature zPIV Label */
-qproperty-alignment: 'AlignVCenter | AlignLeft';
-min-width:160px;
-color:#2b2b1a;
-margin-right:5px;
-padding-right:5px;
-font-weight:bold;
-font-size:12px;
-}
-
-QWidget .QFrame#frame_ZerocoinBalances .QLabel#labelzBalanceImmature { /* Immature zPIV Balance */
-qproperty-alignment: 'AlignVCenter | AlignLeft';
-font-size:12px;
-font-weight:bold;
-color:#4f7a2e;
-margin-left:0px;
 }
 
 QWidget .QFrame#frame_CombinedBalances .QLabel#label_5z { /* Combined Balance Label */
@@ -1554,12 +1458,6 @@ QDialog#CoinControlDialog .CoinControlTreeWidget#treeWidget::seperator {
 
 QDialog#CoinControlDialog .CoinControlTreeWidget#treeWidget::indicator { /* Coin Control Widget Checkbox */
 
-}
-
-QDialog#ZPivControlDialog .QTreeWidget#treeWidget { /* zPIV Control Widget Container */
-outline:0;
-background-color:#ffffff;
-border:1px solid #2b2b1a;
 }
 
 /**************************** RECEIVE COINS *********************************************/

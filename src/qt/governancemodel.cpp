@@ -357,9 +357,7 @@ OperationResult GovernanceModel::voteForProposal(const ProposalInfo& prop,
 {
     UniValue ret; // future: don't use UniValue here.
     for (const auto& mnAlias : mnVotingAlias) {
-        bool fLegacyMN = true; // For now, only legacy MNs
         ret = mnBudgetVoteInner(nullptr,
-                          fLegacyMN,
                           prop.id,
                           false,
                           isVotePositive ? CBudgetVote::VoteDirection::VOTE_YES : CBudgetVote::VoteDirection::VOTE_NO,

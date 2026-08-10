@@ -11,9 +11,7 @@
 
 #define MASTERNODE_SYNC_INITIAL 0
 #define MASTERNODE_SYNC_SPORKS 1
-#define MASTERNODE_SYNC_LIST 2
-#define MASTERNODE_SYNC_MNW 3
-#define MASTERNODE_SYNC_BUDGET 4
+#define MASTERNODE_SYNC_BUDGET 2
 #define MASTERNODE_SYNC_BUDGET_PROP 10
 #define MASTERNODE_SYNC_BUDGET_FIN 11
 #define MASTERNODE_SYNC_FAILED 998
@@ -33,7 +31,8 @@ public:
     bool IsBlockchainSynced() const { return fBlockchainSynced; };
     bool IsSynced() const { return m_current_sync_phase == MASTERNODE_SYNC_FINISHED; }
     bool IsSporkListSynced() const { return m_current_sync_phase > MASTERNODE_SYNC_SPORKS; }
-    bool IsMasternodeListSynced() const { return m_current_sync_phase > MASTERNODE_SYNC_LIST; }
+    // DMN list is derived from the chain state, so it's synced once the sporks phase is done
+    bool IsMasternodeListSynced() const { return m_current_sync_phase > MASTERNODE_SYNC_SPORKS; }
 
     // Update seen maps
     void AddedMasternodeList(const uint256& hash);

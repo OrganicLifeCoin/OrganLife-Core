@@ -16,7 +16,6 @@
 #include "util/system.h"
 #include "utilmoneystr.h"
 #include "validation.h"
-#include "zpiv/zpos.h"
 
 /**
  * CStakeKernel Constructor
@@ -97,9 +96,7 @@ static bool LoadStakeInput(const CBlock& block, std::unique_ptr<CStakeInput>& st
 
     // Construct the stakeinput object
     const CTxIn& txin = block.vtx[1]->vin[0];
-    stake = txin.IsZerocoinSpend() ?
-            std::unique_ptr<CStakeInput>(CLegacyZPivStake::NewZPivStake(txin, nHeight)) :
-            std::unique_ptr<CStakeInput>(CPivStake::NewPivStake(txin, nHeight, block.nTime));
+    stake = std::unique_ptr<CStakeInput>(CPivStake::NewPivStake(txin, nHeight, block.nTime));
 
     return stake != nullptr;
 }
@@ -160,9 +157,6 @@ bool CheckProofOfStake(const CBlock& block, std::string& strError, const CBlockI
         strError = "kernel hash check fails";
         return false;
     }
-
-    // zPoS disabled (ContextCheck) before blocks V7, and the tx input signature is in CoinSpend
-    if (stakeInput->IsZPIV()) return true;
 
     // Verify tx input signature
     CTxOut stakePrevout;

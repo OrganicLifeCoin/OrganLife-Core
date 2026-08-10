@@ -407,6 +407,9 @@ BOOST_AUTO_TEST_CASE(gov_special_txs_rejected_before_activation)
 {
     LOCK(cs_main);
 
+    // V6_1_GOV activates at genesis on the public networks; pin a concrete
+    // height here so the activation-boundary behavior stays testable.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, 100);
     const int govActivationHeight =
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(govActivationHeight > 1);
@@ -429,6 +432,9 @@ BOOST_AUTO_TEST_CASE(gov_special_txs_activation_boundary)
 {
     LOCK(cs_main);
 
+    // V6_1_GOV activates at genesis on the public networks; pin a concrete
+    // height here so the activation-boundary behavior stays testable.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, 100);
     const int govActivationHeight =
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(govActivationHeight > 0);
@@ -458,6 +464,9 @@ BOOST_AUTO_TEST_CASE(gov_votelock_rejects_excessive_consensus_cap)
 {
     LOCK(cs_main);
 
+    // V6_1_GOV activates at genesis on the public networks; pin a concrete
+    // height here so the activation-boundary behavior stays testable.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, 100);
     const int govActivationHeight =
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(govActivationHeight > 0);
@@ -480,6 +489,9 @@ BOOST_AUTO_TEST_CASE(gov_votelock_rejects_missing_matching_lock_output)
 {
     LOCK(cs_main);
 
+    // V6_1_GOV activates at genesis on the public networks; pin a concrete
+    // height here so the activation-boundary behavior stays testable.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, 100);
     const int govActivationHeight =
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(govActivationHeight > 0);
@@ -505,6 +517,9 @@ BOOST_AUTO_TEST_CASE(gov_votecast_accepts_same_block_lock_without_mempool_lookup
 
     mempool.clear();
 
+    // V6_1_GOV activates at genesis on the public networks; pin a concrete
+    // height here so the activation-boundary behavior stays testable.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, 100);
     const int govActivationHeight =
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(govActivationHeight > 0);
@@ -557,6 +572,9 @@ BOOST_AUTO_TEST_CASE(gov_votecast_missing_lock_is_non_bannable)
 {
     LOCK(cs_main);
 
+    // V6_1_GOV activates at genesis on the public networks; pin a concrete
+    // height here so the activation-boundary behavior stays testable.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, 100);
     const int govActivationHeight =
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(govActivationHeight > 0);

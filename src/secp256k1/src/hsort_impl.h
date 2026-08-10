@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 The CTEAM Core developers */
+/* Copyright (c) 2026 The Bitcoin Core developers */
 /***********************************************************************
  * Copyright (c) 2021 Russell O'Connor, Jonas Nick                     *
  * Distributed under the MIT software license, see the accompanying    *

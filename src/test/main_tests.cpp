@@ -204,35 +204,29 @@ BOOST_AUTO_TEST_CASE(consensus_upgrade_schedule_safety_test)
         BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_3].nActivationHeight, posHeight);
         BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_5].nActivationHeight, posHeight);
         BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_6].nActivationHeight, posHeight);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight, posHeight);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight, posHeight);
+        // OrganicLife activates the deterministic-masternode system at genesis.
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight,
+                          Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight,
+                          Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
 
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_ZC].nActivationHeight,
-                          Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_ZC_V2].nActivationHeight,
-                          Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_ZC_PUBLIC].nActivationHeight,
-                          Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
         BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_BIP65].nActivationHeight,
                           Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     };
 
     const auto assert_testnet_legacy_schedule = [](const Consensus::Params& consensus) {
         BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_POS].nActivationHeight, 5041);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_POS_V2].nActivationHeight, 32000);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_ZC].nActivationHeight, 32200);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_ZC_V2].nActivationHeight, 32400);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_BIP65].nActivationHeight, 32600);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_ZC_PUBLIC].nActivationHeight, 32800);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V3_4].nActivationHeight, 33000);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V4_0].nActivationHeight, 33200);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_0].nActivationHeight, 33400);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_2].nActivationHeight, 33600);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_3].nActivationHeight, 33800);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_5].nActivationHeight, 34000);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_6].nActivationHeight, 34200);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight, 34400);
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight, 41000);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_POS_V2].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_BIP65].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V3_4].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V4_0].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_0].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_2].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_3].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_5].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V5_6].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     };
 
     SelectParams(CBaseChainParams::MAIN);

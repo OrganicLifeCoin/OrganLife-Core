@@ -163,12 +163,24 @@ BASE_SCRIPTS= [
 ]
 
 TIERTWO_SCRIPTS = [
-    # Legacy tier-two path used by OrganicLife (non-deterministic MN flow).
-    # Deterministic/Evo-specific tests stay runnable by explicit name.
+    # Deterministic masternode (DMN) tests. The fork is DMN-only: v6 activates
+    # at genesis on mainnet/testnet and the legacy masternode system was
+    # removed (masternode.cpp/h, masternodeman.cpp/h, legacy RPCs, legacy GUI).
     # Longest test should go first, to favor running tests in parallel.
-    'tiertwo_governance_reorg.py',              # ~ 361 sec
-    'tiertwo_masternode_activation.py',         # ~ 352 sec
-    'tiertwo_governance_invalid_budget.py',     # ~ 266 sec
+    'tiertwo_deterministicmns.py',              # ~ 100 sec
+    'tiertwo_governance_reorg.py',              # ~ 90 sec
+    'tiertwo_governance_sync_basic.py',         # ~ 150 sec
+    'tiertwo_governance_invalid_budget.py',     # ~ 70 sec
+    'tiertwo_dkg_pose.py',                      # ~ 140 sec
+    'tiertwo_dkg_errors.py',                    # ~ 130 sec
+    'tiertwo_signing_session.py',               # ~ 130 sec
+    'tiertwo_chainlocks.py',                    # ~ 80 sec
+    'tiertwo_simple_dmn.py',                    # simple (legacy-style) DMN UX wrapper
+    'tiertwo_reorg_mempool.py',                 # ~ 80 sec
+
+    # Removed with the legacy masternode system:
+    # - tiertwo_mn_compatibility.py (legacy<->DMN transition)
+    # - tiertwo_masternode_activation.py, tiertwo_masternode_ping.py (legacy-only)
 ]
 
 SAPLING_SCRIPTS = [

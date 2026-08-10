@@ -352,8 +352,6 @@ void Shutdown()
         pcoinscatcher.reset();
         pcoinsdbview.reset();
         pblocktree.reset();
-        zerocoinDB.reset();
-        accumulatorCache.reset();
         pSporkDB.reset();
         DeleteTierTwo();
     }
@@ -1116,9 +1114,6 @@ bool AppInitParameterInteraction()
     // Check for -tor - as this is a privacy risk to continue, exit here
     if (gArgs.GetBoolArg("-tor", false))
         return UIError(strprintf(_("Error: Unsupported argument %s found, use %s."), "-tor", "-onion"));
-    // Check level must be 4 for zerocoin checks
-    if (gArgs.IsArgSet("-checklevel"))
-        return UIError(strprintf(_("Error: Unsupported argument %s found. Checklevel must be level 4."), "-checklevel"));
     // Exit early if -masternode=1 and -listen=0
     if (gArgs.GetBoolArg("-masternode", DEFAULT_MASTERNODE) && !gArgs.GetBoolArg("-listen", DEFAULT_LISTEN))
         return UIError(strprintf(_("Error: %s must be true if %s is set."), "-listen", "-masternode"));
@@ -1344,12 +1339,11 @@ bool AppInitMain()
         fs::path blocksDir = GetBlocksDir();
         fs::path chainstateDir = GetDataDir() / "chainstate";
         fs::path sporksDir = GetDataDir() / "sporks";
-        fs::path zerocoinDir = GetDataDir() / "zerocoin";
         fs::path evoDir = GetDataDir() / "evodb";
 
-        LogPrintf("Deleting blockchain folders blocks, chainstate, sporks, zerocoin and evodb\n");
-        std::vector<fs::path> removeDirs{blocksDir, chainstateDir, sporksDir, zerocoinDir, evoDir};
-        // We delete in 5 individual steps in case one of the folder is missing already
+        LogPrintf("Deleting blockchain folders blocks, chainstate, sporks and evodb\n");
+        std::vector<fs::path> removeDirs{blocksDir, chainstateDir, sporksDir, evoDir};
+        // We delete in 4 individual steps in case one of the folder is missing already
         try {
             for (const auto& dir : removeDirs) {
                 if (fs::exists(dir)) {
@@ -1554,12 +1548,9 @@ bool AppInitMain()
                 pblocktree.reset();
                 pblocktree.reset(new CBlockTreeDB(nBlockTreeDBCache, false, fReset));
 
-                //OrganicLife specific: zerocoin and spork DB's
-                zerocoinDB.reset();
-                zerocoinDB.reset(new CZerocoinDB(0, false, fReindex));
+                //OrganicLife specific: spork DB
                 pSporkDB.reset();
                 pSporkDB.reset(new CSporkDB(0, false, false));
-                accumulatorCache.reset(new AccumulatorCache(zerocoinDB.get()));
 
                 InitTierTwoPreChainLoad(fReindex);
 
@@ -1668,26 +1659,10 @@ bool AppInitMain()
                 }
 
                 if (Params().NetworkIDString() == CBaseChainParams::MAIN) {
-                    // Prune zerocoin invalid outs if they were improperly stored in the coins database
-                    int chainHeight = chainActive.Height();
-                    bool fZerocoinActive = chainHeight > 0 && consensus.NetworkUpgradeActive(chainHeight, Consensus::UPGRADE_ZC);
-
-                    uiInterface.InitMessage(_("Loading/Pruning invalid outputs..."));
-                    if (fZerocoinActive) {
-                        if (!pcoinsTip->PruneInvalidEntries()) {
-                            strLoadError = _("System error while flushing the chainstate after pruning invalid entries. Possible corrupt database.");
-                            break;
-                        }
-                        MoneySupply.Update(pcoinsTip->GetTotalAmount(), chainHeight);
-                        // No need to keep the invalid outs in memory. Clear the map 100 blocks after the last invalid UTXO
-                        if (chainHeight > consensus.height_last_invalid_UTXO + 100) {
-                            invalid_out::setInvalidOutPoints.clear();
-                        }
-                    } else {
-                        // Populate list of invalid/fraudulent outpoints that are banned from the chain
-                        // They will not be added to coins view
-                        invalid_out::LoadOutpoints();
-                    }
+                    // Populate list of invalid/fraudulent outpoints that are banned from the chain
+                    // They will not be added to coins view
+                    uiInterface.InitMessage(_("Loading invalid outputs..."));
+                    invalid_out::LoadOutpoints();
                 }
 
                 if (!is_coinsview_empty) {

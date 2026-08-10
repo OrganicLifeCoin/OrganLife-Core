@@ -6,6 +6,7 @@
 #define PIVX_LLMQ_QUORUMS_UTILS_H
 
 #include "consensus/params.h"
+#include "random.h"
 #include "unordered_lru_cache.h"
 
 #include <vector>

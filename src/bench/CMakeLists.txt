@@ -63,8 +63,7 @@ target_include_directories(bench_organiclife PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/src/leveldb/include
         ${CMAKE_SOURCE_DIR}/src/leveldb/helpers/memenv
         ${LIBEVENT_INCLUDE_DIR}
-        ${GMP_INCLUDE_DIR}
-        ${Boost_INCLUDE_DIRS}
+                ${Boost_INCLUDE_DIRS}
         ${sodium_INCLUDE_DIR})
 target_link_libraries(bench_organiclife PRIVATE
         SERVER_A
@@ -72,7 +71,7 @@ target_link_libraries(bench_organiclife PRIVATE
         WALLET_A
         COMMON_A
         univalue
-        ZEROCOIN_A
+       
         UTIL_A
         SAPLING_A
         BITCOIN_CRYPTO_A
@@ -81,7 +80,7 @@ target_link_libraries(bench_organiclife PRIVATE
         secp256k1
         rustzcash
         bls
-        ${BerkeleyDB_LIBRARIES} ${Boost_LIBRARIES} ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} ${LIBEVENT_LIB} ${GMP_LIBRARY} pthread
+        ${BerkeleyDB_LIBRARIES} ${Boost_LIBRARIES} ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} ${LIBEVENT_LIB} pthread
         )
 if(ZMQ_FOUND)
     target_link_libraries(bench_organiclife PRIVATE ZMQ_A ${ZMQ_LIB})

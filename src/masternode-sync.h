@@ -37,13 +37,9 @@ public:
     std::atomic<int64_t> lastProcess;
 
     // sum of all counts
-    int sumMasternodeList;
-    int sumMasternodeWinner;
     int sumBudgetItemProp;
     int sumBudgetItemFin;
     // peers that reported counts
-    int countMasternodeList;
-    int countMasternodeWinner;
     int countBudgetItemProp;
     int countBudgetItemFin;
 
@@ -68,7 +64,7 @@ public:
      * If it returns false, the Process() step is complete.
      * Otherwise Process() calls it again for a different node.
      */
-    bool SyncWithNode(CNode* pnode, bool fLegacyMnObsolete);
+    bool SyncWithNode(CNode* pnode);
     bool NotCompleted();
     void UpdateBlockchainSynced(bool isRegTestNet);
     void ClearFulfilledRequest();
@@ -98,9 +94,6 @@ private:
 
     // update peer sync state data
     bool UpdatePeerSyncState(const NodeId& id, const char* msg, const int nextSyncStatus);
-
-    // Check if an update is needed
-    void CheckAndUpdateSyncStatus();
 
     // Mark sync timeout
     void syncTimeout(const std::string& reason);

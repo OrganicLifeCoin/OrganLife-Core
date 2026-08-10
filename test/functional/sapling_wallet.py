@@ -24,7 +24,7 @@ class WalletSaplingTest(PivxTestFramework):
         self.num_nodes = 4
         saplingUpgrade = ['-nuparams=v5_shield:201']
         self.extra_args = [saplingUpgrade, saplingUpgrade, saplingUpgrade, saplingUpgrade]
-        self.extra_args[0].append('-sporkkey=7C7LXuERaWY3cnfKZn345cAQnz7BqT5FStjid79GXPU3r3sMhRM')
+        self.extra_args[0].append('-sporkkey=932HEevBSujW2ud7RfB1YF91AFygbBRQj3de3LyaCRqNzKKgWXi')
 
     def check_tx_in_mempool(self, txids):
         self.sync_mempools()

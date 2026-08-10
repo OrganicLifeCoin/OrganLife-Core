@@ -50,7 +50,7 @@ bench_bench_organiclife_LDADD = \
   $(LIBMEMENV) \
   $(LIBSECP256K1) \
   $(LIBUNIVALUE) \
-  $(LIBBITCOIN_ZEROCOIN) \
+  \
   $(LIBSAPLING) \
   $(LIBRUSTZCASH) \
   $(LIBZCASH_LIBS)

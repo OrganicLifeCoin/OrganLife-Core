@@ -177,7 +177,6 @@ set(BITCOIN_TESTS
         ${CMAKE_CURRENT_SOURCE_DIR}/sha256compress_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/upgrades_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/validation_block_tests.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/zerocoindb_tests.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/librust/sapling_rpc_wallet_tests.cpp
         ${CMAKE_SOURCE_DIR}/src/wallet/test/wallet_tests.cpp
         ${CMAKE_SOURCE_DIR}/src/wallet/test/crypto_tests.cpp
@@ -195,7 +194,6 @@ target_include_directories(test_organiclife PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/src/leveldb/include
         ${CMAKE_SOURCE_DIR}/src/leveldb/helpers/memenv
         ${LIBEVENT_INCLUDE_DIR}
-        ${GMP_INCLUDE_DIR}
         ${Boost_INCLUDE_DIRS}
         ${sodium_INCLUDE_DIR})
 target_link_libraries(test_organiclife PRIVATE
@@ -204,7 +202,6 @@ target_link_libraries(test_organiclife PRIVATE
         WALLET_A
         COMMON_A
         univalue
-        ZEROCOIN_A
         UTIL_A
         SAPLING_A
         BITCOIN_CRYPTO_A
@@ -213,7 +210,7 @@ target_link_libraries(test_organiclife PRIVATE
         secp256k1
         rustzcash
         bls
-        ${BerkeleyDB_LIBRARIES} ${Boost_LIBRARIES} ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} ${LIBEVENT_LIB} ${GMP_LIBRARY} pthread
+        ${BerkeleyDB_LIBRARIES} ${Boost_LIBRARIES} ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY} ${LIBEVENT_LIB} pthread
         )
 if(ZMQ_FOUND)
     target_link_libraries(test_organiclife PRIVATE ZMQ_A ${ZMQ_LIB})

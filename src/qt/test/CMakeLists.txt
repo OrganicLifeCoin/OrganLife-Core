@@ -26,15 +26,14 @@ target_include_directories(test_organiclife-qt PRIVATE
     ${BerkeleyDB_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
     ${sodium_INCLUDE_DIR}
-    ${GMP_INCLUDE_DIR}
-    ${LIBEVENT_INCLUDE_DIR}
+        ${LIBEVENT_INCLUDE_DIR}
 )
 target_link_libraries(test_organiclife-qt PRIVATE
     qt_stuff
     SERVER_A
     WALLET_A
     COMMON_A
-    ZEROCOIN_A
+   
     UTIL_A
     SAPLING_A
     BITCOIN_CRYPTO_A
@@ -47,8 +46,7 @@ target_link_libraries(test_organiclife-qt PRIVATE
     bls
     Qt${QT_VERSION_MAJOR}::Test
     ${BerkeleyDB_LIBRARIES} ${Boost_LIBRARIES} ${LIBEVENT_LIB}
-    ${sodium_LIBRARY_RELEASE} ${GMP_LIBRARY}
-    -ldl pthread
+    ${sodium_LIBRARY_RELEASE}     -ldl pthread
 )
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     target_link_libraries(test_organiclife-qt PRIVATE "-framework Cocoa")

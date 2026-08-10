@@ -13,13 +13,13 @@ Test checking:
 
 import time
 
-from test_framework.messages import COutPoint
 from test_framework.test_framework import PivxTier2TestFramework
 from test_framework.util import (
     assert_equal,
     assert_true,
     get_datadir_path,
-    satoshi_round
+    satoshi_round,
+    set_node_times
 )
 import shutil
 import os
@@ -36,14 +36,9 @@ class Proposal:
 
 class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
 
-    def check_mns_status_legacy(self, node, txhash):
+    def check_mns_status(self, node, proTxHash):
         status = node.getmasternodestatus()
-        assert_equal(status["txhash"], txhash)
-        assert_equal(status["message"], "Masternode successfully started")
-
-    def check_mns_status(self, node, txhash):
-        status = node.getmasternodestatus()
-        assert_equal(status["proTxHash"], txhash)
+        assert_equal(status["proTxHash"], proTxHash)
         assert_equal(status["dmnstate"]["PoSePenalty"], 0)
         assert_equal(status["status"], "Ready")
 
@@ -51,8 +46,39 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
         # check masternode list from node
         mnlist = node.listmasternodes()
         assert_equal(len(mnlist), 3)
-        foundHashes = set([mn["txhash"] for mn in mnlist if mn["txhash"] in txHashSet])
+        foundHashes = set([mn.get("proTxHash", mn.get("txhash", "")) for mn in mnlist
+                           if mn.get("proTxHash", mn.get("txhash", "")) in txHashSet])
         assert_equal(len(foundHashes), len(txHashSet))
+
+    def check_mn_enabled_count(self, enabled, total):
+        for node in self.nodes:
+            node_count = node.getmasternodecount()
+            assert_equal(node_count['enabled'], enabled)
+            assert_equal(node_count['total'], total)
+
+    def wait_until_mn_removed(self, proTxHash, _timeout, node):
+        # wait until the DMN disappears from the list of the given node
+        time.sleep(2)
+        timeout = time.time() + _timeout
+        while time.time() < timeout:
+            if len(node.listmasternodes(proTxHash)) == 0:
+                return
+            time.sleep(2)
+        raise AssertionError("MN %s still in the list of node %d" % (proTxHash, self.nodes.index(node)))
+
+    def spend_dmn_collateral(self, mnOwner, dmn, miner):
+        # spends the collateral outpoint of a DMN, removing it from the list
+        collateral = dmn.collateral.to_json()
+        send_value = satoshi_round(100 - 0.001)
+        inputs = [collateral]
+        outputs = {mnOwner.getnewaddress(): float(send_value)}
+        rawtx = mnOwner.createrawtransaction(inputs, outputs)
+        signedtx = mnOwner.signrawtransaction(rawtx)
+        assert_equal(signedtx['complete'], True)
+        txid = miner.sendrawtransaction(signedtx['hex'])
+        self.sync_mempools()
+        self.log.info("Collateral spent in %s" % txid)
+        self.stake(1, [self.remoteTwo])
 
     def check_budget_finalization_sync(self, votesCount, status):
         for i in range(0, len(self.nodes)):
@@ -62,6 +88,17 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
             budget = budFin[next(iter(budFin))]
             assert_equal(budget["VoteCount"], votesCount)
             assert_equal(budget["Status"], status)
+
+    def mine_blocks(self, num_blocks):
+        # Bulk-mine PoS blocks with the daemon: much faster than the framework's
+        # per-block stake() (blocks advance by the 15s time slots at a fixed
+        # mocktime, no per-block RPC round-trips).
+        remaining = num_blocks
+        while remaining > 0:
+            n = min(remaining, 250)
+            self.miner.generate(n)
+            remaining -= n
+        self.sync_blocks()
 
     def broadcastbudgetfinalization(self, node, with_ping_mns=None):
         if with_ping_mns is None:
@@ -163,7 +200,7 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
         # check fee tx existence
         for entry in props:
             txinfo = self.miner.gettransaction(entry.feeTxId)
-            assert_equal(txinfo['amount'], -50.00)
+            assert_equal(txinfo['amount'], -100.00)
         # propagate proposals
         props = self.propagate_proposals(props)
         # let's wait a little bit and see if all nodes are sync
@@ -173,19 +210,62 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
             self.log.info("proposal %s broadcast successful!" % entry.name)
         return props
 
+    def setup_3_dmns_network(self):
+        self.ownerOne = self.nodes[self.ownerOnePos]
+        self.remoteOne = self.nodes[self.remoteOnePos]
+        self.ownerTwo = self.nodes[self.ownerTwoPos]
+        self.remoteTwo = self.nodes[self.remoteTwoPos]
+        self.miner = self.nodes[self.minerPos]
+        self.remoteDMN1 = self.nodes[self.remoteDMN1Pos]
+
+        self.log.info("generating 256 blocks..")
+        # First mine 250 PoW blocks
+        for i in range(250):
+            self.mocktime = self.generate_pow(self.minerPos, self.mocktime)
+        self.sync_blocks()
+        # Then start staking
+        self.stake(6)
+        # Re-anchor the mocktime to the tip time: the fork's block times follow the
+        # adjusted time only when it is ahead of the tip (otherwise the 15s time
+        # slots apply, breaking time-based governance rules such as the 5min proposal
+        # establishment).
+        self.mocktime = self.miner.getblock(self.miner.getbestblockhash())["time"] + 60
+        set_node_times(self.nodes, self.mocktime)
+
+        self.log.info("masternodes setup..")
+        # Register 3 deterministic masternodes (registration on-chain, collateral embedded).
+        # The controllers (ownerOne/ownerTwo) hold the owner/voting keys used to vote.
+        self.dmn1 = self.register_new_dmn(self.remoteOnePos, self.minerPos, self.ownerOnePos, "fund")
+        self.dmn2 = self.register_new_dmn(self.remoteTwoPos, self.minerPos, self.ownerTwoPos, "fund")
+        self.dmn3 = self.register_new_dmn(self.remoteDMN1Pos, self.minerPos, self.ownerOnePos, "fund")
+        self.sync_all()
+
+        self.log.info("masternodes setup completed, initializing them..")
+        self.stake(1)
+        self.remoteOne.initmasternode(self.dmn1.operator_sk)
+        self.remoteTwo.initmasternode(self.dmn2.operator_sk)
+        self.remoteDMN1.initmasternode(self.dmn3.operator_sk)
+
+        # wait until mnsync complete on all nodes
+        self.stake(1)
+        self.wait_until_mnsync_finished()
+        self.log.info("tier two synced, all masternodes started!")
+
     def run_test(self):
         self.enable_mocktime()
-        self.setup_3_masternodes_network()
-        txHashSet = set([self.mnOneCollateral.hash, self.mnTwoCollateral.hash, self.proRegTx1])
+        self.setup_3_dmns_network()
+        txHashSet = set([self.dmn1.proTx, self.dmn2.proTx, self.dmn3.proTx])
         # check mn list from miner
         self.check_mn_list(self.miner, txHashSet)
+        # enabled/total masternodes: 3/3
+        self.check_mn_enabled_count(3, 3)
 
         # check status of masternodes
-        self.check_mns_status_legacy(self.remoteOne, self.mnOneCollateral.hash)
+        self.check_mns_status(self.remoteOne, self.dmn1.proTx)
         self.log.info("MN1 active")
-        self.check_mns_status_legacy(self.remoteTwo, self.mnTwoCollateral.hash)
+        self.check_mns_status(self.remoteTwo, self.dmn2.proTx)
         self.log.info("MN2 active")
-        self.check_mns_status(self.remoteDMN1, self.proRegTx1)
+        self.check_mns_status(self.remoteDMN1, self.dmn3.proTx)
         self.log.info("DMN1 active")
 
         # activate sporks
@@ -224,12 +304,12 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
 
         # now let's vote for the proposal with the first MN
         self.log.info("Voting with MN1...")
-        voteResult = self.ownerOne.mnbudgetvote("alias", firstProposal.proposalHash, "yes", self.masternodeOneAlias, True)
+        voteResult = self.ownerOne.mnbudgetvote("alias", firstProposal.proposalHash, "yes", self.dmn1.proTx)
         assert_equal(voteResult["detail"][0]["result"], "success")
 
         # check that the vote was accepted everywhere
         self.stake(1, [self.remoteOne, self.remoteTwo])
-        self.check_vote_existence(firstProposal.name, self.mnOneCollateral.hash, "YES", True)
+        self.check_vote_existence(firstProposal.name, self.dmn1.proTx, "YES", True)
         self.log.info("all good, MN1 vote accepted everywhere!")
 
         # before broadcast the second vote, let's drop the budget data of ownerOne.
@@ -241,29 +321,29 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
 
         # now let's vote for the proposal with the second MN
         self.log.info("Voting with MN2...")
-        voteResult = self.ownerTwo.mnbudgetvote("alias", firstProposal.proposalHash, "yes", self.masternodeTwoAlias, True)
+        voteResult = self.ownerTwo.mnbudgetvote("alias", firstProposal.proposalHash, "yes", self.dmn2.proTx)
         assert_equal(voteResult["detail"][0]["result"], "success")
 
         # check orphan vote proposal re-sync
         self.log.info("checking orphan vote based proposal re-sync...")
         time.sleep(5) # wait a bit before check it
         self.check_proposal_existence(firstProposal.name, firstProposal.proposalHash)
-        self.check_vote_existence(firstProposal.name, self.mnOneCollateral.hash, "YES", True)
+        self.check_vote_existence(firstProposal.name, self.dmn1.proTx, "YES", True)
         self.log.info("all good, orphan vote based proposal re-sync succeeded")
 
         # check that the vote was accepted everywhere
         self.stake(1, [self.remoteOne, self.remoteTwo])
-        self.check_vote_existence(firstProposal.name, self.mnTwoCollateral.hash, "YES", True)
+        self.check_vote_existence(firstProposal.name, self.dmn2.proTx, "YES", True)
         self.log.info("all good, MN2 vote accepted everywhere!")
 
-        # now let's vote for the proposal with the first DMN
+        # now let's vote for the proposal with the third MN
         self.log.info("Voting with DMN1...")
-        voteResult = self.ownerOne.mnbudgetvote("alias", firstProposal.proposalHash, "yes", self.proRegTx1)
+        voteResult = self.ownerOne.mnbudgetvote("alias", firstProposal.proposalHash, "yes", self.dmn3.proTx)
         assert_equal(voteResult["detail"][0]["result"], "success")
 
         # check that the vote was accepted everywhere
         self.stake(1, [self.remoteOne, self.remoteTwo])
-        self.check_vote_existence(firstProposal.name, self.proRegTx1, "YES", True)
+        self.check_vote_existence(firstProposal.name, self.dmn3.proTx, "YES", True)
         self.log.info("all good, DMN1 vote accepted everywhere!")
 
         # Now check the budget
@@ -281,7 +361,7 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
         self.check_budgetprojection(expected_budget)
 
         # Quick block count check.
-        assert_equal(self.ownerOne.getblockcount(), 279)
+        assert_equal(self.ownerOne.getblockcount(), 280)
 
         self.log.info("starting budget finalization sync test..")
         self.stake(2, [self.remoteOne, self.remoteTwo])
@@ -302,31 +382,32 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
         # Connecting owner to all the other nodes.
         self.connect_to_all(self.ownerOnePos)
 
-        voteResult = self.ownerOne.mnfinalbudget("vote-many", budgetFinHash, True)
+        # Finalized budget votes are cast from the masternodes themselves (operator key)
+        voteResult = self.remoteOne.mnfinalbudget("vote", budgetFinHash)
         assert_equal(voteResult["detail"][0]["result"], "success")
-        time.sleep(2) # wait a bit
-        self.stake(2, [self.remoteOne, self.remoteTwo])
-        self.check_budget_finalization_sync(1, "OK")
         self.log.info("Remote One voted successfully.")
+        voteResult = self.remoteTwo.mnfinalbudget("vote", budgetFinHash)
+        assert_equal(voteResult["detail"][0]["result"], "success")
+        self.log.info("Remote Two voted successfully.")
+        time.sleep(2) # wait a bit
+        self.stake(1, [self.remoteOne, self.remoteTwo])
+        self.check_budget_finalization_sync(2, "OK")
 
-        # before broadcast the second finalization vote, let's drop the budget data of remoteOne.
+        # before broadcast the third finalization vote, let's drop the budget data of remoteOne.
         # so the node is forced to send a single fin sync when the, now orphan, vote is received.
         self.log.info("Testing single fin re-sync based on an orphan vote, dropping budget data...")
         self.remoteOne.cleanbudget(try_sync=False)
         assert_equal(self.remoteOne.getbudgetprojection(), []) # empty
         assert_equal(self.remoteOne.getbudgetinfo(), [])
 
-        # vote for finalization with MN2 and the DMN
-        voteResult = self.ownerTwo.mnfinalbudget("vote-many", budgetFinHash, True)
-        assert_equal(voteResult["detail"][0]["result"], "success")
-        self.log.info("Remote Two voted successfully.")
+        # vote for finalization with the third MN
         voteResult = self.remoteDMN1.mnfinalbudget("vote", budgetFinHash)
         assert_equal(voteResult["detail"][0]["result"], "success")
         self.log.info("DMN voted successfully.")
         time.sleep(2) # wait a bit
-        self.stake(2, [self.remoteOne, self.remoteTwo])
 
-        self.log.info("checking finalization votes..")
+        self.log.info("checking finalization votes (and mining the superblock)..")
+        self.stake(2, [self.remoteOne, self.remoteTwo])
         self.check_budget_finalization_sync(3, "OK")
         self.log.info("orphan vote based finalization re-sync succeeded")
 
@@ -357,16 +438,14 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
 
         self.log.info("resync (1): budget data resynchronized successfully!")
 
-        self.log.info("checking resync (2): stop node, delete chain data and resync from scratch..")
-        # stop and remove everything
-        self.stop_node(self.ownerTwoPos)
-        ownerTwoDir = os.path.join(get_datadir_path(self.options.tmpdir, self.ownerTwoPos), "regtest")
-        for entry in ['chainstate', 'blocks', 'sporks', 'evodb', 'zerocoin', "mncache.dat", "budget.dat", "mnpayments.dat", "peers.dat"]:
-            rem_path = os.path.join(ownerTwoDir, entry)
-            shutil.rmtree(rem_path) if os.path.isdir(rem_path) else os.remove(rem_path)
-
-        self.log.info("restarting node..")
-        self.start_node(self.ownerTwoPos)
+        self.log.info("checking resync (2): stop node and reindex from scratch..")
+        # Restart the node with -reindex: this rebuilds the chainstate AND
+        # resets the tier-two state (evodb, llmq, spork DB), like a real node
+        # recovering from a lost/corrupt chainstate. A manual partial wipe that
+        # keeps stale tier-two caches is not a valid node state (it would reject
+        # re-synced quorum-commitment blocks: HasMinedCommitment reads the
+        # persisted evodb and would see commitments from the old chain).
+        self.restart_node(self.ownerTwoPos, self.extra_args[self.ownerTwoPos] + ["-reindex"])
         self.ownerTwo.setmocktime(self.mocktime)
         self.connect_to_all(self.ownerTwoPos)
         self.stake(2, [self.remoteOne, self.remoteTwo])
@@ -391,38 +470,51 @@ class MasternodeGovernanceBasicTest(PivxTier2TestFramework):
         self.log.info("Checking budget sync..")
         for i in range(self.num_nodes):
             assert_equal(len(self.nodes[i].getbudgetinfo()), 16)
-        self.check_vote_existence(firstProposal.name, self.mnOneCollateral.hash, "YES", True)
-        self.check_vote_existence(firstProposal.name, self.mnTwoCollateral.hash, "YES", True)
-        self.check_vote_existence(firstProposal.name, self.proRegTx1, "YES", True)
+        self.check_vote_existence(firstProposal.name, self.dmn1.proTx, "YES", True)
+        self.check_vote_existence(firstProposal.name, self.dmn2.proTx, "YES", True)
+        self.check_vote_existence(firstProposal.name, self.dmn3.proTx, "YES", True)
         self.check_budget_finalization_sync(3, "OK")
         self.log.info("Remote incremental sync succeeded")
 
         # now let's verify that votes expire properly.
-        # Drop one MN and one DMN
+        # Drop one DMN (spend its collateral)
         self.log.info("expiring MN1..")
-        self.spend_collateral(self.ownerOne, self.mnOneCollateral, self.miner)
-        self.wait_until_mn_vinspent(self.mnOneCollateral.hash, 30, [self.remoteTwo])
+        self.spend_dmn_collateral(self.ownerOne, self.dmn1, self.miner)
+        self.wait_until_mn_removed(self.dmn1.proTx, 30, self.remoteTwo)
         self.stake(15, [self.remoteTwo]) # create blocks to remove staled votes
         time.sleep(2) # wait a little bit
-        self.check_vote_existence(firstProposal.name, self.mnOneCollateral.hash, "YES", False)
+        self.check_vote_existence(firstProposal.name, self.dmn1.proTx, "YES", False)
         self.check_budget_finalization_sync(2, "OK") # budget finalization vote removal
         self.log.info("MN1 vote expired after collateral spend, all good")
 
         self.log.info("expiring DMN1..")
-        lm = self.ownerOne.listmasternodes(self.proRegTx1)[0]
-        self.spend_collateral(self.ownerOne, COutPoint(lm["collateralHash"], lm["collateralIndex"]), self.miner)
-        self.wait_until_mn_vinspent(self.proRegTx1, 30, [self.remoteTwo])
+        self.spend_dmn_collateral(self.ownerOne, self.dmn3, self.miner)
+        self.wait_until_mn_removed(self.dmn3.proTx, 30, self.remoteTwo)
         self.stake(15, [self.remoteTwo]) # create blocks to remove staled votes
         time.sleep(2) # wait a little bit
-        self.check_vote_existence(firstProposal.name, self.proRegTx1, "YES", False)
+        self.check_vote_existence(firstProposal.name, self.dmn3.proTx, "YES", False)
         self.check_budget_finalization_sync(1, "OK") # budget finalization vote removal
         self.log.info("DMN vote expired after collateral spend, all good")
 
-        # Check that the budget is removed 200 blocks after the last payment
+        # Check that the finalized budget is kept for history until the end of the
+        # governance history retention window (nBlockEnd + 2 * nBudgetCycleBlocks * 2 on regtest,
+        # i.e. nBlockEnd + 5040 blocks), and removed after that.
         assert_equal(len(self.miner.mnfinalbudget("show")), 1)
         blocks_to_mine = nextSuperBlockHeight + 200 - self.miner.getblockcount()
-        self.log.info("Mining %d more blocks to check expired budget removal..." % blocks_to_mine)
-        self.stake(blocks_to_mine - 1, [self.remoteTwo])
+        self.log.info("Mining %d more blocks to check the 200-blocks history point..." % blocks_to_mine)
+        self.mine_blocks(blocks_to_mine - 1)
+        # finalized budget must still be there (still valid)
+        self.miner.checkbudgets()
+        assert_equal(len(self.miner.mnfinalbudget("show")), 1)
+        # after one more block it is expired but still kept for history
+        self.stake(1, [self.remoteTwo])
+        self.miner.checkbudgets()
+        assert_equal(len(self.miner.mnfinalbudget("show")), 1)
+        self.log.info("Finalized budget correctly kept for history 200 blocks after the payment")
+
+        blocks_to_remove = nextSuperBlockHeight + 5040 - self.miner.getblockcount()
+        self.log.info("Mining %d more blocks to check the finalized budget removal..." % blocks_to_remove)
+        self.mine_blocks(blocks_to_remove - 1)
         # finalized budget must still be there
         self.miner.checkbudgets()
         assert_equal(len(self.miner.mnfinalbudget("show")), 1)

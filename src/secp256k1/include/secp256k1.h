@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 The CTEAM Core developers */
+/* Copyright (c) 2026 The Bitcoin Core developers */
 #ifndef SECP256K1_H
 #define SECP256K1_H
 

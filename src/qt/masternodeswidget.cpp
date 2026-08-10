@@ -225,21 +225,16 @@ void MasterNodesWidget::onEditMNClicked()
 {
     if (walletModel) {
         if (!walletModel->isRegTestNetwork() && !checkMNsNetwork()) return;
-        if (index.sibling(index.row(), MNModel::WAS_COLLATERAL_ACCEPTED).data(Qt::DisplayRole).toBool()) {
-            // Start MN
-            QString strAlias = this->index.data(Qt::DisplayRole).toString();
-            if (ask(tr("Start Masternode"), tr("Are you sure you want to start masternode %1?\n").arg(strAlias))) {
-                WalletModel::UnlockContext ctx(walletModel->requestUnlock());
-                if (!ctx.isValid()) {
-                    // Unlock wallet was cancelled
-                    inform(tr("Cannot edit masternode, wallet locked"));
-                    return;
-                }
-                startAlias(strAlias);
+        // Start MN
+        QString strAlias = this->index.data(Qt::DisplayRole).toString();
+        if (ask(tr("Start Masternode"), tr("Are you sure you want to start masternode %1?\n").arg(strAlias))) {
+            WalletModel::UnlockContext ctx(walletModel->requestUnlock());
+            if (!ctx.isValid()) {
+                // Unlock wallet was cancelled
+                inform(tr("Cannot edit masternode, wallet locked"));
+                return;
             }
-        } else {
-            inform(tr("Cannot start masternode, the collateral transaction has not been confirmed by the network yet.\n"
-                    "Please wait few more minutes (masternode collaterals require %1 confirmations).").arg(mnModel->getMasternodeCollateralMinConf()));
+            startAlias(strAlias);
         }
     }
 }
@@ -253,7 +248,7 @@ void MasterNodesWidget::startAlias(const QString& strAlias)
     int success_amount = 0;
     std::string alias = strAlias.toStdString();
     std::string strError;
-    mnModel->startAllLegacyMNs(false, failed_amount, success_amount, &alias, &strError);
+    mnModel->startAllMNs(false, failed_amount, success_amount, &alias, &strError);
     if (failed_amount > 0) {
         strStatusHtml = tr("failed to start.\nError: %1").arg(QString::fromStdString(strError));
     } else if (success_amount > 0) {
@@ -293,7 +288,7 @@ bool MasterNodesWidget::startAll(QString& failText, bool onlyMissing)
 {
     int amountOfMnFailed = 0;
     int amountOfMnStarted = 0;
-    mnModel->startAllLegacyMNs(onlyMissing, amountOfMnFailed, amountOfMnStarted);
+    mnModel->startAllMNs(onlyMissing, amountOfMnFailed, amountOfMnStarted);
     if (amountOfMnFailed > 0) {
         failText = tr("%1 Masternodes failed to start, %2 started").arg(amountOfMnFailed).arg(amountOfMnStarted);
         return false;
@@ -348,10 +343,8 @@ void MasterNodesWidget::onInfoMNClicked()
                    "then start the Masternode using\nthis controller wallet (select the Masternode in the list and press \"start\").\n"
                 ))) {
             // export data
-            QString exportedMN = "masternode=1\n"
-                                 "externalip=" + address.left(address.lastIndexOf(":")) + "\n" +
-                                 "masternodeaddr=" + address + + "\n" +
-                                 "masternodeprivkey=" + index.sibling(index.row(), MNModel::PRIV_KEY).data(Qt::DisplayRole).toString() + "\n";
+            QString exportedMN = "mnoperatorprivatekey=" + index.sibling(index.row(), MNModel::PRIV_KEY).data(Qt::DisplayRole).toString() + "\n"
+                                 "externalip=" + address.left(address.lastIndexOf(":")) + "\n";
             GUIUtil::setClipboard(exportedMN);
             inform(tr("Masternode data copied to the clipboard."));
         }
@@ -362,26 +355,13 @@ void MasterNodesWidget::onInfoMNClicked()
 
 void MasterNodesWidget::onDeleteMNClicked()
 {
-    QString txId = index.sibling(index.row(), MNModel::COLLATERAL_ID).data(Qt::DisplayRole).toString();
-    QString outIndex = index.sibling(index.row(), MNModel::COLLATERAL_OUT_INDEX).data(Qt::DisplayRole).toString();
     QString qAliasString = index.data(Qt::DisplayRole).toString();
-
-    bool convertOK = false;
-    unsigned int indexOut = outIndex.toUInt(&convertOK);
-    if (!convertOK) {
-        inform(tr("Invalid collateral output index"));
-        return;
-    }
 
     if (!ask(tr("Delete Masternode"), tr("You are just about to delete Masternode:\n%1\n\nAre you sure?").arg(qAliasString))) {
         return;
     }
 
-    QString errorStr;
-    if (!mnModel->removeLegacyMN(qAliasString.toStdString(), txId.toStdString(), indexOut, errorStr)) {
-        inform(errorStr);
-        return;
-    }
+    masternodeConfig.remove(qAliasString.toStdString());
     // Update list
     mnModel->removeMn(index);
     updateListState();

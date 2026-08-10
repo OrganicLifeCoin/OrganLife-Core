@@ -41,7 +41,7 @@ public:
     SERIALIZE_METHODS(CBlockHeader, obj) {
         READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce);
 
-        //zerocoin active, header changes to include accumulator checksum
+        //upgrade active, header changes may be required
         if(obj.nVersion > 3 && obj.nVersion < 7)
             READWRITE(obj.nAccumulatorCheckpoint);
 

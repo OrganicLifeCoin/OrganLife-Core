@@ -234,29 +234,23 @@ extern const char* GETSPORKS;
 /**
  * The mnbroadcast message is used to broadcast masternode startup data to connected peers
  */
-extern const char* MNBROADCAST;
 /**
  * The mnbroadcast2 message is used to broadcast masternode startup data to connected peers
  * Supporting BIP155 node addresses.
  */
-extern const char* MNBROADCAST2;
 /**
  * The mnping message is used to ensure a masternode is still active
  */
-extern const char* MNPING;
 /**
  * The mnwinner message is used to relay and distribute consensus for masternode
  * payout ordering
  */
-extern const char* MNWINNER;
 /**
  * The getmnwinners message is used to request winning masternode data from connected peers
  */
-extern const char* GETMNWINNERS;
 /**
 * The dseg message is used to request the Masternode list or an specific entry
 */
-extern const char* GETMNLIST;
 /**
  * The budgetproposal message is used to broadcast or relay budget proposal metadata to connected peers
  */
@@ -448,15 +442,12 @@ enum GetDataMsg {
     MSG_TXLOCK_REQUEST, // Deprecated
     MSG_TXLOCK_VOTE,    // Deprecated
     MSG_SPORK,
-    MSG_MASTERNODE_WINNER,
     MSG_MASTERNODE_SCANNING_ERROR,
     MSG_BUDGET_VOTE,
     MSG_BUDGET_PROPOSAL,
     MSG_BUDGET_FINALIZED,
     MSG_BUDGET_FINALIZED_VOTE,
     MSG_MASTERNODE_QUORUM,
-    MSG_MASTERNODE_ANNOUNCE,
-    MSG_MASTERNODE_PING,
     MSG_DSTX, // Deprecated
     MSG_QUORUM_FINAL_COMMITMENT,
     MSG_QUORUM_CONTRIB,

@@ -230,7 +230,7 @@ BOOST_AUTO_TEST_CASE(cnode_askfor_thread_safety_stress)
         workers.emplace_back([&, worker]() {
             while (!go.load(std::memory_order_acquire)) std::this_thread::yield();
             for (int i = 0; i < kIterations; ++i) {
-                const CInv inv(MSG_MASTERNODE_WINNER, AskForStressHash(worker + 1, i));
+                const CInv inv(MSG_TX, AskForStressHash(worker + 1, i));
                 node.AskFor(inv);
                 if ((i % 2) == 0) {
                     node.AskForInvReceived(inv.hash);

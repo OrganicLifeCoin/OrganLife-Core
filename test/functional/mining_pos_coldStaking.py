@@ -28,7 +28,7 @@ class PIVX_ColdStakingTest(PivxTestFramework):
         self.num_nodes = 3
         # whitelist all peers to speed up tx relay / mempool sync
         self.extra_args = [['-nuparams=v5_shield:201', "-whitelist=127.0.0.1"]] * self.num_nodes
-        self.extra_args[0].append('-sporkkey=7C7LXuERaWY3cnfKZn345cAQnz7BqT5FStjid79GXPU3r3sMhRM')
+        self.extra_args[0].append('-sporkkey=932HEevBSujW2ud7RfB1YF91AFygbBRQj3de3LyaCRqNzKKgWXi')
         self.enable_mocktime()
 
     def setColdStakingEnforcement(self, fEnable=True):

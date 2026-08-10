@@ -10,8 +10,6 @@
 #include "coins.h"
 #include "chain.h"
 #include "dbwrapper.h"
-#include "libzerocoin/Coin.h"
-#include "libzerocoin/CoinSpend.h"
 
 #include <map>
 #include <string>
@@ -145,55 +143,6 @@ public:
     bool WriteInt(const std::string& name, int nValue);
     bool ReadInt(const std::string& name, int& nValue);
     bool LoadBlockIndexGuts(std::function<CBlockIndex*(const uint256&)> insertBlockIndex);
-};
-
-/** Zerocoin database (zerocoin/) */
-class CZerocoinDB : public CDBWrapper
-{
-public:
-    explicit CZerocoinDB(size_t nCacheSize, bool fMemory = false, bool fWipe = false);
-
-private:
-    CZerocoinDB(const CZerocoinDB&);
-    void operator=(const CZerocoinDB&);
-
-public:
-    /** Write zPIV spends to the zerocoinDB in a batch
-     * Pair of: CBigNum -> coinSerialNumber and uint256 -> txHash.
-     */
-    bool WriteCoinSpendBatch(const std::vector<std::pair<CBigNum, uint256> >& spendInfo);
-    bool ReadCoinSpend(const CBigNum& bnSerial, uint256& txHash);
-    bool EraseCoinSpend(const CBigNum& bnSerial);
-
-    /** Accumulators (only for zPoS IBD): [checksum, denom] --> block height **/
-    bool WriteAccChecksum(const uint32_t nChecksum, const libzerocoin::CoinDenomination denom, const int nHeight);
-    bool ReadAccChecksum(const uint32_t nChecksum, const libzerocoin::CoinDenomination denom, int& nHeightRet);
-    bool ReadAll(std::map<std::pair<uint32_t, libzerocoin::CoinDenomination>, int>& mapCheckpoints);
-    bool EraseAccChecksum(const uint32_t nChecksum, const libzerocoin::CoinDenomination denom);
-    void WipeAccChecksums();
-};
-
-class AccumulatorCache
-{
-private:
-    // underlying database
-    CZerocoinDB* db{nullptr};
-    // in-memory map [checksum, denom] --> block height
-    std::map<std::pair<uint32_t, libzerocoin::CoinDenomination>, int> mapCheckpoints;
-
-public:
-    explicit AccumulatorCache(CZerocoinDB* _db) : db(_db)
-    {
-        assert(db != nullptr);
-        bool res = db->ReadAll(mapCheckpoints);
-        assert(res);
-    }
-
-    Optional<int> Get(uint32_t checksum, libzerocoin::CoinDenomination denom);
-    void Set(uint32_t checksum, libzerocoin::CoinDenomination denom, int height);
-    void Erase(uint32_t checksum, libzerocoin::CoinDenomination denom);
-    void Flush();
-    void Wipe();
 };
 
 #endif // PIVX_TXDB_H

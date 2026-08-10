@@ -63,6 +63,9 @@ CMutableTransaction BuildGovVoteCastTx(const uint256& proposalHash,
 
 int GovActivationHeight()
 {
+    // V6_1_GOV activates at genesis on the public networks; pin a concrete
+    // height here so the activation-boundary behavior stays testable.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, 100);
     const int height =
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(height > 0);

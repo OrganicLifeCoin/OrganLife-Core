@@ -111,9 +111,6 @@ public:
     bool IsFinal() const { return nSequence == SEQUENCE_FINAL; }
     bool IsNull() const { return prevout.IsNull() && scriptSig.empty() && IsFinal(); }
 
-    bool IsZerocoinSpend() const;
-    bool IsZerocoinPublicSpend() const;
-
     friend bool operator==(const CTxIn& a, const CTxIn& b)
     {
         return (a.prevout   == b.prevout &&
@@ -174,8 +171,6 @@ public:
     }
 
     uint256 GetHash() const;
-
-    bool IsZerocoinMint() const;
 
     friend bool operator==(const CTxOut& a, const CTxOut& b)
     {
@@ -367,18 +362,9 @@ public:
     // Return sum of (positive valueBalance or zero) and JoinSplit vpub_new
     CAmount GetShieldedValueIn() const;
 
-    bool HasZerocoinSpendInputs() const;
-
-    bool HasZerocoinMintOutputs() const;
-
-    bool ContainsZerocoins() const
-    {
-        return HasZerocoinSpendInputs() || HasZerocoinMintOutputs();
-    }
-
     bool IsCoinBase() const
     {
-        return (vin.size() == 1 && vin[0].prevout.IsNull() && !vin[0].scriptSig.IsZerocoinSpend());
+        return (vin.size() == 1 && vin[0].prevout.IsNull());
     }
 
     bool IsCoinStake() const;

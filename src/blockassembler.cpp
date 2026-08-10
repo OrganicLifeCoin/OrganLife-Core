@@ -97,6 +97,14 @@ static bool HasRequiredCoinbasePayment(const CMutableTransaction& txCoinbase, co
     if (GetMutableValueOut(txCoinbase) > 0)
         return true;
 
+    // No payment in the coinbase yet. This is valid when no payee can be
+    // determined (small or unsynced network: FillBlockPayee keeps a valid
+    // empty coinbase); only pause when a payee exists but the payment is
+    // missing from the coinbase.
+    std::vector<CTxOut> vecMnOuts;
+    if (!masternodePayments.GetMasternodeTxOuts(pindexPrev, vecMnOuts) || vecMnOuts.empty())
+        return true;
+
     LogPrintf("Staking paused: missing required coinbase masternode/budget payment at height %d\n", nHeight);
     return false;
 }
@@ -704,8 +712,6 @@ int32_t ComputeBlockVersion(const Consensus::Params& consensus, int nHeight)
         return 6;
     } else if (consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_BIP65)) {
         return 5;
-    } else if (consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_ZC)) {
-        return 4;
     } else {
         return 3;
     }

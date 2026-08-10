@@ -18,7 +18,6 @@
 #include "masternode-payments.h"
 #include "masternode-sync.h"
 #include "masternodeconfig.h"
-#include "masternodeman.h"
 #include "messagesigner.h"
 #include "policy/feerate.h"
 #include "script/sign.h"
@@ -265,6 +264,8 @@ static void EnsureGovVotingActiveAtNextBlock()
 static void EnsureGovVotingFullySynced()
 {
     if (!g_tiertwo_sync_state.IsSynced()) {
+        LogPrintf("%s: sync not finished (phase=%d, blockchainSynced=%d)\n", __func__,
+                  g_tiertwo_sync_state.GetSyncPhase(), g_tiertwo_sync_state.IsBlockchainSynced() ? 1 : 0);
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Masternode/Budget sync not finished yet");
     }
 }
@@ -446,25 +447,24 @@ UniValue mnbudgetvote(const JSONRPCRequest& request)
     CWallet * const pwallet = GetWalletForJSONRPCRequest(request);
 
     if (request.fHelp || (request.params.size() == 3 && (strCommand != "local" && strCommand != "many")) || (request.params.size() == 4 && strCommand != "alias") ||
-        request.params.size() > 5 || request.params.size() < 3)
+        request.params.size() > 4 || request.params.size() < 3)
         throw std::runtime_error(
-            "mnbudgetvote \"local|many|alias\" \"hash\" \"yes|no\" ( \"alias\" legacy )\n"
+            "mnbudgetvote \"local|many|alias\" \"hash\" \"yes|no\" ( \"alias\" )\n"
             "\nVote on a budget proposal\n"
-            "\nAfter V6 enforcement, the deterministic masternode system is used by default. Set the \"legacy\" parameter to true to vote with legacy masternodes."
+            "\nThe deterministic masternode system is used."
 
             "\nArguments:\n"
-            "1. \"mode\"      (string, required) The voting mode. 'local' for voting directly from a masternode, 'many' for voting with a MN controller and casting the same vote for each MN, 'alias' for voting with a MN controller and casting a vote for a single MN\n"
+            "1. \"mode\"      (string, required) The voting mode. 'many' for voting with a MN controller and casting the same vote for each MN, 'alias' for voting with a MN controller and casting a vote for a single MN\n"
             "2. \"hash\"      (string, required) The budget proposal hash\n"
             "3. \"votecast\"  (string, required) Your vote. 'yes' to vote for the proposal, 'no' to vote against\n"
-            "4. \"alias\"     (string, required for 'alias' mode) The MN alias to cast a vote for (for deterministic masternodes it's the hash of the proTx transaction).\n"
-            "5. \"legacy\"    (boolean, optional, default=false) Use the legacy masternode system after deterministic masternodes enforcement.\n"
+            "4. \"alias\"     (string, required for 'alias' mode) The MN alias to cast a vote for (the hash of the proTx transaction).\n"
 
             "\nResult:\n"
             "{\n"
             "  \"overall\": \"xxxx\",      (string) The overall status message for the vote cast\n"
             "  \"detail\": [\n"
             "    {\n"
-            "      \"node\": \"xxxx\",      (string) 'local' or the MN alias\n"
+            "      \"node\": \"xxxx\",      (string) The MN alias\n"
             "      \"result\": \"xxxx\",    (string) Either 'Success' or 'Failed'\n"
             "      \"error\": \"xxxx\",     (string) Error message, if vote failed\n"
             "    }\n"
@@ -480,27 +480,19 @@ UniValue mnbudgetvote(const JSONRPCRequest& request)
     CBudgetVote::VoteDirection nVote = parseVote(request.params[2].get_str());
     EnsureGovVotingFullySynced();
 
-    bool fLegacyMN = !deterministicMNManager->IsDIP3Enforced() || (request.params.size() > 4 && request.params[4].get_bool());
-
     if (strCommand == "local") {
-        if (!fLegacyMN) {
-            throw JSONRPCError(RPC_MISC_ERROR, _("\"local\" vote is no longer available with DMNs. Use \"alias\" from the wallet with the voting key."));
-        }
-        return mnLocalBudgetVoteInner(true, hash, false, nVote);
+        throw JSONRPCError(RPC_MISC_ERROR, _("\"local\" vote is no longer available with DMNs. Use \"alias\" from the wallet with the voting key."));
     }
 
-    // DMN require wallet with voting key
-    if (!fLegacyMN) {
-        if (!EnsureWalletIsAvailable(pwallet, false)) {
-            return NullUniValue;
-        }
-        EnsureWalletIsUnlocked(pwallet);
+    if (!EnsureWalletIsAvailable(pwallet, false)) {
+        return NullUniValue;
     }
+    EnsureWalletIsUnlocked(pwallet);
 
     bool isAlias = false;
     if (strCommand == "many" || (isAlias = strCommand == "alias")) {
         Optional<std::string> mnAlias = isAlias ? Optional<std::string>(request.params[3].get_str()) : nullopt;
-        return mnBudgetVoteInner(pwallet, fLegacyMN, hash, false, nVote, mnAlias);
+        return mnBudgetVoteInner(pwallet, hash, false, nVote, mnAlias);
     }
 
     return NullUniValue;
@@ -1000,8 +992,9 @@ UniValue mnbudgetrawvote(const JSONRPCRequest& request)
     if (fInvalid)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Malformed base64 encoding");
 
-    CMasternode* pmn = mnodeman.Find(vin.prevout);
-    if (!pmn) {
+    auto mnList = deterministicMNManager->GetListAtChainTip();
+    auto dmn = mnList.GetMNByCollateral(vin.prevout);
+    if (!dmn) {
         return "Failure to find masternode in list : " + vin.ToString();
     }
 
@@ -1009,7 +1002,7 @@ UniValue mnbudgetrawvote(const JSONRPCRequest& request)
     vote.SetTime(nTime);
     vote.SetVchSig(vchSig);
 
-    if (!vote.CheckSignature(pmn->pubKeyMasternode.GetID())) {
+    if (!vote.CheckSignature(dmn->pdmnState->keyIDVoting)) {
         return "Failure to verify signature.";
     }
 
@@ -1135,29 +1128,23 @@ UniValue mnfinalbudget(const JSONRPCRequest& request)
     if (request.fHelp ||
         (strCommand != "vote-many" && strCommand != "vote" && strCommand != "show" && strCommand != "getvotes"))
         throw std::runtime_error(
-            "mnfinalbudget \"command\"... ( \"passphrase\" )\n"
+            "mnfinalbudget \"command\"...\n"
             "\nVote or show current budgets\n"
 
             "\nAvailable commands:\n"
-            "  vote-many   - Vote on a finalized budget\n"
+            "  vote-many   - Vote on a finalized budget (only locally with the active masternode)\n"
             "  vote        - Vote on a finalized budget with local masternode\n"
             "  show        - Show existing finalized budgets\n"
             "  getvotes     - Get vote information for each finalized budget\n");
 
     if (strCommand == "vote-many" || strCommand == "vote") {
-        if (request.params.size() < 2 || request.params.size() > 3) {
-            throw std::runtime_error(strprintf("Correct usage is 'mnfinalbudget %s BUDGET_HASH (fLegacy)'", strCommand));
+        if (request.params.size() != 2) {
+            throw std::runtime_error(strprintf("Correct usage is 'mnfinalbudget %s BUDGET_HASH'", strCommand));
         }
         const uint256& hash = ParseHashV(request.params[1], "BUDGET_HASH");
-        bool fLegacyMN = !deterministicMNManager->IsDIP3Enforced() || (request.params.size() > 2 && request.params[2].get_bool());
 
-        // DMN require wallet with operator keys for vote-many
-        if (!fLegacyMN && strCommand == "vote-many" && !EnsureWalletIsAvailable(pwallet, false)) {
-            return NullUniValue;
-        }
-
-        return (strCommand == "vote-many" ? mnBudgetVoteInner(pwallet, fLegacyMN, hash, true, CBudgetVote::VOTE_YES, nullopt)
-                                          : mnLocalBudgetVoteInner(fLegacyMN, hash, true, CBudgetVote::VOTE_YES));
+        return (strCommand == "vote-many" ? mnBudgetVoteInner(pwallet, hash, true, CBudgetVote::VOTE_YES, nullopt)
+                                          : mnLocalBudgetVoteInner(hash));
     }
 
     if (strCommand == "show") {
@@ -1256,7 +1243,7 @@ static const CRPCCommand commands[] =
     { "budget",             "castgovvote",            &castgovvote,            true,  {"proposal_hash","vote","lock_refs"} },
     { "budget",             "creategovvotelock",      &creategovvotelock,      true,  {"proposal_hash","amount","unlock_height","return_lock_ref"} },
     { "budget",             "mnbudgetrawvote",        &mnbudgetrawvote,        true,  {"collat_txid","collat_vout","hash","votecast","time","sig"} },
-    { "budget",             "mnbudgetvote",           &mnbudgetvote,           true,  {"mode","hash","votecast","alias","legacy"} },
+    { "budget",             "mnbudgetvote",           &mnbudgetvote,           true,  {"mode","hash","votecast","alias"} },
     { "budget",             "mnfinalbudget",          &mnfinalbudget,          true,  {"command"} },
     { "budget",             "preparebudget",          &preparebudget,          true,  {"name","url","npayments","start","address","monthly_payment"} },
     { "budget",             "submitbudget",           &submitbudget,           true,  {"name","url","npayments","start","address","monthly_payment","fee_txid"}  },

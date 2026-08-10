@@ -793,10 +793,10 @@ void GovernanceDialogTests::topBarReceiveDialogUsesOpaqueBackgroundHelper()
 
 void GovernanceDialogTests::multiWalletStartupBuildsWalletModelsForAllLoadedWallets()
 {
-    const QString pivxSourcePath = resolveQtSourceFile("pivx.cpp");
-    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/pivx.cpp");
+    const QString pivxSourcePath = resolveQtSourceFile("organiclife.cpp");
+    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/organiclife.cpp");
     QFile sourceFile(pivxSourcePath);
-    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read pivx.cpp");
+    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read organiclife.cpp");
     const QString source = QString::fromUtf8(sourceFile.readAll());
 
     const int methodStart = source.indexOf(QStringLiteral("void BitcoinApplication::initializeResult(int retval)"));
@@ -815,10 +815,10 @@ void GovernanceDialogTests::multiWalletStartupBuildsWalletModelsForAllLoadedWall
 
 void GovernanceDialogTests::qtStartupSetsGovernanceModelBeforeInitialWalletBinding()
 {
-    const QString pivxSourcePath = resolveQtSourceFile("pivx.cpp");
-    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/pivx.cpp");
+    const QString pivxSourcePath = resolveQtSourceFile("organiclife.cpp");
+    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/organiclife.cpp");
     QFile sourceFile(pivxSourcePath);
-    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read pivx.cpp");
+    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read organiclife.cpp");
     const QString source = QString::fromUtf8(sourceFile.readAll());
 
     const int methodStart = source.indexOf(QStringLiteral("void BitcoinApplication::initializeResult(int retval)"));
@@ -1064,10 +1064,10 @@ void GovernanceDialogTests::guiInterfaceExposesWalletUnloadSignal()
 
 void GovernanceDialogTests::qtRuntimeWalletLifecycleWiresLoadAndUnloadSignals()
 {
-    const QString pivxSourcePath = resolveQtSourceFile("pivx.cpp");
-    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/pivx.cpp");
+    const QString pivxSourcePath = resolveQtSourceFile("organiclife.cpp");
+    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/organiclife.cpp");
     QFile sourceFile(pivxSourcePath);
-    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read pivx.cpp");
+    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read organiclife.cpp");
     const QString source = QString::fromUtf8(sourceFile.readAll());
 
     QVERIFY2(source.contains(QStringLiteral("interfaces::MakeHandler(uiInterface.LoadWallet.connect")),
@@ -1215,10 +1215,10 @@ void GovernanceDialogTests::walletVerifyMigratesLegacyManagedWalletLayoutBeforeV
 
 void GovernanceDialogTests::qtStartupDiscoversManagedWalletFilesForAutoload()
 {
-    const QString pivxSourcePath = resolveQtSourceFile("pivx.cpp");
-    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/pivx.cpp");
+    const QString pivxSourcePath = resolveQtSourceFile("organiclife.cpp");
+    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/organiclife.cpp");
     QFile sourceFile(pivxSourcePath);
-    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read pivx.cpp");
+    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read organiclife.cpp");
     const QString source = QString::fromUtf8(sourceFile.readAll());
 
     const int methodStart = source.indexOf(QStringLiteral("void BitcoinApplication::initializeResult(int retval)"));
@@ -1239,10 +1239,10 @@ void GovernanceDialogTests::qtStartupDiscoversManagedWalletFilesForAutoload()
 
 void GovernanceDialogTests::qtShutdownPersistsLoadedWalletNamesBeforeWalletTeardown()
 {
-    const QString pivxSourcePath = resolveQtSourceFile("pivx.cpp");
-    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/pivx.cpp");
+    const QString pivxSourcePath = resolveQtSourceFile("organiclife.cpp");
+    QVERIFY2(!pivxSourcePath.isEmpty(), "Unable to resolve src/qt/organiclife.cpp");
     QFile sourceFile(pivxSourcePath);
-    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read pivx.cpp");
+    QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read organiclife.cpp");
     const QString source = QString::fromUtf8(sourceFile.readAll());
 
     const int shutdownStart = source.indexOf(QStringLiteral("void BitcoinApplication::requestShutdown()"));
@@ -3003,7 +3003,7 @@ void GovernanceDialogTests::voteDialogHeaderUsesOrganicLifeAccentToneInBothTheme
     const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
 
     QVERIFY(cssHasAccentHeader(lightSource, "#F2D4B8"));
-    QVERIFY(cssHasAccentHeader(darkSource, "#C9823D"));
+    QVERIFY(cssHasAccentHeader(darkSource, "#8fb35f"));
 }
 
 void GovernanceDialogTests::voteDialogCloseButtonUsesThemeAwareIconClass()
@@ -3063,7 +3063,7 @@ void GovernanceDialogTests::voteDialogHeaderTitleUsesThemeAwareReadableColor()
     const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
     const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
 
-    QVERIFY(cssHasTitleSpec(lightSource, "#3A2418"));
+    QVERIFY(cssHasTitleSpec(lightSource, "#2b2b1a"));
     QVERIFY(cssHasTitleSpec(darkSource, "#FFFFFF"));
 }
 
@@ -3798,7 +3798,7 @@ void GovernanceDialogTests::governanceHeaderCtaUsesInsetContentPadding()
 
     const QStringList requiredSnippets = {
         QStringLiteral("findChild<QWidget*>(\"layoutOptions2\")"),
-        QStringLiteral("setContentsMargins(14, 10, 10, 10)")
+        QStringLiteral("setContentsMargins(12, 6, 8, 6)")
     };
 
     for (const QString& snippet : requiredSnippets) {
@@ -4403,10 +4403,10 @@ void GovernanceDialogTests::premiumRailOptionTilesUseCtaStyleArrowChrome()
 
 void GovernanceDialogTests::qtStartupKeepsQt5HighDpiAttributes()
 {
-    QFile f(resolveQtSourceFile("pivx.cpp"));
+    QFile f(resolveQtSourceFile("organiclife.cpp"));
     QVERIFY(f.open(QIODevice::ReadOnly | QIODevice::Text));
     if (!f.isOpen()) {
-        QFAIL("Unable to read pivx.cpp");
+        QFAIL("Unable to read organiclife.cpp");
         return;
     }
 
@@ -4504,6 +4504,7 @@ void GovernanceDialogTests::dashboardWidgetUsesPremiumDashboardClasses()
     OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
+    mainWindow.show();   // child visibility requires visible ancestors
     widget.show();
     QTest::qWait(20);
     QCoreApplication::processEvents();
@@ -4594,6 +4595,7 @@ void GovernanceDialogTests::dashboardWidgetHeaderRemainsExpandableWithScaledFont
     OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
+    mainWindow.show();   // child visibility requires visible ancestors
     widget.show();
     QTest::qWait(20);
     QCoreApplication::processEvents();
@@ -4639,6 +4641,7 @@ void GovernanceDialogTests::dashboardWidgetMergesRewardStatsAndChartIntoSidebarM
     OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
+    mainWindow.show();   // child visibility requires visible ancestors
     widget.show();
     QTest::qWait(20);
     QCoreApplication::processEvents();
@@ -4661,7 +4664,7 @@ void GovernanceDialogTests::dashboardWidgetMergesRewardStatsAndChartIntoSidebarM
     }
 
     QCOMPARE(analyticsModule->property("cssClass").toString(), QStringLiteral("dashboard-analytics-card"));
-    QCOMPARE(analyticsLayout->spacing(), 2);
+    QCOMPARE(analyticsLayout->spacing(), 6); // fork dashboard card spacing
     QVERIFY(analyticsModule->isAncestorOf(amountPiv));
     QVERIFY(analyticsModule->isAncestorOf(amountMn));
     QVERIFY(analyticsModule->isAncestorOf(liveChart));
@@ -4680,6 +4683,7 @@ void GovernanceDialogTests::dashboardWidgetRestoresTransactionListVisibilityAfte
     OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
+    mainWindow.show();   // child visibility requires visible ancestors
     widget.show();
     QTest::qWait(20);
     QCoreApplication::processEvents();
@@ -4729,6 +4733,7 @@ void GovernanceDialogTests::masternodeWidgetRefreshesWhenModelLoadsConfiguredMas
     MNModel mnModel(nullptr);
     widget.setMNModel(&mnModel);
     widget.resize(1280, 720);
+    mainWindow.show();   // child visibility requires visible ancestors
     widget.show();
     QTest::qWait(20);
     QCoreApplication::processEvents();
@@ -4774,6 +4779,7 @@ void GovernanceDialogTests::dashboardWidgetUsesSelfDescribingRewardTiles()
     OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
+    mainWindow.show();   // child visibility requires visible ancestors
     widget.show();
     QTest::qWait(20);
     QCoreApplication::processEvents();
@@ -4831,6 +4837,7 @@ void GovernanceDialogTests::dashboardWidgetPrioritizesChartHeightWithProminentRe
     OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
     DashboardWidget widget(&mainWindow);
     widget.resize(1280, 720);
+    mainWindow.show();   // child visibility requires visible ancestors
     widget.show();
     QTest::qWait(20);
     QCoreApplication::processEvents();

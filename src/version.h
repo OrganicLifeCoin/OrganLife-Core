@@ -18,10 +18,11 @@ static const int PROTOCOL_VERSION = 70929;
 static const int INIT_PROTO_VERSION = 209;
 
 //! disconnect from peers older than this proto version
-// New chains should not carry legacy protocol enforcement toggles.
-// Keep both enforcement values aligned so old nodes cannot connect and create persistent forks.
-static const int MIN_PEER_PROTO_VERSION_BEFORE_ENFORCEMENT = 70929;
-static const int MIN_PEER_PROTO_VERSION_AFTER_ENFORCEMENT = 70929;
+// The enforcement window is staggered so a future mandatory protocol bump
+// gives old nodes a grace period (they keep connecting with a warning between
+// BEFORE and AFTER enforcement) instead of being cut off instantly.
+static const int MIN_PEER_PROTO_VERSION_BEFORE_ENFORCEMENT = 70927;
+static const int MIN_PEER_PROTO_VERSION_AFTER_ENFORCEMENT = 70928;
 
 //! Version where BIP155 was introduced
 static const int MIN_BIP155_PROTOCOL_VERSION = 70923;

@@ -1,8 +1,8 @@
 dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
 define(_CLIENT_VERSION_MAJOR, 1)
-define(_CLIENT_VERSION_MINOR, 0)
-define(_CLIENT_VERSION_REVISION, 2)
+define(_CLIENT_VERSION_MINOR, 1)
+define(_CLIENT_VERSION_REVISION, 0)
 define(_CLIENT_VERSION_BUILD, 0)
 define(_CLIENT_VERSION_RC, 0)
 define(_CLIENT_VERSION_IS_RELEASE, true)
@@ -579,7 +579,6 @@ case $host in
          dnl the user (--without-wallet or --without-gui for example).
 
          qt5_prefix=`$BREW --prefix qt5 2>/dev/null`
-         gmp_prefix=`$BREW --prefix gmp 2>/dev/null`
          if $BREW list --versions berkeley-db@4 >/dev/null && test "x$BDB_CFLAGS" = "x" && test "x$BDB_LIBS" = "x"; then
            bdb_prefix=$($BREW --prefix berkeley-db@4 2>/dev/null)
            dnl This must precede the call to BITCOIN_FIND_BDB48 below.
@@ -589,10 +588,6 @@ case $host in
          if test x$qt5_prefix != x; then
            PKG_CONFIG_PATH="$qt5_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
            export PKG_CONFIG_PATH
-         fi
-         if test x$gmp_prefix != x; then
-           CPPFLAGS="$CPPFLAGS -I$gmp_prefix/include"
-           LIBS="$LIBS -L$gmp_prefix/lib"
          fi
        fi
      else
@@ -1212,14 +1207,6 @@ if test x$use_pkgconfig = xyes; then
           PKG_CHECK_MODULES([EVENT_PTHREADS], [libevent_pthreads], [], [AC_MSG_ERROR([libevent_pthreads not found.])])
         fi
         PKG_CHECK_MODULES([SODIUM], [libsodium], [], [AC_MSG_ERROR([libsodium not found.])])
-        dnl Ubuntu Bionic's libgmp-dev package doesn't include pkgconfig files,
-        dnl so we need to do some gymnastics here.
-        dnl TODO: Remove this drill down once Ubuntu Bionic is no longer supported.
-        PKG_CHECK_MODULES([GMP], [gmp], [], [
-          AC_CHECK_HEADER([gmp.h], [
-            AC_CHECK_LIB([gmp], [__gmpz_init], [LIBS="$LIBS -lgmp"], [AC_MSG_ERROR([libgmp missing])])
-          ], [AC_MSG_ERROR([libgmp headers missing])])
-        ])
       fi
 
       if test "x$use_zmq" = "xyes"; then
@@ -1243,8 +1230,6 @@ else
     fi
     AC_CHECK_HEADER([sodium/core.h], [], [AC_MSG_ERROR([libsodium headers missing])])
     AC_CHECK_LIB([sodium], [main], [SODIUM_LIBS=-lsodium], [AC_MSG_ERROR([libsodium missing])])
-    AC_CHECK_HEADER([gmp.h], [], [AC_MSG_ERROR([libgmp headers missing])])
-    AC_CHECK_LIB([gmp], [__gmpz_init], [LIBS="$LIBS -lgmp"], [AC_MSG_ERROR([libgmp missing])])
   fi
 
   if test "x$use_zmq" = "xyes"; then
@@ -1365,7 +1350,7 @@ dnl Additional Zcash flags
 AX_CHECK_COMPILE_FLAG([-fno-strict-aliasing], [CXXFLAGS="$CXXFLAGS -fno-strict-aliasing"])
 AX_CHECK_COMPILE_FLAG([-Wno-builtin-declaration-mismatch], [CXXFLAGS="$CXXFLAGS -Wno-builtin-declaration-mismatch"], [], [$CXXFLAG_WERROR])
 
-LIBZCASH_LIBS="$BOOST_SYSTEM_LIB $SODIUM_LIBS $RUST_LIBS $GMP_LIBS"
+LIBZCASH_LIBS="$BOOST_SYSTEM_LIB $SODIUM_LIBS $RUST_LIBS"
 
 AC_MSG_CHECKING([whether to build organiclifed])
 AM_CONDITIONAL([BUILD_BITCOIND], [test x$build_bitcoind = xyes])

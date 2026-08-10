@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 The CTEAM Core developers */
+/* Copyright (c) 2026 The Bitcoin Core developers */
 /*************************************************************************
  * Written in 2020-2022 by Elichai Turkel                                *
  * To the extent possible under law, the author(s) have dedicated all    *

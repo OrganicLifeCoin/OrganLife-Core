@@ -33,6 +33,27 @@ Mainnet Parameters
 
 Mainnet supply is capped in consensus. Transaction fees are paid to miners during the PoW bootstrap phase and burned once PoS is active. Post-v5.5 governance cycles can allocate up to `55,555 OLC` per month (two 14-day cycles).
 
+Masternodes (deterministic, since v1.1.0)
+-----------------------------------------
+
+OrganicLife uses deterministic masternodes (DMN) exclusively — the legacy broadcast-based
+masternode system was removed. DMNs activate at genesis and are registered on-chain via
+`protx` transactions; the 4,000 OLC collateral is embedded in the registration transaction.
+
+Controller wallet setup (CLI):
+
+```bash
+# 1. generate the key set (owner/voting keys are stored in the wallet)
+organiclife-cli createmasternodekey dmn mn1
+# 2. add the returned confLine to masternode.conf:  alias IP:port operator_bls_key
+# 3. register the masternode (embeds and locks the collateral)
+organiclife-cli startmasternode alias false mn1
+```
+
+VPS setup: run the daemon with `-mnoperatorprivatekey=<operator_bls_key>` (one line in
+organiclife.conf). No collateral txid/output index is needed in masternode.conf — the
+collateral is created and locked by the registration itself.
+
 Quick Start
 -----------
 

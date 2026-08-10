@@ -17,6 +17,7 @@ namespace AddressBook {
         const std::string SHIELDED_RECEIVE{"shielded_receive"};
         const std::string SHIELDED_SEND{"shielded_spend"};
         const std::string EXCHANGE_ADDRESS{"exchange_address"};
+        const std::string MASTERNODE{"masternode"};
     }
 
     bool IsColdStakingPurpose(const std::string& purpose) {

@@ -6,10 +6,9 @@
 from test_framework.test_framework import PivxTestFramework
 from test_framework.util import (
     assert_equal,
-    p2p_port,
+    set_node_times,
 )
 
-import os
 import time
 
 class GovernanceInvalidBudgetTest(PivxTestFramework):
@@ -20,21 +19,19 @@ class GovernanceInvalidBudgetTest(PivxTestFramework):
         # - 1 miner/mncontroller
         # - 2 remote mns
         self.num_nodes = 3
-        self.extra_args = [["-sporkkey=7C7LXuERaWY3cnfKZn345cAQnz7BqT5FStjid79GXPU3r3sMhRM"],
-                           [],
-                           [],
+        self.extra_args = [["-sporkkey=932HEevBSujW2ud7RfB1YF91AFygbBRQj3de3LyaCRqNzKKgWXi"],
+                           ["-listen", "-externalip=127.0.0.1"],
+                           ["-listen", "-externalip=127.0.0.1"],
                            ]
+        # v5_shield at 249 (standard SAPLING-version txes) and v6_evo at 250
+        # (post-v6 semantics apply to all the PoS blocks)
+        for i in range(self.num_nodes):
+            self.extra_args[i] += ["-nuparams=v5_shield:249", "-nuparams=v6_evo:250"]
         self.enable_mocktime()
 
         self.minerAPos = 0
         self.remoteOnePos = 1
         self.remoteTwoPos = 2
-
-        self.masternodeOneAlias = "mnOne"
-        self.masternodeTwoAlias = "mntwo"
-
-        self.mnOnePrivkey = "7B9B1SPPxQNKR4b6Hq5jhJEzPq3egHWLoNkqK6SfijrNi3jtdRh"
-        self.mnTwoPrivkey = "7BNowr8HYtRmJWJmFHHiyRqGb2HnDX8DwNUvUdia3uLTs1HvmPN"
 
     def run_test(self):
         self.minerA = self.nodes[self.minerAPos]     # also controller of mn1 and mn2
@@ -54,8 +51,8 @@ class GovernanceInvalidBudgetTest(PivxTestFramework):
         time.sleep(1)
         self.stake_and_ping(self.minerAPos, 7, [self.mn1, self.mn2])
         self.log.info("Vote for the proposal and check projection...")
-        self.minerA.mnbudgetvote("alias", proposalHash, "yes", self.masternodeOneAlias)
-        self.minerA.mnbudgetvote("alias", proposalHash, "yes", self.masternodeTwoAlias)
+        self.minerA.mnbudgetvote("alias", proposalHash, "yes", self.dmn1.proTx)
+        self.minerA.mnbudgetvote("alias", proposalHash, "yes", self.dmn2.proTx)
         time.sleep(1)
         self.stake_and_ping(self.minerAPos, 1, [self.mn1, self.mn2])
         projection = self.mn1.getbudgetprojection()[0]
@@ -84,14 +81,6 @@ class GovernanceInvalidBudgetTest(PivxTestFramework):
 
         self.log.info("Good, invalid budget not accepted.")
 
-    def send_3_pings(self, mn_list):
-        self.advance_mocktime(30)
-        self.send_pings(mn_list)
-        self.stake_and_ping(self.minerAPos, 1, mn_list)
-        self.advance_mocktime(30)
-        self.send_pings(mn_list)
-        time.sleep(2)
-
     def setupContext(self):
         # First mine 250 PoW blocks (250 with minerA)
         self.log.info("Generating 259 blocks...")
@@ -102,36 +91,32 @@ class GovernanceInvalidBudgetTest(PivxTestFramework):
         self.stake_and_ping(self.minerAPos, 9, [])
         for n in self.nodes:
             assert_equal(n.getblockcount(), 259)
+        # Re-anchor the mocktime to the tip time: the fork's block times follow the
+        # adjusted time only when it is ahead of the tip (otherwise the 15s time
+        # slots apply, breaking time-based governance rules such as the 5min proposal
+        # establishment).
+        self.mocktime = self.minerA.getblock(self.minerA.getbestblockhash())["time"] + 60
+        set_node_times(self.nodes, self.mocktime)
 
-        # Setup Masternodes
+        # Setup Masternodes (DMN registration on-chain, collateral embedded)
         self.log.info("Masternodes setup...")
-        ownerdir = os.path.join(self.options.tmpdir, "node%d" % self.minerAPos, "regtest")
-        self.mnOneCollateral = self.setupMasternode(self.minerA, self.minerA, self.masternodeOneAlias,
-                                                    ownerdir, self.remoteOnePos, self.mnOnePrivkey)
-        self.mnTwoCollateral = self.setupMasternode(self.minerA, self.minerA, self.masternodeTwoAlias,
-                                                    ownerdir, self.remoteTwoPos, self.mnTwoPrivkey)
+        self.dmn1 = self.register_new_dmn(self.remoteOnePos, self.minerAPos, self.minerAPos, "fund")
+        self.dmn2 = self.register_new_dmn(self.remoteTwoPos, self.minerAPos, self.minerAPos, "fund")
+        self.sync_all()
+        self.mn1.initmasternode(self.dmn1.operator_sk)
+        self.mn2.initmasternode(self.dmn2.operator_sk)
 
         # Activate masternodes
         self.log.info("Masternodes activation...")
         self.stake_and_ping(self.minerAPos, 1, [])
-        time.sleep(3)
-        self.advance_mocktime(10)
-        remoteOnePort = p2p_port(self.remoteOnePos)
-        remoteTwoPort = p2p_port(self.remoteTwoPos)
-        self.mn1.initmasternode(self.mnOnePrivkey, "127.0.0.1:"+str(remoteOnePort))
-        self.mn2.initmasternode(self.mnTwoPrivkey, "127.0.0.1:"+str(remoteTwoPort))
-        self.stake_and_ping(self.minerAPos, 1, [])
         self.wait_until_mnsync_finished()
-        self.controller_start_masternode(self.minerA, self.masternodeOneAlias)
-        self.controller_start_masternode(self.minerA, self.masternodeTwoAlias)
-        self.wait_until_mn_preenabled(self.mnOneCollateral.hash, 40)
-        self.wait_until_mn_preenabled(self.mnOneCollateral.hash, 40)
-        self.send_3_pings([self.mn1, self.mn2])
-        self.wait_until_mn_enabled(self.mnOneCollateral.hash, 120, [self.mn1, self.mn2])
-        self.wait_until_mn_enabled(self.mnOneCollateral.hash, 120, [self.mn1, self.mn2])
+        for n in self.nodes:
+            assert_equal(n.getmasternodecount()["enabled"], 2)
+            assert_equal(n.getmasternodecount()["total"], 2)
+        self.log.info("Masternodes enabled.")
 
         # activate sporks
-        self.log.info("Masternodes enabled. Activating sporks.")
+        self.log.info("Activating sporks.")
         self.activate_spork(self.minerAPos, "SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT")
         self.activate_spork(self.minerAPos, "SPORK_9_MASTERNODE_BUDGET_ENFORCEMENT")
         self.activate_spork(self.minerAPos, "SPORK_13_ENABLE_SUPERBLOCKS")

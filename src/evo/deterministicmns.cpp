@@ -15,10 +15,10 @@
 #include "core_io.h"
 #include "key_io.h"
 #include "guiinterface.h"
-#include "masternodeman.h" // for mnodeman (!TODO: remove)
 #include "script/standard.h"
 #include "spork.h"
 #include "sync.h"
+#include "validationinterface.h"
 
 #include <univalue.h>
 
@@ -615,14 +615,6 @@ bool CDeterministicMNManager::BuildNewListFromBlock(const CBlock& block, const C
             dmn->collateralOutpoint = pl.collateralOutpoint.hash.IsNull() ? COutPoint(tx.GetHash(), pl.collateralOutpoint.n)
                                                                           : pl.collateralOutpoint;
 
-            // if the collateral outpoint appears in the legacy masternode list, remove the old node
-            // !TODO: remove this when the transition to DMN is complete
-            CMasternode* old_mn = mnodeman.Find(dmn->collateralOutpoint);
-            if (old_mn) {
-                old_mn->SetSpent();
-                mnodeman.CheckAndRemove();
-            }
-
             auto replacedDmn = newList.GetMNByCollateral(dmn->collateralOutpoint);
             if (replacedDmn != nullptr) {
                 // This might only happen with a ProRegTx that refers an external collateral
@@ -927,9 +919,7 @@ CDeterministicMNList CDeterministicMNManager::GetListAtChainTip()
 
 bool CDeterministicMNManager::IsDIP3Enforced(int nHeight) const
 {
-    (void)nHeight;
-    // OrganicLife never activates deterministic masternodes.
-    return false;
+    return Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0);
 }
 
 bool CDeterministicMNManager::IsDIP3Enforced() const
@@ -940,10 +930,7 @@ bool CDeterministicMNManager::IsDIP3Enforced() const
 
 bool CDeterministicMNManager::LegacyMNObsolete(int nHeight) const
 {
-    // OrganicLife policy: keep legacy masternodes enabled permanently.
-    // SPORK_21 must never force deterministic-only mode on this network.
-    (void)nHeight;
-    return false;
+    return IsDIP3Enforced(nHeight);
 }
 
 bool CDeterministicMNManager::LegacyMNObsolete() const

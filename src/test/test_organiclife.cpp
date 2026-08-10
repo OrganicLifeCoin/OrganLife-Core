@@ -19,7 +19,6 @@
 #include "evo/governancevoteindex.h"
 #include "llmq/quorums_init.h"
 #include "masternode-payments.h"
-#include "masternodeman.h"
 #include "miner.h"
 #include "net_processing.h"
 #include "rpc/server.h"
@@ -101,8 +100,6 @@ static void ResetTierTwoAndSporks()
     g_mock_deterministic_tests = false;
     sporkManager.Clear();
     g_budgetman.Clear();
-    masternodePayments.Clear();
-    mnodeman.Clear();
     g_tiertwo_sync_state.ResetData();
     g_tiertwo_sync_state.SetBlockchainSync(false, 0);
     g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_INITIAL);
@@ -173,7 +170,6 @@ TestingSetup::TestingSetup(const std::string& chainName) : BasicTestingSetup(cha
         // Ideally we'd move all the RPC tests to the functional testing framework
         // instead of unit tests, but for now we need these here.
         RegisterAllCoreRPCCommands(tableRPC);
-        zerocoinDB.reset(new CZerocoinDB(0, true));
         pSporkDB.reset(new CSporkDB(0, true));
         pblocktree.reset(new CBlockTreeDB(1 << 20, true));
         pcoinsdbview.reset(new CCoinsViewDB(1 << 23, true));
@@ -209,7 +205,6 @@ TestingSetup::~TestingSetup()
         pcoinsTip.reset();
         pcoinsdbview.reset();
         pblocktree.reset();
-        zerocoinDB.reset();
         pSporkDB.reset();
         llmq::DestroyLLMQSystem();
 }

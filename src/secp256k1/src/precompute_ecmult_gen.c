@@ -1,4 +1,4 @@
-/* Copyright (c) 2026 The CTEAM Core developers */
+/* Copyright (c) 2026 The Bitcoin Core developers */
 /*********************************************************************************
  * Copyright (c) 2013, 2014, 2015, 2021 Thomas Daede, Cory Fields, Pieter Wuille *
  * Distributed under the MIT software license, see the accompanying              *

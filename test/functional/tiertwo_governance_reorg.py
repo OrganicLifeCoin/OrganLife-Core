@@ -4,14 +4,14 @@
 # file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
 from decimal import Decimal
-import os
 import time
 
 from test_framework.test_framework import PivxTestFramework
+from test_framework.authproxy import JSONRPCException
 from test_framework.util import (
     assert_equal,
-    p2p_port,
     set_node_times,
+    wait_until,
 )
 
 
@@ -24,23 +24,21 @@ class GovernanceReorgTest(PivxTestFramework):
         # - 2 remote mns
         # - 1 other node to stake a forked chain
         self.num_nodes = 4
-        self.extra_args = [["-sporkkey=7C7LXuERaWY3cnfKZn345cAQnz7BqT5FStjid79GXPU3r3sMhRM"],
+        self.extra_args = [["-sporkkey=932HEevBSujW2ud7RfB1YF91AFygbBRQj3de3LyaCRqNzKKgWXi"],
+                           ["-listen", "-externalip=127.0.0.1"],
+                           ["-listen", "-externalip=127.0.0.1"],
                            [],
-                           ["-listen", "-externalip=127.0.0.1"],
-                           ["-listen", "-externalip=127.0.0.1"],
                            ]
+        # v5_shield at 249 (standard SAPLING-version txes) and v6_evo at 250
+        # (post-v6 semantics apply to all the PoS blocks)
+        for i in range(self.num_nodes):
+            self.extra_args[i] += ["-nuparams=v5_shield:249", "-nuparams=v6_evo:250"]
         self.enable_mocktime()
 
         self.minerAPos = 0
         self.minerBPos = 1
         self.remoteOnePos = 1
         self.remoteTwoPos = 2
-
-        self.masternodeOneAlias = "mnOne"
-        self.masternodeTwoAlias = "mntwo"
-
-        self.mnOnePrivkey = "7B9B1SPPxQNKR4b6Hq5jhJEzPq3egHWLoNkqK6SfijrNi3jtdRh"
-        self.mnTwoPrivkey = "7BNowr8HYtRmJWJmFHHiyRqGb2HnDX8DwNUvUdia3uLTs1HvmPN"
 
     def run_test(self):
         minerA = self.nodes[self.minerAPos]     # also controller of mn1 and mn2
@@ -61,35 +59,32 @@ class GovernanceReorgTest(PivxTestFramework):
         self.stake_and_ping(self.minerAPos, 9, [])
         for n in self.nodes:
             assert_equal(n.getblockcount(), 259)
+        # Re-anchor the mocktime to the tip time: the fork's block times follow the
+        # adjusted time only when it is ahead of the tip (otherwise the 15s time
+        # slots apply, breaking time-based governance rules such as the 5min proposal
+        # establishment).
+        self.mocktime = minerA.getblock(minerA.getbestblockhash())["time"] + 60
+        set_node_times(self.nodes, self.mocktime)
 
-        # Setup Masternodes
+        # Setup Masternodes (DMN registration on-chain, collateral embedded)
         self.log.info("Masternodes setup...")
-        ownerdir = os.path.join(self.options.tmpdir, "node%d" % self.minerAPos, "regtest")
-        self.mnOneCollateral = self.setupMasternode(minerA, minerA, self.masternodeOneAlias,
-                                                    ownerdir, self.remoteOnePos, self.mnOnePrivkey)
-        self.mnTwoCollateral = self.setupMasternode(minerA, minerA, self.masternodeTwoAlias,
-                                                    ownerdir, self.remoteTwoPos, self.mnTwoPrivkey)
+        self.dmn1 = self.register_new_dmn(self.remoteOnePos, self.minerAPos, self.minerAPos, "fund")
+        self.dmn2 = self.register_new_dmn(self.remoteTwoPos, self.minerAPos, self.minerAPos, "fund")
+        self.sync_all()
+        mn1.initmasternode(self.dmn1.operator_sk)
+        mn2.initmasternode(self.dmn2.operator_sk)
 
         # Activate masternodes
         self.log.info("Masternodes activation...")
         self.stake_and_ping(self.minerAPos, 1, [])
-        time.sleep(3)
-        self.advance_mocktime(10)
-        remoteOnePort = p2p_port(self.remoteOnePos)
-        remoteTwoPort = p2p_port(self.remoteTwoPos)
-        mn1.initmasternode(self.mnOnePrivkey, "127.0.0.1:"+str(remoteOnePort))
-        mn2.initmasternode(self.mnTwoPrivkey, "127.0.0.1:"+str(remoteTwoPort))
-        self.stake_and_ping(self.minerAPos, 1, [])
         self.wait_until_mnsync_finished()
-        self.controller_start_masternodes(minerA, [self.masternodeOneAlias, self.masternodeTwoAlias])
-        self.wait_until_mn_preenabled(self.mnOneCollateral.hash, 40)
-        self.wait_until_mn_preenabled(self.mnOneCollateral.hash, 40)
-        self.send_3_pings([mn1, mn2])
-        self.wait_until_mn_enabled(self.mnOneCollateral.hash, 120, [mn1, mn2])
-        self.wait_until_mn_enabled(self.mnOneCollateral.hash, 120, [mn1, mn2])
+        for n in self.nodes:
+            assert_equal(n.getmasternodecount()["enabled"], 2)
+            assert_equal(n.getmasternodecount()["total"], 2)
+        self.log.info("Masternodes enabled.")
 
         # activate sporks
-        self.log.info("Masternodes enabled. Activating sporks.")
+        self.log.info("Activating sporks.")
         self.activate_spork(self.minerAPos, "SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT")
         self.activate_spork(self.minerAPos, "SPORK_9_MASTERNODE_BUDGET_ENFORCEMENT")
         self.activate_spork(self.minerAPos, "SPORK_13_ENABLE_SUPERBLOCKS")
@@ -106,8 +101,8 @@ class GovernanceReorgTest(PivxTestFramework):
         time.sleep(1)
         self.stake_and_ping(self.minerAPos, 7, [mn1, mn2])
         self.log.info("Vote for the proposal and check projection...")
-        minerA.mnbudgetvote("alias", proposalHash, "yes", self.masternodeOneAlias)
-        minerA.mnbudgetvote("alias", proposalHash, "yes", self.masternodeTwoAlias)
+        minerA.mnbudgetvote("alias", proposalHash, "yes", self.dmn1.proTx)
+        minerA.mnbudgetvote("alias", proposalHash, "yes", self.dmn2.proTx)
         time.sleep(1)
         self.stake_and_ping(self.minerAPos, 1, [mn1, mn2])
         projection = minerB.getbudgetprojection()[0]
@@ -115,7 +110,7 @@ class GovernanceReorgTest(PivxTestFramework):
         assert_equal(projection["Hash"], proposalHash)
         assert_equal(projection["Yeas"], 2)
 
-        # Create the finalized budget and vote on it
+        # Create the finalized budget and vote on it (from the masternodes)
         self.log.info("Finalizing the budget...")
         self.stake_and_ping(self.minerAPos, 5, [mn1, mn2])
         assert minerA.mnfinalbudgetsuggest() is not None
@@ -124,7 +119,9 @@ class GovernanceReorgTest(PivxTestFramework):
         budgetFinHash = minerA.mnfinalbudgetsuggest()
         assert budgetFinHash != ""
         time.sleep(1)
-        minerA.mnfinalbudget("vote-many", budgetFinHash)
+        self.sync_all()
+        assert_equal(mn1.mnfinalbudget("vote", budgetFinHash)["detail"][0]["result"], "success")
+        assert_equal(mn2.mnfinalbudget("vote", budgetFinHash)["detail"][0]["result"], "success")
         self.stake_and_ping(self.minerAPos, 2, [mn1, mn2])
         budFin = minerB.mnfinalbudget("show")
         budget = budFin[next(iter(budFin))]
@@ -169,23 +166,34 @@ class GovernanceReorgTest(PivxTestFramework):
 
         self.log.info("All good.")
 
-
-    def send_3_pings(self, mn_list):
-        self.advance_mocktime(30)
-        self.send_pings(mn_list)
-        self.stake_and_ping(self.minerAPos, 1, mn_list)
-        self.advance_mocktime(30)
-        self.send_pings(mn_list)
-        time.sleep(2)
-
     def split_network(self):
         for i in range(self.num_nodes):
             if i != self.minerBPos:
-                self.disconnect_nodes(i, self.minerBPos)
-                self.disconnect_nodes(self.minerBPos, i)
+                self.disconnect_node_pair(i, self.minerBPos)
+                self.disconnect_node_pair(self.minerBPos, i)
         # by-pass ring connection
         assert self.minerBPos > 0
         self.connect_nodes(self.minerBPos-1, self.minerBPos+1)
+
+    def disconnect_node_pair(self, a, b):
+        # Robust version of the framework's disconnect_nodes: the daemon can briefly
+        # stall (e.g. DKG phase processing), so retry the disconnect until the peer is gone.
+        from_connection = self.nodes[a]
+        for attempt in range(8):
+            for addr in [peer['addr'] for peer in from_connection.getpeerinfo()
+                         if "testnode%d" % b in peer['subver']]:
+                try:
+                    from_connection.disconnectnode(addr)
+                except JSONRPCException as e:
+                    if e.error['code'] != -29:  # RPC_CLIENT_NODE_NOT_CONNECTED
+                        raise
+            try:
+                wait_until(lambda: [peer['addr'] for peer in from_connection.getpeerinfo()
+                                    if "testnode%d" % b in peer['subver']] == [], timeout=15)
+                return
+            except AssertionError:
+                self.log.info("node %d didn't disconnect from node %d (attempt %d), retrying..." % (a, b, attempt))
+        raise AssertionError("Unable to disconnect node %d from node %d" % (a, b))
 
     def reconnect_nodes(self):
         for i in range(self.num_nodes):
@@ -196,8 +204,9 @@ class GovernanceReorgTest(PivxTestFramework):
     def create_and_check_superblock(self, node, next_superblock, payee):
         self.stake_and_ping(self.nodes.index(node), 1, [])
         assert_equal(node.getblockcount(), next_superblock)
-        coinstake = node.getrawtransaction(node.getblock(node.getbestblockhash())["tx"][1], True)
-        budget_payment_out = coinstake["vout"][-1]
+        # Post-v6 the budget payment is in the coinbase (first tx) of PoS blocks
+        coinbase = node.getrawtransaction(node.getblock(node.getbestblockhash())["tx"][0], True)
+        budget_payment_out = coinbase["vout"][-1]
         assert_equal(budget_payment_out["value"], Decimal("300"))
         assert_equal(budget_payment_out["scriptPubKey"]["addresses"][0], payee)
 

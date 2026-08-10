@@ -6,11 +6,12 @@
 
 #include "budget/budgetmanager.h"
 
+#include "activemasternode.h"
 #include "budget/budgetmanager_bridge.h"
 #include "consensus/validation.h"
 #include "evo/deterministicmns.h"
 #include "evo/governancevoteindex.h"
-#include "masternodeman.h"
+#include "net.h"
 #include "netmessagemaker.h"
 #include "spork.h"
 #include "tiertwo/tiertwo_sync_state.h"
@@ -436,7 +437,7 @@ bool CBudgetManager::AddProposal(CBudgetProposal& budgetProposal)
     ApplyCoinVoteTotalsFromIndex(budgetProposal);
 
     // update expiration / heavily-downvoted
-    int mnCount = mnodeman.CountEnabled();
+    const int mnCount = static_cast<int>(deterministicMNManager->GetListAtChainTip().GetValidMNsCount());
     if (!budgetProposal.UpdateValid(nCurrentHeight, mnCount, GetCoinGovernanceWeightFixed())) {
         if (!IsProposalInHistoryWindow(budgetProposal, nCurrentHeight)) {
             LogPrint(BCLog::MNBUDGET,"%s: Invalid budget proposal %s %s\n", __func__, nHash.ToString(), budgetProposal.IsInvalidLogStr());
@@ -468,7 +469,7 @@ void CBudgetManager::CheckAndRemove()
     std::map<uint256, CBudgetProposal> tmpMapProposals;
 
     // Get MN count, used for the heavily down-voted check
-    int mnCount = mnodeman.CountEnabled();
+    const int mnCount = static_cast<int>(deterministicMNManager->GetListAtChainTip().GetValidMNsCount());
 
     // Check Proposals first
     {
@@ -683,9 +684,8 @@ void CBudgetManager::VoteOnFinalizedBudgets()
 
     // Get the active masternode (operator) key
     CTxIn mnVin;
-    Optional<CKey> mnKey{nullopt};
     CBLSSecretKey blsKey;
-    if (!GetActiveMasternodeKeys(mnVin, mnKey, blsKey)) {
+    if (!GetActiveDMNKeys(blsKey, mnVin)) {
         return;
     }
 
@@ -723,18 +723,9 @@ void CBudgetManager::VoteOnFinalizedBudgets()
     // Sign finalized budgets
     for (const uint256& budgetHash: vBudgetHashes) {
         CFinalizedBudgetVote vote(mnVin, budgetHash);
-        if (mnKey != nullopt) {
-            // Legacy MN
-            if (!vote.Sign(*mnKey, mnKey->GetPubKey().GetID())) {
-                LogPrintf("%s: Failure to sign budget %s\n", __func__, budgetHash.ToString());
-                continue;
-            }
-        } else {
-            // DMN
-            if (!vote.Sign(blsKey)) {
-                LogPrintf("%s: Failure to sign budget %s with DMN\n", __func__, budgetHash.ToString());
-                continue;
-            }
+        if (!vote.Sign(blsKey)) {
+            LogPrintf("%s: Failure to sign budget %s with DMN\n", __func__, budgetHash.ToString());
+            continue;
         }
         std::string strError = "";
         if (!UpdateFinalizedBudget(vote, nullptr, strError)) {
@@ -814,7 +805,7 @@ bool CBudgetManager::GetFinalizedBudget(const uint256& nHash, CFinalizedBudget& 
 bool CBudgetManager::IsBudgetPaymentBlock(int nBlockHeight, int& nCountThreshold) const
 {
     int nHighestCount = GetHighestVoteCount(nBlockHeight);
-    int nCountEnabled = mnodeman.CountEnabled();
+    const int nCountEnabled = static_cast<int>(deterministicMNManager->GetListAtChainTip().GetValidMNsCount());
     int nFivePercent = nCountEnabled / 20;
     // threshold for highest finalized budgets (highest vote count - 10% of active masternodes)
     nCountThreshold = nHighestCount - (nCountEnabled / 10);
@@ -900,7 +891,7 @@ std::vector<CBudgetProposal> CBudgetManager::GetBudget()
     int nBlockStart = nHeight - nHeight % nBlocksPerCycle + nBlocksPerCycle;
     int nBlockEnd = nBlockStart + nBlocksPerCycle - 1;
     // Avoid taking cs_main indirectly through masternode counting while holding cs_proposals.
-    int mnCount = mnodeman.CountEnabled();
+    const int mnCount = static_cast<int>(deterministicMNManager->GetListAtChainTip().GetValidMNsCount());
     CAmount nTotalBudget = GetTotalBudget(nBlockStart);
     const int64_t coinWeightFixed = GetCoinGovernanceWeightFixed();
 
@@ -992,11 +983,9 @@ CAmount CBudgetManager::GetTotalBudget(int nHeight)
         return consensus.nBudgetCycleAmount;
     }
 
-    CAmount nSubsidy = GetBlockValue(nHeight);
-    if (nHeight <= consensus.vUpgrades[Consensus::UPGRADE_V5_5].nActivationHeight) {
-        nSubsidy /= 5;
-    }
-    return nSubsidy * consensus.nBudgetCycleBlocks;
+    // No treasury during the PoW bootstrap phase: governance funding only
+    // starts with PoS.
+    return 0;
 }
 
 void CBudgetManager::AddSeenProposalVote(const CBudgetVote& vote)
@@ -1021,13 +1010,7 @@ void CBudgetManager::RemoveStaleVotesOnProposal(CBudgetProposal* prop)
     while (it != prop->mapVotes.end()) {
         auto mnList = deterministicMNManager->GetListAtChainTip();
         auto dmn = mnList.GetMNByCollateral(it->first);
-        if (dmn) {
-            (*it).second.SetValid(!dmn->IsPoSeBanned());
-        } else {
-            // -- Legacy System (!TODO: remove after enforcement) --
-            CMasternode* pmn = mnodeman.Find(it->first);
-            (*it).second.SetValid(pmn && pmn->IsEnabled());
-        }
+        (*it).second.SetValid(dmn && !dmn->IsPoSeBanned());
         ++it;
     }
 
@@ -1045,13 +1028,7 @@ void CBudgetManager::RemoveStaleVotesOnFinalBudget(CFinalizedBudget* fbud)
     while (it != fbud->mapVotes.end()) {
         auto mnList = deterministicMNManager->GetListAtChainTip();
         auto dmn = mnList.GetMNByCollateral(it->first);
-        if (dmn) {
-            (*it).second.SetValid(!dmn->IsPoSeBanned());
-        } else {
-            // -- Legacy System (!TODO: remove after enforcement) --
-            CMasternode* pmn = mnodeman.Find(it->first);
-            (*it).second.SetValid(pmn && pmn->IsEnabled());
-        }
+        (*it).second.SetValid(dmn && !dmn->IsPoSeBanned());
         ++it;
     }
     LogPrint(BCLog::MNBUDGET, "Cleaned finalized budget votes for [%s (%s)]. After: %d\n",
@@ -1268,41 +1245,9 @@ bool CBudgetManager::ProcessProposalVote(CBudgetVote& vote, CNode* pfrom, CValid
         return true;
     }
 
-    // -- Legacy System (!TODO: remove after enforcement) --
-
-    CMasternode* pmn = mnodeman.Find(voteVin.prevout);
-    if (!pmn) {
-        err = strprintf("unknown masternode - vin: %s", voteVin.prevout.ToString());
-        // Ask for MN only if we finished syncing the MN list.
-        if (pfrom && g_tiertwo_sync_state.IsMasternodeListSynced()) mnodeman.AskForMN(pfrom, voteVin);
-        return state.DoS(0, false, REJECT_INVALID, "bad-mvote", false, err);
-    }
-
-    if (!pmn->IsEnabled()) {
-        return state.DoS(0, false, REJECT_INVALID, "bad-mvote", false, "masternode not valid");
-    }
-
-    AddSeenProposalVote(vote);
-
-    if (!vote.CheckSignature(pmn->pubKeyMasternode.GetID())) {
-        if (g_tiertwo_sync_state.IsSynced()) {
-            err = strprintf("signature from masternode %s invalid", voteVin.prevout.ToString());
-            return state.DoS(20, false, REJECT_INVALID, "bad-mvote-sig", false, err);
-        }
-        return false;
-    }
-
-    if (!UpdateProposal(vote, pfrom, err)) {
-        return state.DoS(0, false, REJECT_INVALID, "bad-mvote", false, err);
-    }
-
-    // Relay only if we are synchronized
-    // Makes no sense to relay votes to the peers from where we are syncing them.
-    if (g_tiertwo_sync_state.IsSynced()) vote.Relay();
-    g_tiertwo_sync_state.AddedBudgetItem(voteID);
-    LogPrint(BCLog::MNBUDGET, "mvote - new vote (%s) for proposal %s from dmn %s\n",
-            voteID.ToString(), vote.GetProposalHash().ToString(), voteVin.prevout.ToString());
-    return true;
+    // Vote from an unknown masternode (not in the deterministic list)
+    err = strprintf("unknown masternode - vin: %s", voteVin.prevout.ToString());
+    return state.DoS(0, false, REJECT_INVALID, "bad-mvote", false, err);
 }
 
 int CBudgetManager::ProcessFinalizedBudget(CFinalizedBudget& finalbudget, CNode* pfrom)
@@ -1377,40 +1322,9 @@ bool CBudgetManager::ProcessFinalizedBudgetVote(CFinalizedBudgetVote& vote, CNod
         return true;
     }
 
-    // -- Legacy System (!TODO: remove after enforcement) --
-    CMasternode* pmn = mnodeman.Find(voteVin.prevout);
-    if (!pmn) {
-        err = strprintf("unknown masternode - vin: %s", voteVin.prevout.ToString());
-        // Ask for MN only if we finished syncing the MN list.
-        if (pfrom && g_tiertwo_sync_state.IsMasternodeListSynced()) mnodeman.AskForMN(pfrom, voteVin);
-        return state.DoS(0, false, REJECT_INVALID, "bad-fbvote", false, err);
-    }
-
-    if (!pmn->IsEnabled()) {
-        return state.DoS(0, false, REJECT_INVALID, "bad-fbvote", false, "masternode not valid");
-    }
-
-    AddSeenFinalizedBudgetVote(vote);
-
-    if (!vote.CheckSignature(pmn->pubKeyMasternode.GetID())) {
-        if (g_tiertwo_sync_state.IsSynced()) {
-            err = strprintf("signature from masternode %s invalid", voteVin.prevout.ToString());
-            return state.DoS(20, false, REJECT_INVALID, "bad-fbvote-sig", false, err);
-        }
-        return false;
-    }
-
-    if (!UpdateFinalizedBudget(vote, pfrom, err)) {
-        return state.DoS(0, false, REJECT_INVALID, "bad-fbvote", false, err);
-    }
-
-    // Relay only if we are synchronized
-    // Makes no sense to relay votes to the peers from where we are syncing them.
-    if (g_tiertwo_sync_state.IsSynced()) vote.Relay();
-    g_tiertwo_sync_state.AddedBudgetItem(voteID);
-    LogPrint(BCLog::MNBUDGET, "fbvote - new vote (%s) for budget %s from mn %s\n",
-            voteID.ToString(), vote.GetBudgetHash().ToString(), voteVin.prevout.ToString());
-    return true;
+    // Vote from an unknown masternode (not in the deterministic list)
+    err = strprintf("unknown masternode - vin: %s", voteVin.prevout.ToString());
+    return state.DoS(0, false, REJECT_INVALID, "bad-fbvote", false, err);
 }
 
 bool CBudgetManager::ProcessMessage(CNode* pfrom, std::string& strCommand, CDataStream& vRecv, int& banScore)

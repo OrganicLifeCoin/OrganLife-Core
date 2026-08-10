@@ -31,7 +31,7 @@ class DIP3Test(PivxTestFramework):
         self.controllerPos = 1
         self.setup_clean_chain = True
         self.extra_args = [["-nuparams=v5_shield:1", "-nuparams=v6_evo:130"]] * self.num_nodes
-        self.extra_args[0].append("-sporkkey=7C7LXuERaWY3cnfKZn345cAQnz7BqT5FStjid79GXPU3r3sMhRM")
+        self.extra_args[0].append("-sporkkey=932HEevBSujW2ud7RfB1YF91AFygbBRQj3de3LyaCRqNzKKgWXi")
 
     def add_new_dmn(self, mns, strType, op_keys=None, from_out=None):
         mns.append(self.register_new_dmn(2 + len(mns),
@@ -260,7 +260,8 @@ class DIP3Test(PivxTestFramework):
         # Test payments.
         # Mine 12 blocks and check that each masternode has been paid exactly twice.
         # Save last paid masternode. Check that it's the last paid also after the 12 blocks.
-        # Note: dmn2 sends (2 * 0.3 PIV) to the operator, and (2 * 2.7 PIV) to the owner
+        # Note: dmn2 sends (2 * 0.6 OLC) to the operator, and (2 * 5.4 OLC) to the owner
+        # (OrganicLife MN payment is 6 OLC per block: 2 payments of 6.0 = 12.0 per MN)
         self.log.info("Testing masternode payments...")
         last_paid_mn = self.get_last_paid_mn()
         starting_balances = {"operator": self.get_addr_balance(self.nodes[dmn2c.idx], op_rew["address"])}
@@ -270,12 +271,12 @@ class DIP3Test(PivxTestFramework):
         self.sync_blocks()
         for mn in mns:
             bal = self.get_addr_balance(controller, mn.payee)
-            expected = starting_balances[mn.payee] + (Decimal('6.0') if mn.idx != dmn2c.idx else Decimal('5.4'))
+            expected = starting_balances[mn.payee] + (Decimal('12.0') if mn.idx != dmn2c.idx else Decimal('10.8'))
             if bal != expected:
                 raise Exception("Invalid balance (%s != %s) for node %d" % (bal, expected, mn.idx))
         self.log.info("All masternodes paid twice.")
         assert_equal(self.get_addr_balance(self.nodes[dmn2c.idx], op_rew["address"]),
-                     starting_balances["operator"] + Decimal('0.6'))
+                     starting_balances["operator"] + Decimal('1.2'))
         self.log.info("Operator paid twice.")
         assert_equal(last_paid_mn, self.get_last_paid_mn())
         self.log.info("Order preserved.")
@@ -300,7 +301,7 @@ class DIP3Test(PivxTestFramework):
                                 miner.protx_update_service, mns[0].proTx, "",
                                 miner.getnewaddress(), mns[0].operator_sk)
         self.log.info("Trying to update the operator payee to an invalid address...")
-        assert_raises_rpc_error(-5, "invalid PIVX address InvalidPayee",
+        assert_raises_rpc_error(-5, "invalid OrganicLife address InvalidPayee",
                                 miner.protx_update_service, dmn2c.proTx, "", "InvalidPayee", "")
         self.log.info("Update IP address...")
         mns[0].ipport = "127.0.0.1:1000"
@@ -324,7 +325,7 @@ class DIP3Test(PivxTestFramework):
         self.sync_blocks()
         # Check payment to new address
         self.log.info("Checking payment...")
-        assert_equal(self.get_addr_balance(self.nodes[dmn2c.idx], new_address), Decimal('0.3'))
+        assert_equal(self.get_addr_balance(self.nodes[dmn2c.idx], new_address), Decimal('0.6'))
 
         # Test ProUpReg txes
         self.log.info("Trying to update a non-existent masternode...")
@@ -334,7 +335,7 @@ class DIP3Test(PivxTestFramework):
         assert_raises_rpc_error(-1, "bad-protx-dup-key", controller.protx_update_registrar,
                                 mns[0].proTx, mns[1].operator_pk, "", "")
         self.log.info("Trying to update the payee to an invalid address...")
-        assert_raises_rpc_error(-5, "invalid PIVX address InvalidPayee", controller.protx_update_registrar,
+        assert_raises_rpc_error(-5, "invalid OrganicLife address InvalidPayee", controller.protx_update_registrar,
                                 mns[0].proTx, "", "", "InvalidPayee")
         self.log.info("Update operator keys...")
         bls_keypair = self.nodes[mns[0].idx].generateblskeypair()
@@ -386,7 +387,7 @@ class DIP3Test(PivxTestFramework):
         # Check payment to new address
         self.log.info("Checking payments...")
         assert_equal(self.get_addr_balance(controller, old_payee), old_mn2_bal)
-        assert_equal(self.get_addr_balance(controller, mns[2].payee), Decimal('3'))
+        assert_equal(self.get_addr_balance(controller, mns[2].payee), Decimal('6'))
         # The PoSe banned node didn't receive any more payment
         assert_equal(self.get_addr_balance(controller, mns[0].payee), old_mn0_balance)
 
@@ -449,7 +450,7 @@ class DIP3Test(PivxTestFramework):
         self.check_mn_list(mns)
 
         self.log.info("Checking payments...")
-        assert_equal(self.get_addr_balance(controller, mns[3].payee), old_mn3_bal + Decimal('3'))
+        assert_equal(self.get_addr_balance(controller, mns[3].payee), old_mn3_bal + Decimal('6'))
 
         self.log.info("All good.")
 

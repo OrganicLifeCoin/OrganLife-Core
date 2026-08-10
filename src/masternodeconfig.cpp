@@ -5,6 +5,7 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 #include "masternodeconfig.h"
 
+#include "chainparams.h"
 #include "fs.h"
 #include "netbase.h"
 #include "util/system.h"
@@ -45,7 +46,9 @@ bool CMasternodeConfig::read(std::string& strErr)
         if (configFile != nullptr) {
             std::string strHeader = "# Masternode config file\n"
                                     "# Format: alias IP:port masternodeprivkey collateral_output_txid collateral_output_index\n"
-                                    "# Example: mn1 127.0.0.2:31616 93HaYBVUCYjEMeeH1Y4sBGLALQZE1Yc1K64xiqgX37tGBDQL8Xg 2bcd3c84c84f87eaa86e4e56834c92927a07f9e18718810b92e0d0324456a67c 0"
+                                    "# Deterministic format: alias IP:port operator_bls_key\n"
+                                    "# Example: mn1 127.0.0.2:31616 93HaYBVUCYjEMeeH1Y4sBGLALQZE1Yc1K64xiqgX37tGBDQL8Xg 2bcd3c84c84f87eaa86e4e56834c92927a07f9e18718810b92e0d0324456a67c 0\n"
+                                    "# DMN example: mn1 127.0.0.2:31616 olc-bls-sk-test-xxxx\n"
                                     "#\n";
             fwrite(strHeader.c_str(), std::strlen(strHeader.c_str()), 1, configFile);
             fclose(configFile);
@@ -66,14 +69,17 @@ bool CMasternodeConfig::read(std::string& strErr)
         }
 
         if (!(iss >> alias >> ip >> privKey >> txHash >> outputIndex)) {
+            // tolerate 3-field deterministic entries: alias IP:port operator_bls_key
             iss.str(line);
             iss.clear();
-            if (!(iss >> alias >> ip >> privKey >> txHash >> outputIndex)) {
+            if (!(iss >> alias >> ip >> privKey)) {
                 strErr = _("Could not parse masternode.conf") + "\n" +
                          strprintf(_("Line: %d"), linenumber) + "\n\"" + line + "\"";
                 streamConfig.close();
                 return false;
             }
+            txHash = "";
+            outputIndex = "";
         }
 
         int port = 0;
@@ -113,4 +119,10 @@ bool CMasternodeConfig::CMasternodeEntry::castOutputIndex(int &n) const
     }
 
     return true;
+}
+
+bool CMasternodeConfig::CMasternodeEntry::IsDeterministic() const
+{
+    return !privKey.empty() &&
+           privKey.find(Params().Bech32HRP(CChainParams::BLS_SECRET_KEY)) != std::string::npos;
 }

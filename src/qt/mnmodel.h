@@ -9,7 +9,10 @@
 #include "masternodeconfig.h"
 #include "qt/walletmodel.h"
 
-class CMasternode;
+#include <memory>
+
+class CDeterministicMN;
+typedef std::shared_ptr<const CDeterministicMN> CDeterministicMNCPtr;
 
 class MNModel : public QAbstractTableModel
 {
@@ -47,44 +50,43 @@ public:
 
 
     bool isMNsNetworkSynced();
-    // Returns the MN activeState field.
-    int getMNState(const QString& mnAlias);
     // Checks if the masternode is inactive
     bool isMNInactive(const QString& mnAlias);
-    // Masternode is active if it's in PRE_ENABLED OR ENABLED state
+    // Masternode is active if it's registered in the DMN list at the chain tip
     bool isMNActive(const QString& mnAlias);
-    // Masternode collateral has enough confirmations
+    // Deterministic masternodes embed and lock the collateral in the registration
+    // transaction: always mature.
     bool isMNCollateralMature(const QString& mnAlias);
     // Validate string representing a masternode IP address
     static bool validateMNIP(const QString& addrStr);
 
     // Return the specific chain amount value for the MN collateral output.
     CAmount getMNCollateralRequiredAmount();
-    // Return the specific chain min conf for the collateral tx
-    int getMasternodeCollateralMinConf();
-    // Generates the collateral transaction
-    bool createMNCollateral(const QString& alias, const QString& addr, COutPoint& ret_outpoint, QString& ret_error);
-    // Creates the mnb and broadcast it to the network
-    bool startLegacyMN(const CMasternodeConfig::CMasternodeEntry& mne, int chainHeight, std::string& strError);
-    void startAllLegacyMNs(bool onlyMissing, int& amountOfMnFailed, int& amountOfMnStarted,
-                           std::string* aliasFilter = nullptr, std::string* error_ret = nullptr);
 
-    CMasternodeConfig::CMasternodeEntry* createLegacyMN(COutPoint& collateralOut,
-                                                        const std::string& alias,
-                                                        std::string& serviceAddr,
+    // Starts a deterministic masternode (simple DMN flow): the 4000 OLC collateral
+    // is embedded and locked in the registration transaction.
+    bool startDMN(const CMasternodeConfig::CMasternodeEntry& mne, std::string& strError);
+    // Starts all configured masternodes (deterministic flow only).
+    void startAllMNs(bool onlyMissing, int& amountOfMnFailed, int& amountOfMnStarted,
+                     std::string* aliasFilter = nullptr, std::string* error_ret = nullptr);
+
+    // Appends a 3-field deterministic masternode entry (alias IP:port BLS-operator-key)
+    // to masternode.conf. Does not create or lock any collateral: the registration
+    // transaction embeds it.
+    CMasternodeConfig::CMasternodeEntry* createDMNEntry(const std::string& alias,
+                                                        const std::string& serviceAddr,
                                                         const std::string& port,
-                                                        const std::string& mnKeyString,
+                                                        const std::string& operatorKeyString,
                                                         QString& ret_error);
 
-    bool removeLegacyMN(const std::string& alias_to_remove, const std::string& tx_id, unsigned int out_index, QString& ret_error);
     void setCoinControl(CCoinControl* coinControl);
     void resetCoinControl();
 
 private:
     WalletModel* walletModel;
     CCoinControl* coinControl;
-    // alias mn node ---> pair <ip, master node>
-    QMap<QString, std::pair<QString, CMasternode*>> nodes;
+    // alias mn node ---> pair <ip, dmn (null if not registered)>
+    QMap<QString, std::pair<QString, CDeterministicMNCPtr>> nodes;
     QMap<std::string, bool> collateralTxAccepted;
 };
 

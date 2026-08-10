@@ -24,6 +24,7 @@
 #include <QParallelAnimationGroup>
 #include <QPainter>
 #include <QPropertyAnimation>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QThread>
 #include <QTime>
@@ -128,7 +129,8 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
 
     // Title: V2 greeting band
     setCssProperty(ui->labelTitle, "screen-header-title");
-    setCssProperty(ui->labelTitle2, "dashboard-side-title");
+    setCssProperty(ui->labelTitle2, "dashboard-feed-title");
+    ui->labelTitle2->setMinimumHeight(0);
     {
         const int hour = QTime::currentTime().hour();
         const QString daypart = hour < 5 ? tr("night") : (hour < 12 ? tr("morning") : (hour < 18 ? tr("afternoon") : tr("evening")));
@@ -139,9 +141,8 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     /* Subtitle */
     setCssProperty(ui->labelSubtitle, "screen-header-subtitle");
     ui->labelSubtitle->setWordWrap(true);
-    setCssProperty(ui->labelMessage, "dashboard-side-subtitle");
-    ui->labelMessage->setWordWrap(true);
-    ui->labelMessage->setVisible(false);
+    setCssProperty(ui->labelMessage, "dashboard-feed-subtitle");
+    ui->labelMessage->setText(tr("staking & masternode income"));
 
     // Staking Information
     setCssProperty(ui->labelSquarePiv, "square-chart-piv");
@@ -176,16 +177,26 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_31->setSpacing(0);
     ui->verticalLayout_2->setContentsMargins(8, 8, 8, 8);
     ui->verticalLayout_2->setSpacing(8);
-    ui->horizontalLayout_3->setContentsMargins(10, 8, 20, 0);
-    ui->horizontalLayout_3->setSpacing(12);
+    ui->horizontalLayout_3->setContentsMargins(0, 2, 0, 2);
+    ui->horizontalLayout_3->setSpacing(8);
+    ui->verticalLayout_6->setSpacing(1);
 
     auto* analyticsModule = new QWidget(ui->right);
     analyticsModule->setObjectName("analyticsModule");
     analyticsModule->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(analyticsModule, "dashboard-analytics-card");
     auto* analyticsLayout = new QVBoxLayout(analyticsModule);
-    analyticsLayout->setContentsMargins(8, 8, 8, 8);
-    analyticsLayout->setSpacing(2);
+    analyticsLayout->setContentsMargins(16, 12, 16, 12);
+    analyticsLayout->setSpacing(6);
+
+    // The .ui title row is removed here and rebuilt as a fixed-height header
+    // widget further below, so the collapsed card keeps a compact header.
+    ui->verticalLayout_2->removeItem(ui->horizontalLayout_3);
+    if (ui->verticalSpacer_4) {
+        ui->verticalLayout_2->removeItem(ui->verticalSpacer_4);
+        delete ui->verticalSpacer_4;
+        ui->verticalSpacer_4 = nullptr;
+    }
 
     auto* rewardSummaryRow = new QWidget(analyticsModule);
     rewardSummaryRow->setObjectName("rewardSummaryRow");
@@ -282,8 +293,17 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     chartBodyLayout->addWidget(ui->layoutChart, 1);
     chartBodyLayout->addWidget(ui->emptyContainerChart, 1);
 
-    analyticsLayout->addWidget(rewardSummaryRow);
-    analyticsLayout->addWidget(chartBody, 1);
+    // Collapsible body: reward tiles + chart. Collapsing hides only this,
+    // leaving the decorated header card visible like the field notes card.
+    chartContent = new QWidget(analyticsModule);
+    chartContent->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(chartContent, "dashboard-chart-body");
+    auto* chartContentLayout = new QVBoxLayout(chartContent);
+    chartContentLayout->setContentsMargins(0, 4, 0, 0);
+    chartContentLayout->setSpacing(6);
+    chartContentLayout->addWidget(rewardSummaryRow);
+    chartContentLayout->addWidget(chartBody, 1);
+    analyticsLayout->addWidget(chartContent, 1);
     analyticsCard = analyticsModule;
     ui->verticalLayout_2->addWidget(analyticsModule, 1);
     ui->verticalLayout_2->addStretch(0);
@@ -296,8 +316,29 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     chartToggle->setFixedSize(28, 28);
     setCssProperty(chartToggle, "dashboard-feed-toggle");
     chartToggle->setText("▾");
-    ui->horizontalLayout_3->addWidget(chartToggle, 0, Qt::AlignVCenter);
     connect(chartToggle, &QPushButton::clicked, this, [this]() { setChartExpanded(!chartExpanded); });
+
+    // Rebuild the .ui title row as a fixed-height header widget inside the
+    // card: a nested layout would soak up all leftover vertical space when
+    // the chart body is collapsed, spreading the title and subtitle apart.
+    auto* chartHeader = new QWidget(analyticsModule);
+    chartHeader->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(chartHeader, "dashboard-chart-content");
+    chartHeader->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+    auto* chartHeaderLayout = new QHBoxLayout(chartHeader);
+    chartHeaderLayout->setContentsMargins(0, 2, 0, 2);
+    chartHeaderLayout->setSpacing(8);
+    auto* chartTitleCol = new QVBoxLayout();
+    chartTitleCol->setContentsMargins(0, 0, 0, 0);
+    chartTitleCol->setSpacing(1);
+    ui->verticalLayout_6->removeWidget(ui->labelTitle2);
+    ui->verticalLayout_6->removeWidget(ui->labelMessage);
+    chartTitleCol->addWidget(ui->labelTitle2);
+    chartTitleCol->addWidget(ui->labelMessage);
+    chartHeaderLayout->addLayout(chartTitleCol, 1);
+    chartHeaderLayout->addWidget(chartToggle, 0, Qt::AlignVCenter);
+    analyticsLayout->insertWidget(0, chartHeader);
+    delete ui->horizontalLayout_3;
 
     ui->layoutChart->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->layoutChart, "dashboard-chart-content");
@@ -405,25 +446,47 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     feedCard->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
     ui->verticalLayout_2->setSpacing(10);
     ui->verticalLayout_2->insertWidget(0, feedCard, 0);
+    // Inserting the feed card at index 0 shifts the bottom stretch down one slot.
+    if (chartBottomStretchIdx >= 0) chartBottomStretchIdx++;
     connect(feedToggle, &QPushButton::clicked, this, [this]() { setFeedExpanded(!feedExpanded); });
     {
         QSettings settings;
         feedExpanded = settings.value("dashboardFeedExpanded", false).toBool();
         chartExpanded = settings.value("dashboardChartExpanded", true).toBool();
+        // Accordion restore: the graph wins if both were left expanded.
+        if (feedExpanded && chartExpanded) feedExpanded = false;
     }
     feedBody->setMaximumHeight(feedExpanded ? QWIDGETSIZE_MAX : 0);
     feedBody->setVisible(feedExpanded);
     feedToggle->setText(feedExpanded ? "▾" : "▸");
-    if (analyticsCard) {
-        analyticsCard->setMaximumHeight(chartExpanded ? QWIDGETSIZE_MAX : 0);
-        analyticsCard->setVisible(chartExpanded);
-        if (chartBottomStretchIdx >= 0) {
-            ui->verticalLayout_2->setStretchFactor(analyticsCard, chartExpanded ? 1 : 0);
-            ui->verticalLayout_2->setStretch(chartBottomStretchIdx, chartExpanded ? 0 : 1);
-        }
+    if (chartContent) {
+        chartContent->setMaximumHeight(chartExpanded ? QWIDGETSIZE_MAX : 0);
+        chartContent->setVisible(chartExpanded);
+    }
+    if (analyticsCard && chartBottomStretchIdx >= 0) {
+        ui->verticalLayout_2->setStretchFactor(analyticsCard, chartExpanded ? 1 : 0);
+        ui->verticalLayout_2->setStretch(chartBottomStretchIdx, chartExpanded ? 0 : 1);
     }
     if (chartToggle) chartToggle->setText(chartExpanded ? "▾" : "▸");
     updateFeedNotes();
+
+    // Scrollable right column: with both field notes and the chart expanded
+    // the content can exceed the available height, so let it scroll instead
+    // of squeezing the graph.
+    auto* rightScrollContent = new QWidget(ui->right);
+    rightScrollContent->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(rightScrollContent, "dashboard-right-scroll-content");
+    ui->verticalLayout_31->removeItem(ui->verticalLayout_2);
+    rightScrollContent->setLayout(ui->verticalLayout_2);
+    auto* rightScroll = new QScrollArea(ui->right);
+    rightScroll->setWidgetResizable(true);
+    rightScroll->setFrameShape(QFrame::NoFrame);
+    rightScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    rightScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    rightScroll->viewport()->setAutoFillBackground(false);
+    setCssProperty(rightScroll, "dashboard-right-scroll");
+    rightScroll->setWidget(rightScrollContent);
+    ui->verticalLayout_31->addWidget(rightScroll);
 
 #ifdef USE_QTCHARTS
     connect(ui->comboBoxYears, static_cast<void (QComboBox::*)(const QString&)>(&QComboBox::currentTextChanged),
@@ -674,6 +737,8 @@ void DashboardWidget::animateSection(QWidget* body, bool expand, const std::func
 void DashboardWidget::setFeedExpanded(bool expanded)
 {
     if (feedExpanded == expanded && feedBody && feedBody->isVisible() == expanded) return;
+    // Accordion: only one section open at a time.
+    if (expanded && chartExpanded) setChartExpanded(false);
     feedExpanded = expanded;
     if (feedToggle) feedToggle->setText(expanded ? "▾" : "▸");
     QSettings settings;
@@ -683,18 +748,20 @@ void DashboardWidget::setFeedExpanded(bool expanded)
 
 void DashboardWidget::setChartExpanded(bool expanded)
 {
-    if (chartExpanded == expanded && analyticsCard && analyticsCard->isVisible() == expanded) return;
+    if (chartExpanded == expanded && chartContent && chartContent->isVisible() == expanded) return;
+    // Accordion: only one section open at a time.
+    if (expanded && feedExpanded) setFeedExpanded(false);
     chartExpanded = expanded;
     if (chartToggle) chartToggle->setText(expanded ? "▾" : "▸");
     QSettings settings;
     settings.setValue("dashboardChartExpanded", expanded);
-    // Keep the title row pinned to the top: hand the leftover stretch
-    // to a bottom spacer while the card is collapsed.
+    // Keep the header card pinned to the top: hand the leftover stretch
+    // to a bottom spacer while the body is collapsed.
     if (analyticsCard && chartBottomStretchIdx >= 0) {
         ui->verticalLayout_2->setStretchFactor(analyticsCard, expanded ? 1 : 0);
         ui->verticalLayout_2->setStretch(chartBottomStretchIdx, expanded ? 0 : 1);
     }
-    animateSection(analyticsCard, expanded);
+    animateSection(chartContent, expanded);
 }
 
 void DashboardWidget::updateFeedNotes()
@@ -727,7 +794,6 @@ void DashboardWidget::updateFeedNotes()
         switch (type) {
             case TransactionRecord::MNReward:      label = tr("MN reward");    color = "#8FB35F"; break;
             case TransactionRecord::StakeMint:
-            case TransactionRecord::StakeZPIV:
             case TransactionRecord::StakeDelegated:
             case TransactionRecord::StakeHot:      label = tr("Stake found");  color = "#B77E35"; break;
             case TransactionRecord::Generated:     label = tr("Mined");        color = "#B77E35"; break;
@@ -1519,7 +1585,6 @@ void DashboardWidget::onHideChartsChanged(bool fHide)
             stakesFilter->setSortCaseSensitivity(Qt::CaseInsensitive);
             stakesFilter->setFilterCaseSensitivity(Qt::CaseInsensitive);
             stakesFilter->setTypeFilter(TransactionFilterProxy::TYPE(TransactionRecord::StakeMint) |
-                                        TransactionFilterProxy::TYPE(TransactionRecord::StakeZPIV) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::StakeDelegated) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::MNReward) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::BudgetPayment));

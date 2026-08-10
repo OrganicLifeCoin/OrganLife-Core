@@ -103,7 +103,6 @@ BOOST_FIXTURE_TEST_CASE(v6_pos_coinbase_without_masternode_payee_is_valid, TestP
     g_tiertwo_sync_state.ResetData();
     g_tiertwo_sync_state.SetBlockchainSync(false, 0);
     g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_INITIAL);
-    masternodePayments.Clear();
 
     std::vector<CStakeableOutput> availableCoins;
     BOOST_REQUIRE(pwalletMain->StakeableCoins(&availableCoins));

@@ -89,7 +89,6 @@ void test_one_input(std::vector<uint8_t> buffer)
     (void)tx.isSaplingVersion();
     (void)tx.hasSaplingData();
     (void)tx.HasP2CSOutputs();
-    (void)tx.ContainsZerocoins();
     (void)tx.IsNull();
     (void)tx.ToString();
 

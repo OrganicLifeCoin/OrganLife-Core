@@ -106,6 +106,10 @@ void ChartUtilsTests::chartRewardAggregationUsesCopiedRows()
 
 void ChartUtilsTests::coinbaseCreditsAreClassifiedByRewardType()
 {
+    // v6 activates at genesis on the public networks: pin a concrete height so
+    // the coinbase-classification boundary behavior stays testable.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, 1000);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, 50);
     const int v6Height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight;
     const CAmount mnReward = GetMasternodePayment(v6Height);
     QVERIFY(mnReward > 0);

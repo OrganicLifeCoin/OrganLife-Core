@@ -41,8 +41,8 @@ int main(int argc, char *argv[])
     SetupEnvironment();
     SelectParams(CBaseChainParams::MAIN);
     bool fInvalid = false;
-    Q_INIT_RESOURCE(pivx);
-    Q_INIT_RESOURCE(pivx_locale);
+    Q_INIT_RESOURCE(organiclife);
+    Q_INIT_RESOURCE(organiclife_locale);
 
     // Don't remove this, it's needed to access
     // QApplication:: in the tests

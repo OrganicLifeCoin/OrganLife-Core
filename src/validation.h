@@ -38,12 +38,10 @@
 #include <utility>
 #include <vector>
 
-class AccumulatorCache;
 class CBlockIndex;
 class CBlockTreeDB;
 class CBudgetManager;
 class CCoinsViewDB;
-class CZerocoinDB;
 class CSporkDB;
 class CBloomFilter;
 class CInv;
@@ -74,7 +72,6 @@ static const bool DEFAULT_TXINDEX = true;
 static const bool DEFAULT_CHECKPOINTS_ENABLED = true;
 /** The maximum size for transactions we're willing to relay/mine */
 static const unsigned int MAX_STANDARD_TX_SIZE = 100000;
-static const unsigned int MAX_ZEROCOIN_TX_SIZE = 150000;
 /** Maximum kilobytes for transactions to store for processing during reorg */
 static const unsigned int MAX_DISCONNECTED_TX_POOL_SIZE = 20000;
 /** Default for -checkblocks */
@@ -372,12 +369,6 @@ extern std::unique_ptr<CCoinsViewCache> pcoinsTip;
 
 /** Global variable that points to the active block tree (protected by cs_main) */
 extern std::unique_ptr<CBlockTreeDB> pblocktree;
-
-/** Global variable that points to the zerocoin database (protected by cs_main) */
-extern std::unique_ptr<CZerocoinDB> zerocoinDB;
-
-/** In-memory cache for the zerocoin accumulators */
-extern std::unique_ptr<AccumulatorCache> accumulatorCache;
 
 /** Global variable that points to the spork database (protected by cs_main) */
 extern std::unique_ptr<CSporkDB> pSporkDB;

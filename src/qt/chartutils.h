@@ -53,9 +53,9 @@ namespace detail {
 
 // Keep these numeric values aligned with TransactionRecord::Type. The
 // Qt-free unit tests include this header without pulling in Qt types.
-static constexpr int TX_TYPE_GENERATED = 1;
-static constexpr int TX_TYPE_MN_REWARD = 7;
-static constexpr int TX_TYPE_BUDGET_PAYMENT = 8;
+static constexpr int TX_TYPE_GENERATED = 1; // TransactionRecord::Generated
+static constexpr int TX_TYPE_MN_REWARD = 6; // TransactionRecord::MNReward
+static constexpr int TX_TYPE_BUDGET_PAYMENT = 7; // TransactionRecord::BudgetPayment
 
 inline int ClampInt(const int value, const int low, const int high)
 {

@@ -156,6 +156,7 @@ public:
     bool isStakingStatusActive() const;
 
     bool hasWallet() { return wallet; };
+    CWallet* getWallet() const { return wallet; };
 
     bool isHDEnabled() const;
     bool isSaplingWalletEnabled() const;

@@ -16,7 +16,6 @@
 #include "kernel.h"
 #include "key_io.h"
 #include "llmq/quorums_chainlocks.h"
-#include "masternodeman.h"
 #include "policy/feerate.h"
 #include "policy/policy.h"
 #include "rpc/server.h"
@@ -981,9 +980,6 @@ static UniValue SoftForkMajorityDesc(int version, const CBlockIndex* pindex, con
     case 3:
         idx = Consensus::BASE_NETWORK;
         break;
-    case 4:
-        idx = Consensus::UPGRADE_ZC;
-        break;
     case 5:
         idx = Consensus::UPGRADE_BIP65;
         break;
@@ -1302,7 +1298,6 @@ UniValue invalidateblock(const JSONRPCRequest& request)
         ActivateBestChain(state);
         int nHeight = WITH_LOCK(cs_main, return chainActive.Height(); );
         g_budgetman.SetBestHeight(nHeight);
-        mnodeman.SetBestHeight(nHeight);
     }
 
     if (!state.IsValid()) {
@@ -1342,7 +1337,6 @@ UniValue reconsiderblock(const JSONRPCRequest& request)
         ActivateBestChain(state);
         int nHeight = WITH_LOCK(cs_main, return chainActive.Height(); );
         g_budgetman.SetBestHeight(nHeight);
-        mnodeman.SetBestHeight(nHeight);
     }
 
     if (!state.IsValid()) {
@@ -1443,10 +1437,6 @@ UniValue getblockindexstats(const JSONRPCRequest& request) {
         // loop through each tx in block and save size and fee (except for coinbase/coinstake)
         for (int idx = firstTxIndex; idx < ntx; idx++) {
             const CTransaction& tx = *(block.vtx[idx]);
-
-            // zerocoin txes have fixed fee, don't count them here.
-            if (tx.ContainsZerocoins())
-                continue;
 
             // Transaction size
             nBytes += GetSerializeSize(tx, CLIENT_VERSION);

@@ -8,7 +8,6 @@
 #include "bls/bls_wrapper.h"
 #include "budget/budgetmanager.h"
 #include "masternode-payments.h"
-#include "masternodeman.h"
 #include "spork.h"
 #include "test/util/blocksutil.h"
 #include "tiertwo/tiertwo_sync_state.h"
@@ -26,15 +25,6 @@ void CheckBudgetValue(int nHeight, std::string strNetwork, CAmount nExpectedValu
     CAmount nBudget = g_budgetman.GetTotalBudget(nHeight);
     std::string strError = strprintf("Budget is not as expected for %s. Result: %s, Expected: %s", strNetwork, FormatMoney(nBudget), FormatMoney(nExpectedValue));
     BOOST_CHECK_MESSAGE(nBudget == nExpectedValue, strError);
-}
-
-static CAmount GetLegacyBudgetValue(int nHeight)
-{
-    CAmount nSubsidy = GetBlockValue(nHeight);
-    if (nHeight <= Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V5_5].nActivationHeight) {
-        nSubsidy /= 5;
-    }
-    return nSubsidy * Params().GetConsensus().nBudgetCycleBlocks;
 }
 
 void enableMnSyncAndSuperblocksPayment()
@@ -70,22 +60,22 @@ BOOST_AUTO_TEST_CASE(budget_value)
     // Governance keeps 14-day cycles, so the 55,555 monthly treasury target is split across two cycles.
     static constexpr CAmount expectedBudget = (55555 * COIN) / 2;
 
-    // Treasury switches from legacy subsidy-derived budget to the fixed cycle budget at PoS activation.
+    // Treasury is zero during the PoW bootstrap and switches to the fixed cycle budget at PoS activation.
     SelectParams(CBaseChainParams::TESTNET);
     int nHeightTest = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight;
-    CheckBudgetValue(nHeightTest - 1, "testnet pre-pos", GetLegacyBudgetValue(nHeightTest - 1));
+    CheckBudgetValue(nHeightTest - 1, "testnet pre-pos", 0); // no treasury during PoW bootstrap
     CheckBudgetValue(nHeightTest, "testnet pos", expectedBudget);
     CheckBudgetValue(nHeightTest + 1, "testnet post-pos", expectedBudget);
 
     SelectParams(CBaseChainParams::MAIN);
     nHeightTest = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight;
-    CheckBudgetValue(nHeightTest - 1, "mainnet pre-pos", GetLegacyBudgetValue(nHeightTest - 1));
+    CheckBudgetValue(nHeightTest - 1, "mainnet pre-pos", 0); // no treasury during PoW bootstrap
     CheckBudgetValue(nHeightTest, "mainnet pos", expectedBudget);
     CheckBudgetValue(nHeightTest + 1, "mainnet post-pos", expectedBudget);
 
     SelectParams(CBaseChainParams::REGTEST);
     nHeightTest = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight;
-    CheckBudgetValue(nHeightTest - 1, "regtest pre-pos", GetLegacyBudgetValue(nHeightTest - 1));
+    CheckBudgetValue(nHeightTest - 1, "regtest pre-pos", 0); // no treasury during PoW bootstrap
     CheckBudgetValue(nHeightTest, "regtest pos", expectedBudget);
     CheckBudgetValue(nHeightTest + 1, "regtest post-pos", expectedBudget);
 }
@@ -108,6 +98,13 @@ BOOST_AUTO_TEST_CASE(governance_cycle_realtime_equivalence)
 BOOST_FIXTURE_TEST_CASE(block_value, TestnetSetup)
 {
     enableMnSyncAndSuperblocksPayment();
+    // Pin the deterministic-masternode activation above the heights tested
+    // here (with v6 at genesis, block-value checks would require the on-chain
+    // DMN list) and PoS below them (so the superblock math uses the fixed
+    // cycle budget).
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, 1000);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, 50);
+
     int nHeight = 100; std::string strError;
     const CAmount nBlockReward = GetBlockValue(nHeight);
     CAmount nExpectedRet = nBlockReward;
@@ -196,6 +193,13 @@ BOOST_FIXTURE_TEST_CASE(block_value_exact_mint_after_v6_1_mainnet, TestingSetup)
 {
     enableMnSyncAndSuperblocksPayment();
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    // Pin the deterministic-masternode activation above the heights tested
+    // here (with v6 at genesis, block-value checks would require the on-chain
+    // DMN list) and PoS below them (so the superblock math uses the fixed
+    // cycle budget).
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, 1000);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, 50);
+
 
     const int nHeight = 100;
     CAmount nExpectedRet = GetBlockValue(nHeight);
@@ -237,6 +241,13 @@ BOOST_FIXTURE_TEST_CASE(block_value_allows_undermint_on_testnet_after_v6_1, Test
 {
     enableMnSyncAndSuperblocksPayment();
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    // Pin the deterministic-masternode activation above the heights tested
+    // here (with v6 at genesis, block-value checks would require the on-chain
+    // DMN list) and PoS below them (so the superblock math uses the fixed
+    // cycle budget).
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, 1000);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, 50);
+
 
     const int nHeight = 100;
     CAmount nExpectedRet = GetBlockValue(nHeight);
@@ -445,10 +456,11 @@ static CMutableTransaction NewCoinBase(int nHeight, CAmount cbaseAmt, const CScr
 
 BOOST_FIXTURE_TEST_CASE(IsCoinbaseValueValid_test, TestingSetup)
 {
-    // IsCoinbaseValueValid uses mnodeman.GetBestHeight() internally to determine MN payment.
-    // In test setup, the best height is 0 (PoW phase), where MN payment is 0.
-    // Use actual best height to get the MN payment that IsCoinbaseValueValid will expect.
-    const int nBestHeight = mnodeman.GetBestHeight();
+    // IsCoinbaseValueValid determines the MN payment from the height of the
+    // block built on top of pindexPrev (the chain tip, passed below).
+    // In test setup, the chain tip is genesis (height 0), where MN payment is 0.
+    // Use the tip height + 1 to match the value IsCoinbaseValueValid will expect.
+    const int nBestHeight = WITH_LOCK(cs_main, return chainActive.Height() + 1;);
     const CAmount mnAmt = GetMasternodePayment(nBestHeight);
     const CScript& cbaseScript = GetRandomP2PKH();
     CValidationState state;
@@ -572,27 +584,44 @@ BOOST_FIXTURE_TEST_CASE(IsCoinbaseValueValid_test, TestingSetup)
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-superblock-cb-amt");
 }
 
-BOOST_FIXTURE_TEST_CASE(coinbase_value_deferred_when_tiertwo_unsynced, TestingSetup)
+// On regtest the masternode payment is nonzero from height 1, so the
+// coinbase checks below are meaningful (on mainnet params PoS is not yet
+// active at height 1 and GetMasternodePayment returns 0).
+BOOST_FIXTURE_TEST_CASE(coinbase_value_deferred_when_tiertwo_unsynced, RegTestingSetup)
 {
     g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_INITIAL);
 
     const CScript& cbaseScript = GetRandomP2PKH();
     const CAmount mnAmt = GetMasternodePayment(chainActive.Tip()->nHeight + 1);
+    BOOST_CHECK(mnAmt > 0);   // sanity: the checks below rely on a nonzero MN payment
     CMutableTransaction cbase = NewCoinBase(1, mnAmt, cbaseScript);
     CValidationState state;
 
+    // Unsynced: the expected total payment is accepted (deferred check).
     BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
 
+    // Unsynced with no payee determinable: an empty coinbase is valid too
+    // (post-v6 no-payee blocks are allowed so the chain can advance).
     cbase.vout[0].nValue = 0;
+    state = CValidationState();
+    BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
+
+    // Unsynced with a wrong partial payment: rejected.
+    cbase.vout[0].nValue = mnAmt / 2;
     state = CValidationState();
     BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt");
 
+    // Synced, no masternodes registered: the coinbase must be empty.
     cbase.vout[0].nValue = mnAmt;
     g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_FINISHED);
     state = CValidationState();
     BOOST_CHECK(!IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
     BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cb-amt");
+
+    cbase.vout[0].nValue = 0;
+    state = CValidationState();
+    BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
 }
 
 BOOST_AUTO_TEST_CASE(fbv_signverify_bls)
