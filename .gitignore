@@ -251,3 +251,11 @@ to_backport.txt
 build-arm64/
 build-x86_64/
 tools/quark_miner
+
+# built binaries — never commit
+CTEAM-macos-universal-qt/
+CTEAM-macos-universal-daemon/
+*.dmg
+build-arm64/
+build-x86_64/
+build-logs/
