@@ -870,7 +870,12 @@ CDeterministicMNList CDeterministicMNManager::GetListForBlock(const CBlockIndex*
         if (!evoDb.Read(std::make_pair(DB_LIST_DIFF, pindex->GetBlockHash()), diff)) {
             // no snapshot and no diff on disk means that it's initial snapshot (empty list)
             // If we get here, then this must be the block before the enforcement of DIP3.
-            if (!IsActivationHeight(pindex->nHeight + 1, Params().GetConsensus(), Consensus::UPGRADE_V6_0)) {
+            // Special case: if V6_0 (DIP3) is active from genesis (activation height 0),
+            // there is no block before the enforcement, so the genesis block itself is
+            // the anchor for the initial (empty) list.
+            bool fIsActivationAnchor = IsActivationHeight(pindex->nHeight + 1, Params().GetConsensus(), Consensus::UPGRADE_V6_0);
+            bool fIsGenesisAnchor = pindex->pprev == nullptr && IsActivationHeight(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_V6_0);
+            if (!fIsActivationAnchor && !fIsGenesisAnchor) {
                 std::string err = strprintf("No masternode list data found for block %s at height %d. "
                                             "Possible corrupt database.", pindex->GetBlockHash().ToString(), pindex->nHeight);
                 throw std::runtime_error(err);

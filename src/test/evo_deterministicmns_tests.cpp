@@ -1423,4 +1423,26 @@ BOOST_FIXTURE_TEST_CASE(dkg_pose_and_qfc_invalid_paths, TestChain400Setup)
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
+BOOST_AUTO_TEST_CASE(dmn_getlistforblock_genesis_anchor)
+{
+    // Mainnet and testnet activate V6_0 (DIP3) at genesis (activation height 0),
+    // so there is no block "before the enforcement" to anchor the initial empty
+    // masternode list. With an empty evo DB, GetListForBlock() must anchor the
+    // empty list at the genesis block itself instead of throwing.
+    for (const std::string& chainName : {CBaseChainParams::MAIN, CBaseChainParams::TESTNET}) {
+        BasicTestingSetup setup(chainName);
+
+        CBlockIndex genesis;
+        genesis.nHeight = 0;
+        genesis.pprev = nullptr;
+        genesis.phashBlock = &Params().GetConsensus().hashGenesisBlock;
+
+        deterministicMNManager->SetTipIndex(&genesis);
+        CDeterministicMNList list;
+        BOOST_CHECK_NO_THROW(list = deterministicMNManager->GetListAtChainTip());
+        BOOST_CHECK_EQUAL(list.GetAllMNsCount(), 0u);
+        BOOST_CHECK_EQUAL(list.GetHeight(), -1);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
