@@ -2,63 +2,63 @@
 HH       CONTAINER
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
-/* OrganicLife dark brown candidate palette sampled from ic-coin-cteam.png: espresso #0d1008, cocoa surface #2a3319, roasted border #3b4426, copper primary #4f7a2e, caramel accent #8fb35f. */
+/* OrganicLife forest palette sampled from Organic-Life-Icon.png: espresso green #0c0f07, forest surface #233319, moss border #31401f, deep green primary #3d6121, sage accent #85a653, navy highlight #3B5E8C. */
 /* Previous dark palette kept for comparison: aubergine #100B1E, violet surface #2B1F46, violet border #3A2C52, primary #c4552a, dark accent #A78BFA. */
 
 *[cssClass="container"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #0d1008,
-        stop: 1 #141a0d);
+        stop: 0 #0c0f07,
+        stop: 1 #182013);
 }
 
 *[cssClass="container-border"] {
-    background-color:#0d1008;
-    border:  1px solid #0d1008;
+    background-color:#0c0f07;
+    border:  1px solid #0c0f07;
 }
 
 *[cssClass="container-border-light"] {
-    background-color:#0d1008;
-    border:  1px solid #33C08445;
+    background-color:#0c0f07;
+    border:  1px solid #3B5E8C45;
     border-radius:2px;
 }
 
 *[cssClass="container_right"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #0d1008,
-        stop: 1 #141a0d);
-    border-left:  1px solid #33C08445;
+        stop: 0 #0c0f07,
+        stop: 1 #182013);
+    border-left:  1px solid #3B5E8C45;
 }
 
 *[cssClass="container-right"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #0d1008,
-        stop: 1 #141a0d);
-    border-left:  1px solid #33C08445;
+        stop: 0 #0c0f07,
+        stop: 1 #182013);
+    border-left:  1px solid #3B5E8C45;
 }
 
 *[cssClass="container-square"] {
-    background-color:#0d1008;
-    border:  1px solid #33C08445;
+    background-color:#0c0f07;
+    border:  1px solid #3B5E8C45;
 }
 
 *[cssClass="container-options"] {
-    background-color:#0d1008;
-    border-bottom: 1px solid #3b4426;
+    background-color:#0c0f07;
+    border-bottom: 1px solid #31401f;
     border-radius: 8px;
 }
 
 *[cssClass="container-divider"] {
-    background-color:#33C08445;
+    background-color:#3B5E8C45;
 }
 
 *[cssClass="container-purple"] {
-    background-color:#4f7a2e;
+    background-color:#3d6121;
     border:  0;
 }
 
 *[cssClass="container-border-purple"] {
-    background-color:#0d1008;
-    border:  1px solid #4f7a2e;
+    background-color:#0c0f07;
+    border:  1px solid #3d6121;
     border-radius:2px;
 }
 
@@ -127,7 +127,7 @@ QPushButton[cssClass="btn-check-cold-staking"] {
 QPushButton[cssClass="btn-check-cold-staking-inactive"] {
     qproperty-icon: url("://ic-check-cold-staking-off");
     qproperty-iconSize: 28px 28px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     background-color:rgba(143, 179, 95, 0.18);
     border:none;
     border-radius:10px;
@@ -147,7 +147,7 @@ QPushButton[cssClass="btn-check-cold-staking-checked"] {
 QPushButton[cssClass="btn-check-cold-staking-unchecked"] {
     qproperty-icon: url("://ic-check-cold-staking-enabled");
     qproperty-iconSize: 28px 28px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     background-color:rgba(143, 179, 95, 0.18);
     border:none;
     border-radius:10px;
@@ -244,32 +244,32 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 *[cssClass="container-top"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
         stop: 0 rgba(42, 51, 25, 26),
-        stop: 0.2 #0d1008,
-        stop: 0.8 #0d1008,
+        stop: 0.2 #0c0f07,
+        stop: 0.8 #0c0f07,
         stop: 1 rgba(143, 179, 95, 32));
-    border-bottom: 2px solid #4f7a2e;
+    border-bottom: 2px solid #3d6121;
 }
 
 *[cssClass="container-top-home"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
         stop: 0 rgba(42, 51, 25, 26),
-        stop: 0.2 #0d1008,
-        stop: 0.8 #0d1008,
+        stop: 0.2 #0c0f07,
+        stop: 0.8 #0c0f07,
         stop: 1 rgba(143, 179, 95, 32));
-    border-bottom: 2px solid #4f7a2e;
+    border-bottom: 2px solid #3d6121;
     border-top-left-radius: 16px;
 }
 
 *[cssClass="container-topbar-no-image"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
         stop: 0 rgba(42, 51, 25, 26),
-        stop: 0.2 #0d1008,
-        stop: 0.8 #0d1008,
+        stop: 0.2 #0c0f07,
+        stop: 0.8 #0c0f07,
         stop: 1 rgba(143, 179, 95, 32));
 }
 
 *[cssClass="text-title-topbar"] {
-    color:#a9b38d;
+    color:#a8b18a;
     font-size:16px;
     font-weight: ligther;
 }
@@ -317,9 +317,9 @@ QPushButton[cssClass="btn-info"]:hover {
 }
 
 *[cssClass="sync-status"] {
-    background-color:#33332016;
+    background-color:#34362316;
     color:#FFFFFF;
-    border-bottom:2px solid #8fb35f;
+    border-bottom:2px solid #85a653;
     padding-right:10px;
     border-radius:2px;
 }
@@ -327,13 +327,13 @@ QPushButton[cssClass="btn-info"]:hover {
 /** btn HD Upgrade */
 
 QPushButton[cssClass="btn-check-hd-upgrade"] {
-    background-color:#33332016;
+    background-color:#34362316;
     color:#FFFFFF;
     font-weight: bold;
     font-size: 15px;
     padding-right:6px;
     padding-left:6px;
-    border-bottom:2px solid #8fb35f;
+    border-bottom:2px solid #85a653;
     border-radius:2px;
 }
 
@@ -342,8 +342,8 @@ QPushButton[cssClass="btn-check-hd-upgrade"]:hover {
 }
 
 QPushButton[cssClass="btn-check-hd-upgrade"]:checked {
-    background-color:#33332016;
-    border-bottom:2px solid #8fb35f;
+    background-color:#34362316;
+    border-bottom:2px solid #85a653;
     border-radius:2px;
 }
 
@@ -441,7 +441,7 @@ QPushButton[cssClass="btn-check-mint-inactive"] {
     qproperty-icon: url("://ic-check-mint-off") ;
     qproperty-iconSize: 28px 28px;
     background-color:rgba(143, 179, 95, 0.18);
-    color:#c2c7ae;
+    color:#bdc5a9;
     border:none;
     border-radius:10px;
     padding: 6px 10px;
@@ -467,7 +467,7 @@ QPushButton[cssClass="btn-check-stack"] {
 QPushButton[cssClass="btn-check-stack-inactive"] {
     qproperty-icon: url("://ic-check-staking-off");
     qproperty-iconSize: 28px 28px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     background-color:rgba(143, 179, 95, 0.18);
     border:none;
     border-radius:10px;
@@ -494,7 +494,7 @@ QPushButton[cssClass="btn-check-connect"] {
 QPushButton[cssClass="btn-check-connect-inactive"] {
     qproperty-icon: url("://ic-check-connect-off");
     qproperty-iconSize: 28px 28px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     background-color:rgba(143, 179, 95, 0.18);
     border:none;
     border-radius:10px;
@@ -522,7 +522,7 @@ QPushButton[cssClass="btn-check-tor"] {
 QPushButton[cssClass="btn-check-tor-inactive"] {
     qproperty-icon: url("://ic-check-tor-off");
     qproperty-iconSize: 28px 28px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     background-color:rgba(143, 179, 95, 0.18);
     border:none;
     border-radius:10px;
@@ -553,7 +553,7 @@ QPushButton[cssClass="btn-check-status-unlock"] {
     qproperty-icon: url("://ic-wallet-status-unlocked") off,
     url("://ic-wallet-status-unlocked") on ;
     qproperty-iconSize: 28px 28px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     border-radius:10px;
     padding: 6px 10px;
 }
@@ -572,29 +572,29 @@ QPushButton[cssClass="btn-check-status-staking"] {
 
 
 QPushButton[cssClass="btn-check-text"] {
-    color:#a9b38d;
-    background-color:#141a0d;
+    color:#a8b18a;
+    background-color:#182013;
     font-size:18px;
-    border-bottom:2px solid #4f7a2e;
+    border-bottom:2px solid #3d6121;
 }
 
 QPushButton[cssClass="btn-check-text"]:checked {
     color:#FFFFFF;
-    background-color:#4f7a2e;
-    border-bottom:2px solid #8fb35f;
+    background-color:#3d6121;
+    border-bottom:2px solid #85a653;
 }
 
 QPushButton[cssClass="btn-check-text-theme"] {
     color:#FFFFFF;
     background-color:#1A332016;
     font-size:18px;
-    border-bottom:2px solid #8fb35f;
+    border-bottom:2px solid #85a653;
 }
 
 QPushButton[cssClass="btn-check-text-theme"]:checked {
     color:#FFFFFF;
-    background-color:#33332016;
-    border-bottom:2px solid #8fb35f;
+    background-color:#34362316;
+    border-bottom:2px solid #85a653;
 }
 
 QPushButton[cssClass="btn-check-theme"] {
@@ -621,8 +621,8 @@ QPushButton[cssClass="btn-check-theme-dark"] {
 }
 
 QPushButton[cssClass="btn-check-theme-light"] {
-    background-color:#33332016;
-    border:2px solid #8fb35f;
+    background-color:#34362316;
+    border:2px solid #85a653;
     qproperty-icon: url("://ic-check-theme-light") off,
     url("://ic-check-theme-light") on ;
     qproperty-iconSize: 28px 28px;
@@ -632,29 +632,29 @@ QPushButton[cssClass="btn-check-theme-light"] {
 }
 
 QPushButton[cssClass="btn-check-theme"]:checked {
-    background-color:#33332016;
-    border-bottom:2px solid #8fb35f;
+    background-color:#34362316;
+    border-bottom:2px solid #85a653;
 }
 
 QPushButton[cssClass="btn-check-peers"] {
     qproperty-icon: url("://ic-check-peers") ;
     qproperty-iconSize: 28px 28px;
     color:#FFFFFF;
-    background-color:#33332016;
-    border-bottom:2px solid #8fb35f;
+    background-color:#34362316;
+    border-bottom:2px solid #85a653;
     border-radius:2px;
 }
 
 QPushButton[cssClass="btn-check-peers"]:checked {
-    background-color:#33332016;
+    background-color:#34362316;
     color:#FFFFFF;
-    border-bottom:2px solid #8fb35f;
+    border-bottom:2px solid #85a653;
 }
 
 QPushButton[cssClass="btn-check-peers-inactive"] {
     qproperty-icon: url("://ic-check-peers-off");
     qproperty-iconSize: 28px 28px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     background-color:#1A332016;
     border-bottom:2px solid #f05050;
     border-radius:2px;
@@ -669,13 +669,13 @@ QPushButton[cssClass="btn-check-lock-sub-menu-unlocked"] {
     background-color: transparent;
     text-align: left;
     padding-left: 30px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     border-bottom:0px;
     border-radius:0px;
 }
 
 QPushButton[cssClass="btn-check-lock-sub-menu-unlocked"]:checked {
-    background-color:#50C08445;
+    background-color:#4A6FA545;
 }
 
 QPushButton[cssClass="btn-check-lock-sub-menu-unlocked"]:hover {
@@ -689,13 +689,13 @@ QPushButton[cssClass="btn-check-lock-sub-menu-locked"] {
     background-color: transparent;
     text-align: left;
     padding-left: 30px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     border-bottom:0px;
     border-radius:0px;
 }
 
 QPushButton[cssClass="btn-check-lock-sub-menu-locked"]:checked {
-    background-color:#50C08445;
+    background-color:#4A6FA545;
 }
 
 QPushButton[cssClass="btn-check-lock-sub-menu-locked"]:hover {
@@ -710,13 +710,13 @@ QPushButton[cssClass="btn-check-lock-sub-menu-staking"] {
     background-color: transparent;
     text-align: left;
     padding-left: 30px;
-    color:#c2c7ae;
+    color:#bdc5a9;
     border-bottom:0px;
     border-radius:0px;
 }
 
 QPushButton[cssClass="btn-check-lock-sub-menu-staking"]:checked {
-    background-color:#50C08445;
+    background-color:#4A6FA545;
 }
 
 QPushButton[cssClass="btn-check-lock-sub-menu-staking"]:hover {
@@ -725,12 +725,12 @@ QPushButton[cssClass="btn-check-lock-sub-menu-staking"]:hover {
 
 
 *[cssClass="top-sub-menu"] {
-    background-color:#1c2210;
+    background-color:#1d2612;
 }
 
 
 *[cssClass="top-sub-menu-text"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
 }
 
 QProgressBar[cssClass="progress-sync"] {
@@ -743,9 +743,9 @@ QProgressBar[cssClass="progress-sync"]::chunk:horizontal {
     y1: 0.5,
     x2: 1,
     y2: 0.5,
-    stop: 0 #8fb35f,
+    stop: 0 #85a653,
     stop: 0.5 #f05050,
-    stop: 1 #8fb35f);
+    stop: 1 #85a653);
 }
 
 
@@ -755,27 +755,27 @@ HH       LISTS ELEMENTS
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="text-list-title-purple"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:20px;
 }
 
 *[cssClass="text-list-title1"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:16px;
 }
 
 *[cssClass="text-list-contact-title1"] {
-    color:#4f7a2e;
+    color:#3d6121;
     font-size:16px;
 }
 
 *[cssClass="text-list-title1"] {
-    color:#4f7a2e;
+    color:#3d6121;
     font-size:16px;
 }
 
 *[cssClass="text-list-body1-purple"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:14px;
 }
 
@@ -785,7 +785,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="text-list-body-unconfirmed"] {
-    color:#c6c8b8;
+    color:#c1c5b1;
     font-size:16px;
 }
 
@@ -811,22 +811,22 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="text-list-caption"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:12px;
 }
 
 *[cssClass="text-list-caption-medium"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:14px;
 }
 
 *[cssClass="text-list-caption-medium-green"] {
-    color:#4f7a2e;
+    color:#3d6121;
     font-size:14px;
 }
 
 *[cssClass="text-list-caption-unconfirmed"] {
-    color:#c6c8b8;
+    color:#c1c5b1;
 }
 
 *[cssClass="text-list-caption-grey"] {
@@ -836,7 +836,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 
 *[cssClass="text-list-amount-receive"] {
-    color:#4f7a2e;
+    color:#3d6121;
     font-size:16px;
 }
 
@@ -852,7 +852,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="text-list-amount-unconfirmed"] {
-    color:#c6c8b8;
+    color:#c1c5b1;
     font-size:16px;
 }
 
@@ -862,22 +862,22 @@ HH       TEXT
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="text-title-screen"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:22px;
 }
 
 *[cssClass="text-title-dialog"] {
-    color:#4f7a2e;
+    color:#3d6121;
     font-size:22px;
 }
 
 *[cssClass="text-title"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:16px;
 }
 
 *[cssClass="text-title-right"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:14px;
 }
 
@@ -897,7 +897,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="btn-title-purple"] {
-    color:#4f7a2e;
+    color:#3d6121;
     font-size:22px;
 }
 
@@ -907,12 +907,12 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="text-subtitle"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:14px;
 }
 
 *[cssClass="text-body2-grey"] {
-    color:#87906f;
+    color:#8c9578;
     font-size:14px;
 }
 
@@ -928,7 +928,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="text-main-light"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:17px;
 }
 
@@ -948,12 +948,12 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="text-main-purple"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:17px;
 }
 
 *[cssClass="text-title-purple"] {
-    color:#4f7a2e;
+    color:#3d6121;
     font-size:22px;
 }
 
@@ -978,7 +978,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 QGroupBox::title {
-    color:#8fb35f;
+    color:#85a653;
     font-size:16px;
     padding-bottom:9px;
 }
@@ -1014,82 +1014,82 @@ QPushButton[cssClass="btn-switch"] {
     background-image: url("://ic-switch-off");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:18px;
     text-align:left;
-    color: #3b4426;
+    color: #31401f;
 }
 
 QPushButton[cssClass="btn-switch"]:checked {
     background-image: url("://ic-switch-liliac-on");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     text-align:left;
     font-size:18px;
-    color: #8fb35f;
+    color: #85a653;
 }
 
 QPushButton[cssClass="btn-check"] {
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     padding:4px;
     font-size:18px;
-    color: #87906f;
+    color: #8c9578;
     border-radius: 2px;
 }
 
 QPushButton[cssClass="btn-check"]:hover {
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding:4px;
-    color: #87906f;
+    color: #8c9578;
     border-radius: 2px;
 }
 
 QPushButton[cssClass="btn-check"]:pressed {
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding:4px;
-    color: #87906f;
+    color: #8c9578;
     border-radius: 2px;
 }
 
 
 QPushButton[cssClass="btn-check-right"] {
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
-    color: #87906f;
+    color: #8c9578;
     border-top-right-radius:8px;
     border-bottom-right-radius:8px;
 }
 
 
 QPushButton[cssClass="btn-check-right"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
     font-size:18px;
-    color: #87906f;
+    color: #8c9578;
     border-top-right-radius:8px;
     border-bottom-right-radius:8px;
 }
 
 QPushButton[cssClass="btn-check-right"]:pressed {
-    border:  1px solid #4f7a2e;
-    background-color:#4DC08445;
+    border:  1px solid #3d6121;
+    background-color:#4A6FA545;
     font-size:18px;
-    color: #87906f;
+    color: #8c9578;
     border-top-right-radius:8px;
     border-bottom-right-radius:8px;
 }
 
 
 QPushButton[cssClass="btn-check-right"]:checked {
-    border:  1px solid #4f7a2e;
-    background-color:#4f7a2e;
+    border:  1px solid #3d6121;
+    background-color:#3d6121;
     font-size:18px;
     color: #FFFFFF;
     border-top-right-radius:8px;
@@ -1097,8 +1097,8 @@ QPushButton[cssClass="btn-check-right"]:checked {
 }
 
 QPushButton[cssClass="btn-check-right"]:checked:hover {
-    border:  1px solid #5f7a3a;
-    background-color:#5f7a3a;
+    border:  1px solid #50682f;
+    background-color:#50682f;
     font-size:18px;
     padding:4px;
     color: #FFFFFF;
@@ -1107,48 +1107,48 @@ QPushButton[cssClass="btn-check-right"]:checked:hover {
 }
 
 QPushButton[cssClass="btn-check-right"]:checked:pressed {
-    border:  1px solid #1a200d;
-    background-color:#1a200d;
+    border:  1px solid #182010;
+    background-color:#182010;
     font-size:18px;
     padding:4px;
-    color: #8fb35f;
+    color: #85a653;
     border-top-right-radius:8px;
     border-bottom-right-radius:8px;
 }
 
 
 QPushButton[cssClass="btn-check-left"] {
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
-    color: #87906f;
+    color: #8c9578;
     border-top-left-radius:8px;
     border-bottom-left-radius:8px;
 }
 
 
 QPushButton[cssClass="btn-check-left"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
     font-size:18px;
-    color: #87906f;
+    color: #8c9578;
     border-top-left-radius:8px;
     border-bottom-left-radius:8px;
 }
 
 QPushButton[cssClass="btn-check-left"]:pressed {
-    border:  1px solid #4f7a2e;
-    background-color:#4DC08445;
+    border:  1px solid #3d6121;
+    background-color:#4A6FA545;
     font-size:18px;
-    color: #87906f;
+    color: #8c9578;
     border-top-left-radius:8px;
     border-bottom-left-radius:8px;
 }
 
 
 QPushButton[cssClass="btn-check-left"]:checked {
-    border:  1px solid #4f7a2e;
-    background-color:#4f7a2e;
+    border:  1px solid #3d6121;
+    background-color:#3d6121;
     font-size:18px;
     color: #FFFFFF;
     border-top-left-radius:8px;
@@ -1156,8 +1156,8 @@ QPushButton[cssClass="btn-check-left"]:checked {
 }
 
 QPushButton[cssClass="btn-check-left"]:checked:hover {
-    border:  1px solid #5f7a3a;
-    background-color:#5f7a3a;
+    border:  1px solid #50682f;
+    background-color:#50682f;
     font-size:18px;
     padding:4px;
     color: #FFFFFF;
@@ -1166,19 +1166,19 @@ QPushButton[cssClass="btn-check-left"]:checked:hover {
 }
 
 QPushButton[cssClass="btn-check-left"]:checked:pressed {
-    border:  1px solid #0d1008;
-    background-color:#0d1008;
+    border:  1px solid #0c0f07;
+    background-color:#0c0f07;
     font-size:18px;
     padding:4px;
-    color: #8fb35f;
+    color: #85a653;
     border-top-left-radius:8px;
     border-bottom-left-radius:8px;
 }
 
 
 QPushButton[cssClass="btn-check"]:checked {
-    border:  1px solid #4f7a2e;
-    background-color:#4f7a2e;
+    border:  1px solid #3d6121;
+    background-color:#3d6121;
     padding:4px;
     font-size:18px;
     color: #FFFFFF;
@@ -1187,8 +1187,8 @@ QPushButton[cssClass="btn-check"]:checked {
 
 
 QPushButton[cssClass="btn-check"]:checked:hover {
-    border:  1px solid #4f7a2e;
-    background-color:#4f7a2e;
+    border:  1px solid #3d6121;
+    background-color:#3d6121;
     font-size:18px;
     padding:4px;
     color: #FFFFFF;
@@ -1196,8 +1196,8 @@ QPushButton[cssClass="btn-check"]:checked:hover {
 }
 
 QPushButton[cssClass="btn-check"]:checked:pressed {
-    border:  1px solid #141a0d;
-    background-color:#4f7a2e;
+    border:  1px solid #182013;
+    background-color:#3d6121;
     font-size:18px;
     padding:4px 10px;
     color: #FFFFFF;
@@ -1205,18 +1205,18 @@ QPushButton[cssClass="btn-check"]:checked:pressed {
 }
 
 QPushButton[cssClass="btn-check"]:unchecked {
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding:4px;
-    color: #87906f;
+    color: #8c9578;
     border-radius: 2px;
 }
 
 
 QPushButton[cssClass="btn-primary"] {
-    border:  1px solid #4f7a2e;
-    background-color:#4f7a2e;
+    border:  1px solid #3d6121;
+    background-color:#3d6121;
     font-size:18px;
     padding:8px 20px;
     color: #FFFFFF;
@@ -1225,8 +1225,8 @@ QPushButton[cssClass="btn-primary"] {
 
 
 QPushButton[cssClass="btn-primary"]:hover {
-    border:  1px solid #4f7a2e;
-    background-color:#4f7a2e;
+    border:  1px solid #3d6121;
+    background-color:#3d6121;
     font-size:18px;
     padding:8px 20px;
     color: #FFFFFF;
@@ -1244,36 +1244,36 @@ QPushButton[cssClass="btn-primary"]:pressed {
 
 
 QPushButton[cssClass="btn-secundary"] {
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding:4px 10px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 8px;
 }
 
 QPushButton[cssClass="btn-secundary"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
     font-size:18px;
     padding:4px 10px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 8px;
 }
 
 QPushButton[cssClass="btn-secundary"]:pressed {
-    border:  1px solid #8fb35f;
-    background-color:#4DC08445;
+    border:  1px solid #85a653;
+    background-color:#4A6FA545;
     font-size:18px;
     padding:4px 10px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 8px;
 }
 
 
 QPushButton[cssClass="btn-edit-primary"] {
-    border:  1px solid #3b4426;
-    background-color:#0d1008;
+    border:  1px solid #31401f;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -1282,11 +1282,11 @@ QPushButton[cssClass="btn-edit-primary"] {
 }
 
 QPushButton[cssClass="btn-edit-primary-folder"] {
-    border:  1px solid #3b4426;
+    border:  1px solid #31401f;
     background-image: url("://ic-folder");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -1295,11 +1295,11 @@ QPushButton[cssClass="btn-edit-primary-folder"] {
 }
 
 *[cssClass="edit-primary-book"] {
-    border:  1px solid #3b4426;
+    border:  1px solid #31401f;
     background-image: url("://ic-address-book-white");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:16px;
     border-radius: 2px;
     padding:8px;
@@ -1310,11 +1310,11 @@ QPushButton[cssClass="btn-edit-primary-folder"] {
 
 
 QLineEdit[cssClass="edit-primary-book"]:focus {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QLineEdit[cssClass="edit-primary-book"]:focus:hover  {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QLineEdit[cssClass="edit-primary-book"]:hover {
@@ -1326,7 +1326,7 @@ QLineEdit[cssClass="edit-primary-book"]:hover {
     background-image: url("://ic-address_book_grey");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:16px;
     border-radius: 2px;
     padding:8px;
@@ -1336,11 +1336,11 @@ QLineEdit[cssClass="edit-primary-book"]:hover {
 }
 
 *[cssClass="edit-primary-multi-book"] {
-    border:  1px solid #3b4426;
+    border:  1px solid #31401f;
     background-image: url("://ic-address-send-white");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -1351,11 +1351,11 @@ QLineEdit[cssClass="edit-primary-book"]:hover {
 }
 
 QLineEdit[cssClass="edit-primary-multi-book"]:focus {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QLineEdit[cssClass="edit-primary-multi-book"]:focus:hover {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QLineEdit[cssClass="edit-primary-multi-book"]:hover {
@@ -1367,7 +1367,7 @@ QLineEdit[cssClass="edit-primary-multi-book"]:hover {
     background-image: url("://ic-address-send-white");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:17px;
     border-radius: 2px;
     padding:8px;
@@ -1379,11 +1379,11 @@ QLineEdit[cssClass="edit-primary-multi-book"]:hover {
 
 
 *[cssClass="edit-primary-book-send"] {
-    border:  1px solid #3b4426;
+    border:  1px solid #31401f;
     background-image: url("://ic-address-send-white");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -1394,11 +1394,11 @@ QLineEdit[cssClass="edit-primary-multi-book"]:hover {
 }
 
 QLineEdit[cssClass="edit-primary-book-send"]:focus {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QLineEdit[cssClass="edit-primary-book-send"]:focus:hover  {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QLineEdit[cssClass="edit-primary-book-send"]:hover {
@@ -1410,7 +1410,7 @@ QLineEdit[cssClass="edit-primary-book-send"]:hover {
     background-image: url("://ic-address-send-white");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -1424,101 +1424,101 @@ QPushButton[cssClass="btn-secundary-clear"] {
     qproperty-icon: url("://ic-clear-liliac") off,
     url("://ic-clear-liliac") on ;
     qproperty-iconSize: 30px 22px;
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding-top:4px;
     padding-left:0px;
     padding-bottom:4px;
     padding-right:6px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 8px;
 }
 
 QPushButton[cssClass="btn-secundary-clear"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
 }
 
 QPushButton[cssClass="btn-secundary-clear"]:pressed {
-    border:  1px solid #8fb35f;
-    background-color:#4DC08445;
+    border:  1px solid #85a653;
+    background-color:#4A6FA545;
 }
 
 QPushButton[cssClass="btn-secundary-new-address"] {
     qproperty-icon: url("://ic-update-liliac") off,
     url("://ic-update-liliac") on ;
     qproperty-iconSize: 30px 30px;
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding-top:4px;
     padding-left:6px;
     padding-bottom:4px;
     padding-right:6px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 8px;
 }
 
 QPushButton[cssClass="btn-secundary-new-address"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
 }
 
 QPushButton[cssClass="btn-secundary-new-address"]:pressed {
-    border:  1px solid #8fb35f;
-    background-color:#4DC08445;
+    border:  1px solid #85a653;
+    background-color:#4A6FA545;
 }
 
 QPushButton[cssClass="btn-secundary-label"] {
     qproperty-icon: url("://ic-label-liliac") off,
     url("://ic-label-liliac") on ;
     qproperty-iconSize: 30px 30px;
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding-top:4px;
     padding-left:6px;
     padding-bottom:4px;
     padding-right:6px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 8px;
 }
 
 QPushButton[cssClass="btn-secundary-label"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
 }
 
 QPushButton[cssClass="btn-secundary-label"]:pressed {
-    border:  1px solid #8fb35f;
-    background-color:#4DC08445;
+    border:  1px solid #85a653;
+    background-color:#4A6FA545;
 }
 
 QPushButton[cssClass="btn-secundary-copy"] {
         qproperty-icon: url("://ic-copy-liliac") off,
     url("://ic-copy-liliac") on ;
     qproperty-iconSize: 30px 30px;
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding-top:4px;
     padding-left:6px;
     padding-bottom:4px;
     padding-right:6px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 8px;
 }
 
 
 QPushButton[cssClass="btn-secundary-copy"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
 }
 
 QPushButton[cssClass="btn-secundary-copy"]:pressed {
-    border:  1px solid #8fb35f;
-    background-color:#4DC08445;
+    border:  1px solid #85a653;
+    background-color:#4A6FA545;
 }
 
 
@@ -1526,72 +1526,72 @@ QPushButton[cssClass="btn-secundary-add"] {
     background-image: url("://ic-add-liliac");
     background-position:right center;
     background-repeat:no-repeat;
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding-top:4px;
     padding-left:6px;
     padding-bottom:4px;
     padding-right:30px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 8px;
 }
 
 
 QPushButton[cssClass="btn-secundary-add"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
 }
 
 QPushButton[cssClass="btn-secundary-add"]:pressed {
-    border:  1px solid #8fb35f;
-    background-color:#4DC08445;
+    border:  1px solid #85a653;
+    background-color:#4A6FA545;
 }
 
 QPushButton[cssClass="btn-secondary-update"] {
     background-image: url("://ic-chevron-right-liliac");
     background-position:right center;
     background-repeat:no-repeat;
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     font-size:18px;
     padding-top:4px;
     padding-left:6px;
     padding-bottom:4px;
     padding-right:30px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 8px;
 }
 
 
 QPushButton[cssClass="btn-secondary-update"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
 }
 
 QPushButton[cssClass="btn-secondary-update"]:pressed {
-    border:  1px solid #8fb35f;
-    background-color:#4DC08445;
+    border:  1px solid #85a653;
+    background-color:#4A6FA545;
 }
 
 
 QPushButton[cssClass="btn-text-primary"] {
     border: 0;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:18px;
     padding-top:4px;
     padding-left:4px;
     padding-bottom:4px;
     padding-right:4px;
-    color: #8fb35f;
+    color: #85a653;
 }
 
 QPushButton[cssClass="btn-text-primary"]:hover {
-    color: #4f7a2e;
+    color: #3d6121;
 }
 
 QPushButton[cssClass="btn-text-primary"]:pressed {
-    color: #8fb35f;
+    color: #85a653;
 }
 
 
@@ -1602,8 +1602,8 @@ HH       LINE EDIT
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="edit-primary"] {
-    border:  1px solid #3b4426;
-    background-color:#0d1008;
+    border:  1px solid #31401f;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -1611,11 +1611,11 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="edit-primary"]:focus {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 *[cssClass="edit-primary"]:focus:hover {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 *[cssClass="edit-primary"]:hover {
@@ -1623,8 +1623,8 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="edit-primary-disabled"] {
-    border:  1px solid #33C08445;
-    background-color:#0d1008;
+    border:  1px solid #3B5E8C45;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -1634,7 +1634,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="edit-primary-error"] {
     border:  1px solid #f05050;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -1643,16 +1643,16 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="edit-primary-no-border"] {
     border: 0px;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:15px;
-    color: #c2c7ae;
+    color: #bdc5a9;
 }
 
 QPushButton[cssClass="btn-expand"] {
     background-image: url("://ic-expand");
     background-position:center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
 }
 
 
@@ -1662,10 +1662,10 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="container-splash"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
-        stop: 0 #2a3319,
-        stop: 0.55 #0d1008,
-        stop: 1 #141a0d);
-    border: 1px solid #3b4426;
+        stop: 0 #233319,
+        stop: 0.55 #0c0f07,
+        stop: 1 #182013);
+    border: 1px solid #31401f;
     border-radius:16px;
 }
 
@@ -1677,7 +1677,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="bg-progress"] {
-    border-top:2px solid #8fb35f;
+    border-top:2px solid #85a653;
     border-top-left-radius: 0;
     border-top-right-radius: 0;
     border-bottom-right-radius: 4px;
@@ -1694,13 +1694,13 @@ QProgressBar[cssClass="progress-splash"]::chunk:horizontal {
 }
 
 *[cssClass="text-splash-message"] {
-    color:#efefdd;
+    color:#edefda;
     font-size:16px;
     padding-left:0px;
 }
 
 *[cssClass="text-splash-version"] {
-    color:#a9b38d;
+    color:#a8b18a;
     font-size:15px;
     padding-top:1px;
 }
@@ -1735,57 +1735,57 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="text-stake-piv"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:16px;
     padding:10px;
-    border-bottom: 5px solid #4f7a2e;
+    border-bottom: 5px solid #3d6121;
 }
 
 *[cssClass="text-stake-piv-disable"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:16px;
     padding:10px;
-    border-bottom: 5px solid #5d6b45;
+    border-bottom: 5px solid #56653d;
 }
 
 *[cssClass="text-stake-mn"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:16px;
     padding:10px;
-    border-bottom: 5px solid #87906f;
+    border-bottom: 5px solid #8c9578;
 }
 
 *[cssClass="text-stake-mn-disable"] {
-    color:#87906f;
+    color:#8c9578;
     font-size:16px;
     padding:10px;
     border-bottom: 5px solid #c4552a;
 }
 
 *[cssClass="legend-chart"] {
-    color:#ccd4ac;
+    color:#c7cfa0;
     font-size:16px;
 }
 
 *[cssClass="text-chart-mn"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:16px;
     padding-left:4px;
 }
 
 *[cssClass="text-chart-piv"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:16px;
     padding-left:4px;
 }
 
 *[cssClass="square-chart-mn"] {
-    background-color:#87906f;
+    background-color:#8c9578;
     border:none;
 }
 
 *[cssClass="square-chart-piv"] {
-    background-color:#4f7a2e;
+    background-color:#3d6121;
     border:none;
 }
 
@@ -1797,9 +1797,9 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="container-chart"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #0d1008,
-        stop: 1 #141a0d);
-    border: 1px solid #3b4426;
+        stop: 0 #0c0f07,
+        stop: 1 #182013);
+    border: 1px solid #31401f;
     border-radius: 8px;
 }
 
@@ -1812,11 +1812,11 @@ QPushButton[cssClass="btn-chart-arrow"] {
 }
 
 QPushButton[cssClass="btn-chart-arrow"]:hover {
-    background-color: #4f7a2e;
+    background-color: #3d6121;
 }
 
 QPushButton[cssClass="btn-chart-arrow"]:pressed {
-    background-color:#1a200d;
+    background-color:#182010;
 }
 
 QPushButton[cssClass="btn-chart-arrow-right"] {
@@ -1828,19 +1828,19 @@ QPushButton[cssClass="btn-chart-arrow-right"] {
 }
 
 QPushButton[cssClass="btn-chart-arrow-right"]:hover {
-    background-color: #4f7a2e;
+    background-color: #3d6121;
 }
 
 QPushButton[cssClass="btn-chart-arrow-right"]:pressed {
-    background-color:#1a200d;
+    background-color:#182010;
 }
 
 QComboBox[cssClass="btn-combo-secundary"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:6px 12px 6px 6px;
     font-size:16px;
-    border:1px solid #3b4426;
-    color: #87906f;
+    border:1px solid #31401f;
+    color: #8c9578;
     text-align: right;
     border-radius:2px;
 }
@@ -1852,12 +1852,12 @@ QComboBox[cssClass="btn-combo-secundary"]::down-arrow {
 }
 
 QComboBox[cssClass="btn-combo-chart"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:6px 12px 6px 6px;
     font-size:16px;
-    border:1px solid #5d6b45;
-    color: #ccd4ac;
-    selection-color:#ccd4ac;
+    border:1px solid #56653d;
+    color: #c7cfa0;
+    selection-color:#c7cfa0;
     text-align: right;
     border-radius:10px;
 }
@@ -1873,7 +1873,7 @@ QComboBox[cssClass="btn-combo-chart-selected"] {
     background-color:#c4552a;
     padding:6px 12px 6px 6px;
     font-size:16px;
-    border:1px solid #4f7a2e;
+    border:1px solid #3d6121;
     color: #FFFFFF;
     text-align: right;
     border-radius:10px;
@@ -1888,15 +1888,15 @@ QComboBox[cssClass="btn-combo-chart-selected"]::down-arrow {
 
 QComboBox[cssClass="btn-combo-chart-selected"]:on {
     padding:6px 12px 6px 6px;
-    background-color: #4f7a2e;
+    background-color: #3d6121;
 }
 
 QComboBox[cssClass="btn-combo-chart-selected"]:disabled {
-    background-color:#1c2210;
+    background-color:#1d2612;
     padding:6px 12px 6px 6px;
     font-size:16px;
-    border:1px solid #5d6b45;
-    color: #a9b38d;
+    border:1px solid #56653d;
+    color: #a8b18a;
     text-align: right;
     border-radius:10px;
 }
@@ -1910,18 +1910,18 @@ QComboBox::down-arrow {
 }
 
 QPushButton[cssClass="btn-check-time"] {
-    background-color:#141a0d;
+    background-color:#182013;
     font-size:14px;
     font-weight:600;
-    color:#e2e6d2;
+    color:#dde3ca;
     padding:6px 12px;
-    border:1px solid #5d6b45;
+    border:1px solid #56653d;
     border-radius:10px;
 }
 
 QPushButton[cssClass="btn-check-time"]:checked {
     background-color:#c4552a;
-    border:1px solid #4f7a2e;
+    border:1px solid #3d6121;
     border-radius:10px;
     font-size:14px;
     font-weight:600;
@@ -1930,17 +1930,17 @@ QPushButton[cssClass="btn-check-time"]:checked {
 }
 
 QPushButton[cssClass="btn-check-time"]:hover {
-    background-color:#1c2210;
+    background-color:#1d2612;
     border:1px solid #6B6563;
     border-radius:10px;
     font-size:14px;
     font-weight:600;
     padding:6px 12px;
-    color:#f6f4e8;
+    color:#f4f2e4;
 }
 
 QPushButton[cssClass="btn-check-time"]:pressed {
-    background-color:#2a3319;
+    background-color:#233319;
     border:1px solid #6B6563;
     border-radius:10px;
     font-size:14px;
@@ -1950,13 +1950,13 @@ QPushButton[cssClass="btn-check-time"]:pressed {
 }
 
 QPushButton[cssClass="btn-check-time"]:disabled {
-    background-color:#1c2210;
+    background-color:#1d2612;
     border-radius:10px;
     font-size:14px;
     font-weight:600;
     padding:6px 12px;
-    color:#a9b38d;
-    border:1px solid #5d6b45;
+    color:#a8b18a;
+    border:1px solid #56653d;
 }
 
 *[cssClass="dashboard-shell-left"] {
@@ -1987,11 +1987,11 @@ QPushButton[cssClass="btn-check-time"]:disabled {
 }
 
 *[cssClass="dashboard-header-band"] QLabel[cssClass="screen-header-title"] {
-    color: #f4f6e2;
+    color: #f1f4df;
 }
 
 *[cssClass="dashboard-header-band"] QLabel[cssClass="screen-header-subtitle"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
 }
 
 *[cssClass="dashboard-warning-pill"] {
@@ -2001,7 +2001,7 @@ QPushButton[cssClass="btn-check-time"]:disabled {
 }
 
 *[cssClass="dashboard-warning-text"] {
-    color: #a8c46b;
+    color: #9db95f;
     font-size: 14px;
     font-weight: 600;
 }
@@ -2012,8 +2012,8 @@ QComboBox[cssClass="dashboard-filter-pill"] {
     font-size: 14px;
     font-weight: 600;
     border: 1px solid rgba(143, 179, 95, 0.18);
-    color: #f4f6e2;
-    selection-color: #f4f6e2;
+    color: #f1f4df;
+    selection-color: #f1f4df;
     text-align: left;
     border-radius: 12px;
 }
@@ -2043,7 +2043,7 @@ QComboBox[cssClass="dashboard-filter-pill"]::down-arrow {
 QLineEdit[cssClass="dashboard-filter-line"] {
     background: transparent;
     border: 0;
-    color: #f4f6e2;
+    color: #f1f4df;
     padding: 0;
     margin: 0;
     font-size: 14px;
@@ -2102,7 +2102,7 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 }
 
 *[cssClass="dashboard-reward-tile-label"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.4px;
@@ -2119,19 +2119,19 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 }
 
 *[cssClass="dashboard-side-title"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 24px;
     font-weight: 700;
 }
 
 *[cssClass="dashboard-side-subtitle"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 14px;
     font-weight: 500;
 }
 
 *[cssClass="dashboard-reward-stat-stakes"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 15px;
     font-weight: 700;
     padding: 0;
@@ -2140,7 +2140,7 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 }
 
 *[cssClass="dashboard-reward-stat-mn"] {
-    color: #f6f4e8;
+    color: #f4f2e4;
     font-size: 15px;
     font-weight: 700;
     padding: 0;
@@ -2149,7 +2149,7 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 }
 
 *[cssClass="dashboard-reward-stat-muted"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 15px;
     font-weight: 700;
     padding: 0;
@@ -2192,55 +2192,55 @@ QListView[cssClass="dashboard-transactions-list"] QScrollBar::sub-page:vertical 
 }
 
 *[cssClass="dashboard-tx-address"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 14px;
     font-weight: 600;
 }
 
 *[cssClass="dashboard-tx-address-muted"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 14px;
     font-weight: 600;
 }
 
 *[cssClass="dashboard-tx-date"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 12px;
     font-weight: 500;
 }
 
 *[cssClass="dashboard-tx-date-muted"] {
-    color: #a9b38d;
+    color: #a8b18a;
     font-size: 12px;
     font-weight: 500;
 }
 
 *[cssClass="dashboard-tx-amount-positive"] {
-    color: #a8c46b;
+    color: #9db95f;
     font-size: 14px;
     font-weight: 700;
 }
 
 *[cssClass="dashboard-tx-amount-negative"] {
-    color: #a8c46b;
+    color: #9db95f;
     font-size: 14px;
     font-weight: 700;
 }
 
 *[cssClass="dashboard-tx-amount-muted"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 14px;
     font-weight: 700;
 }
 
 *[cssClass="dashboard-tx-amount-secondary"] {
-    color: #ccd4ac;
+    color: #c7cfa0;
     font-size: 12px;
     font-weight: 600;
 }
 
 QGroupBox#container_chart_dropboxes {
-    color:#e2e6d2;
+    color:#dde3ca;
     border:0;
     margin-top:18px;
 }
@@ -2261,7 +2261,7 @@ QGroupBox#container_chart_dropboxes::title {
     subcontrol-position: top left;
     left: 0px;
     padding: 0 4px 4px 0;
-    color:#e2e6d2;
+    color:#dde3ca;
 }
 
 /*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
@@ -2278,7 +2278,7 @@ QCheckBox {
 QCheckBox:checked {
     spacing: 5px;
     font-size:18px;
-    color:#8fb35f;
+    color:#85a653;
 }
 
 QCheckBox::indicator {
@@ -2316,13 +2316,13 @@ QCheckBox[cssClass="btn-watch-password"]::indicator:checked {
 QCheckBox[cssClass="combo-light"] {
     spacing: 5px;
     font-size:18px;
-    color: #87906f;
+    color: #8c9578;
 }
 
 QCheckBox[cssClass="combo-light"]:checked {
     spacing: 5px;
     font-size:18px;
-    color:#8fb35f;
+    color:#85a653;
 }
 
 QCheckBox[cssClass="combo-light"]::indicator:unchecked {
@@ -2332,7 +2332,7 @@ QCheckBox[cssClass="combo-light"]::indicator:unchecked {
 QCheckBox[cssClass="combo-light"]:hover {
     spacing: 5px;
     font-size:18px;
-    color: #3b4426;
+    color: #31401f;
 }
 
 QCheckBox[cssClass="combo-light"]::indicator:unchecked:hover {
@@ -2344,18 +2344,18 @@ HH        REQUEST DIALOG
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 QComboBox[cssClass="btn-combo-coins"] {
-    background-color:#4f7a2e;
+    background-color:#3d6121;
     padding:10px 20px 10px 10px;
     font-size:16px;
-    border:1px solid #4f7a2e;
+    border:1px solid #3d6121;
     color: #FFFFFF;
 }
 
 QLabel[cssClass="btn-combo-coins"] {
-    background-color:#4f7a2e;
+    background-color:#3d6121;
     padding:10px 10px 10px 10px;
     font-size:16px;
-    border:1px solid #4f7a2e;
+    border:1px solid #3d6121;
     color: #FFFFFF;
 }
 
@@ -2385,7 +2385,7 @@ HH       PPROPOSAL
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="dialog-proposal-message"] {
-    color:#87906f;
+    color:#8c9578;
     font-size:16px;
 }
 
@@ -2394,12 +2394,12 @@ HH       GOVERNANCE
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="label-budget-title"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:22px;
 }
 
 *[cssClass="label-budget-text"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:16px;
 }
 
@@ -2410,7 +2410,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="label-budget-amount-allocated"] {
-    color:#5d6b45;
+    color:#56653d;
     font-size:17px;
 }
 
@@ -2423,7 +2423,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 *[cssClass="governance-dashboard-shell"] {
     border: 1px solid rgba(143, 179, 95, 0.18);
     border-radius: 22px;
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0d1008, stop:1 #1a1e0e);
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0c0f07, stop:1 #1a1e0e);
 }
 
 *[cssClass="screen-header-band"] {
@@ -2438,13 +2438,13 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="screen-header-title"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 28px;
     font-weight: 700;
 }
 
 *[cssClass="screen-header-subtitle"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 15px;
     font-weight: 500;
     padding-top: 6px;
@@ -2467,7 +2467,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="screen-side-section-title"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 14px;
     font-weight: 700;
 }
@@ -2488,12 +2488,12 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 QComboBox[cssClass="governance-dashboard-filter"] {
     background-color: rgba(13,16,8, 0.78);
-    border: 1px solid #5d6b45;
+    border: 1px solid #56653d;
     border-radius: 14px;
     padding: 8px 14px 8px 38px;
     font-size: 14px;
     font-weight: 600;
-    color: #f4f6e2;
+    color: #f1f4df;
 }
 
 QComboBox[cssClass="governance-dashboard-filter"] QLineEdit {
@@ -2540,13 +2540,13 @@ QScrollArea[cssClass="governance-dashboard-surface"] QWidget#qt_scrollarea_viewp
 }
 
 *[cssClass="governance-title"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 24px;
     font-weight: 700;
 }
 
 *[cssClass="governance-subtitle"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 13px;
     font-weight: 500;
     padding-top: 0px;
@@ -2578,13 +2578,13 @@ OptionButton[cssClass="screen-side-option"] QWidget#layoutOptions2[hovered="true
 }
 
 OptionButton[cssClass="screen-side-option"] QLabel#labelTitleChange {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 16px;
     font-weight: 700;
 }
 
 OptionButton[cssClass="screen-side-option"] QLabel#labelSubtitleChange {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 13px;
     font-weight: 500;
 }
@@ -2627,13 +2627,13 @@ OptionButton[cssClass="governance-header-cta"] QWidget#layoutOptions2[hovered="t
 }
 
 OptionButton[cssClass="governance-header-cta"] QLabel[cssClass="governance-cta-title"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 16px;
     font-weight: 700;
 }
 
 OptionButton[cssClass="governance-header-cta"] QLabel[cssClass="governance-cta-subtitle"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 12px;
     font-weight: 500;
 }
@@ -2654,7 +2654,7 @@ QPushButton[cssClass="governance-cta-arrow"]:checked {
 }
 
 QLabel[cssClass="governance-warning-text"] {
-    color: #a8c46b;
+    color: #9db95f;
     font-size: 14px;
     font-weight: 600;
 }
@@ -2666,24 +2666,24 @@ QLabel[cssClass="governance-warning-text"] {
 }
 
 *[cssClass="governance-budget-title"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 18px;
     font-weight: 600;
 }
 
 *[cssClass="governance-budget-label"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 13px;
 }
 
 *[cssClass="governance-budget-value"] {
-    color: #f6f4e8;
+    color: #f4f2e4;
     font-size: 20px;
     font-weight: 700;
 }
 
 *[cssClass="governance-budget-value-allocated"] {
-    color: #8fb35f;
+    color: #85a653;
     font-size: 20px;
     font-weight: 700;
 }
@@ -2693,23 +2693,23 @@ HH       GOVERNANCE CARD
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="card-governance"] {
-    background-color:qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0d1008, stop:1 #1a1e0e);
+    background-color:qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0c0f07, stop:1 #1a1e0e);
     border:  1px solid rgba(143, 179, 95, 0.40);
     border-radius: 16px;
 }
 
 *[cssClass="card-title"] {
-    color:#eef2d8;
+    color:#e9efd3;
     font-size:17px;
 }
 
 *[cssClass="card-amount"] {
-    color:#f6f4e8;
+    color:#f4f2e4;
     font-size:21px;
 }
 
 *[cssClass="card-time"] {
-    color:#ccd4ac;
+    color:#c7cfa0;
     font-size:12px;
 }
 
@@ -2723,7 +2723,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="card-status-not-passing"] {
-    color:#f4f6e2;
+    color:#f1f4df;
     font-size:11px;
     border-radius:11px;
     background-color:rgba(196, 85, 42, 0.20);
@@ -2760,11 +2760,11 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="label-progress-no"] {
-    color:#eef2d8;
+    color:#e9efd3;
 }
 
 *[cssClass="label-progress-yes"] {
-    color:#f4f6e2;
+    color:#f1f4df;
 }
 
 *[cssClass="card-progress-yes"] {
@@ -2800,19 +2800,19 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     border:  1px solid rgba(143, 179, 95, 0.58);
     background-color:rgba(42, 51, 25, 0.92);
     font-size:15px;
-    color: #eef2d8;
+    color: #e9efd3;
     border-radius: 10px;
     padding:6px 14px;
 }
 
 QPushButton[cssClass="card-btn-vote"]:hover {
-    border:  1px solid #a8c46b;
+    border:  1px solid #9db95f;
     background-color:rgba(48, 50, 40, 0.98);
 }
 
 QPushButton[cssClass="card-btn-vote"]:pressed {
-    border:  1px solid #8fb35f;
-    background-color:#4DC08445;
+    border:  1px solid #85a653;
+    background-color:#4A6FA545;
 }
 
 
@@ -2821,7 +2821,7 @@ HH       VOTE DIALOG
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="vote-title"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:22px;
 }
 
@@ -2831,18 +2831,18 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="vote-time"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:17px;
 }
 
 *[cssClass="vote-dialog-subtitle"] {
-    color:#e9eed4;
+    color:#e5ecd0;
     font-size:16px;
     font-weight:500;
 }
 
 *[cssClass="vote-section-label"] {
-    color:#e9eed4;
+    color:#e5ecd0;
     font-size:14px;
     font-weight:600;
 }
@@ -2857,7 +2857,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 *[cssClass="btn-vote-select"] {
     background: transparent;
     border: 0px;
-    color:#4f7a2e;
+    color:#3d6121;
     font-size:16px;
 }
 
@@ -2866,18 +2866,18 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 QPushButton[cssClass="vote-inline-selector"] {
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
     border-radius: 12px;
     background-color: rgba(13,16,8, 0.7);
-    color: #a8c46b;
+    color: #9db95f;
     font-size: 14px;
     font-weight: 600;
     padding: 10px 14px;
 }
 
 QPushButton[cssClass="vote-inline-selector"]:hover {
-    border-color: #8fb35f;
-    color: #f4f6e2;
+    border-color: #85a653;
+    color: #f1f4df;
     background-color: rgba(143, 179, 95, 0.26);
 }
 
@@ -2887,7 +2887,7 @@ QPushButton[cssClass="vote-inline-selector"]:pressed {
 
 
 *[cssClass="vote-message"] {
-    color:#87906f;
+    color:#8c9578;
     font-size:14px;
 }
 
@@ -2899,7 +2899,7 @@ QPushButton[cssClass="vote-inline-selector"]:pressed {
 
 
 *[cssClass="vote-progress"] {
-    color: #4f7a2e;
+    color: #3d6121;
     font-size:14px;
     background-color: transparent;
     border-radius: 14px;
@@ -2908,14 +2908,14 @@ QPushButton[cssClass="vote-inline-selector"]:pressed {
 
 *[cssClass="vote-progress"]::chunk:horizontal {
     background: rgba(143, 179, 95, 0.22);
-    border-right:1px solid  #4f7a2e;
+    border-right:1px solid  #3d6121;
 }
 
 
 
 *[cssClass="vote-progress-no"] {
     min-height: 34px;
-    color: #5d6b45;
+    color: #56653d;
     font-size:13px;
     background-color: transparent;
     border-radius: 14px;
@@ -2930,7 +2930,7 @@ QPushButton[cssClass="vote-inline-selector"]:pressed {
 
 *[cssClass="vote-progress-yes"] {
     min-height: 34px;
-    color: #5d6b45;
+    color: #56653d;
     font-size:13px;
     background-color: transparent;
     border-radius: 14px;
@@ -2951,8 +2951,8 @@ QCheckBox[cssClass="check-vote"] {
 }
 
 QCheckBox[cssClass="check-vote"][voteChoice="yes"] {
-    color:#2a3319;
-    border: 1px solid #efefdd;
+    color:#233319;
+    border: 1px solid #edefda;
     background-color: #f8faea;
 }
 
@@ -2960,14 +2960,14 @@ QCheckBox:checked[cssClass="check-vote"][voteChoice="yes"]  {
     font-size:16px;
     font-weight: 600;
     color:#FFFFFF;
-    border: 1px solid #2a3319;
-    background-color: #2a3319;
+    border: 1px solid #233319;
+    background-color: #233319;
 }
 
 QCheckBox[cssClass="check-vote"][voteChoice="no"] {
-    color:#2a3319;
-    border: 1px solid #a8c46b;
-    background-color: #eef2d8;
+    color:#233319;
+    border: 1px solid #9db95f;
+    background-color: #e9efd3;
 }
 
 QCheckBox:checked[cssClass="check-vote"][voteChoice="no"]  {
@@ -2984,7 +2984,7 @@ QCheckBox::indicator[cssClass="check-vote"] {
 }
 
 *[cssClass="vote-mode-card"] {
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
     border-top-left-radius: 0px;
     border-top-right-radius: 0px;
     border-bottom-left-radius: 12px;
@@ -2994,24 +2994,24 @@ QCheckBox::indicator[cssClass="check-vote"] {
 
 QRadioButton[cssClass="vote-mode-radio"] {
     spacing: 8px;
-    color: #e9eed4;
+    color: #e5ecd0;
     font-size: 14px;
 }
 
 QRadioButton[cssClass="vote-mode-radio"]:checked {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 14px;
     font-weight: 600;
 }
 
 QRadioButton[cssClass="vote-mode-radio"]:unchecked {
-    color: #dde3c0;
+    color: #d8dfb9;
     font-size: 14px;
     font-weight: 500;
 }
 
 QRadioButton[cssClass="vote-mode-radio"]:disabled {
-    color: #a9b38d;
+    color: #a8b18a;
     font-size: 14px;
 }
 
@@ -3030,7 +3030,7 @@ QRadioButton[cssClass="vote-mode-radio"]::indicator:checked {
 
 QRadioButton[cssClass="vote-mode-toggle"] {
     spacing: 0px;
-    color: #dde3c0;
+    color: #d8dfb9;
     font-size: 14px;
     font-weight: 600;
     border: 1px solid transparent;
@@ -3048,26 +3048,26 @@ QRadioButton[cssClass="vote-mode-toggle"]:checked {
     color: #FFFFFF;
     background-color: #c4552a;
     border-radius: 12px;
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
 }
 
 QRadioButton[cssClass="vote-mode-toggle"]:unchecked {
-    color: #dde3c0;
+    color: #d8dfb9;
     background-color: transparent;
     border-radius: 12px;
     border: 1px solid transparent;
 }
 
 QRadioButton[cssClass="vote-mode-toggle"]:hover:unchecked {
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
     background-color: rgba(143, 179, 95, 0.20);
 }
 
 *[cssClass="btn-vote-quick"] {
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
     border-radius: 12px;
     background-color: transparent;
-    color: #8fb35f;
+    color: #85a653;
     font-size: 13px;
     min-width: 74px;
     min-height: 36px;
@@ -3075,8 +3075,8 @@ QRadioButton[cssClass="vote-mode-toggle"]:hover:unchecked {
 }
 
 *[cssClass="btn-vote-quick"]:hover {
-    border-color: #8fb35f;
-    color: #a8c46b;
+    border-color: #85a653;
+    color: #9db95f;
 }
 
 *[cssClass="btn-vote-quick"]:pressed {
@@ -3085,28 +3085,28 @@ QRadioButton[cssClass="vote-mode-toggle"]:hover:unchecked {
 
 *[cssClass="btn-vote-quick"]:disabled {
     border-color: #6B6563;
-    color: #a9b38d;
+    color: #a8b18a;
 }
 
 *[cssClass="vote-meta-title"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 12px;
 }
 
 *[cssClass="vote-meta-value"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 14px;
     font-weight: 600;
 }
 
 *[cssClass="vote-unlock-value"] {
-    color: #8fb35f;
+    color: #85a653;
     font-size: 14px;
     font-weight: 600;
 }
 
 QLabel[cssClass="vote-validation-hint"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 12px;
 }
 
@@ -3121,9 +3121,9 @@ QLineEdit[coinAmountInvalid="true"] {
 }
 
 *[cssClass="vote-lock-badge"] {
-    border: 1px solid #2a3319;
+    border: 1px solid #233319;
     border-radius: 8px;
-    color: #f4f6e2;
+    color: #f1f4df;
     background-color: rgba(42, 51, 25, 0.36);
     min-height: 34px;
     padding: 8px 10px;
@@ -3131,19 +3131,19 @@ QLineEdit[coinAmountInvalid="true"] {
 }
 
 *[cssClass="vote-hybrid-status"] {
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
     border-radius: 10px;
-    color: #a8c46b;
+    color: #9db95f;
     background-color: rgba(16, 20, 10, 0.55);
     padding: 8px 12px;
     font-size: 13px;
 }
 
 QListWidget[cssClass="vote-mn-list"] {
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
     border-radius: 12px;
     background-color: rgba(16, 20, 10, 0.5);
-    color: #e9eed4;
+    color: #e5ecd0;
     font-size: 13px;
     padding: 4px;
 }
@@ -3165,13 +3165,13 @@ QListWidget[cssClass="vote-mn-list"]::indicator {
     width: 15px;
     height: 15px;
     border-radius: 7px;
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
     background-color: transparent;
 }
 
 QListWidget[cssClass="vote-mn-list"]::indicator:checked {
-    background-color: #4f7a2e;
-    border-color: #8fb35f;
+    background-color: #3d6121;
+    border-color: #85a653;
 }
 
 /*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
@@ -3179,47 +3179,47 @@ HH       SELECT MASTER NODE
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="text-title-purple"] {
-    color: #4f7a2e;
+    color: #3d6121;
     font-size: 14px;
 }
 
 *[cssClass="text-purple"] {
-    color: #4f7a2e;
+    color: #3d6121;
     font-size: 14px;
     padding-left: 8px;
     padding-right: 8px;
 }
 
 *[cssClass="btn-dialog-secondary"] {
-    border:  1px solid #4f7a2e;
-    background-color:#0d1008;
+    border:  1px solid #3d6121;
+    background-color:#0c0f07;
     border-radius: 2px;
-    color: #8fb35f;
+    color: #85a653;
     font-size: 14px;
     padding-left: 6px;
     padding-right: 6px;
 }
 
 *[cssClass="btn-dialog-secondary"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#0d1008;
+    border:  1px solid #85a653;
+    background-color:#0c0f07;
 }
 
 QHeaderView::section {
-    background-color: #4f7a2e;
+    background-color: #3d6121;
     color: white;
     font-size: 14px;
     padding-top: 8px;
     padding-bottom: 8px;
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
 }
 
 QTreeView {
     show-decoration-selected: 1;
-    background: #0d1008;
-    border: 1px solid #4f7a2e;
+    background: #0c0f07;
+    border: 1px solid #3d6121;
     font-size: 14px;
-    color: #5d6b45;
+    color: #56653d;
     padding-left: 0px;
 }
 
@@ -3238,17 +3238,17 @@ QTreeView::item:hover {
 }
 
 QTreeView::item:selected {
-    color: #8fb35f;
+    color: #85a653;
     border:0px;
 }
 
 QTreeView::item:selected:active{
-    color: #8fb35f;
+    color: #85a653;
     border:0px;
 }
 
 QTreeView::item:selected:!active {
-    color:#8fb35f;
+    color:#85a653;
     border:0px;
 }
 
@@ -3279,12 +3279,12 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 
 QSpinBox[cssClass="btn-spin-box"], QDoubleSpinBox[cssClass="btn-spin-box"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:10px 20px 10px 10px;
     font-size:16px;
-    border:1px solid #3b4426;
-    color: #87906f;
-    selection-background-color: #4f7a2e;
+    border:1px solid #31401f;
+    color: #8c9578;
+    selection-background-color: #3d6121;
     selection-color: #FFFFFF;
 }
 
@@ -3314,12 +3314,12 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 
 QComboBox[cssClass="btn-combo"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:10px 20px 10px 10px;
     font-size:16px;
-    border:1px solid #0d1008;
-    color: #87906f;
-    selection-color:#87906f;
+    border:1px solid #0c0f07;
+    color: #8c9578;
+    selection-color:#8c9578;
     text-align: right;
 }
 
@@ -3330,11 +3330,11 @@ QComboBox[cssClass="btn-combo"]::down-arrow {
 }
 
 QComboBox[cssClass="btn-combo-small"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:8px 14px 8px 8px;
     font-size:13px;
-    border:1px solid #0d1008;
-    color: #87906f;
+    border:1px solid #0c0f07;
+    color: #8c9578;
     text-align: right;
 }
 
@@ -3348,11 +3348,11 @@ QComboBox[cssClass="btn-filter"] {
     background-image: url("://ic-filter");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:10px 10px 10px 10px;
-    border:1px solid #0d1008;
+    border:1px solid #0c0f07;
     font-size:16px;
-    color: #c2c7ae;
+    color: #bdc5a9;
     text-align: right;
 }
 
@@ -3363,10 +3363,10 @@ QComboBox[cssClass="btn-filter"]::down-arrow {
 }
 
 QComboBox[cssClass="btn-combo-edit"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:10px 20px 10px 10px;
     font-size:16px;
-    border:1px solid #0d1008;
+    border:1px solid #0c0f07;
     color: #ffffff;
     text-align: right;
 }
@@ -3379,11 +3379,11 @@ QComboBox[cssClass="btn-combo-edit"]::down-arrow {
 
 
 QComboBox[cssClass="btn-combo-options"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:10px 20px 10px 10px;
     font-size:16px;
-    border:1px solid #0d1008;
-    color: #87906f;
+    border:1px solid #0c0f07;
+    color: #8c9578;
     text-align: right;
 }
 
@@ -3398,7 +3398,7 @@ QComboBox {
     background-color:transparent;
     padding-right:20px;
     font-size:16px;
-    color: #87906f;
+    color: #8c9578;
     border-radius:0px;
     border: 0px;
 }
@@ -3434,7 +3434,7 @@ QComboBox::down-arrow:on { /* shift the arrow when popup is open */
 }
 
 QComboBox:item {
-    color: #87906f;
+    color: #8c9578;
     font-size:18px;
 }
 
@@ -3453,7 +3453,7 @@ QComboBox QAbstractItemView::item {
     background-color: #FFFFFF;
     padding:10px 20px;
     font-size:16px;
-    color: #87906f;
+    color: #8c9578;
     border-radius:0px;
     outline: 0px;
 }
@@ -3462,7 +3462,7 @@ QComboBox QAbstractItemView::item:selected {
     padding:10px 20px;
     font-size:16px;
     margin:0px;
-    color: #4f7a2e;
+    color: #3d6121;
     border-radius:0px;
     outline: 0px;
 }
@@ -3481,17 +3481,17 @@ QComboBox QAbstractItemView::item:selected QPushButton:hover{
 HH       RADIO BUTTON
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 QRadioButton:checked {
-    color: #8fb35f;
+    color: #85a653;
     font-size:20px;
 }
 
 QRadioButton:unchecked {
-    color: #3b4426;
+    color: #31401f;
     font-size:20px;
 }
 
 QRadioButton {
-    color: #3b4426;
+    color: #31401f;
     font-size:20px;
     spacing:20px;
 }
@@ -3515,28 +3515,28 @@ QRadioButton::indicator:unchecked {
 
 QRadioButton#radioModeMasternode,
 QRadioButton#radioModeCoinLock {
-    color: #e9eed4;
+    color: #e5ecd0;
     font-size: 14px;
     spacing: 8px;
 }
 
 QRadioButton#radioModeMasternode:checked,
 QRadioButton#radioModeCoinLock:checked {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 14px;
     font-weight: 600;
 }
 
 QRadioButton#radioModeMasternode:unchecked,
 QRadioButton#radioModeCoinLock:unchecked {
-    color: #dde3c0;
+    color: #d8dfb9;
     font-size: 14px;
     font-weight: 500;
 }
 
 QRadioButton#radioModeMasternode:disabled,
 QRadioButton#radioModeCoinLock:disabled {
-    color: #a9b38d;
+    color: #a8b18a;
     font-size: 14px;
 }
 
@@ -3547,26 +3547,26 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 
 QScrollBar:vertical {
-    border: 0px solid #3b4426;
-    background:#0d1008;
+    border: 0px solid #31401f;
+    background:#0c0f07;
     width:7px;
     margin: 0px 0px 0px 0px;
 }
 
 
 QScrollBar::handle:vertical {
-    background: #4f7a2e;
+    background: #3d6121;
     min-height: 10px;
 }
 
 QScrollBar::add-line:vertical {
-    background: #0d1008;
+    background: #0c0f07;
     height: 0px;
     subcontrol-position: bottom;
     subcontrol-origin: margin;
 }
 QScrollBar::sub-line:vertical {
-    background: #0d1008;
+    background: #0c0f07;
     height: 0 px;
     subcontrol-position: top;
     subcontrol-origin: margin;
@@ -3596,38 +3596,38 @@ HH       DIALOG MASTER NODE
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="line-purple"] {
-    background-color:#4f7a2e;
+    background-color:#3d6121;
 }
 
 
 QPushButton[cssClass="btn-number-check"] {
-    border:  1px solid #4f7a2e;
+    border:  1px solid #3d6121;
     background-color:transparent;
     font-size:14px;
     border-radius:11px;
-    color: #87906f;
+    color: #8c9578;
 }
 
 QPushButton[cssClass="btn-number-check"]:checked {
-    border:  1px solid #8fb35f;
-    background-color:#8fb35f;
+    border:  1px solid #85a653;
+    background-color:#85a653;
     font-size:14px;
     border-radius:11px;
-    color: #4f7a2e;
+    color: #3d6121;
 }
 
 QPushButton[cssClass="btn-name-check"] {
     background-color: transparent;
     border:none;
     font-size:20px;
-    color: #87906f;
+    color: #8c9578;
 }
 
 QPushButton[cssClass="btn-name-check"]:checked {
     background-color:transparent;
     border:none;
     font-size:20px;
-    color: #8fb35f;
+    color: #85a653;
 }
 
 
@@ -3635,9 +3635,9 @@ QPushButton[cssClass="ic-step-confirm"] {
     background-image: url("://ic-check-white");
     background-position:center;
     background-repeat:no-repeat;
-    border:  1px solid #4f7a2e;
+    border:  1px solid #3d6121;
     border-radius:11px;
-    background-color:#4f7a2e;
+    background-color:#3d6121;
 }
 
 
@@ -3646,8 +3646,8 @@ HH             SEND
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="container-coin-type"] {
-    background-color:#0d1008;
-    border:  1px solid #3b4426;
+    background-color:#0c0f07;
+    border:  1px solid #31401f;
     border-radius: 8px;
 }
 
@@ -3657,7 +3657,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     url("://ic-coin-piv") on ;
     qproperty-iconSize: 28px 28px;
     background-color: #FFFFFF;
-    border:  2px solid #0d1008;
+    border:  2px solid #0c0f07;
     border-radius: 12px;
 }
 
@@ -3669,19 +3669,19 @@ HH      Dialog
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="container-dialog"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     border-radius: 16px;
     border:none;
 }
 
 *[cssClass="container-dialog-shell"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     border:1px solid rgba(143, 179, 95, 0.30);
     border-radius:16px;
 }
 
 *[cssClass="container-dialog-header"] {
-    background-color:#8fb35f;
+    background-color:#85a653;
     border-top-left-radius:16px;
     border-top-right-radius:16px;
     border-bottom-left-radius:0px;
@@ -3690,7 +3690,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="container-dialog-body"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     border-top-left-radius:0px;
     border-top-right-radius:0px;
     border-bottom-left-radius:16px;
@@ -3699,13 +3699,13 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="vote-dialog-shell"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     border:1px solid rgba(143, 179, 95, 0.30);
     border-radius:16px;
 }
 
 *[cssClass="vote-dialog-header"] {
-    background-color:#8fb35f;
+    background-color:#85a653;
     border-top-left-radius:16px;
     border-top-right-radius:16px;
     border-bottom-left-radius:0px;
@@ -3714,7 +3714,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="vote-dialog-title"] {
-    color:#2a3319;
+    color:#233319;
     font-size:24px;
     font-weight:700;
 }
@@ -3739,7 +3739,7 @@ QWidget#voteDialogHeader QPushButton[cssClass="ic-close"] {
 }
 
 *[cssClass="vote-dialog-body"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     border-top-left-radius:0px;
     border-top-right-radius:0px;
     border-bottom-left-radius:16px;
@@ -3755,49 +3755,49 @@ QFrame#voteDialogShell QFrame[cssClass="vote-dialog-body"] {
 }
 
 *[cssClass="container-popup"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     border-radius:14px;
-    border:1px solid #8fb35f;
+    border:1px solid #85a653;
 }
 
 *[cssClass="text-title-dialog"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:22px;
 }
 
 *[cssClass="text-title2-dialog"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:16px;
 }
 
 *[cssClass="text-title1-dialog"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:22px;
 }
 
 *[cssClass="text-body-dialog"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:16px;
 }
 
 *[cssClass="text-body1-dialog"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:18px;
 }
 
 *[cssClass="text-body2-dialog"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:15px;
 }
 
 *[cssClass="text-body3-dialog"] {
-    color:#c2c7ae;
+    color:#bdc5a9;
     font-size:17px;
 }
 
 QDialogButtonBox QPushButton {
-    border:  1px solid #4f7a2e;
-    background-color:#4f7a2e;
+    border:  1px solid #3d6121;
+    background-color:#3d6121;
     font-size:18px;
     padding:4px 10px;
     color: #FFFFFF;
@@ -3809,7 +3809,7 @@ QPushButton[cssClass="btn-dialog-cancel"] {
     background-color:transparent;
     font-size:18px;
     padding:4px 10px;
-    color: #3b4426;
+    color: #31401f;
     border-radius: 8px;
 }
 
@@ -3824,33 +3824,33 @@ QPushButton[cssClass="vote-action-primary"] {
 }
 
 QPushButton[cssClass="vote-action-primary"]:hover {
-    border-color: #4f7a2e;
-    background-color: #4f7a2e;
+    border-color: #3d6121;
+    background-color: #3d6121;
 }
 
 QPushButton[cssClass="vote-action-primary"]:pressed {
-    border-color: #2a3319;
-    background-color: #2a3319;
+    border-color: #233319;
+    background-color: #233319;
 }
 
 QPushButton[cssClass="vote-action-primary"]:disabled {
-    border-color: #5d6b45;
-    background-color: #5d6b45;
-    color: #a9b38d;
+    border-color: #56653d;
+    background-color: #56653d;
+    color: #a8b18a;
 }
 
 QPushButton[cssClass="vote-action-cancel"] {
     border: 1px solid transparent;
     border-radius: 14px;
     background-color: transparent;
-    color: #e9eed4;
+    color: #e5ecd0;
     font-size: 16px;
     font-weight: 600;
     padding: 10px 18px;
 }
 
 QPushButton[cssClass="vote-action-cancel"]:hover {
-    border: 1px solid #5d6b45;
+    border: 1px solid #56653d;
     background-color: rgba(96, 106, 76, 0.45);
 }
 
@@ -3860,8 +3860,8 @@ QPushButton[cssClass="vote-action-cancel"]:pressed {
 
 
 QLineEdit[cssClass="edit-primary-dialog"] {
-    border:  1px solid #3b4426;
-    background-color:#0d1008;
+    border:  1px solid #31401f;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -3869,11 +3869,11 @@ QLineEdit[cssClass="edit-primary-dialog"] {
 }
 
 QLineEdit[cssClass="edit-primary-dialog"]:focus {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QLineEdit[cssClass="edit-primary-dialog"]:focus:hover {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QLineEdit[cssClass="edit-primary-dialog"]:hover {
@@ -3882,7 +3882,7 @@ QLineEdit[cssClass="edit-primary-dialog"]:hover {
 
 QLineEdit[cssClass="edit-primary-dialog-error"] {
     border:  1px solid #f05050;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -3890,8 +3890,8 @@ QLineEdit[cssClass="edit-primary-dialog-error"] {
 }
 
 QTextEdit[cssClass="edit-text-dialog"] {
-    border:  1px solid #3b4426;
-    background-color:#0d1008;
+    border:  1px solid #31401f;
+    background-color:#0c0f07;
     font-size:16px;
     border-radius: 2px;
     padding:8px;
@@ -3899,11 +3899,11 @@ QTextEdit[cssClass="edit-text-dialog"] {
 }
 
 QTextEdit[cssClass="edit-text-dialog"]:focus {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QTextEdit[cssClass="edit-text-dialog"]:focus:hover {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
 }
 
 QTextEdit[cssClass="edit-text-dialog"]:hover {
@@ -3911,19 +3911,19 @@ QTextEdit[cssClass="edit-text-dialog"]:hover {
 }
 
 QLabel[cssClass="label-subtitle-dialog"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     font-size:16px;
-    color: #8fb35f;
+    color: #85a653;
     padding-top: 10px;
     padding-bottom: 10px;
 }
 
 QComboBox[cssClass="btn-combo-dialog"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:10px 20px 10px 10px;
     font-size:16px;
-    border:1px solid #0d1008;
-    color: #8fb35f;
+    border:1px solid #0c0f07;
+    color: #85a653;
     text-align: right;
 }
 
@@ -3936,11 +3936,11 @@ QComboBox[cssClass="btn-combo-dialog"]::down-arrow {
 
 
 QComboBox[cssClass="btn-combo-edit-dialog"] {
-    background-color:#0d1008;
+    background-color:#0c0f07;
     padding:10px 20px 10px 10px;
     font-size:16px;
-    border:1px solid #3b4426;
-    color: #8fb35f;
+    border:1px solid #31401f;
+    color: #85a653;
     text-align: right;
 }
 
@@ -3960,12 +3960,12 @@ QPushButton[cssClass="btn-settings-check"] {
     background-image: url("://ic-arrow-drop-down-white");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color: #0d1008;
+    background-color: #0c0f07;
     border:none;
-    border-bottom:1px solid #3b4426;
+    border-bottom:1px solid #31401f;
     border-radius: 8px;
     font-size:20px;
-    color: #87906f;
+    color: #8c9578;
     text-align:left;
     padding-left: 30px;
     padding-right: 20px;
@@ -3975,12 +3975,12 @@ QPushButton[cssClass="btn-settings-check"]:checked {
     background-image: url("://ic-arrow-drop-up-white");
     background-position:right center;
     background-repeat:no-repeat;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     border:none;
-    border-bottom:1px solid #0d1008;
+    border-bottom:1px solid #0c0f07;
     border-radius: 8px;
     font-size:20px;
-    color: #87906f;
+    color: #8c9578;
     text-align:left;
     padding-left: 30px;
     padding-right: 20px;
@@ -3997,7 +3997,7 @@ QPushButton[cssClass="btn-settings-options"] {
 }
 
 QPushButton[cssClass="btn-settings-options"]:checked {
-    background-color:#4f7a2e;
+    background-color:#3d6121;
     border:none;
     border-radius: 8px;
     font-size:20px;
@@ -4089,14 +4089,14 @@ HH        FAQ
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="text-title-faq"] {
-    color:#8fb35f;
+    color:#85a653;
     font-size:26px;
 }
 
 
 *[cssClass="container-faq-buttons"] {
     background:transparent;
-    border:1px solid #8fb35f;
+    border:1px solid #85a653;
     border-radius: 5px;
 }
 
@@ -4112,7 +4112,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="container-number-faq"] {
     color:#FFFFFF;
-    background-color: #4f7a2e;
+    background-color: #3d6121;
     font-size:14px;
     border-radius: 2px;
 }
@@ -4135,7 +4135,7 @@ QPushButton[cssClass="btn-faq-web"] {
     background-color:transparent;
     border:none;
     font-size:16px;
-    color: #8fb35f;
+    color: #85a653;
     text-align:left;
 }
 
@@ -4165,27 +4165,27 @@ QPushButton[cssClass="btn-faq-options"]:checked {
 }
 
 #scrollAreaFaq QScrollBar:vertical {
-    border: 0px solid #3b4426;
-    background:#0d1008;
+    border: 0px solid #31401f;
+    background:#0c0f07;
     width:4px;
     margin: 0px 0px 0px 0px;
 }
 
 
 #scrollAreaFaq QScrollBar::handle:vertical {
-    background: #4f7a2e;
+    background: #3d6121;
     min-height: 0px;
 }
 
 #scrollAreaFaq QScrollBar::add-line:vertical {
-    background: #0d1008;
+    background: #0c0f07;
     height: 0px;
     subcontrol-position: bottom;
     subcontrol-origin: margin;
 }
 
 #scrollAreaFaq QScrollBar::sub-line:vertical {
-    background: #0d1008;
+    background: #0c0f07;
     height: 0 px;
     subcontrol-position: top;
     subcontrol-origin: margin;
@@ -4225,9 +4225,9 @@ QPushButton[cssClass="ic-step-confirm-welcome"] {
     background-image: url("://ic-check-white");
     background-position:center;
     background-repeat:no-repeat;
-    border:  1px solid #4f7a2e;
+    border:  1px solid #3d6121;
     border-radius:11px;
-    background-color:#4f7a2e;
+    background-color:#3d6121;
 }
 
 *[cssClass="text-title-welcome"] {
@@ -4243,16 +4243,16 @@ QPushButton[cssClass="ic-step-confirm-welcome"] {
 
 *[cssClass="container-welcome"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #0d1008,
-        stop: 0.5 #2a3319,
-        stop: 1 #1c2210);
+        stop: 0 #0c0f07,
+        stop: 0.5 #233319,
+        stop: 1 #1d2612);
     border-image: none;
 }
 
 *[cssClass="container-welcome-no-image"] {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #0d1008,
-        stop: 1 #141a0d);
+        stop: 0 #0c0f07,
+        stop: 1 #182013);
 }
 
 *[cssClass="container-welcome-box"] {
@@ -4262,15 +4262,15 @@ QPushButton[cssClass="ic-step-confirm-welcome"] {
 
 
 *[cssClass="line-welcome"] {
-    background-color: #87906f;
+    background-color: #8c9578;
 }
 
 *[cssClass="container-welcome-stack"] {
     background-image: none;
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 #1c2210,
-        stop: 1 #2a3319);
-    border:  1px solid #5d6b45;
+        stop: 0 #1d2612,
+        stop: 1 #233319);
+    border:  1px solid #56653d;
     border-radius: 16px;
 }
 
@@ -4291,10 +4291,10 @@ QPushButton[cssClass="ic-step-confirm-welcome"] {
 }
 
 QComboBox[cssClass="btn-combo-welcome"] {
-    background-color:#1c2210;
+    background-color:#1d2612;
     padding:12px 24px 12px 16px;
     font-size:16px;
-    border:2px solid #5d6b45;
+    border:2px solid #56653d;
     border-radius:8px;
     color: #FFFFFF;
 }
@@ -4311,8 +4311,8 @@ QPushButton[cssClass="btn-welcome-back"] {
     background-repeat:no-repeat;
     background-position:center;
     border: 0px;
-    background-color:#4f7a2e;
-    color: #4f7a2e;
+    background-color:#3d6121;
+    color: #3d6121;
     border-radius: 8px;
 }
 
@@ -4321,42 +4321,42 @@ QPushButton[cssClass="btn-welcome-next"] {
     background-repeat:no-repeat;
     background-position:center;
     border: 0;
-    background-color: #4f7a2e;
-    color: #4f7a2e;
+    background-color: #3d6121;
+    color: #3d6121;
     border-radius: 8px;
 }
 
 
 QPushButton[cssClass="btn-welcome-number-check"] {
-    border: 2px solid #5d6b45;
+    border: 2px solid #56653d;
     background-color:transparent;
     font-size:14px;
     border-radius:16px;
-    color: #a9b38d;
+    color: #a8b18a;
     min-width: 32px;
     min-height: 32px;
 }
 
 QPushButton[cssClass="btn-welcome-number-check"]:checked {
-    border: 2px solid #8fb35f;
-    background-color:#8fb35f;
+    border: 2px solid #85a653;
+    background-color:#85a653;
     font-size:14px;
     border-radius:16px;
-    color: #2a3319;
+    color: #233319;
 }
 
 QPushButton[cssClass="btn-welcome-name-check"] {
     background-color: transparent;
     border:none;
     font-size:20px;
-    color: #a9b38d;
+    color: #a8b18a;
 }
 
 QPushButton[cssClass="btn-welcome-name-check"]:checked {
     background-color:transparent;
     border:none;
     font-size:20px;
-    color: #8fb35f;
+    color: #85a653;
 }
 
 
@@ -4367,7 +4367,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 QToolTip {
     color: white;
-    background-color: #8fb35f;
+    background-color: #85a653;
     border: none;
     padding:4px;
     border-radius:3px;
@@ -4386,23 +4386,23 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
     background-color:white;
     border-radius:2px;
     padding:15px;
-    border: 1px solid #3b4426;
+    border: 1px solid #31401f;
 }
 
 *[cssClass="btn-list-menu"]{
     border: 0;
     background-color:#FFFFFF;
     font-size:16px;
-    color: #87906f;
+    color: #8c9578;
 }
 
 *[cssClass="btn-list-menu"]:hover{
-    color: #4f7a2e;
+    color: #3d6121;
 }
 
 *[cssClass="btn-list-menu"]:checked{
     font-size:16px;
-    color:#8fb35f;
+    color:#85a653;
 }
 
 
@@ -4412,7 +4412,7 @@ HH        EMPTY LIST
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="text-empty"]{
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 18px;
 }
 
@@ -4483,11 +4483,11 @@ HH        TREE WIDGET
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 #treeWidget {
-    border:1px solid #4f7a2e;
-    background-color:#0d1008;;
+    border:1px solid #3d6121;
+    background-color:#0c0f07;;
     background-position:center;
     background-repeat:no-repeat;
-    selection-background-color:#33C08445;
+    selection-background-color:#3B5E8C45;
     selection-color: white;
     font-size:14px;
     border-radius:0px;
@@ -4524,26 +4524,26 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 #treeWidget::item {
     border:none;
-    border-bottom: 1px solid #33C08445;
+    border-bottom: 1px solid #3B5E8C45;
     border-radius:0px;
     color: #ffffff;
     padding-top: 6px;
     padding-bottom: 6px;
-    background-color:#0d1008;
+    background-color:#0c0f07;
 }
 
 #treeWidget::branch:closed:has-children:!has-siblings {
     border-image: none;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     image: url("://ic-arrow-drop-up");
-    border-bottom: 1px solid #33C08445;
+    border-bottom: 1px solid #3B5E8C45;
 }
 
 #treeWidget::branch:closed:has-children:has-siblings {
     border-image: none;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     image: url("://ic-arrow-drop-up");
-    border-bottom: 1px solid #33C08445;
+    border-bottom: 1px solid #3B5E8C45;
 }
 
 
@@ -4551,46 +4551,46 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 #treeWidget::branch:open:has-children:has-siblings {
     border-image: none;
     image: url("://ic-arrow-drop-down");
-    border-bottom: 1px solid #33C08445;
+    border-bottom: 1px solid #3B5E8C45;
 }
 
 #treeWidget::item:hover {
     border:none;
-    border-bottom: 1px solid #33C08445;
+    border-bottom: 1px solid #3B5E8C45;
     border-radius:0px;
     color: #ffffff;
-    background-color:#26E8DCCF;
+    background-color:#3B5E8CCF;
 }
 
 #treeWidget::item:selected {
     border:none;
-    border-bottom: 1px solid #33C08445;
+    border-bottom: 1px solid #3B5E8C45;
     border-radius:0px;
     color: #ffffff;
-    background-color:#33C08445;
+    background-color:#3B5E8C45;
 }
 
 
 #treeWidget::item:hover:selected {
     border:none;
-    border-bottom: 1px solid #33C08445;
+    border-bottom: 1px solid #3B5E8C45;
     border-radius:0px;
     color: #ffffff;
-    background-color:#33C08445;
+    background-color:#3B5E8C45;
 }
 
 
 #treeWidget::branch {
-    background-color: #0d1008;
-    selection-background-color:#33C08445;
+    background-color: #0c0f07;
+    selection-background-color:#3B5E8C45;
 }
 
 #treeWidget::branch:selected {
-    background-color:#33C08445;
+    background-color:#3B5E8C45;
 }
 
 #treeWidget::branch:!selected {
-    background-color:#33C08445;
+    background-color:#3B5E8C45;
 }
 
 #treeWidget::branch:hover {
@@ -4598,22 +4598,22 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 #treeWidget::branch:!has-children {
-    background-color: #0d1008;
+    background-color: #0c0f07;
 }
 
 QHeaderView::section {
-    background-color: #4f7a2e;
+    background-color: #3d6121;
     color: #FFFFFF;
     padding-top: 6px;
     padding-bottom: 6px;
     font-size:14px;
-    border:0px solid #4f7a2e;
+    border:0px solid #3d6121;
 }
 
 
 *[cssClass="table-tree"] {
     border:0;
-    background-color:#0d1008;
+    background-color:#0c0f07;
     background-position:center;
     background-repeat:no-repeat;
     font-size:14px;
@@ -4633,7 +4633,7 @@ QPushButton[cssClass="ic-multi-number"] {
     background-repeat:no-repeat;
     font-size:12px;
     border-radius:12px;
-    color: #8fb35f;
+    color: #85a653;
 }
 
 /*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
@@ -4643,7 +4643,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="btn-options-indicator"]{
     border:0px ;
-    background:#4f7a2e;
+    background:#3d6121;
     border-radius: 5px;
 }
 
@@ -4677,32 +4677,32 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
 }
 
 *[cssClass="loading-card-shell"]{
-    background-color:#2a3319;
+    background-color:#233319;
     border:1px solid rgba(143, 179, 95, 0.26);
     border-radius:24px;
 }
 
 *[cssClass="loading-card-badge"]{
-    background-color:#141a0d;
+    background-color:#182013;
     border:1px solid rgba(143, 179, 95, 0.40);
     border-radius:66px;
 }
 
 *[cssClass="loading-card-eyebrow"]{
-    color:#a8c46b;
+    color:#9db95f;
     font-size:12px;
     font-weight:700;
     letter-spacing:1px;
 }
 
 *[cssClass="loading-card-title"]{
-    color:#f6f4e8;
+    color:#f4f2e4;
     font-size:26px;
     font-weight:700;
 }
 
 *[cssClass="loading-card-support"]{
-    color:#ccd4ac;
+    color:#c7cfa0;
     font-size:15px;
     font-weight:500;
 }
@@ -4713,19 +4713,19 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
 }
 
 *[cssClass="loading-card-meta-pill"]{
-    background-color:#0d1008;
+    background-color:#0c0f07;
     border:1px solid rgba(143, 179, 95, 0.24);
     border-radius:16px;
 }
 
 *[cssClass="loading-card-meta-label"]{
-    color:#a9b38d;
+    color:#a8b18a;
     font-size:12px;
     font-weight:600;
 }
 
 *[cssClass="loading-card-meta-value"]{
-    color:#f6f4e8;
+    color:#f4f2e4;
     font-size:13px;
     font-weight:700;
 }
@@ -4743,8 +4743,8 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
 
 
 QPushButton[cssClass="btn-dots-welcome"] {
-    border:  1px solid #8fb35f;
-    background-color:#8fb35f;
+    border:  1px solid #85a653;
+    background-color:#85a653;
     font-size:18px;
     padding:8px;
     color: #FFFFFF;
@@ -4753,8 +4753,8 @@ QPushButton[cssClass="btn-dots-welcome"] {
 
 
 QPushButton[cssClass="btn-dots-welcome"]:hover {
-    border:  1px solid #8fb35f;
-    background-color:#2a3319;
+    border:  1px solid #85a653;
+    background-color:#233319;
     font-size:18px;
     padding:8px;
     color: #FFFFFF;
@@ -4762,18 +4762,18 @@ QPushButton[cssClass="btn-dots-welcome"]:hover {
 }
 
 QPushButton[cssClass="btn-dots-welcome"]:pressed {
-    border:  1px solid #8fb35f;
-    background-color:#2a3319;
+    border:  1px solid #85a653;
+    background-color:#233319;
     font-size:18px;
     padding:8px;
-    color: #8fb35f;
+    color: #85a653;
     border-radius: 2px;
 }
 
 *[cssClass="edit-primary-welcome"] {
-    border:1px solid #3b4426;
+    border:1px solid #31401f;
     border-right: 0;
-    background-color:#2a3319;
+    background-color:#233319;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
@@ -4781,42 +4781,42 @@ QPushButton[cssClass="btn-dots-welcome"]:pressed {
 }
 
 *[cssClass="edit-primary-welcome"]:focus {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
     border-right: 0;
 }
 
 *[cssClass="edit-primary-welcome"]:focus:hover {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
     border-right: 0;
 }
 
 *[cssClass="edit-primary-welcome"]:hover {
-    border: 1px solid #8fb35f;
+    border: 1px solid #85a653;
     border-right: 0;
 }
 
 *[cssClass="edit-primary-welcome-disabled"] {
-    border:1px solid #5d6b45;
+    border:1px solid #56653d;
     border-right: 0;
-    background-color:#2a3319;
+    background-color:#233319;
     font-size:18px;
     border-radius: 2px;
     padding:8px;
-    color: #a9b38d;
+    color: #a8b18a;
 }
 
 QRadioButton[cssClass="radio-welcome"]:checked {
-    color: #8fb35f;
+    color: #85a653;
     font-size:20px;
 }
 
 QRadioButton[cssClass="radio-welcome"]:unchecked {
-    color: #a9b38d;
+    color: #a8b18a;
     font-size:20px;
 }
 
 QRadioButton[cssClass="radio-welcome"] {
-    color: #a9b38d;
+    color: #a8b18a;
     font-size:20px;
     spacing:20px;
 }
@@ -4843,17 +4843,17 @@ HH       STANDARD QT DIALOGS (TOOLS / DEBUG)
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 QDialog {
-    background-color: #0d1008;
-    color: #efefdd;
+    background-color: #0c0f07;
+    color: #edefda;
 }
 
 QDialog QLabel {
-    color: #efefdd;
+    color: #edefda;
 }
 
 QDialog QGroupBox {
-    color: #efefdd;
-    border: 1px solid #3b4426;
+    color: #edefda;
+    border: 1px solid #31401f;
     margin-top: 12px;
 }
 
@@ -4861,76 +4861,76 @@ QDialog QGroupBox::title {
     subcontrol-origin: margin;
     left: 10px;
     padding: 0 4px;
-    color: #a9b38d;
+    color: #a8b18a;
 }
 
 QDialog QLineEdit,
 QDialog QTextEdit,
 QDialog QPlainTextEdit {
-    background-color: #141a0d;
-    color: #efefdd;
-    border: 1px solid #3b4426;
-    selection-background-color: #4f7a2e;
+    background-color: #182013;
+    color: #edefda;
+    border: 1px solid #31401f;
+    selection-background-color: #3d6121;
     selection-color: #FFFFFF;
 }
 
 QDialog QPushButton {
-    background-color: #141a0d;
-    color: #efefdd;
-    border: 1px solid #3b4426;
+    background-color: #182013;
+    color: #edefda;
+    border: 1px solid #31401f;
     padding: 6px 10px;
     border-radius: 4px;
 }
 
 QDialog QPushButton:hover {
-    border-color: #8fb35f;
+    border-color: #85a653;
 }
 
 QDialog QPushButton:pressed {
-    background-color: #2a3319;
+    background-color: #233319;
 }
 
 QDialog QTabWidget::pane {
-    border: 1px solid #3b4426;
+    border: 1px solid #31401f;
     top: -1px;
 }
 
 QDialog QTabBar::tab {
-    background-color: #2a3319;
-    color: #a9b38d;
-    border: 1px solid #3b4426;
+    background-color: #233319;
+    color: #a8b18a;
+    border: 1px solid #31401f;
     padding: 6px 10px;
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
 }
 
 QDialog QTabBar::tab:selected {
-    background-color: #141a0d;
-    color: #efefdd;
-    border-bottom-color: #141a0d;
+    background-color: #182013;
+    color: #edefda;
+    border-bottom-color: #182013;
 }
 
 QDialog QTabBar::tab:hover {
-    color: #efefdd;
-    border-color: #8fb35f;
+    color: #edefda;
+    border-color: #85a653;
 }
 
 QDialog QTableView,
 QDialog QTreeView,
 QDialog QListView {
-    background-color: #141a0d;
-    color: #efefdd;
-    gridline-color: #3b4426;
-    alternate-background-color: #2a3319;
-    selection-background-color: #4f7a2e;
+    background-color: #182013;
+    color: #edefda;
+    gridline-color: #31401f;
+    alternate-background-color: #233319;
+    selection-background-color: #3d6121;
     selection-color: #FFFFFF;
 }
 
 QDialog QHeaderView::section {
-    background-color: #2a3319;
-    color: #efefdd;
+    background-color: #233319;
+    color: #edefda;
     padding: 4px 6px;
-    border: 1px solid #3b4426;
+    border: 1px solid #31401f;
 }
 
 /* Ensure scrollable tools panels remain readable */
@@ -4938,14 +4938,14 @@ QTextEdit[cssClass="container"],
 QPlainTextEdit[cssClass="container"],
 QScrollArea[cssClass="container"],
 QScrollArea[cssClass="container"] QWidget#qt_scrollarea_viewport {
-    background-color: #0d1008;
-    color: #efefdd;
+    background-color: #0c0f07;
+    color: #edefda;
 }
 
 /* VoteDialog toggle rules must override generic dialog/radio rules above. */
 QFrame#voteDialogShell QRadioButton[cssClass="vote-mode-toggle"] {
     spacing: 0px;
-    color: #dde3c0;
+    color: #d8dfb9;
     font-size: 14px;
     font-weight: 600;
     border: 1px solid transparent;
@@ -4963,18 +4963,18 @@ QFrame#voteDialogShell QRadioButton[cssClass="vote-mode-toggle"]:checked {
     color: #FFFFFF;
     background-color: #c4552a;
     border-radius: 12px;
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
 }
 
 QFrame#voteDialogShell QRadioButton[cssClass="vote-mode-toggle"]:unchecked {
-    color: #dde3c0;
+    color: #d8dfb9;
     background-color: transparent;
     border-radius: 12px;
     border: 1px solid transparent;
 }
 
 QFrame#voteDialogShell QRadioButton[cssClass="vote-mode-toggle"]:hover:unchecked {
-    border: 1px solid #4f7a2e;
+    border: 1px solid #3d6121;
     background-color: rgba(143, 179, 95, 0.20);
 }
 
@@ -4994,33 +4994,33 @@ QFrame#voteDialogShell QPushButton[cssClass="vote-action-primary"] {
 }
 
 QFrame#voteDialogShell QPushButton[cssClass="vote-action-primary"]:hover {
-    border-color: #4f7a2e;
-    background-color: #4f7a2e;
+    border-color: #3d6121;
+    background-color: #3d6121;
 }
 
 QFrame#voteDialogShell QPushButton[cssClass="vote-action-primary"]:pressed {
-    border-color: #2a3319;
-    background-color: #2a3319;
+    border-color: #233319;
+    background-color: #233319;
 }
 
 QFrame#voteDialogShell QPushButton[cssClass="vote-action-primary"]:disabled {
-    border-color: #5d6b45;
-    background-color: #5d6b45;
-    color: #a9b38d;
+    border-color: #56653d;
+    background-color: #56653d;
+    color: #a8b18a;
 }
 
 QFrame#voteDialogShell QPushButton[cssClass="vote-action-cancel"] {
     border: 1px solid transparent;
     border-radius: 14px;
     background-color: transparent;
-    color: #e9eed4;
+    color: #e5ecd0;
     font-size: 16px;
     font-weight: 600;
     padding: 10px 18px;
 }
 
 QFrame#voteDialogShell QPushButton[cssClass="vote-action-cancel"]:hover {
-    border: 1px solid #5d6b45;
+    border: 1px solid #56653d;
     background-color: rgba(96, 106, 76, 0.45);
 }
 
@@ -5287,14 +5287,14 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="dashboard-stat-tile-label"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.8px;
 }
 
 *[cssClass="dashboard-stat-value"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 22px;
     font-weight: 700;
 }
@@ -5310,13 +5310,13 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="dashboard-feed-title"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 17px;
     font-weight: 700;
 }
 
 *[cssClass="dashboard-feed-subtitle"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 11px;
     font-weight: 500;
 }
@@ -5327,13 +5327,13 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="dashboard-feed-type"] {
-    color: #f4f6e2;
+    color: #f1f4df;
     font-size: 13px;
     font-weight: 600;
 }
 
 *[cssClass="dashboard-feed-date"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     font-size: 11px;
     font-weight: 500;
 }
@@ -5353,7 +5353,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 }
 
 *[cssClass="dashboard-feed-toggle"] {
-    color: #c2c7ae;
+    color: #bdc5a9;
     background: rgba(255, 255, 255, 0.06);
     border: none;
     border-radius: 14px;
@@ -5364,7 +5364,7 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
 *[cssClass="dashboard-feed-toggle"]:hover {
     background: rgba(255, 255, 255, 0.12);
-    color: #f4f6e2;
+    color: #f1f4df;
 }
 
 /*HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
@@ -5404,4 +5404,396 @@ QScrollArea[cssClass="dashboard-right-scroll"] QScrollBar::sub-page:vertical {
     background: transparent;
     border: 0;
     height: 0;
+}
+
+/* OrganicLife 2026 semantic fintech layer.
+   Roles: app #0D1512, rail #101B16, surface #121F1A, raised #172720,
+   border #2B3D34, focus #4E713D, brand #6EA449, text #F3F1E8. */
+*[cssClass="container"],
+QWidget[cssClass="dashboard-root"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #0D1512, stop:0.62 #101A16, stop:1 #10191A);
+}
+
+*[cssClass="wallet-left-shell"] {
+    background-color: #101B16;
+    border: 0;
+    border-right: 1px solid #24352D;
+}
+
+*[cssClass="brand-island"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #1A2B23, stop:1 #121F1A);
+    border: 1px solid #42603C;
+    border-radius: 32px;
+}
+
+*[cssClass="container-nav"] {
+    background: transparent;
+    border: 0;
+}
+
+QWidget#NavMenuWidget QToolButton {
+    color: #C8CEC8;
+    background-color: transparent;
+    border: 0;
+    border-radius: 9px;
+    padding: 0 12px;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+QWidget#NavMenuWidget QToolButton:hover {
+    color: #F3F1E8;
+    background-color: rgba(110,164,73,0.12);
+}
+
+QWidget#NavMenuWidget QToolButton:checked,
+QWidget#NavMenuWidget QToolButton:checked:hover {
+    color: #F3F1E8;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 rgba(78,124,53,0.78), stop:1 rgba(54,91,40,0.66));
+    border: 1px solid rgba(139,198,91,0.16);
+    font-weight: 600;
+}
+
+*[cssClass="dashboard-shell-left"],
+*[cssClass="dashboard-shell-right"] {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+}
+
+*[cssClass="dashboard-header-band"] {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+}
+
+*[cssClass="dashboard-header-band"] QLabel[cssClass="screen-header-title"],
+*[cssClass="screen-header-title"] {
+    color: #F3F1E8;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+*[cssClass="dashboard-header-band"] QLabel[cssClass="screen-header-subtitle"],
+*[cssClass="screen-header-subtitle"] {
+    color: #A9B0A9;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+*[cssClass="dashboard-stat-tile"],
+*[cssClass="dashboard-feed-card"],
+*[cssClass="dashboard-analytics-card"],
+QListView[cssClass="dashboard-transactions-list"] {
+    background-color: rgba(18,31,26,0.96);
+    border: 1px solid #2B3D34;
+    border-radius: 13px;
+}
+
+*[cssClass="dashboard-stat-tile-label"],
+*[cssClass="dashboard-feed-subtitle"],
+*[cssClass="dashboard-reward-tile-label"],
+*[cssClass="dashboard-side-subtitle"] {
+    color: #A9B0A9;
+}
+
+*[cssClass="dashboard-stat-value"],
+*[cssClass="dashboard-feed-title"],
+*[cssClass="dashboard-side-title"] {
+    color: #F3F1E8;
+}
+
+*[cssClass="dashboard-reward-tile"] {
+    background-color: #172720;
+    border: 1px solid #2B3D34;
+    border-radius: 10px;
+}
+
+QPushButton[cssClass="btn-check-time"] {
+    color: #C8CEC8;
+    background-color: transparent;
+    border: 1px solid #2B3D34;
+    border-radius: 8px;
+    padding: 6px 13px;
+}
+
+QPushButton[cssClass="btn-check-time"]:checked {
+    color: #F3F1E8;
+    background-color: #3F6B31;
+    border-color: #4E713D;
+}
+
+*[cssClass="dashboard-range-selector"] {
+    background-color: rgba(13,21,18,0.62);
+    border: 1px solid #2B3D34;
+    border-radius: 8px;
+}
+
+*[cssClass="dashboard-range-selector"] QPushButton[cssClass="btn-check-time"] {
+    min-height: 28px;
+    max-height: 28px;
+    border: 0;
+    border-radius: 7px;
+    padding: 1px 10px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+*[cssClass="dashboard-range-selector"] QPushButton[cssClass="btn-check-time"]:checked {
+    color: #F3F1E8;
+    background-color: #3F6B31;
+}
+
+*[cssClass="dashboard-reward-stat-stakes"],
+*[cssClass="dashboard-reward-stat-mn"],
+*[cssClass="dashboard-tx-amount-positive"] {
+    color: #8BC65B;
+}
+
+*[cssClass="dashboard-tx-amount-negative"] { color: #EF6A55; }
+*[cssClass="dashboard-warning-text"] { color: #E9A33B; }
+
+*[cssClass="dashboard-tx-row"] {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid rgba(43,61,52,0.72);
+}
+
+*[cssClass="dashboard-tx-row-hover"] { background-color: rgba(110,164,73,0.08); }
+*[cssClass="dashboard-tx-row-selected"] { background-color: rgba(110,164,73,0.14); }
+*[cssClass="dashboard-tx-address"] { color: #F3F1E8; }
+*[cssClass="dashboard-tx-address-muted"],
+*[cssClass="dashboard-tx-date"],
+*[cssClass="dashboard-tx-date-muted"],
+*[cssClass="dashboard-tx-amount-muted"],
+*[cssClass="dashboard-tx-amount-secondary"] { color: #A9B0A9; }
+
+*[cssClass="dashboard-global-header"] { background: transparent; border: 0; }
+*[cssClass="dashboard-global-title"] { color: #F3F1E8; font-size: 24px; font-weight: 700; }
+*[cssClass="dashboard-global-subtitle"] { color: #A9B0A9; font-size: 12px; font-weight: 400; }
+*[cssClass="dashboard-header-balance"] { color: #F3F1E8; font-size: 28px; font-weight: 700; }
+*[cssClass="dashboard-header-caption"] { color: #A9B0A9; font-size: 10px; font-weight: 600; letter-spacing: 0.8px; }
+*[cssClass="dashboard-sync-state"] { color: #8FA18F; font-size: 10px; font-weight: 500; }
+*[cssClass="dashboard-status-cluster"] { background: transparent; border: 0; }
+*[cssClass="dashboard-status-item"] {
+    background-color: rgba(22,37,30,0.72);
+    border: 1px solid #2B3D34;
+    border-radius: 8px;
+}
+*[cssClass="dashboard-status-item"][statusState="active"] {
+    background-color: rgba(78,125,53,0.90);
+    border-color: #79AF57;
+}
+*[cssClass="dashboard-status-item"][statusState="active"] *[cssClass="dashboard-status-text"] { color: #FFFFFF; }
+*[cssClass="dashboard-status-item"][statusState="danger"] {
+    background-color: rgba(194,63,55,0.20);
+    border-color: rgba(231,91,79,0.72);
+}
+*[cssClass="dashboard-status-item"][statusState="warning"] {
+    background-color: rgba(203,119,36,0.18);
+    border-color: rgba(236,153,64,0.70);
+}
+*[cssClass="dashboard-status-item"][statusState="connected"] {
+    background-color: rgba(22,37,30,0.76);
+    border-color: #365043;
+}
+*[cssClass="dashboard-status-divider"] { background-color: #3A4E43; border: 0; }
+*[cssClass="dashboard-status-text"] { color: #B7C0B7; font-size: 9px; font-weight: 550; }
+*[cssClass="dashboard-empty-title"] { color: #F3F1E8; font-size: 14px; font-weight: 600; }
+*[cssClass="dashboard-empty-copy"] { color: #A9B0A9; font-size: 11px; font-weight: 400; padding: 0 20px; }
+
+*[cssClass="dashboard-balance-card"],
+*[cssClass="dashboard-transactions-card"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 rgba(18,31,26,0.98), stop:1 rgba(18,30,27,0.96));
+    border: 1px solid #2B3D34;
+    border-radius: 13px;
+}
+
+*[cssClass="dashboard-card-title"],
+*[cssClass="dashboard-section-title"] { color: #F3F1E8; font-size: 15px; font-weight: 650; }
+*[cssClass="dashboard-card-subtitle"] { color: #A9B0A9; font-size: 11px; font-weight: 400; }
+*[cssClass="dashboard-card-divider"] { color: #2B3D34; background-color: #2B3D34; border: 0; max-height: 1px; }
+*[cssClass="dashboard-total-balance"] { color: #F3F1E8; font-size: 32px; font-weight: 700; }
+*[cssClass="dashboard-latest-activity"] { background: transparent; border: 0; }
+
+QPushButton[cssClass="dashboard-action-primary"],
+QPushButton[cssClass="dashboard-action-secondary"] {
+    min-height: 38px;
+    border-radius: 8px;
+    padding: 0 18px;
+    font-size: 13px;
+    font-weight: 600;
+}
+QPushButton[cssClass="dashboard-action-primary"] {
+    color: #F7F8F2;
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #4C7F35,stop:1 #6EA449);
+    border: 1px solid #6EA449;
+}
+QPushButton[cssClass="dashboard-action-primary"]:hover { background-color: #7CB552; border-color: #8BC65B; }
+QPushButton[cssClass="dashboard-action-secondary"] { color: #F3F1E8; background: transparent; border: 1px solid #4E713D; }
+QPushButton[cssClass="dashboard-action-secondary"]:hover { background-color: rgba(110,164,73,0.10); border-color: #6EA449; }
+
+*[cssClass="dashboard-transactions-card"] *[cssClass="dashboard-shell-left"] { background: transparent; }
+
+*[cssClass="nav-utility-panel"] {
+    background-color: rgba(18,31,26,0.74);
+    border: 1px solid #2B3D34;
+    border-radius: 9px;
+}
+QToolButton[cssClass="nav-utility-button"] {
+    color: #C8CEC8;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    padding: 0 8px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 500;
+}
+QToolButton[cssClass="nav-utility-button"]:hover { color: #F3F1E8; background-color: rgba(110,164,73,0.10); }
+QToolButton[cssClass="nav-utility-button"]:checked { color: #F3F1E8; }
+
+/* Final professional-fintech consistency layer. */
+*[cssClass="topbar-utility-strip"] {
+    background-color: #101B16;
+    border: 1px solid #2B3D34;
+    border-radius: 11px;
+}
+*[cssClass="topbar-utility-strip"] QPushButton[cssClass="btn-check-wallet"],
+*[cssClass="topbar-utility-strip"] QPushButton[cssClass="btn-check-connect-inactive"],
+*[cssClass="topbar-utility-strip"] QPushButton[cssClass="btn-check-connect-active"],
+*[cssClass="topbar-utility-strip"] QPushButton[cssClass="btn-check-sync"],
+*[cssClass="topbar-utility-strip"] QPushButton[cssClass="btn-check-status-lock"],
+*[cssClass="topbar-utility-strip"] QPushButton[cssClass="btn-check-status-unlock"],
+*[cssClass="topbar-utility-strip"] QPushButton[cssClass="btn-check-status-staking"],
+*[cssClass="topbar-utility-strip"] QPushButton[cssClass="btn-check-theme-light"],
+*[cssClass="topbar-utility-strip"] QPushButton[cssClass="btn-check-theme-dark"] {
+    color: #C8CEC8;
+    background-color: #16251E;
+    border: 1px solid #2B3D34;
+    border-radius: 9px;
+    min-height: 36px;
+}
+*[cssClass="topbar-utility-strip"] QPushButton:hover {
+    color: #F3F1E8;
+    background-color: #1C3026;
+    border-color: #527344;
+}
+
+*[cssClass="screen-main-surface"] {
+    background-color: #0D1512;
+    border: 0;
+}
+*[cssClass="screen-main-surface"] *[cssClass="screen-header-band"],
+*[cssClass="screen-header-band"] {
+    background-color: #121F1A;
+    border: 1px solid #2B3D34;
+    border-radius: 13px;
+}
+*[cssClass="screen-side-rail"] {
+    background-color: #0D1512;
+    border-left: 1px solid #2B3D34;
+}
+*[cssClass="screen-side-card"],
+*[cssClass="screen-main-surface"] QListView,
+*[cssClass="screen-main-surface"] QScrollArea {
+    background-color: #121F1A;
+    border: 1px solid #2B3D34;
+    border-radius: 12px;
+}
+OptionButton[cssClass="screen-side-option"] QWidget#layoutOptions2 {
+    background-color: #121F1A;
+    border: 1px solid #2B3D34;
+    border-radius: 12px;
+}
+OptionButton[cssClass="screen-side-option"] QWidget#layoutOptions2[hovered="true"] {
+    background-color: #16251E;
+    border-color: #527344;
+}
+QPushButton[cssClass="btn-settings-check"],
+QPushButton[cssClass="btn-settings-options"] {
+    color: #C8CEC8;
+    background-color: #121F1A;
+    border: 1px solid #2B3D34;
+    border-radius: 10px;
+    min-height: 42px;
+    text-align: left;
+    padding: 0 14px;
+}
+QPushButton[cssClass="btn-settings-check"]:checked,
+QPushButton[cssClass="btn-settings-options"]:checked,
+QPushButton[cssClass="btn-settings-check"]:hover,
+QPushButton[cssClass="btn-settings-options"]:hover {
+    color: #F3F1E8;
+    background-color: #1C3026;
+    border-color: #527344;
+}
+
+QPushButton[cssClass="dashboard-tx-icon-received"],
+QPushButton[cssClass="dashboard-tx-icon-sent"],
+QPushButton[cssClass="dashboard-tx-icon-reward"],
+QPushButton[cssClass="dashboard-tx-icon-transfer"],
+QPushButton[cssClass="dashboard-tx-icon-neutral"] {
+    border: 0;
+    border-radius: 8px;
+    min-width: 34px;
+    max-width: 34px;
+    min-height: 34px;
+    max-height: 34px;
+    qproperty-iconSize: 20px 20px;
+}
+QPushButton[cssClass="dashboard-tx-icon-received"] { background-color: rgba(91,150,63,0.58); }
+QPushButton[cssClass="dashboard-tx-icon-sent"] { background-color: rgba(217,93,76,0.58); }
+QPushButton[cssClass="dashboard-tx-icon-reward"] { background-color: rgba(224,142,54,0.60); }
+QPushButton[cssClass="dashboard-tx-icon-transfer"] { background-color: rgba(114,153,90,0.58); }
+QPushButton[cssClass="dashboard-tx-icon-neutral"] { background-color: rgba(82,97,89,0.54); }
+
+*[cssClass="dashboard-period-filter"] {
+    background-color: #16251E;
+    border: 1px solid #2B3D34;
+    border-radius: 9px;
+}
+*[cssClass="dashboard-period-label"] {
+    color: #A9B0A9;
+    font-size: 11px;
+    font-weight: 600;
+}
+QComboBox[cssClass="dashboard-period-combo"] {
+    color: #F3F1E8;
+    background-color: #101B16;
+    border: 1px solid #2B3D34;
+    border-radius: 7px;
+    padding: 0 28px 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+QComboBox[cssClass="dashboard-period-combo"]::drop-down {
+    width: 24px;
+    border: 0;
+}
+QComboBox[cssClass="dashboard-period-combo"]::down-arrow {
+    image: url("://ic-arrow-drop-down-white");
+    width: 14px;
+    height: 14px;
+}
+QLabel[cssClass="dashboard-chart-timeline-label"] {
+    color: #A9B0A9;
+    background-color: transparent;
+    border: 0;
+    font-size: 10px;
+    font-weight: 500;
+}
+QLabel[cssClass="dashboard-chart-tooltip"] {
+    color: #F3F1E8;
+    background-color: #1A2D24;
+    border: 1px solid #5D913F;
+    border-radius: 6px;
+    padding: 4px 7px;
+    font-size: 10px;
+    font-weight: 600;
 }
