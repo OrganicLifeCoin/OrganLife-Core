@@ -47,12 +47,12 @@ void MNModel::updateMNList()
     beginResetModel();
     nodes.clear();
     collateralTxAccepted.clear();
-    const auto& mnList = deterministicMNManager->GetListAtChainTip();
     for (const CMasternodeConfig::CMasternodeEntry& mne : masternodeConfig.getEntries()) {
         CDeterministicMNCPtr dmn = nullptr;
         CService service;
-        if (Lookup(mne.getIp(), service, Params().GetDefaultPort(), false)) {
-            dmn = mnList.GetMNByService(service);
+        if (deterministicMNManager &&
+            Lookup(mne.getIp(), service, Params().GetDefaultPort(), false)) {
+            dmn = deterministicMNManager->GetListAtChainTip().GetMNByService(service);
         }
         nodes.insert(QString::fromStdString(mne.getAlias()), std::make_pair(QString::fromStdString(mne.getIp()), dmn));
         collateralTxAccepted.insert(mne.getAlias(), dmn != nullptr);
