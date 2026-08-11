@@ -26,6 +26,7 @@
 #include <QApplication>
 #include <QColor>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QKeySequence>
 #include <QPainter>
 #include <QPainterPath>
@@ -138,9 +139,39 @@ OrganicLifeGUI::OrganicLifeGUI(const NetworkStyle* networkStyle, QWidget* parent
         centralWidget->setProperty("cssClass", "container");
         centralWidget->setStyleSheet("padding:0px; border:none; margin:0px;");
 
-        // First the nav
-        navMenu = new NavMenuWidget(this);
-        centralWidgetLayouot->addWidget(navMenu);
+        // Left shell: the brand island is deliberately a sibling of the
+        // navigation widget. This gives the supplied logo its own footprint,
+        // prevents clipping, and guarantees that navigation begins below it.
+        auto* leftShell = new QFrame(centralWidget);
+        leftShell->setObjectName("walletLeftShell");
+        leftShell->setAttribute(Qt::WA_StyledBackground, true);
+        leftShell->setFixedWidth(190);
+        setCssProperty(leftShell, "wallet-left-shell");
+        auto* leftShellLayout = new QVBoxLayout(leftShell);
+        leftShellLayout->setContentsMargins(14, 16, 14, 14);
+        leftShellLayout->setSpacing(14);
+
+        auto* brandIsland = new QFrame(leftShell);
+        brandIsland->setObjectName("brandIsland");
+        brandIsland->setAttribute(Qt::WA_StyledBackground, true);
+        brandIsland->setFixedSize(144, 136);
+        setCssProperty(brandIsland, "brand-island");
+        auto* brandLayout = new QVBoxLayout(brandIsland);
+        brandLayout->setContentsMargins(6, 6, 6, 6);
+        auto* brandLogo = new QLabel(brandIsland);
+        brandLogo->setObjectName("brandIslandLogo");
+        brandLogo->setProperty("sourceAsset", QStringLiteral(":/img-logo-pivx"));
+        brandLogo->setAlignment(Qt::AlignCenter);
+        brandLogo->setScaledContents(false);
+        const QPixmap suppliedLogo(":/img-logo-pivx");
+        brandLogo->setPixmap(suppliedLogo.scaled(122, 122, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        brandLayout->addWidget(brandLogo, 0, Qt::AlignCenter);
+        leftShellLayout->addWidget(brandIsland, 0, Qt::AlignHCenter);
+
+        navMenu = new NavMenuWidget(this, leftShell);
+        navMenu->setObjectName("NavMenuWidget");
+        leftShellLayout->addWidget(navMenu, 1);
+        centralWidgetLayouot->addWidget(leftShell);
 
         this->setCentralWidget(centralWidget);
         this->setContentsMargins(0,0,0,0);
@@ -155,9 +186,11 @@ OrganicLifeGUI::OrganicLifeGUI(const NetworkStyle* networkStyle, QWidget* parent
         baseScreensContainer->setSpacing(0);
         container->setLayout(baseScreensContainer);
 
-        // Insert the topbar
+        // Keep the legacy TopBar alive as a controller for existing wallet
+        // dialogs and model wiring, but remove it from the visible shell.
         topBar = new TopBar(this);
         topBar->setContentsMargins(0,0,0,0);
+        topBar->showDashboard();
         baseScreensContainer->addWidget(topBar);
 
         // Now stacked widget
@@ -249,6 +282,13 @@ void OrganicLifeGUI::connectActions()
     });
     connect(topBar, &TopBar::showHide, this, &OrganicLifeGUI::showHide);
     connect(topBar, &TopBar::themeChanged, this, &OrganicLifeGUI::changeTheme);
+    connect(topBar, &TopBar::themeChanged, navMenu, &NavMenuWidget::setThemeState);
+    connect(navMenu, &NavMenuWidget::themeToggleRequested, topBar, &TopBar::toggleTheme);
+    connect(navMenu, &NavMenuWidget::walletLockRequested, topBar, &TopBar::toggleWalletLock);
+    connect(navMenu, &NavMenuWidget::walletSelectorRequested, topBar, &TopBar::showWalletSelector);
+    connect(topBar, &TopBar::connectionCountChanged, dashboard, &DashboardWidget::setNumConnections);
+    connect(topBar, &TopBar::stakingStatusChanged, dashboard, &DashboardWidget::setStakingStatusActive);
+    connect(topBar, &TopBar::blockHeightChanged, dashboard, &DashboardWidget::setBlockHeight);
     connect(topBar, &TopBar::onShowHideColdStakingChanged, navMenu, &NavMenuWidget::onShowHideColdStakingChanged);
     connect(settingsWidget, &SettingsWidget::showHide, this, &OrganicLifeGUI::showHide);
     connect(sendWidget, &SendWidget::showHide, this, &OrganicLifeGUI::showHide);
@@ -555,9 +595,20 @@ void OrganicLifeGUI::detectShutdown()
 
 void OrganicLifeGUI::goToDashboard()
 {
+    topBar->showDashboard();
+    dashboard->setTransactionsOnly(false);
     if (stackedContainer->currentWidget() != dashboard) {
         stackedContainer->setCurrentWidget(dashboard);
-        topBar->showBottom();
+        QTimer::singleShot(0, this, [this]() { updateContentCornerArc(); });
+    }
+}
+
+void OrganicLifeGUI::goToTransactions()
+{
+    topBar->showDashboard();
+    dashboard->setTransactionsOnly(true);
+    if (stackedContainer->currentWidget() != dashboard) {
+        stackedContainer->setCurrentWidget(dashboard);
         QTimer::singleShot(0, this, [this]() { updateContentCornerArc(); });
     }
 }
@@ -611,9 +662,9 @@ void OrganicLifeGUI::openNetworkMonitor()
 
 void OrganicLifeGUI::showTop(QWidget* view)
 {
+    topBar->showTop();
     if (stackedContainer->currentWidget() != view) {
         stackedContainer->setCurrentWidget(view);
-        topBar->showTop();
         QTimer::singleShot(0, this, [this]() { updateContentCornerArc(); });
     }
 }
@@ -655,7 +706,7 @@ void OrganicLifeGUI::updateContentCornerArc()
 void OrganicLifeGUI::updateContentCornerArcStyle()
 {
     if (!contentCornerArc) return;
-    const QColor arcColor = isLightTheme() ? QColor("#FFF4E8") : QColor("#170D0A");
+    const QColor arcColor = isLightTheme() ? QColor("#F3F6F1") : QColor("#0D1512");
     contentCornerArc->setFillColor(arcColor);
 }
 
@@ -675,10 +726,10 @@ void OrganicLifeGUI::showHide(bool show)
         op->setVisible(false);
         opEnabled = false;
     } else {
-        QColor bg("#3A2418");
+        QColor bg("#19221D");
         bg.setAlpha(200);
         if (!isLightTheme()) {
-            bg = QColor("#130B08");
+            bg = QColor("#08100C");
             bg.setAlpha(150);
         }
 
@@ -789,6 +840,7 @@ bool OrganicLifeGUI::setCurrentWallet(const QString& name)
 
     WalletModel* walletModel = it->second.data();
     currentWallet = name;
+    navMenu->setWalletName(walletDisplayName(name));
 
     if (mnModel) mnModel->setWalletModel(walletModel);
     if (governancewidget) governancewidget->setWalletModel(walletModel);

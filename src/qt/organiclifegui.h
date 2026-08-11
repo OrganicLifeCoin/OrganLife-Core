@@ -73,6 +73,7 @@ Q_SIGNALS:
 public Q_SLOTS:
     void changeTheme(bool isLightTheme);
     void goToDashboard();
+    void goToTransactions();
     void goToSend();
     void goToReceive();
     void goToAddresses();

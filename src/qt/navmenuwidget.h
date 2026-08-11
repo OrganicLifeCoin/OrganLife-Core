@@ -9,6 +9,7 @@
 #include <QWidget>
 
 class OrganicLifeGUI;
+class QToolButton;
 
 namespace Ui {
 class NavMenuWidget;
@@ -28,6 +29,13 @@ public:
 public Q_SLOTS:
     void selectSettings();
     void onShowHideColdStakingChanged(bool show);
+    void setThemeState(bool isLightTheme);
+    void setWalletName(const QString& walletName);
+
+Q_SIGNALS:
+    void themeToggleRequested();
+    void walletLockRequested();
+    void walletSelectorRequested();
 
 private Q_SLOTS:
     void onSendClicked();
@@ -38,10 +46,15 @@ private Q_SLOTS:
     void onGovClicked();
     void onSettingsClicked();
     void onReceiveClicked();
+    void onTransactionsClicked();
     void updateButtonStyles();
 private:
     Ui::NavMenuWidget *ui;
     QList<QWidget*> btns;
+    QToolButton* themeButton{nullptr};
+    QToolButton* lockButton{nullptr};
+    QToolButton* walletSelectorButton{nullptr};
+    QToolButton* transactionsButton{nullptr};
 
     void connectActions();
     void onNavSelected(QWidget* active, bool startup = false);
