@@ -104,6 +104,23 @@ void ChartUtilsTests::chartRewardAggregationUsesCopiedRows()
     QCOMPARE(byYear.amountsBy.at(2026).second, static_cast<long long>(5 * COIN));
 }
 
+void ChartUtilsTests::cumulativeChartSeriesCarriesRewardsAcrossEmptyBuckets()
+{
+    const std::map<int, std::pair<long long, long long>> rewards = {
+        {1, {5 * COIN, 2 * COIN}},
+        {3, {4 * COIN, 1 * COIN}},
+    };
+
+    const auto series = BuildCumulativeRewardSeries(rewards, 1, 4);
+    QCOMPARE(series.size(), size_t{3});
+    QCOMPARE(series.at(0).first, static_cast<long long>(5 * COIN));
+    QCOMPARE(series.at(0).second, static_cast<long long>(2 * COIN));
+    QCOMPARE(series.at(1).first, static_cast<long long>(5 * COIN));
+    QCOMPARE(series.at(1).second, static_cast<long long>(2 * COIN));
+    QCOMPARE(series.at(2).first, static_cast<long long>(9 * COIN));
+    QCOMPARE(series.at(2).second, static_cast<long long>(3 * COIN));
+}
+
 void ChartUtilsTests::coinbaseCreditsAreClassifiedByRewardType()
 {
     // v6 activates at genesis on the public networks: pin a concrete height so

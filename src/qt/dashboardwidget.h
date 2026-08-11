@@ -114,6 +114,7 @@ public:
     void loadWalletModel() override;
     void clearWalletModel() override;
     void loadChart();
+    void setTransactionsOnly(bool transactionsOnly);
 
     void run(int type) override;
     void onError(QString error, int type) override;
@@ -126,6 +127,9 @@ public Q_SLOTS:
     */
     void processNewTransaction(const QModelIndex& parent, int start, int /*end*/);
     void prepareTransactionInsertionAnimation(const QModelIndex& parent, int start, int end);
+    void setNumConnections(int count);
+    void setStakingStatusActive(bool active);
+    void setBlockHeight(int height);
 Q_SIGNALS:
     /** Notify that a new transaction appeared */
     void incomingTransaction(const QString& date, int unit, const CAmount& amount, const QString& type, const QString& address);
@@ -165,22 +169,35 @@ private:
     QLabel* statValueAvailable{nullptr};
     QLabel* statValueStaking{nullptr};
     QLabel* statValueRewards{nullptr};
-    QVBoxLayout* feedRowsLayout{nullptr};
-    QWidget* feedBody{nullptr};
-    QPushButton* feedToggle{nullptr};
-    bool feedExpanded{false};
-    void setFeedExpanded(bool expanded);
+    QLabel* headerAvailableBalance{nullptr};
+    QLabel* dashboardSyncStatus{nullptr};
+    QLabel* dashboardConnectionStatus{nullptr};
+    QLabel* dashboardStakingStatus{nullptr};
+    QLabel* dashboardSyncIcon{nullptr};
+    QLabel* dashboardConnectionIcon{nullptr};
+    QLabel* dashboardStakingIcon{nullptr};
+    QLabel* dashboardBlockHeight{nullptr};
+    QWidget* dashboardSyncBadge{nullptr};
+    QWidget* dashboardConnectionBadge{nullptr};
+    QWidget* dashboardStakingBadge{nullptr};
+    QWidget* dashboardHeader{nullptr};
+    QWidget* topCardsContainer{nullptr};
+    QWidget* recentTransactionsCard{nullptr};
     QWidget* chartBody{nullptr};
     QWidget* chartContent{nullptr};
+    QWidget* periodFilterRow{nullptr};
     QWidget* analyticsCard{nullptr};
     QPushButton* chartToggle{nullptr};
     int chartBottomStretchIdx{-1};
     bool chartExpanded{true};
+    bool transactionsOnly{false};
+    int dashboardConnectionCount{0};
+    int dashboardCurrentBlockHeight{0};
+    bool dashboardStakingActive{false};
     void setChartExpanded(bool expanded);
     void animateSection(QWidget* body, bool expand, const std::function<void()>& onFinish = nullptr);
     void updateStatBalances(const interfaces::WalletBalances& balances);
     void updateStatRewards();
-    void updateFeedNotes();
 
     void changeSort(int nSortIndex);
     void startInsertedRowAnimations(const QModelIndex& proxyIndex);
@@ -201,6 +218,9 @@ private:
 
 	    QBarCategoryAxis *axisX{nullptr};
 	    QValueAxis *axisY{nullptr};
+	    QWidget* chartTimeline{nullptr};
+	    QList<QLabel*> chartTimelineLabels;
+	    QLabel* chartValueTooltip{nullptr};
 
 	    QChart *chart{nullptr};
     bool isChartMin{false};
@@ -233,11 +253,13 @@ private:
     void resolveMonthWindowForFilters();
     void pageMonthWindow(bool goLeft);
     void updateMonthArrowState();
+    void updateChartTimelineGeometry();
     int monthDaysInFilter() const;
 
 private Q_SLOTS:
     void onChartRefreshed();
     void onHideChartsChanged(bool fHide);
+    void onChartPointHovered(const QPointF& point, bool state);
 
 #endif
 

@@ -38,6 +38,7 @@ public:
 
     void showTop();
     void showBottom();
+    void showDashboard();
 
     void loadWalletModel() override;
     void clearWalletModel() override;
@@ -51,6 +52,9 @@ public:
     void unlockWallet();
 
 public Q_SLOTS:
+    void toggleTheme();
+    void toggleWalletLock();
+    void showWalletSelector();
     void updateBalances(const interfaces::WalletBalances& newBalance);
     void updateDisplayUnit();
 
@@ -68,6 +72,9 @@ Q_SIGNALS:
     void walletSynced(bool isSync);
     void tierTwoSynced(bool isSync);
     void onShowHideColdStakingChanged(bool show);
+    void connectionCountChanged(int count);
+    void stakingStatusChanged(bool active);
+    void blockHeightChanged(int height);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;

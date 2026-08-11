@@ -217,4 +217,32 @@ inline ChartRewardAggregation AggregateChartRewards(const std::vector<ChartStake
     return result;
 }
 
+inline std::vector<std::pair<long long, long long>> BuildCumulativeRewardSeries(
+        const std::map<int, std::pair<long long, long long>>& rewards,
+        const int firstBucket,
+        const int lastBucketExclusive)
+{
+    std::vector<std::pair<long long, long long>> series;
+    if (lastBucketExclusive <= firstBucket) return series;
+
+    long long stakingTotal = 0;
+    long long masternodeTotal = 0;
+    for (const auto& reward : rewards) {
+        if (reward.first >= firstBucket) break;
+        stakingTotal += reward.second.first;
+        masternodeTotal += reward.second.second;
+    }
+
+    series.reserve(static_cast<size_t>(lastBucketExclusive - firstBucket));
+    for (int bucket = firstBucket; bucket < lastBucketExclusive; ++bucket) {
+        const auto reward = rewards.find(bucket);
+        if (reward != rewards.end()) {
+            stakingTotal += reward->second.first;
+            masternodeTotal += reward->second.second;
+        }
+        series.emplace_back(stakingTotal, masternodeTotal);
+    }
+    return series;
+}
+
 #endif // PIVX_QT_CHARTUTILS_H

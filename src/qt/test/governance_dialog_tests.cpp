@@ -30,6 +30,7 @@
 #include "sendconfirmdialog.h"
 #include "topbar.h"
 #include "transactionrecord.h"
+#include "txrow.h"
 #include "tiertwo/tiertwo_sync_state.h"
 #include "streams.h"
 #include "qtutils.h"
@@ -55,6 +56,7 @@
 #include <QStyle>
 #include <QtTest/qtest_widgets.h>
 #include <QTimer>
+#include <QToolButton>
 #include <QWidget>
 #include <cstdlib>
 #include <memory>
@@ -447,6 +449,85 @@ void GovernanceDialogTests::topBarConnectionStyleTracksCurrentCount()
     topBar.setNumConnections(0);
     QCOMPARE(innerButton->property("cssClass").toString(), QString("btn-check-connect-inactive"));
     QVERIFY(!connectionButton->isChecked());
+}
+
+void GovernanceDialogTests::lightThemeUtilitiesHaveVisibleChrome()
+{
+    QFile file(resolveQtSourceFile(QStringLiteral("res/css/style_light.css")));
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString css = QString::fromUtf8(file.readAll());
+    const int start = css.indexOf(QStringLiteral("*[cssClass=\"topbar-utility-strip\"]"));
+    QVERIFY2(start >= 0, "Light mode needs a dedicated visible utility-strip surface");
+    const QString block = start >= 0 ? css.mid(start, 1800) : QString();
+    QVERIFY2(block.contains(QStringLiteral("background-color: #FFFFFF")),
+             "Light-mode utility controls must not disappear into the page background");
+    QVERIFY2(block.contains(QStringLiteral("border: 1px solid #D4DDD2")),
+             "Light-mode theme and lock controls need visible boundary chrome");
+}
+
+void GovernanceDialogTests::transactionRowsUseColorCodedIconBadges()
+{
+    TxRow row;
+    row.init(true);
+    auto* icon = row.findChild<QPushButton*>(QStringLiteral("icon"));
+    QVERIFY(icon != nullptr);
+    if (!icon) return;
+
+    row.setType(true, TransactionRecord::RecvWithAddress, true);
+    QCOMPARE(icon->property("cssClass").toString(), QStringLiteral("dashboard-tx-icon-received"));
+    row.setType(true, TransactionRecord::SendToAddress, true);
+    QCOMPARE(icon->property("cssClass").toString(), QStringLiteral("dashboard-tx-icon-sent"));
+    row.setType(true, TransactionRecord::StakeMint, true);
+    QCOMPARE(icon->property("cssClass").toString(), QStringLiteral("dashboard-tx-icon-reward"));
+    const auto hasLightGlyph = [](const QIcon& sourceIcon) {
+        const QImage image = sourceIcon.pixmap(24, 24).toImage().convertToFormat(QImage::Format_ARGB32);
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                const QColor pixel = image.pixelColor(x, y);
+                if (pixel.alpha() > 40 && pixel.red() > 220 && pixel.green() > 220 && pixel.blue() > 220) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    QVERIFY2(hasLightGlyph(icon->icon()), "Color badges need a high-contrast light glyph in light mode");
+    row.setType(true, TransactionRecord::StakeMint, false);
+    QCOMPARE(icon->property("cssClass").toString(), QStringLiteral("dashboard-tx-icon-reward"));
+    QVERIFY2(hasLightGlyph(icon->icon()), "Pending rewards should keep the same clear semantic glyph");
+
+    const auto assertSoftSemanticSurfaces = [](const QString& relativePath) {
+        QFile file(resolveQtSourceFile(relativePath));
+        QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(relativePath));
+        const QString css = QString::fromUtf8(file.readAll());
+        for (const QString& role : {
+                 QStringLiteral("dashboard-tx-icon-received"),
+                 QStringLiteral("dashboard-tx-icon-sent"),
+                 QStringLiteral("dashboard-tx-icon-reward"),
+                 QStringLiteral("dashboard-tx-icon-transfer")}) {
+            const int selector = css.lastIndexOf(QStringLiteral("QPushButton[cssClass=\"%1\"]").arg(role));
+            QVERIFY2(selector >= 0, qPrintable(QString("Missing %1 in %2").arg(role, relativePath)));
+            const int blockEnd = selector >= 0 ? css.indexOf(QLatin1Char('}'), selector) : -1;
+            const QString block = blockEnd > selector ? css.mid(selector, blockEnd - selector) : QString();
+            QVERIFY2(block.contains(QStringLiteral("rgba(")),
+                     qPrintable(QString("%1 must use a soft translucent surface in %2").arg(role, relativePath)));
+        }
+    };
+    assertSoftSemanticSurfaces(QStringLiteral("res/css/style_light.css"));
+    assertSoftSemanticSurfaces(QStringLiteral("res/css/style_dark.css"));
+}
+
+void GovernanceDialogTests::secondaryScreensUseOneFintechShell()
+{
+    QFile file(resolveQtSourceFile(QStringLiteral("settings/settingswidget.cpp")));
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString source = QString::fromUtf8(file.readAll());
+    QVERIFY2(source.contains(QStringLiteral("setCssProperty(ui->left, \"screen-main-surface\")")),
+             "Settings must use the same main content surface as Send and the other wallet screens");
+    QVERIFY2(source.contains(QStringLiteral("setCssProperty(ui->right, \"screen-side-rail\")")),
+             "Settings must use the shared premium side rail");
+    QVERIFY2(source.contains(QStringLiteral("setCssProperty(ui->labelTitle, \"screen-header-title\")")),
+             "Settings must use the shared screen title typography");
 }
 
 void GovernanceDialogTests::expandableButtonExpandsWhenInnerPushButtonReceivesHoverEntry()
@@ -1629,8 +1710,7 @@ void GovernanceDialogTests::voteDialogCloseButtonVisibleAndClickableAfterScroll(
     QVERIFY(header->rect().contains(btnEsc->geometry().center()));
 
     QTest::mouseClick(btnEsc, Qt::LeftButton);
-    QCoreApplication::processEvents();
-    QVERIFY(!dialog.isVisible());
+    QTRY_VERIFY_WITH_TIMEOUT(!dialog.isVisible(), 1000);
 }
 
 void GovernanceDialogTests::voteDialogCloseButtonIconHasVisibleSize()
@@ -3003,7 +3083,7 @@ void GovernanceDialogTests::voteDialogHeaderUsesOrganicLifeAccentToneInBothTheme
     const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
 
     QVERIFY(cssHasAccentHeader(lightSource, "#F2D4B8"));
-    QVERIFY(cssHasAccentHeader(darkSource, "#8fb35f"));
+    QVERIFY(cssHasAccentHeader(darkSource, "#85a653"));
 }
 
 void GovernanceDialogTests::voteDialogCloseButtonUsesThemeAwareIconClass()
@@ -3063,7 +3143,7 @@ void GovernanceDialogTests::voteDialogHeaderTitleUsesThemeAwareReadableColor()
     const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
     const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
 
-    QVERIFY(cssHasTitleSpec(lightSource, "#2b2b1a"));
+    QVERIFY(cssHasTitleSpec(lightSource, "#2d3020"));
     QVERIFY(cssHasTitleSpec(darkSource, "#FFFFFF"));
 }
 
@@ -4537,6 +4617,447 @@ void GovernanceDialogTests::dashboardWidgetUsesPremiumDashboardClasses()
     QCOMPARE(chartCanvas->property("cssClass").toString(), QStringLiteral("dashboard-chart-canvas"));
 }
 
+void GovernanceDialogTests::walletShellKeepsBrandIslandOutsideNavigation()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    const bool originalLightTheme = isLightTheme();
+    const QString captureTheme = qEnvironmentVariable("ORGANICLIFE_CAPTURE_THEME").trimmed().toLower();
+    if (captureTheme == QStringLiteral("light")) {
+        setTheme(true);
+    } else if (captureTheme == QStringLiteral("dark")) {
+        setTheme(false);
+    }
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    bool widthOk = false;
+    bool heightOk = false;
+    const int captureWidth = qEnvironmentVariableIntValue("ORGANICLIFE_CAPTURE_WIDTH", &widthOk);
+    const int captureHeight = qEnvironmentVariableIntValue("ORGANICLIFE_CAPTURE_HEIGHT", &heightOk);
+    mainWindow.resize(widthOk ? captureWidth : 1280, heightOk ? captureHeight : 800);
+    mainWindow.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+
+    QWidget* brandIsland = mainWindow.findChild<QWidget*>("brandIsland");
+    QLabel* brandLogo = mainWindow.findChild<QLabel*>("brandIslandLogo");
+    QWidget* navigation = mainWindow.findChild<QWidget*>("NavMenuWidget");
+    QToolButton* transactionsButton = mainWindow.findChild<QToolButton*>("btnTransactions");
+    QWidget* utilityPanel = mainWindow.findChild<QWidget*>("navUtilityPanel");
+    TopBar* topBar = mainWindow.findChild<TopBar*>();
+
+    QVERIFY(brandIsland != nullptr);
+    QVERIFY(brandLogo != nullptr);
+    QVERIFY(navigation != nullptr);
+    QVERIFY(transactionsButton != nullptr);
+    QVERIFY(utilityPanel != nullptr);
+    QVERIFY(topBar != nullptr);
+    if (!brandIsland || !brandLogo || !navigation || !transactionsButton || !utilityPanel || !topBar) return;
+
+    QVERIFY2(!navigation->isAncestorOf(brandIsland), "The logo island must not belong to the navigation widget");
+    QVERIFY2(!navigation->isAncestorOf(brandLogo), "The logo image must not be painted from inside the navigation widget");
+    QVERIFY(!brandLogo->hasScaledContents());
+    QVERIFY(!brandLogo->pixmap().isNull());
+
+    QWidget* leftShell = brandIsland->parentWidget();
+    QVERIFY(leftShell != nullptr);
+    QCOMPARE(navigation->parentWidget(), leftShell);
+    QVERIFY2(navigation->geometry().top() > brandIsland->geometry().bottom(),
+             "Navigation must begin below the complete logo island footprint");
+    QVERIFY(navigation->isAncestorOf(utilityPanel));
+    QVERIFY(navigation->isAncestorOf(transactionsButton));
+    QCOMPARE(transactionsButton->text(), QStringLiteral("Transactions"));
+    QVERIFY2(!topBar->isVisible(), "The rejected legacy top utility bar must not consume visible wallet space");
+    QCOMPARE(topBar->height(), 0);
+    auto* walletUtilityButton = utilityPanel->findChild<QToolButton*>("navWalletSelector");
+    QVERIFY2(walletUtilityButton != nullptr && walletUtilityButton->isVisible(),
+             "The lower-left utility panel must expose the multi-wallet selector");
+
+    const QString capturePath = qEnvironmentVariable("ORGANICLIFE_CAPTURE_PATH");
+    if (!capturePath.isEmpty()) {
+        if (qEnvironmentVariable("ORGANICLIFE_CAPTURE_SCREEN").trimmed().toLower() == QStringLiteral("transactions")) {
+            mainWindow.goToTransactions();
+            QCoreApplication::processEvents();
+        }
+        QVERIFY2(mainWindow.grab().save(capturePath), qPrintable(QString("Unable to save visual capture to %1").arg(capturePath)));
+    }
+    setTheme(originalLightTheme);
+}
+
+void GovernanceDialogTests::walletShellRedistributesLegacyTopBarUtilities()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    mainWindow.resize(1280, 800);
+    mainWindow.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+
+    auto* topBar = mainWindow.findChild<TopBar*>();
+    auto* walletSelector = mainWindow.findChild<QToolButton*>("navWalletSelector");
+    auto* dashboard = mainWindow.findChild<DashboardWidget*>();
+    auto* connections = mainWindow.findChild<QLabel*>("dashboardConnectionStatus");
+    auto* staking = mainWindow.findChild<QLabel*>("dashboardStakingStatus");
+    QVERIFY(topBar != nullptr);
+    QVERIFY(walletSelector != nullptr);
+    QVERIFY(dashboard != nullptr);
+    QVERIFY(connections != nullptr);
+    QVERIFY(staking != nullptr);
+    if (!topBar || !walletSelector || !dashboard || !connections || !staking) return;
+
+    QVERIFY(!topBar->isVisible());
+    QVERIFY(walletSelector->isVisible());
+    topBar->setNumConnections(4);
+    topBar->setStakingStatusActive(true);
+    QCOMPARE(connections->text(), QStringLiteral("4 connections"));
+    QCOMPARE(staking->text(), QStringLiteral("Staking active"));
+}
+
+void GovernanceDialogTests::walletThemesUseApprovedGreenSemanticRoles()
+{
+    const auto assertRoles = [](const QString& relativePath, const QStringList& roles) {
+        QFile file(resolveQtSourceFile(relativePath));
+        QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(relativePath));
+        const QString css = QString::fromUtf8(file.readAll());
+        for (const QString& role : roles) {
+            QVERIFY2(css.contains(role, Qt::CaseInsensitive), qPrintable(QString("Missing approved role %1 in %2").arg(role, relativePath)));
+        }
+    };
+
+    assertRoles(QStringLiteral("res/css/style_dark.css"), {
+        QStringLiteral("#0D1512"), QStringLiteral("#101B16"), QStringLiteral("#121F1A"),
+        QStringLiteral("#2B3D34"), QStringLiteral("#6EA449"), QStringLiteral("#F3F1E8")
+    });
+    assertRoles(QStringLiteral("res/css/style_light.css"), {
+        QStringLiteral("#F3F6F1"), QStringLiteral("#E9EFE8"), QStringLiteral("#FFFFFF"),
+        QStringLiteral("#D4DDD2"), QStringLiteral("#56863B"), QStringLiteral("#19221D")
+    });
+}
+
+void GovernanceDialogTests::dashboardWidgetExposesApprovedFintechModules()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    widget.resize(1280, 800);
+    mainWindow.show();
+    widget.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+
+    const QStringList requiredModules = {
+        QStringLiteral("dashboardHeader"),
+        QStringLiteral("headerAvailableBalance"),
+        QStringLiteral("balanceCard"),
+        QStringLiteral("analyticsModule"),
+        QStringLiteral("analyticsStatRow"),
+        QStringLiteral("recentTransactionsCard")
+    };
+    for (const QString& objectName : requiredModules) {
+        QVERIFY2(widget.findChild<QWidget*>(objectName) != nullptr,
+                 qPrintable(QString("Missing dashboard module: %1").arg(objectName)));
+    }
+}
+
+void GovernanceDialogTests::dashboardBalanceCardOmitsMiniActivityFeed()
+{
+    QFile file(resolveQtSourceFile(QStringLiteral("dashboardwidget.cpp")));
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString source = QString::fromUtf8(file.readAll());
+    QVERIFY2(!source.contains(QStringLiteral("latestActivityCard")),
+             "The balance card must stay clean; activity belongs only in the full-width transactions card");
+    QVERIFY2(!source.contains(QStringLiteral("Latest activity")),
+             "The dashboard must not duplicate a clipped mini transaction feed");
+}
+
+void GovernanceDialogTests::dashboardCardsUseEqualHeightContract()
+{
+    QFile file(resolveQtSourceFile(QStringLiteral("dashboardwidget.cpp")));
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString source = QString::fromUtf8(file.readAll());
+    QVERIFY2(source.contains(QStringLiteral("balanceCard->setProperty(\"dashboardCardRole\", \"primary\")")),
+             "Balance card must opt into the shared primary-card height contract");
+    QVERIFY2(source.contains(QStringLiteral("analyticsModule->setProperty(\"dashboardCardRole\", \"primary\")")),
+             "Analytics card must opt into the shared primary-card height contract");
+    QVERIFY2(source.contains(QStringLiteral("primaryCardHeight")),
+             "Both top cards must share one explicit compact height contract");
+}
+
+void GovernanceDialogTests::dashboardPrimaryCardsAlignAndContainRewards()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    widget.resize(1280, 800);
+    mainWindow.show();
+    widget.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+
+    QWidget* topCards = widget.findChild<QWidget*>("dashboardTopCards");
+    QWidget* balance = widget.findChild<QWidget*>("balanceCard");
+    QWidget* analytics = widget.findChild<QWidget*>("analyticsModule");
+    QWidget* chartContent = widget.findChild<QWidget*>("dashboardChartContent");
+    QVERIFY(topCards != nullptr);
+    QVERIFY(balance != nullptr);
+    QVERIFY(analytics != nullptr);
+    QVERIFY(chartContent != nullptr);
+    if (!topCards || !balance || !analytics || !chartContent) return;
+
+    QCOMPARE(balance->parentWidget(), topCards);
+    QCOMPARE(analytics->parentWidget(), topCards);
+    QCOMPARE(balance->geometry().top(), analytics->geometry().top());
+    QCOMPARE(balance->height(), analytics->height());
+    const QRect contentInCard(chartContent->mapTo(analytics, QPoint(0, 0)), chartContent->size());
+    QVERIFY2(analytics->rect().contains(contentInCard), "The complete rewards content must remain inside its card");
+}
+
+void GovernanceDialogTests::dashboardHeaderExposesCompactLiveStatusCluster()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    widget.resize(1280, 800);
+    mainWindow.show();
+    widget.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+
+    QWidget* cluster = widget.findChild<QWidget*>("dashboardStatusCluster");
+    QLabel* sync = widget.findChild<QLabel*>("dashboardSyncIcon");
+    QLabel* connections = widget.findChild<QLabel*>("dashboardConnectionIcon");
+    QLabel* staking = widget.findChild<QLabel*>("dashboardStakingIcon");
+    QVERIFY(cluster != nullptr);
+    QVERIFY(sync != nullptr);
+    QVERIFY(connections != nullptr);
+    QVERIFY(staking != nullptr);
+    if (!cluster || !sync || !connections || !staking) return;
+    QVERIFY(cluster->maximumHeight() <= 30);
+    QVERIFY(!sync->pixmap().isNull());
+    QVERIFY(!connections->pixmap().isNull());
+    QVERIFY(!staking->pixmap().isNull());
+}
+
+void GovernanceDialogTests::dashboardStatusBadgesExposeRestrainedSemanticStates()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    QWidget* connections = widget.findChild<QWidget*>("dashboardConnectionBadge");
+    QWidget* staking = widget.findChild<QWidget*>("dashboardStakingBadge");
+    QLabel* stakingIcon = widget.findChild<QLabel*>("dashboardStakingIcon");
+    QVERIFY(connections != nullptr);
+    QVERIFY(staking != nullptr);
+    QVERIFY(stakingIcon != nullptr);
+    if (!connections || !staking || !stakingIcon) return;
+
+    widget.setStakingStatusActive(false);
+    QCOMPARE(staking->property("statusState").toString(), QStringLiteral("inactive"));
+    QCOMPARE(stakingIcon->property("statusIcon").toString(), QStringLiteral(":/ic-check-staking-off"));
+    QVERIFY(staking->graphicsEffect() == nullptr);
+
+    widget.setStakingStatusActive(true);
+    QCOMPARE(staking->property("statusState").toString(), QStringLiteral("active"));
+    QCOMPARE(stakingIcon->property("statusIcon").toString(), QStringLiteral(":/ic-check-staking"));
+    auto* stakingGlow = qobject_cast<QGraphicsDropShadowEffect*>(staking->graphicsEffect());
+    QVERIFY(stakingGlow != nullptr);
+    if (stakingGlow) QVERIFY(stakingGlow->blurRadius() <= 16.0);
+
+    widget.setNumConnections(0);
+    QCOMPARE(connections->property("statusState").toString(), QStringLiteral("danger"));
+    QVERIFY(qobject_cast<QGraphicsDropShadowEffect*>(connections->graphicsEffect()) != nullptr);
+    widget.setNumConnections(1);
+    QCOMPARE(connections->property("statusState").toString(), QStringLiteral("warning"));
+    widget.setNumConnections(5);
+    QCOMPARE(connections->property("statusState").toString(), QStringLiteral("warning"));
+    widget.setNumConnections(6);
+    QCOMPARE(connections->property("statusState").toString(), QStringLiteral("connected"));
+    QVERIFY(connections->graphicsEffect() == nullptr);
+}
+
+void GovernanceDialogTests::dashboardSyncBadgeDisplaysFlexibleBlockHeight()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    QWidget* syncBadge = widget.findChild<QWidget*>("dashboardSyncBadge");
+    QFrame* divider = widget.findChild<QFrame*>("dashboardSyncDivider");
+    QLabel* blockHeight = widget.findChild<QLabel*>("dashboardBlockHeight");
+    QVERIFY(syncBadge != nullptr);
+    QVERIFY(divider != nullptr);
+    QVERIFY(blockHeight != nullptr);
+    if (!syncBadge || !divider || !blockHeight) return;
+
+    QVERIFY(QMetaObject::invokeMethod(&widget, "setBlockHeight", Q_ARG(int, 1234567)));
+    QCOMPARE(blockHeight->text(), QStringLiteral("Block 1,234,567"));
+    QVERIFY(syncBadge->maximumWidth() > syncBadge->minimumSizeHint().width());
+    QVERIFY(divider->isVisibleTo(syncBadge));
+}
+
+void GovernanceDialogTests::walletBrandIslandUsesThemeAwareLogoSurface()
+{
+    QFile lightFile(resolveQtSourceFile(QStringLiteral("res/css/style_light.css")));
+    QFile darkFile(resolveQtSourceFile(QStringLiteral("res/css/style_dark.css")));
+    QVERIFY(lightFile.open(QIODevice::ReadOnly | QIODevice::Text));
+    QVERIFY(darkFile.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString lightCss = QString::fromUtf8(lightFile.readAll());
+    const QString darkCss = QString::fromUtf8(darkFile.readAll());
+    const QRegularExpression lightSurfaceRule(
+        QStringLiteral("\\*\\[cssClass=\\\"brand-island\\\"\\]\\s*\\{[^}]*background(?:-color)?\\s*:\\s*#FFFFFF"),
+        QRegularExpression::DotMatchesEverythingOption);
+    const QRegularExpression darkSurfaceRule(
+        QStringLiteral("\\*\\[cssClass=\\\"brand-island\\\"\\]\\s*\\{[^}]*background\\s*:\\s*qlineargradient"),
+        QRegularExpression::DotMatchesEverythingOption);
+    QVERIFY2(lightSurfaceRule.match(lightCss).hasMatch(), "Light mode must retain the clean white logo surface");
+    QVERIFY2(darkSurfaceRule.match(darkCss).hasMatch(), "Dark mode must use a restrained dark logo surface");
+}
+
+void GovernanceDialogTests::walletBrandIslandUsesOriginalTransparentLogoAsset()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    QLabel* floatingLogo = mainWindow.findChild<QLabel*>("brandIslandLogo");
+    QLabel* cardLogo = widget.findChild<QLabel*>("dashboardBrandLogo");
+    QVERIFY(floatingLogo != nullptr);
+    QVERIFY(cardLogo != nullptr);
+    if (!floatingLogo || !cardLogo) return;
+
+    QCOMPARE(floatingLogo->property("sourceAsset").toString(), QStringLiteral(":/img-logo-pivx"));
+    QCOMPARE(cardLogo->property("sourceAsset").toString(), QStringLiteral(":/img-logo-pivx"));
+    QVERIFY(!floatingLogo->pixmap().isNull());
+    QVERIFY(!cardLogo->pixmap().isNull());
+    QVERIFY2(floatingLogo->pixmap().width() >= 120, "The supplied logo must fill more of its floating island");
+}
+
+void GovernanceDialogTests::dashboardChartShowsValuesOnlyOnHover()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    widget.initChart();
+    widget.resize(1280, 800);
+    mainWindow.show();
+    widget.show();
+    QCoreApplication::processEvents();
+
+    QLabel* tooltip = widget.findChild<QLabel*>("dashboardChartValueTooltip");
+    QVERIFY(tooltip != nullptr);
+    if (!tooltip) return;
+    QVERIFY(!tooltip->isVisible());
+    QVERIFY2(QMetaObject::invokeMethod(&widget, "onChartPointHovered",
+                                      Q_ARG(QPointF, QPointF(2.0, 1234.5)),
+                                      Q_ARG(bool, true)),
+             "The chart must expose a hover-only value handler");
+    // The standalone test widget is not mounted in OrganicLifeGUI's page stack,
+    // so verify the handler's explicit show state rather than ancestor visibility.
+    QVERIFY(!tooltip->isHidden());
+    QCOMPARE(tooltip->text(), QStringLiteral("1,234.50 OLC"));
+    QVERIFY2(QMetaObject::invokeMethod(&widget, "onChartPointHovered",
+                                      Q_ARG(QPointF, QPointF(2.0, 1234.5)),
+                                      Q_ARG(bool, false)),
+             "The chart must hide the value when hover ends");
+    QVERIFY(!tooltip->isVisible());
+}
+
+void GovernanceDialogTests::dashboardTransactionsHeaderUsesCompactContract()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    widget.resize(1280, 800);
+    mainWindow.show();
+    widget.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+
+    QWidget* header = widget.findChild<QWidget*>("left_top_container");
+    QLabel* subtitle = widget.findChild<QLabel*>("labelSubtitle");
+    QVERIFY(header != nullptr);
+    QVERIFY(subtitle != nullptr);
+    if (!header || !subtitle) return;
+    QVERIFY2(header->minimumHeight() >= 56, "The activity header must still contain its filters comfortably");
+    QVERIFY2(header->maximumHeight() <= 62, "The activity header must leave more room for transaction rows");
+    QVERIFY2(!subtitle->isVisible(), "The compact activity header must not clip a redundant subtitle");
+}
+
+void GovernanceDialogTests::transactionsNavigationShowsFocusedActivityView()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    mainWindow.resize(1280, 800);
+    mainWindow.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+
+    auto* dashboard = mainWindow.findChild<DashboardWidget*>();
+    auto* transactions = mainWindow.findChild<QToolButton*>("btnTransactions");
+    auto* topCards = mainWindow.findChild<QWidget*>("dashboardTopCards");
+    auto* recent = mainWindow.findChild<QWidget*>("recentTransactionsCard");
+    auto* dashboardButton = mainWindow.findChild<QToolButton*>("btnDashboard");
+    QVERIFY(dashboard != nullptr);
+    QVERIFY(transactions != nullptr);
+    QVERIFY(topCards != nullptr);
+    QVERIFY(recent != nullptr);
+    QVERIFY(dashboardButton != nullptr);
+    if (!dashboard || !transactions || !topCards || !recent || !dashboardButton) return;
+
+    transactions->click();
+    QCoreApplication::processEvents();
+    QVERIFY(dashboard->property("transactionsOnly").toBool());
+    QVERIFY(!topCards->isVisible());
+    QVERIFY(recent->isVisible());
+
+    dashboardButton->click();
+    QCoreApplication::processEvents();
+    QVERIFY(!dashboard->property("transactionsOnly").toBool());
+    QVERIFY(topCards->isVisible());
+}
+
+void GovernanceDialogTests::dashboardChartFilterIncludesGeneratedRegtestRewards()
+{
+    QFile file(resolveQtSourceFile(QStringLiteral("dashboardwidget.cpp")));
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString source = QString::fromUtf8(file.readAll());
+    const QRegularExpression chartFilter(
+        R"(stakesFilter->setTypeFilter\([^;]*TransactionRecord::Generated[^;]*\);)",
+        QRegularExpression::DotMatchesEverythingOption);
+    QVERIFY2(chartFilter.match(source).hasMatch(),
+             "Generated coinbase rewards must reach the chart filter on regtest and v6 reward chains");
+}
+
 void GovernanceDialogTests::dashboardWidgetThemesDefineRoundedScrollBarChrome()
 {
     const auto cssHasDashboardChrome = [](const QString& cssPath) {
@@ -4664,7 +5185,7 @@ void GovernanceDialogTests::dashboardWidgetMergesRewardStatsAndChartIntoSidebarM
     }
 
     QCOMPARE(analyticsModule->property("cssClass").toString(), QStringLiteral("dashboard-analytics-card"));
-    QCOMPARE(analyticsLayout->spacing(), 6); // fork dashboard card spacing
+    QVERIFY(analyticsLayout->spacing() <= 6); // compact reference-card spacing
     QVERIFY(analyticsModule->isAncestorOf(amountPiv));
     QVERIFY(analyticsModule->isAncestorOf(amountMn));
     QVERIFY(analyticsModule->isAncestorOf(liveChart));
@@ -4860,7 +5381,96 @@ void GovernanceDialogTests::dashboardWidgetPrioritizesChartHeightWithProminentRe
     QVERIFY(masternodeMarker->width() >= 14);
     QVERIFY(masternodeMarker->height() >= 14);
     QVERIFY(rewardSummaryRow->maximumHeight() <= 96);
-    QVERIFY(chartBody->minimumHeight() >= 220);
+    QVERIFY(chartBody->minimumHeight() >= 96);
+    QVERIFY(chartBody->minimumHeight() <= 120);
+}
+
+void GovernanceDialogTests::dashboardChartPeriodControlsStayInsideAnalyticsCard()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    widget.resize(1280, 800);
+    mainWindow.show();
+    widget.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+
+    QWidget* analytics = widget.findChild<QWidget*>("analyticsModule");
+    QWidget* period = widget.findChild<QWidget*>("dashboardPeriodFilter");
+    QComboBox* years = widget.findChild<QComboBox*>("comboBoxYears");
+    QComboBox* months = widget.findChild<QComboBox*>("comboBoxMonths");
+    QVERIFY(analytics != nullptr);
+    QVERIFY(period != nullptr);
+    QVERIFY(years != nullptr);
+    QVERIFY(months != nullptr);
+    if (!analytics || !period || !years || !months) return;
+
+    QVERIFY2(analytics->isAncestorOf(period), "Period selectors must stay inside the analytics card");
+    QVERIFY2(period->maximumHeight() <= 42, "Period selectors must use a compact single-row treatment");
+    QCOMPARE(years->property("cssClass").toString(), QStringLiteral("dashboard-period-combo"));
+    QCOMPARE(months->property("cssClass").toString(), QStringLiteral("dashboard-period-combo"));
+}
+
+void GovernanceDialogTests::dashboardChartKeepsReferenceCleanAxisTreatment()
+{
+    QFile file(resolveQtSourceFile(QStringLiteral("dashboardwidget.cpp")));
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString source = QString::fromUtf8(file.readAll());
+    QVERIFY2(source.contains(QStringLiteral("axisY->setLabelsVisible(false)")),
+             "The rewards chart should not show clipped numeric labels on its compact right edge");
+    QVERIFY2(source.contains(QStringLiteral("axisY->setLineVisible(false)")),
+             "The rewards chart should use the mockup's clean grid-only Y axis treatment");
+}
+
+void GovernanceDialogTests::dashboardChartUsesVisibleCompactTimelineLabels()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    DashboardWidget widget(&mainWindow);
+    widget.initChart();
+    widget.resize(1280, 800);
+    mainWindow.show();
+    widget.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+    widget.updateChartTimelineGeometry();
+
+    int timelineLabelCount = 0;
+    for (QLabel* label : widget.findChildren<QLabel*>()) {
+        if (label->property("cssClass").toString() == QStringLiteral("dashboard-chart-timeline-label")) {
+            ++timelineLabelCount;
+        }
+    }
+    QCOMPARE(timelineLabelCount, 5);
+    QWidget* timeline = widget.findChild<QWidget*>(QStringLiteral("dashboardChartTimeline"));
+    QVERIFY(timeline != nullptr);
+    if (timeline) {
+        QCOMPARE(timeline->parentWidget(), widget.chartView->viewport());
+        QWidget* visibleAnalyticsCard = widget.findChild<QWidget*>(QStringLiteral("analyticsModule"));
+        QVERIFY(visibleAnalyticsCard != nullptr);
+        if (visibleAnalyticsCard) {
+            const QPoint cardBottomGlobal = visibleAnalyticsCard->mapToGlobal(
+                QPoint(0, visibleAnalyticsCard->height()));
+            const int visibleCardBottom = widget.chartView->viewport()->mapFromGlobal(cardBottomGlobal).y();
+            QVERIFY2(timeline->geometry().bottom() <= visibleCardBottom - 4,
+                     "The chart timeline must stay above the visible analytics-card edge");
+        }
+    }
+    QVERIFY(widget.axisX != nullptr);
+    if (widget.axisX) {
+        QVERIFY2(!widget.axisX->labelsVisible(), "The compact timeline should replace clipped chart-native labels");
+    }
+    QVERIFY(widget.chart != nullptr);
+    if (widget.chart) {
+        QVERIFY2(widget.chart->margins().bottom() >= 20, "The plot must reserve in-card room for its timeline");
+    }
 }
 
 void GovernanceDialogTests::voteDialogSubtitleKeepsStablePaddingAcrossModes()

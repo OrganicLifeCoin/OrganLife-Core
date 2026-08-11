@@ -52,8 +52,8 @@ void TxRow::updateStatus(bool isLightTheme, bool isHover, bool isSelected)
     }
 
     const QString dividerColor = isLightTheme
-            ? (isSelected ? QStringLiteral("#F2D4B8") : QStringLiteral("#EAD2BE"))
-            : (isSelected ? QStringLiteral("rgba(192, 132, 69, 0.34)") : QStringLiteral("rgba(192, 132, 69, 0.18)"));
+            ? (isSelected ? QStringLiteral("#D7E2D3") : QStringLiteral("#E5EAE3"))
+            : (isSelected ? QStringLiteral("rgba(110, 164, 73, 0.26)") : QStringLiteral("rgba(169, 176, 169, 0.14)"));
     ui->lblDivisory->setStyleSheet(QStringLiteral("background-color:%1;").arg(dividerColor));
 }
 
@@ -78,6 +78,7 @@ void TxRow::setType(bool isLightTheme, int type, bool isConfirmed)
     QString path;
     QString css;
     QString cssAmountBottom;
+    QString iconCss = "dashboard-tx-icon-neutral";
     bool sameIcon = false;
     switch (type) {
         case TransactionRecord::Generated:
@@ -86,16 +87,19 @@ void TxRow::setType(bool isLightTheme, int type, bool isConfirmed)
         case TransactionRecord::BudgetPayment:
             path = "://ic-transaction-staked";
             css = "dashboard-tx-amount-positive";
+            iconCss = "dashboard-tx-icon-reward";
             break;
         case TransactionRecord::RecvWithAddress:
         case TransactionRecord::RecvFromOther:
         case TransactionRecord::RecvWithShieldedAddress:
             path = "://ic-transaction-received";
             css = "dashboard-tx-amount-positive";
+            iconCss = "dashboard-tx-icon-received";
             break;
         case TransactionRecord::RecvWithShieldedAddressMemo:
             path = "://ic-transaction-received-memo";
             css = "dashboard-tx-amount-positive";
+            iconCss = "dashboard-tx-icon-received";
             break;
         case TransactionRecord::SendToAddress:
         case TransactionRecord::SendToOther:
@@ -103,19 +107,23 @@ void TxRow::setType(bool isLightTheme, int type, bool isConfirmed)
         case TransactionRecord::SendToNobody:
             path = "://ic-transaction-sent";
             css = "dashboard-tx-amount-negative";
+            iconCss = "dashboard-tx-icon-sent";
             break;
         case TransactionRecord::SendToSelf:
         case TransactionRecord::SendToSelfShieldToShieldChangeAddress:
             path = "://ic-transaction-mint";
             css = "dashboard-tx-amount-negative";
+            iconCss = "dashboard-tx-icon-transfer";
             break;
         case TransactionRecord::StakeDelegated:
             path = "://ic-transaction-stake-delegated";
             css = "dashboard-tx-amount-positive";
+            iconCss = "dashboard-tx-icon-reward";
             break;
         case TransactionRecord::StakeHot:
             path = "://ic-transaction-stake-hot";
             css = "dashboard-tx-amount-muted";
+            iconCss = "dashboard-tx-icon-reward";
             break;
         case TransactionRecord::P2CSDelegationSent:
         case TransactionRecord::P2CSDelegationSentOwner:
@@ -144,20 +152,23 @@ void TxRow::setType(bool isLightTheme, int type, bool isConfirmed)
             break;
     }
 
-    if (!isLightTheme && !sameIcon){
+    // Semantic color badges use the light glyph set in both themes so the
+    // icon stays legible against green, orange, and red backgrounds.
+    if (!sameIcon){
         path += "-dark";
     }
 
     if (!isConfirmed){
         css = "dashboard-tx-amount-muted";
         cssAmountBottom = "dashboard-tx-amount-muted";
-        path += "-inactive";
+        if (sameIcon) path += "-inactive";
         setConfirmStatus(false);
     } else {
         setConfirmStatus(true);
     }
     setCssProperty(ui->lblAmountTop, css, true);
     if (isDoubleAmount) setCssProperty(ui->lblAmountBottom, cssAmountBottom, true);
+    setCssProperty(ui->icon, iconCss, true);
     ui->icon->setIcon(QIcon(path));
 }
 

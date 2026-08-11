@@ -494,6 +494,8 @@ TopBar::TopBar(OrganicLifeGUI* _mainWindow, QWidget *parent) :
     ui(new Ui::TopBar)
 {
     ui->setupUi(this);
+    ui->top_container_2->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(ui->top_container_2, "topbar-utility-strip");
 
     // Set parent stylesheet
     this->setStyleSheet(_mainWindow->styleSheet());
@@ -888,39 +890,40 @@ void TopBar::onBtnBalanceInfoClicked()
 
 void TopBar::showTop()
 {
-    if (ui->bottom_container->isVisible()) {
-        if (balanceBubble && balanceBubble->isVisible()) balanceBubble->hide();
-        ui->bottom_container->setVisible(false);
-        ui->widgetTopAmount->setVisible(true);
-        this->setFixedHeight(75);
-    }
+    if (balanceBubble && balanceBubble->isVisible()) balanceBubble->hide();
+    ui->bottom_container->setVisible(false);
+    ui->widgetTopAmount->setVisible(false);
+    // The approved shell redistributes every useful control to the rail or the
+    // dashboard. Keep this object alive only as the existing dialog/model
+    // controller so wallet behavior is not duplicated.
+    this->setFixedHeight(0);
+    setVisible(false);
     compactTopMode = true;
-    ui->containerTop->setProperty("cssClass", "container-top");
-    updateStyle(ui->containerTop);
-    for (ExpandableButton* button : statusButtons) {
-        if (!button) continue;
-        button->setHoverExpandEnabled(false);
-        button->setKeepExpanded(false);
-        button->setSmall(false);
-    }
-    refreshButtonLayouts();
+}
+
+void TopBar::showDashboard()
+{
+    showTop();
+}
+
+void TopBar::toggleTheme()
+{
+    onThemeClicked();
+}
+
+void TopBar::toggleWalletLock()
+{
+    onBtnLockClicked();
+}
+
+void TopBar::showWalletSelector()
+{
+    onWalletButtonClicked();
 }
 
 void TopBar::showBottom()
 {
-    ui->widgetTopAmount->setVisible(false);
-    ui->bottom_container->setVisible(true);
-    this->setFixedHeight(200);
-    this->adjustSize();
-    compactTopMode = false;
-    ui->containerTop->setProperty("cssClass", "container-top-home");
-    updateStyle(ui->containerTop);
-    for (ExpandableButton* button : statusButtons) {
-        if (!button) continue;
-        button->setHoverExpandEnabled(true);
-    }
-    clearTopBarHoverState();
-    refreshButtonLayouts();
+    showTop();
 }
 
 void TopBar::onColdStakingClicked()
@@ -986,6 +989,7 @@ void TopBar::setStakingStatusActive(bool fActive)
                                                                 "btn-check-stack" :
                                                                 "btn-check-stack-inactive"), true);
     }
+    Q_EMIT stakingStatusChanged(fActive);
 }
 void TopBar::updateStakingStatus()
 {
@@ -1012,6 +1016,7 @@ void TopBar::setNumConnections(int count)
     ui->pushButtonConnection->setButtonText(tr("%n active connection(s)", "", count));
     const int textWidth = ui->pushButtonConnection->fontMetrics().horizontalAdvance(ui->pushButtonConnection->getText());
     ui->pushButtonConnection->setExpandedWidth(std::clamp(textWidth + 156, 260, 620));
+    Q_EMIT connectionCountChanged(count);
     updateStakingStatus();
 }
 
@@ -1069,6 +1074,8 @@ void TopBar::setNumBlocks(int count)
 {
     if (!clientModel)
         return;
+
+    Q_EMIT blockHeightChanged(count);
 
     if (progressOverrideActive) {
         ui->pushButtonSync->setButtonClassStyle("cssClass", "btn-check-sync", true);

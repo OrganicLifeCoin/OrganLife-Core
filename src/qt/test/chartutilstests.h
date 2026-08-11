@@ -21,6 +21,7 @@ private Q_SLOTS:
     void monthEmptyWindowKeepsChartVisible();
     void rewardTypeClassificationIncludesV6CoinbaseMasternodePayments();
     void chartRewardAggregationUsesCopiedRows();
+    void cumulativeChartSeriesCarriesRewardsAcrossEmptyBuckets();
     void coinbaseCreditsAreClassifiedByRewardType();
     void progressLabelFormattingIsStable();
     void transactionQueueReloadThresholdWorks();

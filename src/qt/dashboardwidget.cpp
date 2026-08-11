@@ -16,14 +16,19 @@
 #include "txrow.h"
 #include "utiltime.h"
 #include <QHBoxLayout>
+#include <QColor>
+#include <QFrame>
+#include <QGraphicsDropShadowEffect>
 #include <QGraphicsLayout>
 #include <QGraphicsOpacityEffect>
 #include <QLabel>
 #include <QList>
+#include <QLocale>
 #include <QModelIndex>
 #include <QParallelAnimationGroup>
 #include <QPainter>
 #include <QPropertyAnimation>
+#include <QCursor>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QThread>
@@ -92,6 +97,28 @@ bool ToChartBucketMode(const ChartShowType type, ChartBucketMode& mode)
     default:
         return false;
     }
+}
+
+void SetStatusIcon(QLabel* icon, const QString& resourcePath)
+{
+    if (!icon) return;
+    icon->setProperty("statusIcon", resourcePath);
+    icon->setPixmap(QPixmap(resourcePath).scaled(13, 13, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
+
+void ApplyStatusState(QWidget* badge, const QString& state, const QColor& glow = QColor())
+{
+    if (!badge) return;
+    badge->setProperty("statusState", state);
+    badge->setGraphicsEffect(nullptr);
+    if (glow.isValid()) {
+        auto* effect = new QGraphicsDropShadowEffect(badge);
+        effect->setBlurRadius(12.0);
+        effect->setOffset(0, 0);
+        effect->setColor(glow);
+        badge->setGraphicsEffect(effect);
+    }
+    updateStyle(badge);
 }
 } // namespace
 
@@ -173,21 +200,25 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->right->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->right, "dashboard-shell-right");
     ui->right->setContentsMargins(0,0,0,0);
-    ui->verticalLayout_31->setContentsMargins(12, 12, 12, 12);
+    ui->verticalLayout_31->setContentsMargins(0, 0, 0, 0);
     ui->verticalLayout_31->setSpacing(0);
-    ui->verticalLayout_2->setContentsMargins(8, 8, 8, 8);
+    ui->verticalLayout_2->setContentsMargins(0, 0, 0, 0);
     ui->verticalLayout_2->setSpacing(8);
     ui->horizontalLayout_3->setContentsMargins(0, 2, 0, 2);
     ui->horizontalLayout_3->setSpacing(8);
     ui->verticalLayout_6->setSpacing(1);
 
+    const int primaryCardHeight = 310;
     auto* analyticsModule = new QWidget(ui->right);
     analyticsModule->setObjectName("analyticsModule");
+    analyticsModule->setProperty("dashboardCardRole", "primary");
     analyticsModule->setAttribute(Qt::WA_StyledBackground, true);
+    analyticsModule->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    analyticsModule->setFixedHeight(primaryCardHeight);
     setCssProperty(analyticsModule, "dashboard-analytics-card");
     auto* analyticsLayout = new QVBoxLayout(analyticsModule);
-    analyticsLayout->setContentsMargins(16, 12, 16, 12);
-    analyticsLayout->setSpacing(6);
+    analyticsLayout->setContentsMargins(16, 10, 16, 10);
+    analyticsLayout->setSpacing(5);
 
     // The .ui title row is removed here and rebuilt as a fixed-height header
     // widget further below, so the collapsed card keeps a compact header.
@@ -203,7 +234,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     rewardSummaryRow->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(rewardSummaryRow, "dashboard-reward-summary");
     rewardSummaryRow->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
-    rewardSummaryRow->setMaximumHeight(88);
+    rewardSummaryRow->setMaximumHeight(58);
     auto* rewardSummaryLayout = new QHBoxLayout(rewardSummaryRow);
     rewardSummaryLayout->setContentsMargins(0, 0, 0, 0);
     rewardSummaryLayout->setSpacing(6);
@@ -261,18 +292,17 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->labelPiv->setVisible(false);
     ui->labelMN->setVisible(false);
     ui->verticalLayout_8->removeItem(ui->horizontalLayout_4);
-    // Brown palette candidate. Previous marker gradients:
-    // light staking #FF8A3D -> #F24A09, light masternode #7D7877 -> #22254A,
-    // dark staking #A78BFA -> #F24A09, dark masternode #C4B5FD -> #7C3AED.
+    // Compact reward markers share the approved green family while remaining
+    // distinguishable in both themes.
     const auto initialMarkerStyle = [](bool stakingMarker) {
         if (isLightTheme()) {
             return stakingMarker
-                ? QStringLiteral("background:#9C4E1A;border:none;border-radius:4px;")
-                : QStringLiteral("background:#3A2418;border:none;border-radius:4px;");
+                ? QStringLiteral("background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #77A95A,stop:1 #477B31);border:none;border-radius:4px;")
+                : QStringLiteral("background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #A2B893,stop:1 #688F51);border:none;border-radius:4px;");
         }
         return stakingMarker
-            ? QStringLiteral("background:#E5A15E;border:none;border-radius:4px;")
-            : QStringLiteral("background:#B69B82;border:none;border-radius:4px;");
+            ? QStringLiteral("background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #8BC65B,stop:1 #568A3C);border:none;border-radius:4px;")
+            : QStringLiteral("background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #A9C58E,stop:1 #6E934F);border:none;border-radius:4px;");
     };
     ui->labelSquarePiv->setStyleSheet(initialMarkerStyle(true));
     ui->labelSquareMN->setStyleSheet(initialMarkerStyle(false));
@@ -285,6 +315,7 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_2->removeWidget(ui->emptyContainerChart);
 
     chartBody = new QWidget(analyticsModule);
+    chartBody->setMinimumHeight(100);
     chartBody->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(chartBody, "dashboard-chart-body");
     auto* chartBodyLayout = new QVBoxLayout(chartBody);
@@ -296,11 +327,12 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     // Collapsible body: reward tiles + chart. Collapsing hides only this,
     // leaving the decorated header card visible like the field notes card.
     chartContent = new QWidget(analyticsModule);
+    chartContent->setObjectName("dashboardChartContent");
     chartContent->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(chartContent, "dashboard-chart-body");
     auto* chartContentLayout = new QVBoxLayout(chartContent);
-    chartContentLayout->setContentsMargins(0, 4, 0, 0);
-    chartContentLayout->setSpacing(6);
+    chartContentLayout->setContentsMargins(0, 2, 0, 0);
+    chartContentLayout->setSpacing(5);
     chartContentLayout->addWidget(rewardSummaryRow);
     chartContentLayout->addWidget(chartBody, 1);
     analyticsLayout->addWidget(chartContent, 1);
@@ -309,13 +341,15 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_2->addStretch(0);
     chartBottomStretchIdx = ui->verticalLayout_2->count() - 1;
 
-    // Collapse toggle on the "Staking/MN Rewards" title row
+    // Keep the legacy collapse behavior available internally, but the approved
+    // fintech dashboard presents the analytics card as a stable, always-visible
+    // module instead of exposing a text-glyph disclosure control.
     chartToggle = new QPushButton(ui->right);
     chartToggle->setCursor(Qt::PointingHandCursor);
     chartToggle->setFlat(true);
     chartToggle->setFixedSize(28, 28);
     setCssProperty(chartToggle, "dashboard-feed-toggle");
-    chartToggle->setText("▾");
+    chartToggle->setVisible(false);
     connect(chartToggle, &QPushButton::clicked, this, [this]() { setChartExpanded(!chartExpanded); });
 
     // Rebuild the .ui title row as a fixed-height header widget inside the
@@ -336,7 +370,31 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     chartTitleCol->addWidget(ui->labelTitle2);
     chartTitleCol->addWidget(ui->labelMessage);
     chartHeaderLayout->addLayout(chartTitleCol, 1);
+
+    // Move the real chart period buttons out of the data-dependent chart body,
+    // so All / Month / Year remain available in the empty state as well.
+    ui->horizontalLayout_7->removeWidget(ui->pushButtonAll);
+    ui->horizontalLayout_7->removeWidget(ui->pushButtonMonth);
+    ui->horizontalLayout_7->removeWidget(ui->pushButtonYear);
+    ui->pushButtonAll->setText(tr("All"));
+    ui->pushButtonMonth->setText(tr("Month"));
+    ui->pushButtonYear->setText(tr("Year"));
+    ui->pushButtonAll->setMinimumSize(48, 30);
+    ui->pushButtonMonth->setMinimumSize(62, 30);
+    ui->pushButtonYear->setMinimumSize(50, 30);
+
+    auto* rangeSelector = new QWidget(chartHeader);
+    rangeSelector->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(rangeSelector, "dashboard-range-selector");
+    auto* rangeSelectorLayout = new QHBoxLayout(rangeSelector);
+    rangeSelectorLayout->setContentsMargins(1, 1, 1, 1);
+    rangeSelectorLayout->setSpacing(0);
+    rangeSelectorLayout->addWidget(ui->pushButtonAll);
+    rangeSelectorLayout->addWidget(ui->pushButtonMonth);
+    rangeSelectorLayout->addWidget(ui->pushButtonYear);
+    chartHeaderLayout->addWidget(rangeSelector, 0, Qt::AlignVCenter);
     chartHeaderLayout->addWidget(chartToggle, 0, Qt::AlignVCenter);
+    ui->groupBoxChart->setVisible(false);
     analyticsLayout->insertWidget(0, chartHeader);
     delete ui->horizontalLayout_3;
 
@@ -345,7 +403,8 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_8->setContentsMargins(0, 0, 0, 0);
     ui->verticalLayout_8->setSpacing(10);
     ui->verticalWidgetChart->setAttribute(Qt::WA_StyledBackground, true);
-    ui->verticalWidgetChart->setMinimumHeight(220);
+    ui->verticalWidgetChart->setMinimumHeight(108);
+    ui->chartContainer2->setMinimumHeight(96);
     setCssProperty(ui->verticalWidgetChart, "dashboard-chart-content");
     ui->chartContainer->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->chartContainer, "dashboard-chart-canvas");
@@ -354,139 +413,253 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_71->setContentsMargins(0, 0, 0, 0);
     ui->verticalLayout_71->setSpacing(0);
 
-    // --- V2: stat row across the top (Available / Staking / Rewards 30d) ---
-    auto* statRow = new QWidget(this);
-    statRow->setAttribute(Qt::WA_StyledBackground, true);
-    setCssProperty(statRow, "dashboard-stat-row");
-    auto* statRowLayout = new QHBoxLayout(statRow);
-    statRowLayout->setContentsMargins(20, 12, 20, 10);
-    statRowLayout->setSpacing(14);
-    auto makeTile = [&](const QString& chipRes, const QString& caption, QLabel*& valueOut) {
-        auto* tile = new QWidget(statRow);
-        tile->setAttribute(Qt::WA_StyledBackground, true);
-        setCssProperty(tile, "dashboard-stat-tile");
-        auto* lay = new QHBoxLayout(tile);
-        lay->setContentsMargins(12, 10, 16, 10);
-        tile->setMinimumWidth(230);
-        lay->setSpacing(12);
-        auto* chip = new QLabel(tile);
-        chip->setFixedSize(44, 44);
-        chip->setPixmap(QPixmap(chipRes).scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-        lay->addWidget(chip, 0, Qt::AlignVCenter);
-        auto* texts = new QVBoxLayout();
-        texts->setContentsMargins(0, 0, 0, 0);
-        texts->setSpacing(2);
-        auto* cap = new QLabel(caption.toUpper(), tile);
-        setCssProperty(cap, "dashboard-stat-tile-label");
-        valueOut = new QLabel("--", tile);
-        setCssProperty(valueOut, "dashboard-stat-value");
-        texts->addWidget(cap);
-        texts->addWidget(valueOut);
-        lay->addLayout(texts, 1);
-        statRowLayout->addWidget(tile);
-    };
-    makeTile(":/ic-chip-available", tr("Available"), statValueAvailable);
-    makeTile(":/ic-chip-staking", tr("Staking"), statValueStaking);
-    makeTile(":/ic-chip-rewards", tr("Rewards 30d"), statValueRewards);
-    statRowLayout->addStretch(1);
-
-    // Restructure root: stat row on top, original two columns below
+    // Approved dashboard composition: global header, balance + analytics row,
+    // and one full-width recent-transactions card.
     ui->horizontalLayout_2->removeWidget(ui->left);
     ui->horizontalLayout_2->removeWidget(ui->right);
-    auto* columnsLayout = new QHBoxLayout();
-    columnsLayout->setContentsMargins(0, 0, 14, 0);
-    columnsLayout->setSpacing(14);
-    columnsLayout->addWidget(ui->left, 3);
-    columnsLayout->addWidget(ui->right, 2);
     delete ui->horizontalLayout_2;
+
     auto* rootV = new QVBoxLayout(this);
-    rootV->setContentsMargins(0, 0, 0, 0);
-    rootV->setSpacing(0);
-    rootV->addWidget(statRow);
-    rootV->addLayout(columnsLayout, 1);
+    rootV->setContentsMargins(38, 28, 36, 30);
+    rootV->setSpacing(14);
 
-    // --- V2: "Field notes" activity feed, top of the right column (collapsible) ---
-    auto* feedCard = new QWidget(ui->right);
-    feedCard->setAttribute(Qt::WA_StyledBackground, true);
-    setCssProperty(feedCard, "dashboard-feed-card");
-    auto* feedCardLayout = new QVBoxLayout(feedCard);
-    feedCardLayout->setContentsMargins(20, 10, 20, 10);
-    feedCardLayout->setSpacing(2);
-    auto* feedHeader = new QHBoxLayout();
-    feedHeader->setContentsMargins(0, 0, 0, 0);
-    feedHeader->setSpacing(8);
-    auto* feedTitleCol = new QVBoxLayout();
-    feedTitleCol->setContentsMargins(0, 0, 0, 0);
-    feedTitleCol->setSpacing(1);
-    auto* feedTitle = new QLabel(tr("Field notes"), feedCard);
-    setCssProperty(feedTitle, "dashboard-feed-title");
-    auto* feedSubtitle = new QLabel(tr("recent activity"), feedCard);
-    setCssProperty(feedSubtitle, "dashboard-feed-subtitle");
-    feedTitleCol->addWidget(feedTitle);
-    feedTitleCol->addWidget(feedSubtitle);
-    feedHeader->addLayout(feedTitleCol, 1);
-    feedToggle = new QPushButton(feedCard);
-    feedToggle->setCursor(Qt::PointingHandCursor);
-    feedToggle->setFlat(true);
-    feedToggle->setFixedSize(28, 28);
-    setCssProperty(feedToggle, "dashboard-feed-toggle");
-    feedHeader->addWidget(feedToggle, 0, Qt::AlignVCenter);
-    feedCardLayout->addLayout(feedHeader);
-    feedBody = new QWidget(feedCard);
-    feedBody->setAttribute(Qt::WA_StyledBackground, true);
-    setCssProperty(feedBody, "dashboard-feed-body");
-    auto* feedBodyLayout = new QVBoxLayout(feedBody);
-    feedBodyLayout->setContentsMargins(0, 0, 0, 0);
-    feedBodyLayout->setSpacing(0);
-    feedRowsLayout = new QVBoxLayout();
-    feedRowsLayout->setContentsMargins(0, 6, 0, 0);
-    feedRowsLayout->setSpacing(0);
-    feedBodyLayout->addLayout(feedRowsLayout);
-    feedCardLayout->addWidget(feedBody);
-    feedCard->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
-    ui->verticalLayout_2->setSpacing(10);
-    ui->verticalLayout_2->insertWidget(0, feedCard, 0);
-    // Inserting the feed card at index 0 shifts the bottom stretch down one slot.
-    if (chartBottomStretchIdx >= 0) chartBottomStretchIdx++;
-    connect(feedToggle, &QPushButton::clicked, this, [this]() { setFeedExpanded(!feedExpanded); });
-    {
-        QSettings settings;
-        feedExpanded = settings.value("dashboardFeedExpanded", false).toBool();
-        chartExpanded = settings.value("dashboardChartExpanded", true).toBool();
-        // Accordion restore: the graph wins if both were left expanded.
-        if (feedExpanded && chartExpanded) feedExpanded = false;
-    }
-    feedBody->setMaximumHeight(feedExpanded ? QWIDGETSIZE_MAX : 0);
-    feedBody->setVisible(feedExpanded);
-    feedToggle->setText(feedExpanded ? "▾" : "▸");
-    if (chartContent) {
-        chartContent->setMaximumHeight(chartExpanded ? QWIDGETSIZE_MAX : 0);
-        chartContent->setVisible(chartExpanded);
-    }
-    if (analyticsCard && chartBottomStretchIdx >= 0) {
-        ui->verticalLayout_2->setStretchFactor(analyticsCard, chartExpanded ? 1 : 0);
-        ui->verticalLayout_2->setStretch(chartBottomStretchIdx, chartExpanded ? 0 : 1);
-    }
-    if (chartToggle) chartToggle->setText(chartExpanded ? "▾" : "▸");
-    updateFeedNotes();
+    dashboardHeader = new QWidget(this);
+    dashboardHeader->setObjectName("dashboardHeader");
+    dashboardHeader->setAttribute(Qt::WA_StyledBackground, true);
+    dashboardHeader->setMinimumHeight(72);
+    dashboardHeader->setMaximumHeight(82);
+    setCssProperty(dashboardHeader, "dashboard-global-header");
+    auto* dashboardHeaderLayout = new QHBoxLayout(dashboardHeader);
+    dashboardHeaderLayout->setContentsMargins(6, 0, 6, 0);
+    auto* headingColumn = new QVBoxLayout();
+    headingColumn->setSpacing(3);
+    auto* heading = new QLabel(tr("Dashboard"), dashboardHeader);
+    setCssProperty(heading, "dashboard-global-title");
+    auto* headingSubtitle = new QLabel(tr("Overview of your OrganicLife Coin wallet"), dashboardHeader);
+    setCssProperty(headingSubtitle, "dashboard-global-subtitle");
+    headingColumn->addWidget(heading);
+    headingColumn->addWidget(headingSubtitle);
+    dashboardHeaderLayout->addLayout(headingColumn, 1);
+    auto* balanceColumn = new QVBoxLayout();
+    balanceColumn->setSpacing(2);
+    headerAvailableBalance = new QLabel(tr("-- OLC"), dashboardHeader);
+    headerAvailableBalance->setObjectName("headerAvailableBalance");
+    headerAvailableBalance->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    setCssProperty(headerAvailableBalance, "dashboard-header-balance");
+    auto* availableCaption = new QLabel(tr("AVAILABLE BALANCE"), dashboardHeader);
+    availableCaption->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    setCssProperty(availableCaption, "dashboard-header-caption");
+    balanceColumn->addWidget(headerAvailableBalance);
+    balanceColumn->addWidget(availableCaption);
 
-    // Scrollable right column: with both field notes and the chart expanded
-    // the content can exceed the available height, so let it scroll instead
-    // of squeezing the graph.
-    auto* rightScrollContent = new QWidget(ui->right);
-    rightScrollContent->setAttribute(Qt::WA_StyledBackground, true);
-    setCssProperty(rightScrollContent, "dashboard-right-scroll-content");
-    ui->verticalLayout_31->removeItem(ui->verticalLayout_2);
-    rightScrollContent->setLayout(ui->verticalLayout_2);
-    auto* rightScroll = new QScrollArea(ui->right);
-    rightScroll->setWidgetResizable(true);
-    rightScroll->setFrameShape(QFrame::NoFrame);
-    rightScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    rightScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    rightScroll->viewport()->setAutoFillBackground(false);
-    setCssProperty(rightScroll, "dashboard-right-scroll");
-    rightScroll->setWidget(rightScrollContent);
-    ui->verticalLayout_31->addWidget(rightScroll);
+    auto* statusCluster = new QWidget(dashboardHeader);
+    statusCluster->setObjectName("dashboardStatusCluster");
+    statusCluster->setAttribute(Qt::WA_StyledBackground, true);
+    statusCluster->setMaximumHeight(30);
+    setCssProperty(statusCluster, "dashboard-status-cluster");
+    auto* statusLayout = new QHBoxLayout(statusCluster);
+    statusLayout->setContentsMargins(2, 2, 2, 2);
+    statusLayout->setSpacing(6);
+    const auto addStatus = [statusCluster, statusLayout](const QString& name,
+                                                         const QString& iconPath,
+                                                         const QString& text,
+                                                         QWidget*& badge,
+                                                         QLabel*& iconLabel,
+                                                         QLabel*& valueLabel) {
+        auto* item = new QWidget(statusCluster);
+        item->setObjectName(name + QStringLiteral("Badge"));
+        item->setAttribute(Qt::WA_StyledBackground, true);
+        setCssProperty(item, "dashboard-status-item");
+        auto* itemLayout = new QHBoxLayout(item);
+        itemLayout->setContentsMargins(6, 2, 7, 2);
+        itemLayout->setSpacing(4);
+        auto* icon = new QLabel(item);
+        icon->setObjectName(name + QStringLiteral("Icon"));
+        icon->setFixedSize(14, 14);
+        SetStatusIcon(icon, iconPath);
+        valueLabel = new QLabel(text, item);
+        valueLabel->setObjectName(name + QStringLiteral("Status"));
+        setCssProperty(valueLabel, "dashboard-status-text");
+        itemLayout->addWidget(icon);
+        itemLayout->addWidget(valueLabel);
+        statusLayout->addWidget(item);
+        badge = item;
+        iconLabel = icon;
+    };
+    const bool light = isLightTheme();
+    addStatus(QStringLiteral("dashboardSync"),
+              light ? QStringLiteral(":/ic-check-sync-dark") : QStringLiteral(":/ic-check-sync"),
+              tr("Syncing"), dashboardSyncBadge, dashboardSyncIcon, dashboardSyncStatus);
+    addStatus(QStringLiteral("dashboardConnection"),
+              QStringLiteral(":/ic-check-connect-off"),
+              tr("0 connections"), dashboardConnectionBadge, dashboardConnectionIcon, dashboardConnectionStatus);
+    addStatus(QStringLiteral("dashboardStaking"), QStringLiteral(":/ic-check-staking-off"),
+              tr("Staking off"), dashboardStakingBadge, dashboardStakingIcon, dashboardStakingStatus);
+
+    auto* syncLayout = qobject_cast<QHBoxLayout*>(dashboardSyncBadge->layout());
+    auto* syncDivider = new QFrame(dashboardSyncBadge);
+    syncDivider->setObjectName(QStringLiteral("dashboardSyncDivider"));
+    syncDivider->setFrameShape(QFrame::VLine);
+    syncDivider->setFixedSize(1, 12);
+    setCssProperty(syncDivider, "dashboard-status-divider");
+    dashboardBlockHeight = new QLabel(tr("Block —"), dashboardSyncBadge);
+    dashboardBlockHeight->setObjectName(QStringLiteral("dashboardBlockHeight"));
+    dashboardBlockHeight->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    setCssProperty(dashboardBlockHeight, "dashboard-status-text");
+    syncLayout->addWidget(syncDivider);
+    syncLayout->addWidget(dashboardBlockHeight);
+    ApplyStatusState(dashboardSyncBadge, QStringLiteral("neutral"));
+    setNumConnections(0);
+    setStakingStatusActive(false);
+    balanceColumn->addWidget(statusCluster, 0, Qt::AlignRight);
+    dashboardHeaderLayout->addLayout(balanceColumn);
+    rootV->addWidget(dashboardHeader);
+
+    topCardsContainer = new QWidget(this);
+    topCardsContainer->setObjectName("dashboardTopCards");
+    auto* topCards = new QHBoxLayout(topCardsContainer);
+    topCards->setContentsMargins(0, 0, 0, 0);
+    topCards->setSpacing(24);
+
+    auto* balanceCard = new QWidget(this);
+    balanceCard->setObjectName("balanceCard");
+    balanceCard->setProperty("dashboardCardRole", "primary");
+    balanceCard->setAttribute(Qt::WA_StyledBackground, true);
+    balanceCard->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    balanceCard->setFixedHeight(primaryCardHeight);
+    setCssProperty(balanceCard, "dashboard-balance-card");
+    auto* balanceCardLayout = new QVBoxLayout(balanceCard);
+    balanceCardLayout->setContentsMargins(20, 16, 20, 16);
+    balanceCardLayout->setSpacing(10);
+    auto* brandRow = new QHBoxLayout();
+    auto* cardLogo = new QLabel(balanceCard);
+    cardLogo->setObjectName(QStringLiteral("dashboardBrandLogo"));
+    cardLogo->setProperty("sourceAsset", QStringLiteral(":/img-logo-pivx"));
+    cardLogo->setFixedSize(52, 52);
+    cardLogo->setPixmap(QPixmap(":/img-logo-pivx").scaled(48, 48, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    brandRow->addWidget(cardLogo, 0, Qt::AlignVCenter);
+    auto* cardBrandText = new QVBoxLayout();
+    auto* cardBrand = new QLabel(tr("OrganicLife Coin"), balanceCard);
+    setCssProperty(cardBrand, "dashboard-card-title");
+    auto* cardTagline = new QLabel(tr("Local growth, global roots"), balanceCard);
+    setCssProperty(cardTagline, "dashboard-card-subtitle");
+    cardBrandText->addWidget(cardBrand);
+    cardBrandText->addWidget(cardTagline);
+    brandRow->addLayout(cardBrandText, 1);
+    balanceCardLayout->addLayout(brandRow);
+
+    auto* balanceDivider = new QFrame(balanceCard);
+    balanceDivider->setFrameShape(QFrame::HLine);
+    setCssProperty(balanceDivider, "dashboard-card-divider");
+    balanceCardLayout->addWidget(balanceDivider);
+    auto* totalCaption = new QLabel(tr("Total balance"), balanceCard);
+    setCssProperty(totalCaption, "dashboard-card-subtitle");
+    balanceCardLayout->addWidget(totalCaption);
+    statValueAvailable = new QLabel(tr("-- OLC"), balanceCard);
+    statValueAvailable->setObjectName("totalBalanceValue");
+    setCssProperty(statValueAvailable, "dashboard-total-balance");
+    balanceCardLayout->addWidget(statValueAvailable);
+    statValueStaking = new QLabel(tr("Locked: --  •  Immature: --"), balanceCard);
+    setCssProperty(statValueStaking, "dashboard-card-subtitle");
+    balanceCardLayout->addWidget(statValueStaking);
+
+    auto* actionRow = new QHBoxLayout();
+    actionRow->setSpacing(10);
+    auto* sendButton = new QPushButton(QIcon(":/ic-nav-send"), tr("Send"), balanceCard);
+    sendButton->setIconSize(QSize(18, 18));
+    sendButton->setCursor(Qt::PointingHandCursor);
+    setCssProperty(sendButton, "dashboard-action-primary");
+    auto* receiveButton = new QPushButton(QIcon(":/ic-nav-receive"), tr("Receive"), balanceCard);
+    receiveButton->setIconSize(QSize(18, 18));
+    receiveButton->setCursor(Qt::PointingHandCursor);
+    setCssProperty(receiveButton, "dashboard-action-secondary");
+    actionRow->addWidget(sendButton);
+    actionRow->addWidget(receiveButton);
+    connect(sendButton, &QPushButton::clicked, window, &OrganicLifeGUI::goToSend);
+    connect(receiveButton, &QPushButton::clicked, window, &OrganicLifeGUI::goToReceive);
+    balanceCardLayout->addLayout(actionRow);
+
+    balanceCardLayout->addStretch(1);
+
+    // Wrap the two existing reward tiles in the semantic stat row expected by
+    // the selected reference and add the third average/reward metric.
+    auto* analyticsStatRow = new QWidget(analyticsModule);
+    analyticsStatRow->setObjectName("analyticsStatRow");
+    analyticsStatRow->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(analyticsStatRow, "dashboard-reward-summary");
+    auto* analyticsStatsLayout = new QHBoxLayout(analyticsStatRow);
+    analyticsStatsLayout->setContentsMargins(0, 0, 0, 0);
+    analyticsStatsLayout->setSpacing(6);
+    chartContentLayout->removeWidget(rewardSummaryRow);
+    analyticsStatsLayout->addWidget(rewardSummaryRow, 2);
+    auto* averageTile = new QWidget(analyticsStatRow);
+    averageTile->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(averageTile, "dashboard-reward-tile");
+    auto* averageTileLayout = new QVBoxLayout(averageTile);
+    averageTileLayout->setContentsMargins(10, 7, 10, 7);
+    auto* averageCaption = new QLabel(tr("AVG / DAY"), averageTile);
+    setCssProperty(averageCaption, "dashboard-reward-tile-label");
+    statValueRewards = new QLabel(tr("-- OLC"), averageTile);
+    setCssProperty(statValueRewards, "dashboard-reward-stat-stakes");
+    averageTileLayout->addWidget(averageCaption);
+    averageTileLayout->addWidget(statValueRewards);
+    analyticsStatsLayout->addWidget(averageTile, 1);
+    chartContentLayout->insertWidget(0, analyticsStatRow);
+
+    // Keep the real month/year selectors inside the analytics card as a
+    // compact control row. The legacy group boxes were tall enough to escape
+    // the card at common desktop heights.
+    ui->verticalLayout_8->removeWidget(ui->containerSort);
+    ui->containerSort->setVisible(false);
+    ui->horizontalLayout_9->removeWidget(ui->comboBoxMonths);
+    ui->horizontalLayout_10->removeWidget(ui->comboBoxYears);
+
+    periodFilterRow = new QWidget(analyticsModule);
+    periodFilterRow->setObjectName("dashboardPeriodFilter");
+    periodFilterRow->setAttribute(Qt::WA_StyledBackground, true);
+    periodFilterRow->setMaximumHeight(38);
+    setCssProperty(periodFilterRow, "dashboard-period-filter");
+    auto* periodLayout = new QHBoxLayout(periodFilterRow);
+    periodLayout->setContentsMargins(8, 3, 8, 3);
+    periodLayout->setSpacing(6);
+    auto* periodLabel = new QLabel(tr("Period"), periodFilterRow);
+    setCssProperty(periodLabel, "dashboard-period-label");
+    periodLayout->addWidget(periodLabel);
+    periodLayout->addStretch(1);
+    for (QComboBox* combo : {ui->comboBoxMonths, ui->comboBoxYears}) {
+        combo->setParent(periodFilterRow);
+        combo->setMinimumSize(92, 30);
+        combo->setMaximumHeight(30);
+        setCssProperty(combo, "dashboard-period-combo", true);
+        periodLayout->addWidget(combo);
+    }
+    ui->container_chart_dropboxes->setVisible(false);
+    chartContentLayout->insertWidget(1, periodFilterRow);
+
+    ui->verticalLayout_2->removeWidget(analyticsModule);
+    analyticsModule->setParent(topCardsContainer);
+    ui->right->hide();
+    topCards->addWidget(balanceCard, 1);
+    topCards->addWidget(analyticsModule, 1);
+    topCards->setStretch(0, 1);
+    topCards->setStretch(1, 1);
+    rootV->addWidget(topCardsContainer, 0);
+
+    ui->labelTitle->setText(tr("Recent transactions"));
+    ui->labelSubtitle->setText(tr("Your latest wallet activity"));
+    ui->labelSubtitle->hide();
+    ui->labelTitle->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    ui->verticalLayout_5->setContentsMargins(0, 0, 0, 0);
+    ui->verticalLayout_5->setSpacing(0);
+    recentTransactionsCard = new QWidget(this);
+    recentTransactionsCard->setObjectName("recentTransactionsCard");
+    recentTransactionsCard->setAttribute(Qt::WA_StyledBackground, true);
+    setCssProperty(recentTransactionsCard, "dashboard-transactions-card");
+    auto* transactionsLayout = new QVBoxLayout(recentTransactionsCard);
+    transactionsLayout->setContentsMargins(0, 0, 0, 0);
+    transactionsLayout->addWidget(ui->left);
+    rootV->addWidget(recentTransactionsCard, 1);
+    chartExpanded = true;
 
 #ifdef USE_QTCHARTS
     connect(ui->comboBoxYears, static_cast<void (QComboBox::*)(const QString&)>(&QComboBox::currentTextChanged),
@@ -522,6 +695,9 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     connect(ui->comboBoxSortType, static_cast<void (QComboBox::*)(const QString&)>(&QComboBox::currentTextChanged),
         this, &DashboardWidget::onSortTypeChanged);
 
+    ui->left_top_container->setMinimumHeight(56);
+    ui->left_top_container->setMaximumHeight(62);
+
     // Transactions
     setCssProperty(ui->listTransactions, "dashboard-transactions-list");
     ui->listTransactions->setItemDelegate(txViewDelegate);
@@ -551,9 +727,13 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     setCssProperty(ui->pushImgEmpty, "img-empty-transactions");
     setCssProperty(ui->labelEmpty, "text-empty");
     setCssProperty(ui->pushImgEmptyChart, "img-empty-staking-on");
-
-    setCssProperty(ui->labelEmptyChart, "text-empty");
-    setCssSubtitleScreen(ui->labelMessageEmpty);
+    ui->pushImgEmptyChart->setVisible(false);
+    ui->verticalLayout->setSpacing(2);
+    ui->verticalSpacer11->changeSize(0, 0, QSizePolicy::Minimum, QSizePolicy::Minimum);
+    ui->verticalSpacer_2->changeSize(0, 4, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    setCssProperty(ui->labelEmptyChart, "dashboard-empty-title");
+    ui->labelMessageEmpty->setText(tr("Rewards will appear here after the wallet is synced and staking begins."));
+    setCssProperty(ui->labelMessageEmpty, "dashboard-empty-copy");
 
     // Chart State
     ui->layoutChart->setVisible(false);
@@ -579,6 +759,66 @@ bool hasCharts = false;
     } else {
         ui->labelEmptyChart->setText(tr("No charts library"));
     }
+    setTransactionsOnly(false);
+}
+
+void DashboardWidget::setTransactionsOnly(bool showTransactionsOnly)
+{
+    transactionsOnly = showTransactionsOnly;
+    setProperty("transactionsOnly", transactionsOnly);
+    if (dashboardHeader) dashboardHeader->setVisible(!transactionsOnly);
+    if (topCardsContainer) topCardsContainer->setVisible(!transactionsOnly);
+    if (recentTransactionsCard) recentTransactionsCard->setVisible(true);
+    ui->labelTitle->setText(transactionsOnly ? tr("Transactions") : tr("Recent transactions"));
+    ui->labelSubtitle->setText(transactionsOnly ? tr("Complete wallet activity") : tr("Your latest wallet activity"));
+    ui->labelSubtitle->setVisible(false);
+    updateGeometry();
+}
+
+void DashboardWidget::setNumConnections(int count)
+{
+    dashboardConnectionCount = std::max(0, count);
+    if (dashboardConnectionStatus) {
+        dashboardConnectionStatus->setText(dashboardConnectionCount == 1
+                                               ? tr("1 connection")
+                                               : tr("%1 connections").arg(dashboardConnectionCount));
+    }
+    const bool connected = dashboardConnectionCount > 0;
+    SetStatusIcon(dashboardConnectionIcon,
+                  connected
+                      ? (isLightTheme() ? QStringLiteral(":/ic-check-connect-dark")
+                                        : QStringLiteral(":/ic-check-connect"))
+                      : QStringLiteral(":/ic-check-connect-off"));
+    if (dashboardConnectionCount == 0) {
+        ApplyStatusState(dashboardConnectionBadge, QStringLiteral("danger"), QColor(214, 79, 70, 105));
+    } else if (dashboardConnectionCount <= 5) {
+        ApplyStatusState(dashboardConnectionBadge, QStringLiteral("warning"), QColor(224, 142, 54, 95));
+    } else {
+        ApplyStatusState(dashboardConnectionBadge, QStringLiteral("connected"));
+    }
+}
+
+void DashboardWidget::setStakingStatusActive(bool active)
+{
+    dashboardStakingActive = active;
+    if (dashboardStakingStatus) {
+        dashboardStakingStatus->setText(active ? tr("Staking active") : tr("Staking off"));
+    }
+    SetStatusIcon(dashboardStakingIcon,
+                  active ? QStringLiteral(":/ic-check-staking")
+                         : QStringLiteral(":/ic-check-staking-off"));
+    ApplyStatusState(dashboardStakingBadge,
+                     active ? QStringLiteral("active") : QStringLiteral("inactive"),
+                     active ? QColor(104, 162, 73, 100) : QColor());
+}
+
+void DashboardWidget::setBlockHeight(int height)
+{
+    dashboardCurrentBlockHeight = std::max(0, height);
+    if (!dashboardBlockHeight) return;
+    const QLocale displayLocale(QLocale::English, QLocale::UnitedStates);
+    dashboardBlockHeight->setText(tr("Block %1").arg(displayLocale.toString(dashboardCurrentBlockHeight)));
+    dashboardSyncBadge->updateGeometry();
 }
 
 void DashboardWidget::handleTransactionClicked(const QModelIndex &index)
@@ -639,9 +879,8 @@ void DashboardWidget::loadWalletModel()
 #endif
         // V2 stat row data
         connect(walletModel, &WalletModel::balanceChanged, this, &DashboardWidget::updateStatBalances);
-        updateStatBalances(interfaces::WalletBalances());
+        updateStatBalances(walletModel->GetWalletBalances());
         updateStatRewards();
-        updateFeedNotes();
     }
     // update the display unit, to not use the default ("PIV")
     updateDisplayUnit();
@@ -688,7 +927,6 @@ void DashboardWidget::clearWalletModel()
 void DashboardWidget::onTxArrived(const QString& hash, const bool isCoinStake, const bool isMNReward, const bool isCSAnyType)
 {
     showList();
-    updateFeedNotes();
     if (!isVisible()) return;
 #ifdef USE_QTCHARTS
     if (isCoinStake || isMNReward) {
@@ -734,23 +972,9 @@ void DashboardWidget::animateSection(QWidget* body, bool expand, const std::func
     anim->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
-void DashboardWidget::setFeedExpanded(bool expanded)
-{
-    if (feedExpanded == expanded && feedBody && feedBody->isVisible() == expanded) return;
-    // Accordion: only one section open at a time.
-    if (expanded && chartExpanded) setChartExpanded(false);
-    feedExpanded = expanded;
-    if (feedToggle) feedToggle->setText(expanded ? "▾" : "▸");
-    QSettings settings;
-    settings.setValue("dashboardFeedExpanded", expanded);
-    animateSection(feedBody, expanded);
-}
-
 void DashboardWidget::setChartExpanded(bool expanded)
 {
     if (chartExpanded == expanded && chartContent && chartContent->isVisible() == expanded) return;
-    // Accordion: only one section open at a time.
-    if (expanded && feedExpanded) setFeedExpanded(false);
     chartExpanded = expanded;
     if (chartToggle) chartToggle->setText(expanded ? "▾" : "▸");
     QSettings settings;
@@ -764,82 +988,18 @@ void DashboardWidget::setChartExpanded(bool expanded)
     animateSection(chartContent, expanded);
 }
 
-void DashboardWidget::updateFeedNotes()
-{
-    if (!feedRowsLayout) return;
-    while (QLayoutItem* item = feedRowsLayout->takeAt(0)) {
-        if (item->widget()) item->widget()->deleteLater();
-        delete item;
-    }
-
-    auto addEmpty = [this]() {
-        auto* empty = new QLabel(tr("no activity yet"), this);
-        setCssProperty(empty, "dashboard-feed-empty");
-        feedRowsLayout->addWidget(empty);
-    };
-
-    if (!filter || filter->rowCount() == 0) { addEmpty(); return; }
-
-    const int unit = walletModel && walletModel->getOptionsModel()
-        ? walletModel->getOptionsModel()->getDisplayUnit() : 0;
-    const int rows = std::min(3, filter->rowCount());
-    for (int i = 0; i < rows; ++i) {
-        const QModelIndex idx = filter->index(i, TransactionTableModel::ToAddress);
-        if (!idx.isValid()) continue;
-        const int type = idx.data(TransactionTableModel::TypeRole).toInt();
-        const CAmount amount = idx.data(TransactionTableModel::AmountRole).toLongLong();
-        const QDateTime date = idx.data(TransactionTableModel::DateRole).toDateTime();
-
-        QString label, color;
-        switch (type) {
-            case TransactionRecord::MNReward:      label = tr("MN reward");    color = "#8FB35F"; break;
-            case TransactionRecord::StakeMint:
-            case TransactionRecord::StakeDelegated:
-            case TransactionRecord::StakeHot:      label = tr("Stake found");  color = "#B77E35"; break;
-            case TransactionRecord::Generated:     label = tr("Mined");        color = "#B77E35"; break;
-            default:
-                if (amount >= 0) { label = tr("Received"); color = "#4F7A2E"; }
-                else             { label = tr("Sent");     color = "#B0502E"; }
-                break;
-        }
-
-        auto* row = new QWidget(this);
-        row->setAttribute(Qt::WA_StyledBackground, true);
-        setCssProperty(row, "dashboard-feed-row");
-        row->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-        auto* lay = new QHBoxLayout(row);
-        lay->setContentsMargins(2, 7, 2, 7);
-        lay->setSpacing(10);
-        auto* dot = new QLabel(row);
-        dot->setFixedSize(10, 10);
-        dot->setStyleSheet(QString("background:%1;border-radius:5px;").arg(color));
-        lay->addWidget(dot, 0, Qt::AlignVCenter);
-        auto* texts = new QVBoxLayout();
-        texts->setContentsMargins(0, 0, 0, 0);
-        texts->setSpacing(1);
-        auto* typeLabel = new QLabel(label, row);
-        typeLabel->setStyleSheet(QString("color:%1;font-weight:600;font-size:13px;background:transparent;")
-                                 .arg(isLightTheme() ? "#22331a" : "#f4f6e2"));
-        auto* dateLabel = new QLabel(date.date().toString("MMM d"), row);
-        dateLabel->setStyleSheet(QString("color:%1;font-size:11px;background:transparent;")
-                                 .arg(isLightTheme() ? "#5c6b4a" : "#c2c7ae"));
-        texts->addWidget(typeLabel);
-        texts->addWidget(dateLabel);
-        lay->addLayout(texts, 1);
-        auto* amountLabel = new QLabel(QString("%1%2").arg(amount >= 0 ? "+" : "")
-                                       .arg(GUIUtil::formatBalance(std::abs(amount), unit)), row);
-        amountLabel->setStyleSheet(QString("color:%1;font-weight:700;font-size:13px;background:transparent;").arg(color));
-        lay->addWidget(amountLabel, 0, Qt::AlignVCenter | Qt::AlignRight);
-        feedRowsLayout->addWidget(row);
-    }
-}
-
-void DashboardWidget::updateStatBalances(const interfaces::WalletBalances&)
+void DashboardWidget::updateStatBalances(const interfaces::WalletBalances& balances)
 {
     if (!statValueAvailable || !walletModel) return;
     const int unit = walletModel->getOptionsModel()->getDisplayUnit();
-    statValueAvailable->setText(GUIUtil::formatBalance(walletModel->getBalance(), unit));
-    statValueStaking->setText(GUIUtil::formatBalance(walletModel->getDelegatedBalance(), unit));
+    const QString available = GUIUtil::formatBalance(balances.balance, unit);
+    statValueAvailable->setText(available);
+    if (headerAvailableBalance) headerAvailableBalance->setText(available);
+    if (statValueStaking) {
+        statValueStaking->setText(tr("Locked: %1  •  Immature: %2")
+            .arg(GUIUtil::formatBalance(balances.delegate_balance + balances.coldstaked_balance, unit),
+                 GUIUtil::formatBalance(balances.immature_balance, unit)));
+    }
 }
 
 void DashboardWidget::updateStatRewards()
@@ -851,7 +1011,7 @@ void DashboardWidget::updateStatRewards()
         if (QDate(sample.year, sample.month, sample.day) >= cutoff) total += sample.amount;
     }
     const int unit = walletModel->getOptionsModel()->getDisplayUnit();
-    statValueRewards->setText(GUIUtil::formatBalance(total, unit));
+    statValueRewards->setText(GUIUtil::formatBalance(total / 30, unit));
 }
 
 void DashboardWidget::updateDisplayUnit()
@@ -939,6 +1099,7 @@ void DashboardWidget::updateTransactionViewState(bool hasTransactions, bool hasV
 
 void DashboardWidget::walletSynced(bool sync)
 {
+    if (dashboardSyncStatus) dashboardSyncStatus->setText(sync ? tr("Synced") : tr("Syncing"));
     if (this->isSync != sync) {
         this->isSync = sync;
         ui->layoutWarning->setVisible(!this->isSync);
@@ -949,10 +1110,14 @@ void DashboardWidget::walletSynced(bool sync)
     }
 }
 
-void DashboardWidget::changeTheme(bool isLightTheme, QString& theme)
+void DashboardWidget::changeTheme(bool lightTheme, QString& theme)
 {
-    static_cast<TxViewHolder*>(this->txViewDelegate->getRowFactory())->isLightTheme = isLightTheme;
+    static_cast<TxViewHolder*>(this->txViewDelegate->getRowFactory())->isLightTheme = lightTheme;
     if (ui && ui->listTransactions) ui->listTransactions->viewport()->update();
+    SetStatusIcon(dashboardSyncIcon,
+                  lightTheme ? QStringLiteral(":/ic-check-sync-dark") : QStringLiteral(":/ic-check-sync"));
+    setNumConnections(dashboardConnectionCount);
+    setStakingStatusActive(dashboardStakingActive);
 #ifdef USE_QTCHARTS
     if (chart) this->changeChartColors();
 #endif
@@ -1025,6 +1190,7 @@ void DashboardWidget::loadChart()
 
 void DashboardWidget::showHideEmptyChart(bool showEmpty, bool loading, bool forceView)
 {
+    if (chartValueTooltip && (showEmpty || loading)) chartValueTooltip->hide();
     const bool keepChartVisibleWhileLoading = loading && chartHasRenderedData;
     if ((stakesFilter && stakesFilter->rowCount() > SHOW_EMPTY_CHART_VIEW_THRESHOLD) || forceView) {
         ui->layoutChart->setVisible(keepChartVisibleWhileLoading || !showEmpty);
@@ -1050,7 +1216,7 @@ void DashboardWidget::initChart()
     chart->legend()->setVisible(false);
     chart->legend()->setAlignment(Qt::AlignTop);
     chart->layout()->setContentsMargins(0, 0, 0, 0);
-    chart->setMargins({0, 0, 0, 16});
+    chart->setMargins({0, 0, 0, 22});
     chart->setBackgroundRoundness(0);
     chart->setAnimationOptions(QChart::NoAnimation);
     chart->setAnimationDuration(0);
@@ -1060,20 +1226,89 @@ void DashboardWidget::initChart()
     axisY->setTickCount(5);
     axisY->setMinorTickCount(0);
     axisX->setGridLineVisible(false);
+    axisX->setLabelsVisible(false);
+    axisX->setLineVisible(false);
     axisY->setGridLineVisible(true);
+    axisY->setLabelsVisible(false);
+    axisY->setLineVisible(false);
 
     chartView = new QChartView(chart);
     chartView->setRenderHint(QPainter::Antialiasing);
     chartView->setRubberBand(QChartView::HorizontalRubberBand);
     chartView->setContentsMargins(0,0,0,0);
-    chartView->setMinimumHeight(120);
+    chartView->setMinimumHeight(80);
 
-    QHBoxLayout *baseScreensContainer = new QHBoxLayout();
+    QVBoxLayout *baseScreensContainer = new QVBoxLayout();
     baseScreensContainer->setContentsMargins(0, 0, 0, 0);
+    baseScreensContainer->setSpacing(0);
     baseScreensContainer->addWidget(chartView);
+
+    chartTimeline = new QWidget(chartView->viewport());
+    chartTimeline->setObjectName(QStringLiteral("dashboardChartTimeline"));
+    chartTimeline->setFixedHeight(20);
+    chartTimeline->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    auto* timelineLayout = new QHBoxLayout(chartTimeline);
+    timelineLayout->setContentsMargins(4, 0, 4, 0);
+    timelineLayout->setSpacing(0);
+    chartTimelineLabels.clear();
+    for (int i = 0; i < 5; ++i) {
+        auto* label = new QLabel(chartTimeline);
+        label->setAlignment(i == 0 ? Qt::AlignLeft : (i == 4 ? Qt::AlignRight : Qt::AlignCenter));
+        label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        setCssProperty(label, "dashboard-chart-timeline-label");
+        timelineLayout->addWidget(label, 1);
+        chartTimelineLabels.append(label);
+    }
     ui->chartContainer->setLayout(baseScreensContainer);
     ui->chartContainer->setContentsMargins(0,0,0,0);
     setCssProperty(ui->chartContainer, "dashboard-chart-canvas");
+
+    chartValueTooltip = new QLabel(chartView->viewport());
+    chartValueTooltip->setObjectName(QStringLiteral("dashboardChartValueTooltip"));
+    chartValueTooltip->setAttribute(Qt::WA_StyledBackground, true);
+    chartValueTooltip->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    setCssProperty(chartValueTooltip, "dashboard-chart-tooltip");
+    chartValueTooltip->hide();
+    QTimer::singleShot(0, this, &DashboardWidget::updateChartTimelineGeometry);
+}
+
+void DashboardWidget::updateChartTimelineGeometry()
+{
+    if (!chartTimeline || !chartView) return;
+    const int inset = 8;
+    QWidget* viewport = chartView->viewport();
+    int visibleBottom = viewport->height();
+    if (analyticsCard) {
+        const QPoint cardBottomGlobal = analyticsCard->mapToGlobal(
+            QPoint(0, analyticsCard->height() - inset));
+        visibleBottom = std::min(visibleBottom, viewport->mapFromGlobal(cardBottomGlobal).y());
+    }
+    chartTimeline->setGeometry(inset,
+                               std::max(0, visibleBottom - chartTimeline->height()),
+                               std::max(0, viewport->width() - (inset * 2)),
+                               chartTimeline->height());
+    chartTimeline->raise();
+}
+
+void DashboardWidget::onChartPointHovered(const QPointF& point, bool state)
+{
+    if (!chartValueTooltip || !chartView) return;
+    if (!state) {
+        chartValueTooltip->hide();
+        return;
+    }
+
+    const QLocale displayLocale(QLocale::English, QLocale::UnitedStates);
+    chartValueTooltip->setText(tr("%1 OLC").arg(displayLocale.toString(point.y(), 'f', 2)));
+    chartValueTooltip->adjustSize();
+
+    QWidget* viewport = chartView->viewport();
+    QPoint position = viewport->mapFromGlobal(QCursor::pos()) + QPoint(10, -chartValueTooltip->height() - 8);
+    position.setX(std::clamp(position.x(), 4, std::max(4, viewport->width() - chartValueTooltip->width() - 4)));
+    position.setY(std::clamp(position.y(), 4, std::max(4, viewport->height() - chartValueTooltip->height() - 4)));
+    chartValueTooltip->move(position);
+    chartValueTooltip->show();
+    chartValueTooltip->raise();
 }
 
 void DashboardWidget::changeChartColors()
@@ -1085,30 +1320,33 @@ void DashboardWidget::changeChartColors()
     QColor gridY;
     QColor pivHintColor;
     QColor mnHintColor;
-    // Harvest palette anchors for the V2 area chart.
+    // Approved semantic palette anchors for the area chart.
     if (isLightTheme()) {
-        gridLineColorX = QColor("#E3E8CE");
-        gridY = QColor("#E3E8CE");
-        linePenColor = QColor("#B9C49A");
-        labelColor = QColor("#7E7A62");
+        gridLineColorX = QColor("#DDE5DA");
+        gridY = QColor("#D7E0D5");
+        linePenColor = QColor("#D4DDD2");
+        labelColor = QColor("#5D6961");
         backgroundColor = QColor("#FFFFFF");
-        pivHintColor = QColor("#4F7A2E");
-        mnHintColor = QColor("#C4552A");
+        pivHintColor = QColor("#56863B");
+        mnHintColor = QColor("#7A9D65");
         axisY->setGridLineColor(gridY);
-        axisY->setMinorGridLineColor(QColor("#EFF2DF"));
+        axisY->setMinorGridLineColor(QColor("#F3F6F1"));
     } else {
-        gridLineColorX = QColor("#3B4426");
-        gridY = QColor("#3B4426");
-        linePenColor = QColor("#55613F");
-        labelColor = QColor("#C2C7AE");
-        backgroundColor = QColor("#0D1008");
-        pivHintColor = QColor("#8FB35F");
-        mnHintColor = QColor("#D08A63");
+        gridLineColorX = QColor("#30443A");
+        gridY = QColor("#33493D");
+        linePenColor = QColor("#2B3D34");
+        labelColor = QColor("#A9B0A9");
+        backgroundColor = QColor("#121F1A");
+        pivHintColor = QColor("#8BC65B");
+        mnHintColor = QColor("#A1BF89");
         axisY->setGridLineColor(gridY);
-        axisY->setMinorGridLineColor(QColor("#1A2010"));
+        axisY->setMinorGridLineColor(QColor("#172720"));
     }
 
     axisX->setGridLineColor(gridLineColorX);
+    QPen horizontalGridPen(gridY);
+    horizontalGridPen.setWidthF(1.0);
+    axisY->setGridLinePen(horizontalGridPen);
     axisX->setLinePenColor(linePenColor);
     axisY->setLinePenColor(linePenColor);
     axisX->setLabelsColor(labelColor);
@@ -1120,20 +1358,25 @@ void DashboardWidget::changeChartColors()
     ui->labelPiv->setStyleSheet(QString("color:%1;").arg(pivHintColor.name()));
     ui->labelMN->setStyleSheet(QString("color:%1;").arg(mnHintColor.name()));
     const auto markerStyle = [](const QColor& color) {
-        return QString("background:%1;border:none;border-radius:4px;").arg(color.name());
+        return QString("background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 %1,stop:1 %2);border:none;border-radius:4px;")
+            .arg(color.lighter(116).name(), color.darker(112).name());
     };
     ui->labelSquarePiv->setStyleSheet(markerStyle(pivHintColor));
     ui->labelSquareMN->setStyleSheet(markerStyle(mnHintColor));
     if (stakesLine) {
         QPen linePen(pivHintColor);
         linePen.setWidth(2);
+        linePen.setCapStyle(Qt::RoundCap);
+        linePen.setJoinStyle(Qt::RoundJoin);
         stakesLine->setPen(linePen);
+        stakesLine->setPointsVisible(true);
+        stakesLine->setMarkerSize(5.5);
     }
     if (areaStakes) {
         QLinearGradient fillGrad(0, 0, 0, 1);
         fillGrad.setCoordinateMode(QGradient::ObjectBoundingMode);
         QColor top = pivHintColor;
-        top.setAlpha(isLightTheme() ? 72 : 96);
+        top.setAlpha(isLightTheme() ? 54 : 68);
         QColor bottom = pivHintColor;
         bottom.setAlpha(8);
         fillGrad.setColorAt(0, top);
@@ -1146,7 +1389,11 @@ void DashboardWidget::changeChartColors()
     if (mnLine) {
         QPen mnPen(mnHintColor);
         mnPen.setWidth(2);
+        mnPen.setCapStyle(Qt::RoundCap);
+        mnPen.setJoinStyle(Qt::RoundJoin);
         mnLine->setPen(mnPen);
+        mnLine->setPointsVisible(true);
+        mnLine->setMarkerSize(5.0);
     }
 }
 
@@ -1257,13 +1504,18 @@ bool DashboardWidget::loadChartData(bool withMonthNames)
         return false;
     }
 
-    for (int num = range.first; num < range.second; num++) {
-        qreal piv = 0;
-        qreal mn = 0;
+    std::map<int, std::pair<long long, long long>> rewards;
+    for (auto it = chartData->amountsByCache.cbegin(); it != chartData->amountsByCache.cend(); ++it) {
+        rewards.emplace(it.key(), std::make_pair(it.value().first, it.value().second));
+    }
+    const auto cumulative = BuildCumulativeRewardSeries(rewards, range.first, range.second);
+
+    int seriesIndex = 0;
+    for (int num = range.first; num < range.second; num++, seriesIndex++) {
+        qreal piv = cumulative.at(seriesIndex).first / 100000000.0;
+        qreal mn = cumulative.at(seriesIndex).second / 100000000.0;
         if (chartData->amountsByCache.contains(num)) {
             std::pair <qint64, qint64> pair = chartData->amountsByCache[num];
-            piv = (pair.first != 0) ? pair.first / 100000000 : 0;
-            mn = (pair.second != 0) ? pair.second / 100000000 : 0;
             chartData->totalPiv += pair.first;
             chartData->totalMN += pair.second;
         }
@@ -1273,7 +1525,7 @@ bool DashboardWidget::loadChartData(bool withMonthNames)
         chartData->valuesPiv.append(piv);
         chartData->valuesMN.append(mn);
 
-        qreal max = std::max(piv, mn);
+        qreal max = piv + mn;
         if (max > chartData->maxValue) {
             chartData->maxValue = max;
         }
@@ -1326,6 +1578,7 @@ bool DashboardWidget::refreshChart()
 
 void DashboardWidget::onChartRefreshed()
 {
+    if (chartValueTooltip) chartValueTooltip->hide();
     if (chart && axisX) {
         axisX->clear();
     }
@@ -1335,6 +1588,7 @@ void DashboardWidget::onChartRefreshed()
         stakesLine = new QLineSeries();
         areaStakes = new QAreaSeries(stakesLine);
         areaStakes->setName(tr("Stakes"));
+        connect(areaStakes, &QAreaSeries::hovered, this, &DashboardWidget::onChartPointHovered);
         chart->addSeries(areaStakes);
         areaStakes->attachAxis(axisX);
         areaStakes->attachAxis(axisY);
@@ -1354,7 +1608,12 @@ void DashboardWidget::onChartRefreshed()
     targetPivValues = NormalizeValues(targetPivValues, targetSize);
     targetMnValues = NormalizeValues(targetMnValues, targetSize);
 
-    const qreal maxForRange = std::max(MaxValue(targetPivValues), MaxValue(targetMnValues));
+    QList<qreal> targetTotalValues;
+    targetTotalValues.reserve(targetSize);
+    for (int i = 0; i < targetSize; ++i) {
+        targetTotalValues.append(targetPivValues.at(i) + targetMnValues.at(i));
+    }
+    const qreal maxForRange = MaxValue(targetTotalValues);
 
     // Total
     nDisplayUnit = walletModel->getOptionsModel()->getDisplayUnit();
@@ -1372,6 +1631,19 @@ void DashboardWidget::onChartRefreshed()
     ui->labelAmountMN->setText(GUIUtil::formatBalance(chartData->totalMN, nDisplayUnit));
 
     axisX->append(chartData->xLabels);
+    const int timelineCount = chartTimelineLabels.size();
+    const int sourceCount = chartData->xLabels.size();
+    for (int i = 0; i < timelineCount; ++i) {
+        QString text;
+        if (sourceCount == 1) {
+            if (i == timelineCount / 2) text = chartData->xLabels.first();
+        } else if (sourceCount > 1) {
+            const int sourceIndex = qRound((sourceCount - 1) * (i / static_cast<double>(timelineCount - 1)));
+            text = chartData->xLabels.at(sourceIndex);
+        }
+        chartTimelineLabels.at(i)->setText(text);
+    }
+    updateChartTimelineGeometry();
     const ChartAxisSpec axisSpec = ComputeNiceAxisSpec(std::max(0.0, static_cast<double>(maxForRange)), 5);
     axisY->setRange(0.0, axisSpec.top);
     axisY->setTickCount(axisSpec.tickCount);
@@ -1383,9 +1655,9 @@ void DashboardWidget::onChartRefreshed()
         axisY->setLabelFormat("%.0f");
     }
 
-    ReplaceLineSeriesValues(stakesLine, targetPivValues);
+    ReplaceLineSeriesValues(stakesLine, targetTotalValues);
     ReplaceLineSeriesValues(mnLine, targetMnValues);
-    mnLine->setVisible(hasMNRewards);
+    mnLine->setVisible(false);
     updateStatRewards();
 
     bool hasVisibleValues = false;
@@ -1401,17 +1673,19 @@ void DashboardWidget::onChartRefreshed()
     // Controllers
     switch (chartShow) {
         case ALL: {
-            ui->container_chart_dropboxes->setVisible(false);
+            if (periodFilterRow) periodFilterRow->setVisible(false);
             break;
         }
         case YEAR: {
-            ui->container_chart_dropboxes->setVisible(true);
-            ui->containerBoxMonths->setVisible(false);
+            if (periodFilterRow) periodFilterRow->setVisible(true);
+            ui->comboBoxMonths->setVisible(false);
+            ui->comboBoxYears->setVisible(true);
             break;
         }
         case MONTH: {
-            ui->container_chart_dropboxes->setVisible(true);
-            ui->containerBoxMonths->setVisible(true);
+            if (periodFilterRow) periodFilterRow->setVisible(true);
+            ui->comboBoxMonths->setVisible(true);
+            ui->comboBoxYears->setVisible(true);
             break;
         }
         default: break;
@@ -1545,6 +1819,8 @@ void DashboardWidget::updateMonthArrowState()
 
 void DashboardWidget::windowResizeEvent(QResizeEvent* event)
 {
+    Q_UNUSED(event);
+    updateChartTimelineGeometry();
     if (hasStakes && axisX) {
         if (width() > 1300) {
             if (isChartMin) {
@@ -1587,7 +1863,8 @@ void DashboardWidget::onHideChartsChanged(bool fHide)
             stakesFilter->setTypeFilter(TransactionFilterProxy::TYPE(TransactionRecord::StakeMint) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::StakeDelegated) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::MNReward) |
-                                        TransactionFilterProxy::TYPE(TransactionRecord::BudgetPayment));
+                                        TransactionFilterProxy::TYPE(TransactionRecord::BudgetPayment) |
+                                        TransactionFilterProxy::TYPE(TransactionRecord::Generated));
         }
         stakesFilter->setSourceModel(txModel);
         hasStakes = stakesFilter->rowCount() > 0;
