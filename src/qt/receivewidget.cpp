@@ -36,7 +36,7 @@ ReceiveWidget::ReceiveWidget(OrganicLifeGUI* parent) :
                 );
 
     // Containers
-    setCssProperty(ui->left, "container");
+    setCssProperty(ui->left, "screen-main-surface");
     ui->left->setContentsMargins(0,0,0,20);
     ui->right->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->right, "screen-side-rail");

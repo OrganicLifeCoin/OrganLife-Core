@@ -23,11 +23,11 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
     this->setStyleSheet(parent->styleSheet());
 
     /* Containers */
-    setCssProperty(ui->scrollArea, "container");
-    setCssProperty(ui->left, "container");
-    ui->left->setContentsMargins(0,20,0,20);
-    setCssProperty(ui->right, "container-right");
-    ui->right->setContentsMargins(20,10,20,20);
+    setCssProperty(ui->scrollArea, "screen-main-surface");
+    setCssProperty(ui->left, "screen-main-surface");
+    ui->left->setContentsMargins(20,20,20,20);
+    setCssProperty(ui->right, "screen-side-rail");
+    ui->right->setContentsMargins(20,16,20,20);
 
     ui->verticalLayout->setAlignment(Qt::AlignTop);
 
@@ -36,9 +36,9 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
     fontLight.setWeight(QFont::Light);
 
     /* Title */
-    setCssProperty(ui->labelTitle, "text-title-screen");
+    setCssProperty(ui->labelTitle, "screen-header-title");
     ui->labelTitle->setFont(fontLight);
-    setCssProperty(ui->labelSubtitle, "text-subtitle");
+    setCssProperty(ui->labelSubtitle, "screen-header-subtitle");
 
     setCssProperty(ui->pushButtonFile, "btn-settings-check");
     setCssProperty(ui->pushButtonFile2, "btn-settings-options");
