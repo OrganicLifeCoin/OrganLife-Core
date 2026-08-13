@@ -38,8 +38,8 @@ def save(size, path):
     print(f"  {size:>4}px -> {os.path.relpath(path, ROOT)}")
 
 # ---- master brand source (keeps the historic name used by scripts) ----
-coin.resize((1024, 1024), Image.LANCZOS).save(os.path.join(ROOT, "CTEAMCoin.png"))
-print("master -> CTEAMCoin.png")
+coin.resize((1024, 1024), Image.LANCZOS).save(os.path.join(ROOT, "OrganicLifeCoin.png"))
+print("master -> OrganicLifeCoin.png")
 
 # ---- qt resource logos ----
 IMG = os.path.join(ROOT, "src/qt/res/images")
@@ -70,9 +70,9 @@ PX = os.path.join(ROOT, "share/pixmaps")
 for size in (16, 24, 32, 48, 64, 128, 256, 512, 1024):
     save(size, f"{PX}/pivx{size}.png")
 # multi-size .ico files
-coin.save(f"{PX}/cteam.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+coin.save(f"{PX}/organiclife.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 coin.save(f"{PX}/favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
-print("ico -> share/pixmaps/cteam.ico, favicon.ico")
+print("ico -> share/pixmaps/organiclife.ico, favicon.ico")
 # xpm variants
 for size in (16, 24, 32, 48, 64, 128, 256, 512, 1024):
     coin.resize((size, size), Image.LANCZOS).convert("RGB").save(f"{PX}/pivx{size}.xpm")

@@ -65,7 +65,7 @@ BIN_CHECKS=$(top_srcdir)/contrib/devtools/symbol-check.py \
            $(top_srcdir)/contrib/devtools/security-check.py \
            $(top_srcdir)/contrib/devtools/pixie.py
 
-WINDOWS_PACKAGING = $(top_srcdir)/share/pixmaps/cteam.ico \
+WINDOWS_PACKAGING = $(top_srcdir)/share/pixmaps/organiclife.ico \
   $(top_srcdir)/share/pixmaps/pivx.ico \
   $(top_srcdir)/share/pixmaps/nsis-header.bmp \
   $(top_srcdir)/share/pixmaps/nsis-wizard.bmp \

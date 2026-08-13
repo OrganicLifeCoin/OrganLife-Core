@@ -95,7 +95,7 @@ IMG = 'src/qt/res/images/'
 
 # master mark + coin (root)
 mark(1024).save('organiclifecoin-logo.png')
-coin(1024).save('CTEAMCoin.png')
+coin(1024).save('OrganicLifeCoin.png')
 
 # in-wallet logos
 for name, px in [('img-logo-organiclife.png', 256), ('img-logo-organiclife@2x.png', 512),

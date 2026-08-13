@@ -150,13 +150,13 @@ def make_genesis(timestamp: bytes, ntime: int, nbits: int, reward: int = 0,
 def validate_against_cteam():
     checks = [
         # (name, timestamp, time, nonce, bits, expected_hash, expected_merkle)
-        ("cteam-regtest", b"CTEAM Genesis 2026-05-05", 1778491634, 0, 0x207fffff,
+        ("organiclife-regtest", b"CTEAM Genesis 2026-05-05", 1778491634, 0, 0x207fffff,
          "33928ba611fd2bdc184827aec28969d5507114d4d3a7757d0ee2a292c6a23dcb",
          "c10e5c519df766e11290d700ce084d8c339bed1e56b068dade382784940c41bb"),
-        ("cteam-testnet", b"CTEAM Testnet Genesis 2026-05-05", 1778491633, 839634, 0x1e0ffff0,
+        ("organiclife-testnet", b"CTEAM Testnet Genesis 2026-05-05", 1778491633, 839634, 0x1e0ffff0,
          "00000723b58e921e858251185dc07ad0c8fa2ffeb3dca130683e3794c28bceb5",
          "efa13ba9757a15d94955f1d6d35e3b6800d915f93c3c7b565f35ba66a9b09878"),
-        ("cteam-mainnet", b"CTEAM Genesis 2026-07-27", 1785103200, 57002, 0x1e0ffff0,
+        ("organiclife-mainnet", b"CTEAM Genesis 2026-07-27", 1785103200, 57002, 0x1e0ffff0,
          "00000af1784b2656d98a5052dfda8a2580835c7817bed4c0bb8294d36390fa62",
          "16f4d84a103eda63bca9d899579901214dd002c88b1b2bbdf74369bb8ba006cb"),
     ]

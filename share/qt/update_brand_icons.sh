@@ -5,7 +5,7 @@
 # Fallback source (tracked):        src/qt/res/images/img-logo-organiclife@3x.png
 # Outputs updated:
 #   - Qt GUI resources: src/qt/res/icons/bitcoin*.png + .ico + .icns
-#   - Linux/packaging:  share/pixmaps/pivx*.png + cteam.ico + pivx.ico + bitcoin*.png + bitcoin.icns
+#   - Linux/packaging:  share/pixmaps/pivx*.png + organiclife.ico + pivx.ico + bitcoin*.png + bitcoin.icns
 #
 # Requires either:
 #   - ImageMagick `convert`, or
@@ -81,8 +81,8 @@ SIZES_ICO=(256 128 64 48 40 32 24 20 16)
 for size in "${SIZES_ICO[@]}"; do
   resize_png "$SRC_ICON" "$TMPDIR/icon-${size}.png" "$size"
 done
-python3 "$ICO_PACKER" "$ROOT_DIR/share/pixmaps/cteam.ico" $(for size in "${SIZES_ICO[@]}"; do printf "%q " "$TMPDIR/icon-${size}.png"; done)
-cp -f "$ROOT_DIR/share/pixmaps/cteam.ico" "$ROOT_DIR/share/pixmaps/pivx.ico"
+python3 "$ICO_PACKER" "$ROOT_DIR/share/pixmaps/organiclife.ico" $(for size in "${SIZES_ICO[@]}"; do printf "%q " "$TMPDIR/icon-${size}.png"; done)
+cp -f "$ROOT_DIR/share/pixmaps/organiclife.ico" "$ROOT_DIR/share/pixmaps/pivx.ico"
 
 echo "[ICON] Regenerating macOS .icns resources..."
 ICNS_PACKER="$ROOT_DIR/contrib/devtools/png_to_icns.py"

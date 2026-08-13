@@ -1,4 +1,4 @@
-// Copyright (c) 2026 The CTEAM Core developers
+// Copyright (c) 2026 The OrganicLife Coin developers
 /*
  * RELIC is an Efficient LIbrary for Cryptography
  * Copyright (c) 2012 RELIC Authors

@@ -123,7 +123,7 @@ def hgrad(size, c1, c2):
 IMG = 'src/qt/res/images/'
 
 mark(1024, veggies=True).save('organiclifecoin-logo.png')
-coin(1024).save('CTEAMCoin.png')
+coin(1024).save('OrganicLifeCoin.png')
 
 for name, px in [('img-logo-organiclife.png', 256), ('img-logo-organiclife@2x.png', 512),
                  ('img-logo-organiclife@3x.png', 768)]:

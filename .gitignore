@@ -152,7 +152,7 @@ testnet-data/
 contrib/genesis/mine_genesis_quark
 
 # Local brand/artwork scratch files
-/CTEAMCoin.png
+/OrganicLifeCoin.png
 /logo1776.png
 share/pixmaps/bitcoin*
 
@@ -253,8 +253,8 @@ build-x86_64/
 tools/quark_miner
 
 # built binaries — never commit
-CTEAM-macos-universal-qt/
-CTEAM-macos-universal-daemon/
+organiclife-macos-universal-qt/
+organiclife-macos-universal-daemon/
 *.dmg
 build-arm64/
 build-x86_64/
