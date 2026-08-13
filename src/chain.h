@@ -173,6 +173,12 @@ public:
     //! Verification status of this block. See enum BlockStatus
     uint32_t nStatus{0};
 
+    //! Total gross consensus issuance from genesis through this block.
+    //! Unlike the UTXO-set money-supply cache, this includes shielded funds and
+    //! does not restore burned fees. Persisted per block so competing branches
+    //! retain independent, reorg-safe supply totals.
+    CAmount nChainMinted{0};
+
     // proof-of-stake specific fields
     // char vector holding the stake modifier bytes. It is empty for PoW blocks.
     // Modifier V1 is 64 bit while modifier V2 is 256 bit.
@@ -258,11 +264,13 @@ const CBlockIndex* LastCommonAncestor(const CBlockIndex* pa, const CBlockIndex* 
 // New serialization introduced with 4.0.99
 static const int DBI_OLD_SER_VERSION = 4009900;
 static const int DBI_SER_VERSION_NO_ZC = 4009902;   // removes mapZerocoinSupply, nMoneySupply
+static const int DBI_SER_VERSION_CHAIN_MINT = 4009903; // adds cumulative consensus issuance
 
 class CDiskBlockIndex : public CBlockIndex
 {
 public:
     uint256 hashPrev;
+    bool fHasChainMinted{true};
 
     CDiskBlockIndex()
     {
@@ -303,6 +311,12 @@ public:
             if (obj.nVersion >= 8) {
                 READWRITE(obj.hashFinalSaplingRoot);
                 READWRITE(obj.nSaplingValue);
+            }
+
+            if (nSerVersion >= DBI_SER_VERSION_CHAIN_MINT) {
+                READWRITE(obj.nChainMinted);
+            } else {
+                SER_READ(obj, obj.fHasChainMinted = false);
             }
         }
     }

@@ -21,6 +21,7 @@
 #include "sapling/address.h"
 #include "sapling/sapling_operation.h"
 
+#include <algorithm>
 #include <unordered_set>
 
 #include <boost/test/unit_test.hpp>
@@ -47,6 +48,29 @@ namespace {
         fs::path old_cwd;
     };
 
+    class WalletRegistration {
+    public:
+        explicit WalletRegistration(CWallet& wallet) : wallet(&wallet) {
+            vpwallets.insert(vpwallets.begin(), this->wallet);
+        }
+
+        ~WalletRegistration() {
+            const auto it = std::find(vpwallets.begin(), vpwallets.end(), wallet);
+            if (it != vpwallets.end()) vpwallets.erase(it);
+        }
+
+    private:
+        CWallet* wallet;
+    };
+
+    libzcash::SaplingExtendedSpendingKey ForeignSaplingSpendingKey() {
+        return GetTestMasterSaplingSpendingKey().Derive(0x12345);
+    }
+
+    std::string ForeignSaplingAddress() {
+        return KeyIO::EncodePaymentAddress(ForeignSaplingSpendingKey().DefaultAddress());
+    }
+
 }
 
 BOOST_FIXTURE_TEST_SUITE(sapling_rpc_wallet_tests, WalletTestingSetup)
@@ -58,7 +82,7 @@ BOOST_FIXTURE_TEST_SUITE(sapling_rpc_wallet_tests, WalletTestingSetup)
 BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_validateaddress)
 {
     SelectParams(CBaseChainParams::MAIN);
-    vpwallets.insert(vpwallets.begin(), &m_wallet);
+    WalletRegistration walletRegistration(m_wallet);
 
     UniValue retValue;
 
@@ -78,16 +102,16 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_validateaddress)
     BOOST_CHECK_EQUAL(b, false);
 
     // This Sapling address is valid, but the spending key is not in this wallet
-    BOOST_CHECK_NO_THROW(retValue = CallRPC("validateaddress c71u87kylcmn28yclnx2uy0psnvuhs2xn608ukm6n2nshrpg2nzyu3n62ls8j77m9cgp40dxnjxupk"));
+    const auto foreignKey = ForeignSaplingSpendingKey();
+    const auto foreignAddress = foreignKey.DefaultAddress();
+    BOOST_CHECK_NO_THROW(retValue = CallRPC("validateaddress " + KeyIO::EncodePaymentAddress(foreignAddress)));
     resultObj = retValue.get_obj();
     b = find_value(resultObj, "isvalid").get_bool();
     BOOST_CHECK_EQUAL(b, true);
     b = find_value(resultObj, "ismine").get_bool();
     BOOST_CHECK_EQUAL(b, false);
-    BOOST_CHECK_EQUAL(find_value(resultObj, "diversifier").get_str(), "e1fd627f1b9a8e4c7e6657");
-    BOOST_CHECK_EQUAL(find_value(resultObj, "diversifiedtransmissionkey").get_str(), "d35e0d0897edbd3cf02b3d2327622a14c685534dbd2d3f4f4fa3e0e56cc2f008");
-
-    vpwallets.erase(vpwallets.begin());
+    BOOST_CHECK_EQUAL(find_value(resultObj, "diversifier").get_str(), HexStr(foreignAddress.d));
+    BOOST_CHECK_EQUAL(find_value(resultObj, "diversifiedtransmissionkey").get_str(), foreignAddress.pk_d.GetHex());
 }
 
 BOOST_AUTO_TEST_CASE(rpc_wallet_getbalance)
@@ -97,14 +121,15 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_getbalance)
         m_wallet.SetMinVersion(FEATURE_SAPLING);
         m_wallet.SetupSPKM(false);
     }
-    vpwallets.insert(vpwallets.begin(), &m_wallet);
+    WalletRegistration walletRegistration(m_wallet);
 
     BOOST_CHECK_THROW(CallRPC("getshieldbalance too many args"), std::runtime_error);
     BOOST_CHECK_THROW(CallRPC("getshieldbalance invalidaddress"), std::runtime_error);
     BOOST_CHECK_THROW(CallRPC("getshieldbalance tmC6YZnCUhm19dEXxh3Jb7srdBJxDawaCab"), std::runtime_error);
-    BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance c71u87kylcmn28yclnx2uy0psnvuhs2xn608ukm6n2nshrpg2nzyu3n62ls8j77m9cgp40dxnjxupk"));
-    BOOST_CHECK_THROW(CallRPC("getshieldbalance c71u87kylcmn28yclnx2uy0psnvuhs2xn608ukm6n2nshrpg2nzyu3n62ls8j77m9cgp40dxnjxupk -1"), std::runtime_error);
-    BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance c71u87kylcmn28yclnx2uy0psnvuhs2xn608ukm6n2nshrpg2nzyu3n62ls8j77m9cgp40dxnjxupk 0"));
+    const std::string foreignAddress = ForeignSaplingAddress();
+    BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance " + foreignAddress));
+    BOOST_CHECK_THROW(CallRPC("getshieldbalance " + foreignAddress + " -1"), std::runtime_error);
+    BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance " + foreignAddress + " 0"));
     BOOST_CHECK_THROW(CallRPC("getshieldbalance tnRZ8bPq2pff3xBWhTJhNkVUkm2uhzksDeW5PvEa7aFKGT9Qi3YgTALZfjaY4jU3HLVKBtHdSXxoPoLA3naMPcHBcY88FcF 1"), std::runtime_error);
     BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance *"));
     BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance * 6"));
@@ -116,9 +141,7 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_getbalance)
     // invalid zaddr, taddr not allowed
     BOOST_CHECK_THROW(CallRPC("listreceivedbyshieldaddress DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ 0"), std::runtime_error);
     // don't have the spending key
-    BOOST_CHECK_THROW(CallRPC("listreceivedbyshieldaddress c71u87kylcmn28yclnx2uy0psnvuhs2xn608ukm6n2nshrpg2nzyu3n62ls8j77m9cgp40dxnjxupk 1"), std::runtime_error);
-
-    vpwallets.erase(vpwallets.begin());
+    BOOST_CHECK_THROW(CallRPC("listreceivedbyshieldaddress " + foreignAddress + " 1"), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_importkey_paymentaddress)
@@ -128,7 +151,7 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_importkey_paymentaddress)
         m_wallet.SetMinVersion(FEATURE_SAPLING);
         m_wallet.SetupSPKM(false);
     }
-    vpwallets.insert(vpwallets.begin(), &m_wallet);
+    WalletRegistration walletRegistration(m_wallet);
 
     auto testAddress = [](const std::string& key) {
         UniValue ret;
@@ -140,13 +163,7 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_importkey_paymentaddress)
         BOOST_CHECK_EQUAL(true, find_value(ret, "ismine").get_bool());
     };
 
-    testAddress("c1776-secret-spending-key-main1qv09u0wlqqqqpqp75kpmat6l3ce29k"
-                "g9half9epsm80wya5n92j4d8mtmesrukzxlsmm2f74v3nvvx2shxy4z5v5x39p"
-                "eelsy5y2uxmvadaku8crd20q6vt8cvd68wp08cjyec6cku0dcf5lc9c2kykg5c"
-                "8uqmqlx8ccxpsw7ae243quhwr0zyekrrc520gs9z0j8pm954c3cev2yvp29vrc"
-                "0zweu7stxkwhp593p6drheps9uhz9pvkrfgvpxzte8d60uzw0qxadnswcu95e");
-
-    vpwallets.erase(vpwallets.begin());
+    testAddress(KeyIO::EncodeSpendingKey(ForeignSaplingSpendingKey()));
 }
 
 /*
@@ -159,7 +176,7 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_importexport)
         m_wallet.SetMinVersion(FEATURE_SAPLING);
         m_wallet.SetupSPKM(false);
     }
-    vpwallets.insert(vpwallets.begin(), &m_wallet);
+    WalletRegistration walletRegistration(m_wallet);
 
     UniValue retValue;
     int n1 = 1000; // number of times to import/export
@@ -235,7 +252,6 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_importexport)
     BOOST_CHECK((int) listaddrs.size() == numAddrs);
     BOOST_CHECK(myaddrs == listaddrs);
 
-    vpwallets.erase(vpwallets.begin());
 }
 
 // Check if address is of given type and spendable from our wallet.
@@ -255,7 +271,7 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_getnewshieldaddress)
         m_wallet.SetMinVersion(FEATURE_SAPLING);
         m_wallet.SetupSPKM(false);
     }
-    vpwallets.insert(vpwallets.begin(), &m_wallet);
+    WalletRegistration walletRegistration(m_wallet);
 
     // No parameter defaults to sapling address
     UniValue addr = CallRPC("getnewshieldaddress");
@@ -263,7 +279,6 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_getnewshieldaddress)
     // Too many arguments will throw with the help
     BOOST_CHECK_THROW(CallRPC("getnewshieldaddress many args"), std::runtime_error);
 
-    vpwallets.erase(vpwallets.begin());
 }
 
 BOOST_AUTO_TEST_CASE(rpc_shieldsendmany_parameters)
@@ -273,7 +288,7 @@ BOOST_AUTO_TEST_CASE(rpc_shieldsendmany_parameters)
         m_wallet.SetMinVersion(FEATURE_SAPLING);
         m_wallet.SetupSPKM(false);
     }
-    vpwallets.insert(vpwallets.begin(), &m_wallet);
+    WalletRegistration walletRegistration(m_wallet);
 
     BOOST_CHECK_THROW(CallRPC("shieldsendmany"), std::runtime_error);
     BOOST_CHECK_THROW(CallRPC("shieldsendmany toofewargs"), std::runtime_error);
@@ -287,8 +302,7 @@ BOOST_AUTO_TEST_CASE(rpc_shieldsendmany_parameters)
                               "DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ []"), std::runtime_error);
 
     // don't have the spending key for this address
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany "
-                              "c71u87kylcmn28yclnx2uy0psnvuhs2xn608ukm6n2nshrpg2nzyu3n62ls8j77m9cgp40dxnjxupk []"), std::runtime_error);
+    BOOST_CHECK_THROW(CallRPC("shieldsendmany " + ForeignSaplingAddress() + " []"), std::runtime_error);
 
     // duplicate address
     BOOST_CHECK_THROW(CallRPC("shieldsendmany "
@@ -327,7 +341,6 @@ BOOST_AUTO_TEST_CASE(rpc_shieldsendmany_parameters)
     BOOST_CHECK_THROW(CallRPC(std::string("shieldsendmany DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ ")
                               + "[{\"address\":\"" + zaddr1 + "\", \"amount\":123.456}]"), std::runtime_error);
 
-    vpwallets.erase(vpwallets.begin());
 }
 
 // TODO: test private methods
@@ -338,7 +351,7 @@ BOOST_AUTO_TEST_CASE(saplingOperationTests)
         m_wallet.SetupSPKM(false);
     }
     auto consensusParams = Params().GetConsensus();
-    vpwallets.insert(vpwallets.begin(), &m_wallet);
+    WalletRegistration walletRegistration(m_wallet);
 
     UniValue retValue;
 
@@ -408,7 +421,6 @@ BOOST_AUTO_TEST_CASE(saplingOperationTests)
         BOOST_CHECK(errStr.find("too big") != std::string::npos);
     }
 
-    vpwallets.erase(vpwallets.begin());
 }
 
 
@@ -418,7 +430,7 @@ BOOST_AUTO_TEST_CASE(rpc_shieldsendmany_taddr_to_sapling)
         LOCK2(cs_main, m_wallet.cs_wallet);
         m_wallet.SetupSPKM(false);
     }
-    vpwallets.insert(vpwallets.begin(), &m_wallet);
+    WalletRegistration walletRegistration(m_wallet);
 
     UniValue retValue;
 
@@ -496,7 +508,6 @@ BOOST_AUTO_TEST_CASE(rpc_shieldsendmany_taddr_to_sapling)
     // Tear down
     chainActive.SetTip(nullptr);
     mapBlockIndex.erase(blockHash);
-    vpwallets.erase(vpwallets.begin());
 }
 
 BOOST_AUTO_TEST_CASE(rpc_listshieldunspent_parameters)
@@ -505,7 +516,7 @@ BOOST_AUTO_TEST_CASE(rpc_listshieldunspent_parameters)
         LOCK(m_wallet.cs_wallet);
         m_wallet.SetupSPKM(false);
     }
-    vpwallets.insert(vpwallets.begin(), &m_wallet);
+    WalletRegistration walletRegistration(m_wallet);
 
     UniValue retValue;
 
@@ -522,16 +533,17 @@ BOOST_AUTO_TEST_CASE(rpc_listshieldunspent_parameters)
     BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 9999999999"), std::runtime_error);
 
     // must be an array of addresses
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false c71u87kylcmn28yclnx2uy0psnvuhs2xn608ukm6n2nshrpg2nzyu3n62ls8j77m9cgp40dxnjxupk"), std::runtime_error);
+    const std::string foreignAddress = ForeignSaplingAddress();
+    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false " + foreignAddress), std::runtime_error);
 
     // address must be string
     BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false [123456]"), std::runtime_error);
 
     // no spending key
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false [\"c71u87kylcmn28yclnx2uy0psnvuhs2xn608ukm6n2nshrpg2nzyu3n62ls8j77m9cgp40dxnjxupk\"]"), std::runtime_error);
+    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false [\"" + foreignAddress + "\"]"), std::runtime_error);
 
     // allow watch only
-    BOOST_CHECK_NO_THROW(CallRPC("listshieldunspent 1 999 true [\"c71u87kylcmn28yclnx2uy0psnvuhs2xn608ukm6n2nshrpg2nzyu3n62ls8j77m9cgp40dxnjxupk\"]"));
+    BOOST_CHECK_NO_THROW(CallRPC("listshieldunspent 1 999 true [\"" + foreignAddress + "\"]"));
 
     // wrong network, testnet/regtest instead of mainnet
     BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 true [\"ptestsapling1wpurflqllgkcs48m46yu9ktlfe3ahndely20dpaanqq3lw9l5xw7yfehst68yclvlpz7x8cltxe\"]"), std::runtime_error);
@@ -548,7 +560,6 @@ BOOST_AUTO_TEST_CASE(rpc_listshieldunspent_parameters)
     // duplicate address error
     BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false [\"" + myzaddr + "\", \"" + myzaddr + "\"]"), std::runtime_error);
 
-    vpwallets.erase(vpwallets.begin());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

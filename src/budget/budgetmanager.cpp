@@ -624,7 +624,8 @@ bool CBudgetManager::GetExpectedPayeeAmount(int chainHeight, CAmount& nAmountRet
     return GetPayeeAndAmount(chainHeight, payeeRet, nAmountRet);
 }
 
-bool CBudgetManager::FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTransaction& txCoinstake, const int nHeight, bool fProofOfStake) const
+bool CBudgetManager::FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTransaction& txCoinstake, int nHeight,
+                                    bool fProofOfStake, CAmount nBlockValue, CAmount nMaxBudgetPayment) const
 {
     if (nHeight <= 0) return false;
 
@@ -633,8 +634,8 @@ bool CBudgetManager::FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTra
 
     if (!GetPayeeAndAmount(nHeight, payee, nAmount))
         return false;
-
-    CAmount blockValue = GetBlockValue(nHeight);
+    if (nAmount <= 0 || nAmount > nMaxBudgetPayment)
+        return false;
 
     // Starting from OrganicLife v6.0 masternode and budgets are paid in the coinbase tx of PoS blocks
     const bool fPayCoinstake = fProofOfStake &&
@@ -653,7 +654,7 @@ bool CBudgetManager::FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTra
         }
     } else {
         //miners get the full amount on these blocks
-        txCoinbase.vout[0].nValue = blockValue;
+        txCoinbase.vout[0].nValue = nBlockValue;
         txCoinbase.vout.resize(2);
 
         //these are super blocks, so their value can be much larger than normal

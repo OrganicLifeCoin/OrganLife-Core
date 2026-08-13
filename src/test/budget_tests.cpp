@@ -15,6 +15,8 @@
 #include "utilmoneystr.h"
 #include "validation.h"
 
+#include <array>
+
 #include <boost/test/unit_test.hpp>
 
 BOOST_AUTO_TEST_SUITE(budget_tests)
@@ -235,6 +237,44 @@ BOOST_FIXTURE_TEST_CASE(block_value_accepts_mainnet_budget_window_during_initial
     nExpectedRet = nBlockReward;
     nBudgetAmtRet = 0;
     BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, nBlockReward + Params().GetConsensus().nBudgetCycleAmount + 1, nBudgetAmtRet));
+}
+
+BOOST_FIXTURE_TEST_CASE(block_value_rejects_testnet_overmint_during_initial_sync, TestnetSetup)
+{
+    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_INITIAL);
+
+    const auto& consensus = Params().GetConsensus();
+    const std::array<int, 2> heights{{1, consensus.nBudgetCycleBlocks + 1}};
+    for (const int nHeight : heights) {
+        const CAmount nBlockReward = GetBlockValue(nHeight);
+        const CAmount maxMint = nBlockReward + g_budgetman.GetTotalBudget(nHeight);
+        CAmount nExpectedRet = nBlockReward;
+        CAmount nBudgetAmtRet = 0;
+
+        BOOST_REQUIRE(!g_tiertwo_sync_state.IsSynced());
+        BOOST_REQUIRE(nHeight % consensus.nBudgetCycleBlocks < 100);
+        BOOST_CHECK_MESSAGE(!IsBlockValueValid(nHeight, nExpectedRet, maxMint + 1, nBudgetAmtRet),
+                            "unsynced testnet accepted an overminting block at height " << nHeight);
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(block_value_never_crosses_hard_supply_cap, TestnetSetup)
+{
+    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_INITIAL);
+
+    const auto& consensus = Params().GetConsensus();
+    const int nHeight = consensus.nBudgetCycleBlocks + 1;
+    const CAmount chainMinted = consensus.nMaxMoneyOut - 5 * COIN;
+    CAmount nExpectedRet = GetBlockValue(nHeight, chainMinted);
+    CAmount nBudgetAmtRet = 0;
+
+    BOOST_REQUIRE_EQUAL(nExpectedRet, 5 * COIN);
+    BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, 5 * COIN, nBudgetAmtRet, chainMinted));
+
+    nExpectedRet = GetBlockValue(nHeight, chainMinted);
+    nBudgetAmtRet = 0;
+    BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, 5 * COIN + 1, nBudgetAmtRet, chainMinted));
+    BOOST_CHECK_EQUAL(nExpectedRet, 5 * COIN);
 }
 
 BOOST_FIXTURE_TEST_CASE(block_value_allows_undermint_on_testnet_after_v6_1, TestnetSetup)

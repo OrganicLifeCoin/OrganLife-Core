@@ -865,7 +865,23 @@ CAmount GetBlockValue(int nHeight)
     return 60001 * COIN;
 }
 
+CAmount GetBlockValue(int nHeight, CAmount nChainMinted)
+{
+    const CAmount nominalReward = GetBlockValue(nHeight);
+    if (Params().IsRegTestNet()) return nominalReward;
+
+    const CAmount maxMoneyOut = Params().GetConsensus().nMaxMoneyOut;
+    if (nChainMinted >= maxMoneyOut) return 0;
+    if (nChainMinted < 0) return 0;
+    return std::min(nominalReward, maxMoneyOut - nChainMinted);
+}
+
 int64_t GetMasternodePayment(int nHeight)
+{
+    return GetMasternodePayment(nHeight, GetBlockValue(nHeight));
+}
+
+int64_t GetMasternodePayment(int nHeight, CAmount nBlockValue)
 {
     const Consensus::Params& consensus = Params().GetConsensus();
 
@@ -875,12 +891,11 @@ int64_t GetMasternodePayment(int nHeight)
     if (!Params().IsRegTestNet() && !consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_POS)) return 0;
 
     // Cap MN payment to the block subsidy (e.g. if subsidy is 0 after reaching max supply).
-    const CAmount blockValue = GetBlockValue(nHeight);
-    if (blockValue <= 0) return 0;
+    if (nBlockValue <= 0) return 0;
 
     const CAmount mnPayment = consensus.nNewMNBlockReward;
     if (mnPayment <= 0) return 0;
-    return std::min(mnPayment, blockValue);
+    return std::min(mnPayment, nBlockValue);
 }
 
 bool IsInitialBlockDownload()
@@ -1656,31 +1671,36 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     // track mint amount info
     assert(nFees >= 0);
     const int64_t nMint = (nValueOut - nValueIn) + nFees;
+    const CAmount nParentChainMinted = pindex->pprev ? pindex->pprev->nChainMinted : 0;
+    // During PoW, transaction fees are recycled through the coinbase and are
+    // already included in nMint. They are not new issuance. During PoS fees
+    // are burned, so nMint already equals the gross consensus issuance.
+    const CAmount nBlockIssuance = std::max<CAmount>(0, nMint - (isPoSBlock ? 0 : nFees));
 
     int64_t nTime1 = GetTimeMicros();
     nTimeConnect += nTime1 - nTimeStart;
     LogPrint(BCLog::BENCHMARK, "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs - 1), nTimeConnect * 0.000001);
 
     //PoW phase redistributed fees to miner. PoS stage destroys fees.
-    CAmount nExpectedMint = GetBlockValue(pindex->nHeight);
+    CAmount nExpectedMint = GetBlockValue(pindex->nHeight, nParentChainMinted);
     if (!isPoSBlock)
         nExpectedMint += nFees;
 
     //Check that the block does not overmint
     CAmount nBudgetAmt = 0;     // If this is a superblock, amount to be paid to the winning proposal, otherwise 0
-    if (!IsBlockValueValid(pindex->nHeight, nExpectedMint, nMint, nBudgetAmt)) {
+    if (!IsBlockValueValid(pindex->nHeight, nExpectedMint, nMint, nBudgetAmt, nParentChainMinted,
+                           isPoSBlock ? 0 : nFees)) {
         return state.DoS(100, error("%s: invalid block reward amount (actual=%s vs expected/limit=%s)",
                                     __func__, FormatMoney(nMint), FormatMoney(nExpectedMint)),
                          REJECT_INVALID, "bad-blk-amount");
     }
 
-    // Masternode/Budget payments
-    // !TODO: after transition to DMN is complete, check this also during IBD
-    if (!fInitialBlockDownload) {
-        if (!IsBlockPayeeValid(block, pindex->pprev)) {
-            mapRejectedBlocks.emplace(block.GetHash(), GetTime());
-            return state.DoS(0, false, REJECT_INVALID, "bad-cb-payee", false, "Couldn't find masternode/budget payment");
-        }
+    // Deterministic masternode payees are derived from the chain and remain
+    // enforceable during IBD. Governance recipients alone may be deferred by
+    // IsBlockPayeeValid while their off-chain vote data is still syncing.
+    if (!IsBlockPayeeValid(block, pindex->pprev)) {
+        mapRejectedBlocks.emplace(block.GetHash(), GetTime());
+        return state.DoS(0, false, REJECT_INVALID, "bad-cb-payee", false, "Couldn't find masternode/budget payment");
     }
 
     // After v6 enforcement: Check that the coinbase pays the exact amount
@@ -1705,6 +1725,9 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     //IMPORTANT NOTE: Nothing before this point should actually store to disk (or even memory)
     if (fJustCheck)
         return true;
+
+    pindex->nChainMinted = nParentChainMinted + nBlockIssuance;
+    setDirtyBlockIndex.insert(pindex);
 
     // Write undo information to disk
     if (pindex->GetUndoPos().IsNull() || !pindex->IsValid(BLOCK_VALID_SCRIPTS)) {

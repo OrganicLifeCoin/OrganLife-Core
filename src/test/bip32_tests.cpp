@@ -37,53 +37,53 @@ struct TestVector {
 
 TestVector test1 =
   TestVector("000102030405060708090a0b0c0d0e0f")
-    ("sqmNqPMpujqoPFVGct12KxMiiow1SqWxwg3JjSCYHbgUK3qA6HtEBFtdemKn84ybtScZuFLLcMWG7CWFQgeGm9pHh82gc97GNGa46oXpDXM6au6",
-     "sqmNyh4WeeM9hFceHrxM7aVJm5ePTqCQhYWMwWsimjKAAz6a3yorG7Pxn1a6a4mz8MvBZStwJBMNqdhtRbMwMykxa4XW3zBVRAApbcnP2oMrLNX",
+    ("sqmNqPMpujqeaDkkJf5KgDx4sPgqmBPyaCZ7LAFFDj6BVmV5oRfNwW5FKibcR8tt22MN7UFXFXudY8ZbEVKCVx1Evb7DU9TmorJE8niuDU13w4y",
+     "sqmNyh4WeeLztDt7ye2eTr5eufQDnB5RL52AYEvRhrisMhkVm7b12MaaxQtzjvJz7Sep28oiGWuWwLCzGjciN2AS8nszjQavWpXryPrPFUakGjE",
      0x80000000)
-    ("sqmNsQxo4Hh32HqZHtRbKp1UdJpPZtDGXcFtMRBsWfcfkasJpQVvkGA1b7KwWCJk4YFqUyAwEF59nYu7W4s1LFmBHyf811jPubo4bVHTTGWZBiw",
-     "sqmP1ifUoCCPLHxvxsNv7S94faXmastiHUiwZVs3zoFMcX8in6RYq7fLgxeFc1taTu2JzPQrp5VDmbwqpqTHkKCZuQcgkrusbxbytyAQQSc3cjR",
+    ("sqmNqRdEuT97fUsjTGD2syphkRnx5zxKxH381mg9BpUJTxgNAhxZMjcLSrx2CQTamLFu7gY67mT4GmdgCtHLSyjczUZwfnG2jACSeirTX5m8YXw",
+     "sqmNyjKveMeTyV178FAMfbxHnhWL6zdmi9WBDrMKfx6zKtwn8PtBSb7g5ZFQXBfKXA2mjBhQdpEPKh3rzVeS1cScvrxWoHG4knEkgQVEgckMxdY",
      1)
-    ("sqmNsiqaiF7VHxzfhcKgcjeLihtuLeB1tnBmcVWiZvHKWS6ezbVdu4ecbXJV7EUQjmEMaW3Cqx1LiAre9CikT1UihQExPZVx9rVCEHHjAGcYvnt",
-     "sqmP22YGT9cqby83NbH1QMmvkycHMdrTeeeppaBu43v1NNN4xHRFyv9wZ5ZvYTSFPdvHSQ2wNHA6HanHTghGx85f3RHqyEeACCsEy368mKK7e4t",
+    ("sqmNqToN7Eh14BkoHiFUcEiaMAgc9NwRxJmQx6Lyn6F7QbUaQFTh5Y2eQRrFcUvABGyF5QA8uBuAPN89oC29vJuWg8Psxz6tCoCiHTPEp1WtvxL",
+     "sqmNymW3r9CMNBtAxhCoPrrAPSPzANcsiBEUAB2AGDsoGXjzMwPKAPXz389dwErP85opBGT6SdppQQ1H8SAf8xEbi2SxK4DnpY1cMCocDYxAn48",
      0x80000002)
-    ("sqmNyUq8a3VSe45MAEJTaTnYtrqc2aUDDGv6ejBCPKWfB7Du6WWva838Yx4h3GwMEQNRrJiERPZLwtvmwRR4MQPqJhMNJSMmZHnR3xRax6LUWJe",
-     "sqmP7nXpJwznx4CiqDFnN5v8w8Yz3a9ey9P9rorNsT9M33VK4CSYeyYTdFYP46ytLc2oqCXTTBR5MCtmmxs7gHTVdn36vwD5qtQEJ6PMuwofsHq",
+    ("sqmNqWQe9mWrm4cD9t3Zrq7wiAikNXoxDrMQHdaf2RYGaTr1p6eotHs5JsQBAW6zd9QZRvFsWZsmmJh8FXASdQT3jaYiYt52HkGQ19JNuJZMhrJ",
+     "sqmNyp7Ktg2D54japrzteTFXkSS8PXVPyipTViFqWZAxSQ7RmnaRy9NQwZhZVH516KKJgjUV36mjpoqBMduQiy9nq7tcffnLyUFYxUYpr7PjE6Q",
      2)
-    ("sqmNqmwTDA4i1QuxojTCkkbtKDSS7MTL684McZeYWvRX2NgiVfkAVEbi2bPKok5VDbqe1Y3Cm3rFatba8hprmGHutiKWNhw8eNGeyyt8qpTrRcv",
-     "sqmNz5e8x4a4KR3LUiQXYNjUMV9p8M8mqzXQpeKj144CtJx8TMfna67334qSUwjzY9cbwbcFejv9GkZu3DjRrhQgMCQB8RCoqXQ7zZnQ1LZwCMz",
+    ("sqmNqYe2zCdowYHCEMXHZ6L2bft4TM6grSfbj7TxHP4jtuQdBCHAx4ZSWSs6qq6P2wZHuEP3eaMip3bEowWSihtFTB1yTfdD7wAE1qDE3sAR8Mc",
+     "sqmNyrLij79AFYQZuLUcLiTcdwbSULn8cK8ewC98mWhRkqg38tCo2v4n99AVAbUTYyijkXcBf21JjdHLpporvPh92WUf4usSXZ5G7T1zMdp1GUB",
      1000000000)
-    ("sqmNxQEW6nNVTPW1gHoJvGZpA6TgdZjcoa3aEAqC9Mgb7qfBEg78jjVCMi3SLGRtV6tmoo1zdkBNmpKq3i8XwH6F8a3ngBxaa5JJYeT8a9q4Cga",
-     "sqmP6hwBqgsqmPdPMGkdhthQCNB4eZR4ZSWdSFWNdVKGymvbCN2kpazXaPuXYrBrKcjr7TURaPNFDG6j7sE4YRBPozuVvs4MsnZiLUGXXiiqYLP",
+    ("sqmNqaMoTtF44ffPkhJjfdtkuNt4FafzfwUdXMrWXfSt6yo7tKgZUUp6mZ2AUf1KtCe1Nvfb9vHXMFHqQMuTpZP6JSB6LD3HvQjrpnq9J1ddi1F",
+     "sqmNyt4VCnkQNfnmRgG4TG2LwebSGaMSRowgjSXh1o5Zxv4Xr1cBZLKSQFKYoTFfTtqpMw1SSNzFafpTpzpETThs9U8CQQdfeTpyPnaM6oeLpmM",
      0);
 
 TestVector test2 =
   TestVector("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542")
-    ("sqmNqPMpujqkr4Bco1WNYoTHkb83ZueVTSktkWqUC15yb71Ck2LtEg4eo52DVYiywQQ39tRQiRv5z5mWx347gUMDp7qr6A89GvjKSqXzsQ5J3MU",
-     "sqmNyh4WeeM7A4JzTzThLRasnrqRauKwDKDwxbWeg8ifT3GchiGWKXZyfCvZEWKdAWK1PbUkDu3UoRSPyWmEJ5YtQHsx1L6VQvRJczYMMAcbjmf",
+    ("sqmNqPMpujqeaDkkJGaenP2MKbQc1NYQFpow1k2yWfq1U9bx6Qga7erBkcmCmEyrjGiL22VKACZnwD4qxH3Rd8vQ4W7AL5fEeLntTAQ1VQaSDun",
+     "sqmNyh4WeeLztDt7yFXya19wMs7z2NDr1hGzDpi9zoThL5sN46cCCWMXPK4b5z63HxCuGBZ91oMyDSFBNGLpQSZ8kACmBpfAfASbYeUccNi4Q7Z",
      0)
-    ("sqmNxpFrUTNhq12Rbw7Ryu5CFm2YchLVq47JyekwcrBBpU2i5WjCjMSgcv3MtcagdXbvkMZb4JQZ3ZPyyzSN93U45KxCXrHWJbLXMFDACwpUrWf",
-     "sqmP77xYDMt4919oGv4kmXCnJ2jvdh1wavaNBjS86yosgQJ83CeppCx1kADCB8cJN7wJHgbMFkmzRGc7fJgiRxNp98AdEAZVppxthKarhatZpr1",
+    ("sqmNqSdaBTXc4EappYAwvAQEPPp8NLHexoJDZunLgUrTYZTunP8YgvCFuTLTLhwkXMimELyV2RZYLHup7SU7WHcpQ6mSc8PuYgwGaeWfvbiD9Yk",
+     "sqmNykLFvN2xNEiCVX8GhnXpRfXWPKy6ifmGmzTXAcV9QVjKk54AmmhbY9dqfVMqw23jfqnxuomhebfJimydxj4BgPNAC15E3ecLg4PAykp9enX",
      0xFFFFFFFF)
-    ("sqmNv2SCexrZckYqRMr4UFqikqcmVmBngSnyzRk146EdwbDV4rVvQy1rhG4CSKQgYaP7c1YMRwSReVgQHQ53x6iFzmsomKnWuwfV1S5obmeWF65",
-     "sqmP4L8tPsMuvkgD6LoPFsyJo7L9WksESKG3CWRBYDsKoXUu2YRYVpXBcysJ7ik9SpLMLwy3hD9Np1fFtJSYjH14LxypztFzwMXZKcT5kGBEh1n",
+    ("sqmNqTndS4Z8S8kvzQP8LcPsrjVgm5WZWHTuf4rsbsmECJEJEgN1Joca7X83x6BsH6Ks1ru2gGR9dWLQn7LTHC6w8FE59D1xuRCHT2nGmNQ3qUr",
+     "sqmNymVKAy4Uk8tJfPLT8EXTu1D4n5C1G9vxs9Y461Pv4EViCNHdPf7ukDRSGqqpfGnDa57rgpyLhcARA1iQh6fKFgoicjJZpALbTqihk8mp3ox",
      1)
-    ("sqmNsArH7uKMn2vd8t19jc1jU8PWyoydZH5H2AZ5CWVWyYw2CWAVx5NH9dJeLGzZK3aQ6KBJQv7ghtaevYtCiawCDpkcPEWfbMpD6bNG8gTMQu3",
-     "sqmP1UYxropi633zorxUXE9KWQ6tzof5K9YLEFEFge8CqVCSAC682vsc5QJXSF55JMWHPetzY1tjYs9nw3HnndPXvBBxanjYkpEFUXWEwPX8SJT",
+    ("sqmNqWbbr5Y4bn48624GQGYSpgRv6cP4cUPAyWMjSwRZWBajuWEAcK9H1RWRntP14y29c3MaWuWPGdeErubUC6XtPagyjVDp7xdVNoTE1rAipAx",
+     "sqmNypJHaz3QunBVm11bBtg2rx9J7c4WNLrEBb2uw54FN7r9sC9nhAece7op7e3Sgyyut2UZS83j79qdUiVZjzBhGAd1kVqNfGJywe9SDqLYB7T",
      0xFFFFFFFE)
-    ("sqmNsJNpZ3NRDPven3Z3tYq4yuSoPEqC2hdMPWgsbV5Fdr5JVzUGGxA1ksgD5Srwgf2jFmexesnMZmRDefcrob5vwRjtXovR2bejUA74z8PaxHp",
-     "sqmP1c5WHwsmXQ42T2WNgAxf2BABQEWdna6QbbN45chwVnLiTgPtMofLyg2Ni9XkPQn87fnHCkgPvHtgGyxyGCunrnzXhZxSxNgY16UBiwf5Vgw",
+    ("sqmNqXmdm3URDB1qNyHs8kMzCC871LrRfT1g1D5cyf7yLwqzMrZ6hz5HXwsXRYWWGLYbZV1DKQa6KEy6WYkrsyeQ6wPS1PYJgFiuF2XoYhLx4MW",
+     "sqmNyqUKVwymXB9D3xFBvNVaETqV2LXsRKUjDHkoTnkfCt7QKYUinqadAeAukLmqKQNCRbmFjwpiVXRDHqawFw6Bx1JBaSNgoULcHE9xHZu3JT5",
      2)
-    ("sqmNwMakr96EdQ9yqUNp23yci8WkMukYMu36zm6XgbMakEshT7YAxugaFpezdRiyaVSYVcfSJr88EkBvkP5SM6yLArLp1hu8Tcm8GQPeBh3CL1d",
-     "sqmP5fHSb3bawQHMWTL8og7CkQE8NuRz7mWACqmiAizGcB97QoTo3mBuYYEEFk9R7MWABf7UiQcgzwHNboXGMvRjUsvtV3X4kktVb8obFEE9r4K",
+    ("sqmNqZ8fiUgvjML58EUkrpVgAwW5QQPXumvkfNhWPSUTyjhaS3tfsd13iWpXVwanPuuJ5YDSbL5WCwz5zypMi5LJRCF1eZNPcd1dvKizDM8EyqP",
+     "sqmNyrqMTPCH3MTSoDS5eSdGDDDTRQ4yfePosTNgsa79qfxzPjpHxUWPMD7upkSqURTGTucz2hTXwdFuLPUSzFTQzz2uPHtBrtUKybVWN8con72",
      0);
 
 TestVector test3 =
   TestVector("4b381541583be4423346c643850da4b320e46a87ae3d2a4e6da11eba819cd4acba45d239319ac14f863b8d5ab5a0d0c64d2e8a1e7d1457df2e5a3c51c73235be")
-    ("sqmNqPMpujqeh7A7AAze6aY6J8Yw74Y7R864jErPUf15iwHbYKF8WJdW1oKRCJD9neCuJXMcVBaF7e3cX6zjzD4gK6toum9YqixcbbCZCYLYVrm",
-     "sqmNyh4WeeM117HUq9wxtCfgLQGK84DZAzZ7wKXZxndmasZ1W1AkbA8puCTRVybZ8emK46F4XtD9LoEBJ7DEQwHnMpsndiJSx8iR9kV78hM7vrz",
+    ("sqmNqPMpujqeaDkkHL2pJmX9Xafdt1sW1gyCj5oXuxrZjqgk4euqmo69hszjFEWqYsHyC7FAzCSoKsthPagLTqxqUqmJTKZTNuEjEsui1oVDTTp",
+     "sqmNyh4WeeLztDt7xJz96PejZrP1u1YwmZSFwAUiQ6VFbmxA2LqTrebVLaJ7ZypDEySELtDtaj457rytiux8dshZXdi1i7DorbnZqN8yGQU4Wu8",
       0x80000000)
-    ("sqmNszqEWR1b8p72NDjFqHw8itWW9y2jSnrASS3WLeTxJGqQiVHcC545cXEoYfEnkrBhpu95dBFPhpJZGkrAPCDTeTcEsAazgtiYgvdpVfXSj7c",
-     "sqmP2JXvFKWwSpEQ3Cgacv4imADtAxiBCfKDeWigpn6eAD6pgBDEGvZQnNgzfib5VQPzYYzwuRuToc4UWaAkoBNWTPK282B8fZehPMduq7uyNCF",
+    ("sqmNqRj2ehfnFb86Us8DXureaqRJaNUtAYP78a3UjCYQg9c7Kg3JMHs1nLnSYxMMHDtiPUk1mACYAq6C23cgQ5u2463F8RWLvkjXj4GcgEGWeNY",
+     "sqmNyjRiPcB8ZbFU9r5YKXzEd78gbNAKvQrALeifDLB6Y5sXHMxvS9NMR35pskAZavm9o2sJbfqwmbcMNTbHD6HKHPue9F8rbm4NxP6dDob2Xvs",
       0);
 
 static void RunTest(const TestVector &test) {
@@ -98,11 +98,11 @@ static void RunTest(const TestVector &test) {
         pubkey.Encode(data);
 
         // Test private key
-        BOOST_CHECK(KeyIO::EncodeExtKey(key) == derive.prv);
+        BOOST_CHECK_EQUAL(KeyIO::EncodeExtKey(key), derive.prv);
         BOOST_CHECK(KeyIO::DecodeExtKey(derive.prv) == key); //ensure a base58 decoded key also matches
 
         // Test public key
-        BOOST_CHECK(KeyIO::EncodeExtPubKey(pubkey) == derive.pub);
+        BOOST_CHECK_EQUAL(KeyIO::EncodeExtPubKey(pubkey), derive.pub);
         BOOST_CHECK(KeyIO::DecodeExtPubKey(derive.pub) == pubkey); //ensure a base58 decoded pubkey also matches
 
         // Derive new keys

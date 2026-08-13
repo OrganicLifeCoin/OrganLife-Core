@@ -19,19 +19,43 @@
 /** Object for who's going to get paid on which blocks */
 CMasternodePayments masternodePayments;
 
-bool IsBlockValueValid(int nHeight, CAmount& nExpectedValue, CAmount nMinted, CAmount& nBudgetAmt)
+namespace {
+CAmount GetGovernanceCapacity(int nHeight, CAmount nChainMinted, CAmount nBaseIssuance)
+{
+    const auto& consensus = Params().GetConsensus();
+    const CAmount nTotalBudget = g_budgetman.GetTotalBudget(nHeight);
+    // Regtest deliberately exercises legacy pre-PoS superblocks (for example
+    // at height 144), so keep its historical unrestricted test behavior.
+    if (Params().IsRegTestNet()) return consensus.nBudgetCycleAmount;
+    if (nTotalBudget <= 0) return 0;
+    if (nChainMinted < 0 || nChainMinted > consensus.nMaxMoneyOut) return 0;
+
+    const CAmount nRemainingAfterBase = consensus.nMaxMoneyOut - nChainMinted - nBaseIssuance;
+    return nRemainingAfterBase >= nTotalBudget ? nTotalBudget : 0;
+}
+} // namespace
+
+bool IsBlockValueValid(int nHeight, CAmount& nExpectedValue, CAmount nMinted, CAmount& nBudgetAmt,
+                       CAmount nChainMinted, CAmount nRecycledFees)
 {
     const Consensus::Params& consensus = Params().GetConsensus();
+    if (!Params().IsRegTestNet()) {
+        if (nChainMinted < 0 || nChainMinted > consensus.nMaxMoneyOut) return false;
+        if (nRecycledFees < 0) return false;
+        nExpectedValue = std::min(nExpectedValue, consensus.nMaxMoneyOut - nChainMinted + nRecycledFees);
+    }
     const CAmount nBaseExpectedValue = nExpectedValue;
+    const CAmount nBaseIssuanceExpected = nBaseExpectedValue - nRecycledFees;
+    // Governance payments remain exact. If a complete cycle budget cannot fit
+    // below the hard cap, governance issuance stops and ordinary rewards use
+    // the remaining supply instead of creating a partial proposal payment.
+    const CAmount nGovernanceCapacity = GetGovernanceCapacity(nHeight, nChainMinted, nBaseIssuanceExpected);
     bool fUsingBudgetWindowFallback = false;
     if (!g_tiertwo_sync_state.IsSynced()) {
         //there is no budget data to use to check anything
         //super blocks will always be on these blocks, max 100 per budgeting
         if (nHeight % consensus.nBudgetCycleBlocks < 100) {
-            if (Params().IsTestnet()) {
-                return true;
-            }
-            nExpectedValue += g_budgetman.GetTotalBudget(nHeight);
+            nExpectedValue += nGovernanceCapacity;
             fUsingBudgetWindowFallback = true;
         }
     } else {
@@ -40,7 +64,11 @@ bool IsBlockValueValid(int nHeight, CAmount& nExpectedValue, CAmount nMinted, CA
         if (sporkManager.IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS)) {
             // add current payee amount to the expected block value
             if (g_budgetman.GetExpectedPayeeAmount(nHeight, nBudgetAmt)) {
-                nExpectedValue += nBudgetAmt;
+                if (nGovernanceCapacity > 0 && nBudgetAmt <= nGovernanceCapacity) {
+                    nExpectedValue += nBudgetAmt;
+                } else {
+                    nBudgetAmt = 0;
+                }
             }
         }
     }
@@ -68,18 +96,27 @@ bool IsBlockPayeeValid(const CBlock& block, const CBlockIndex* pindexPrev)
 {
     int nBlockHeight = pindexPrev->nHeight + 1;
     TrxValidationStatus transactionStatus = TrxValidationStatus::InValid;
-
-    if (!g_tiertwo_sync_state.IsSynced()) { //there is no budget data to use to check anything -- find the longest chain
-        LogPrint(BCLog::MASTERNODE, "Client not synced, skipping block payee checks\n");
-        return true;
-    }
+    const bool fTierTwoSynced = g_tiertwo_sync_state.IsSynced();
+    const bool fGovernanceWindow = nBlockHeight % Params().GetConsensus().nBudgetCycleBlocks < 100;
+    const CAmount nBlockValue = GetBlockValue(nBlockHeight, pindexPrev->nChainMinted);
+    const CAmount nGovernanceCapacity = GetGovernanceCapacity(nBlockHeight, pindexPrev->nChainMinted, nBlockValue);
 
     const bool fPayCoinstake = Params().GetConsensus().NetworkUpgradeActive(nBlockHeight, Consensus::UPGRADE_POS) &&
                                !Params().GetConsensus().NetworkUpgradeActive(nBlockHeight, Consensus::UPGRADE_V6_0);
     const CTransaction& txNew = *(fPayCoinstake ? block.vtx[1] : block.vtx[0]);
 
+    // Governance recipients depend on off-chain votes, so they cannot be
+    // reconstructed during initial sync. Outside that narrow window the DMN
+    // payee is chain-derived and must be enforced even while syncing.
+    if (!fTierTwoSynced && fGovernanceWindow) {
+        LogPrint(BCLog::MASTERNODE, "Client not synced, deferring governance-window payee check at height %d\n",
+                 nBlockHeight);
+        return true;
+    }
+
     //check if it's a budget block
-    if (sporkManager.IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS)) {
+    if (fTierTwoSynced && nGovernanceCapacity > 0 &&
+            sporkManager.IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS)) {
         if (g_budgetman.IsBudgetPaymentBlock(nBlockHeight)) {
             transactionStatus = g_budgetman.IsTransactionValid(txNew, block.GetHash(), nBlockHeight);
             if (transactionStatus == TrxValidationStatus::Valid) {
@@ -127,9 +164,13 @@ bool IsBlockPayeeValid(const CBlock& block, const CBlockIndex* pindexPrev)
 
 void FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTransaction& txCoinstake, const CBlockIndex* pindexPrev, bool fProofOfStake)
 {
+    const int nHeight = pindexPrev->nHeight + 1;
+    const CAmount nBlockValue = GetBlockValue(nHeight, pindexPrev->nChainMinted);
+    const CAmount nGovernanceCapacity = GetGovernanceCapacity(nHeight, pindexPrev->nChainMinted, nBlockValue);
     if (!sporkManager.IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS) ||           // if superblocks are not enabled
             // ... or this is not a superblock
-            !g_budgetman.FillBlockPayee(txCoinbase, txCoinstake, pindexPrev->nHeight + 1, fProofOfStake) ) {
+            !g_budgetman.FillBlockPayee(txCoinbase, txCoinstake, nHeight, fProofOfStake,
+                                        nBlockValue, nGovernanceCapacity) ) {
         // ... or there's no budget with enough votes, then pay a masternode
         masternodePayments.FillBlockPayee(txCoinbase, txCoinstake, pindexPrev, fProofOfStake);
     }
@@ -147,13 +188,17 @@ bool CanBuildRequiredMasternodePayment(const CBlockIndex* pindexPrev)
     if (!Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_POS))
         return true;
 
-    if (sporkManager.IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS) && g_budgetman.IsBudgetPaymentBlock(nHeight)) {
+    const CAmount nBlockValue = GetBlockValue(nHeight, pindexPrev->nChainMinted);
+    const CAmount nGovernanceCapacity = GetGovernanceCapacity(nHeight, pindexPrev->nChainMinted, nBlockValue);
+    if (sporkManager.IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS) &&
+            nGovernanceCapacity > 0 && g_budgetman.IsBudgetPaymentBlock(nHeight)) {
         CAmount budgetPayment{0};
-        if (g_budgetman.GetExpectedPayeeAmount(nHeight, budgetPayment) && budgetPayment > 0)
+        if (g_budgetman.GetExpectedPayeeAmount(nHeight, budgetPayment) &&
+                budgetPayment > 0 && budgetPayment <= nGovernanceCapacity)
             return true;
     }
 
-    if (GetMasternodePayment(nHeight) <= 0)
+    if (GetMasternodePayment(nHeight, nBlockValue) <= 0)
         return true;
 
     std::vector<CTxOut> vecMnOuts;
@@ -172,7 +217,8 @@ std::string GetRequiredPaymentsString(int nBlockHeight)
 bool CMasternodePayments::GetMasternodeTxOuts(const CBlockIndex* pindexPrev, std::vector<CTxOut>& voutMasternodePaymentsRet) const
 {
     if (deterministicMNManager->LegacyMNObsolete(pindexPrev->nHeight + 1)) {
-        CAmount masternodeReward = GetMasternodePayment(pindexPrev->nHeight + 1);
+        const CAmount blockValue = GetBlockValue(pindexPrev->nHeight + 1, pindexPrev->nChainMinted);
+        CAmount masternodeReward = GetMasternodePayment(pindexPrev->nHeight + 1, blockValue);
         if (masternodeReward <= 0) {
             LogPrint(BCLog::MASTERNODE, "%s: Masternode reward is zero at height %d, skipping payment\n",
                      __func__, pindexPrev->nHeight + 1);
@@ -276,7 +322,7 @@ void CMasternodePayments::FillBlockPayee(CMutableTransaction& txCoinbase, CMutab
     if (fProofOfStake) {
         SubtractMnPaymentFromCoinstake(txCoinstake, masternodePayment, initial_cstake_outs);
     } else {
-        txCoinbase.vout[0].nValue = GetBlockValue(nHeight) - masternodePayment;
+        txCoinbase.vout[0].nValue = GetBlockValue(nHeight, pindexPrev->nChainMinted) - masternodePayment;
     }
 }
 
@@ -378,7 +424,8 @@ bool IsCoinbaseValueValid(const CTransactionRef& tx, CAmount nBudgetAmt, CValida
 
     // Regular block. The exact payee cannot be reconstructed while tier-two
     // data is still syncing, but the required total payment amount is known.
-    const CAmount requiredMasternodePayment = GetMasternodePayment(nHeight);
+    const CAmount blockValue = GetBlockValue(nHeight, pindexPrev->nChainMinted);
+    const CAmount requiredMasternodePayment = GetMasternodePayment(nHeight, blockValue);
     if (!g_tiertwo_sync_state.IsSynced()) {
         // Either the expected total payment, or nothing at all when no payee
         // is determinable yet (small or unsynced network: FillBlockPayee keeps

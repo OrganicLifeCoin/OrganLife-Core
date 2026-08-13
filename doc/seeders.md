@@ -1,6 +1,6 @@
 # Seeders (peer discovery)
 
-This codebase currently ships with a **minimal set of hard-coded seeds** (see `src/chainparams.cpp`). For early networks, you should still provide additional peers and/or run DNS seeders so nodes can find peers reliably.
+This codebase currently ships with **no DNS seeds or fixed IP seeds** for mainnet or testnet (see `src/chainparams.cpp`). Until public VPS listeners exist, every early node must be given at least one reachable peer explicitly.
 
 - **Manual peers**: add known nodes in `organiclifecoin.conf` using `addnode=` / `seednode=`.
 - **Hard-coded IP seeds**: populate `vFixedSeeds` in `src/chainparams.cpp` (advanced).
@@ -8,15 +8,14 @@ This codebase currently ships with a **minimal set of hard-coded seeds** (see `s
 
 ## Minimal bootstrap (no DNS seeder yet)
 
-1. Bring up 2–3 public full nodes (static IPs).
-2. On every node/wallet, add at least one reachable peer, for example:
+1. Bring up the first public full node with a static IP.
+2. On every other testnet node/wallet, add that reachable peer, for example:
 
 ```
-addnode=46.62.255.185:31616
-addnode=195.201.34.89:31616
+addnode=<testnet-vps-ip>:49616
 ```
 
-Once one node is reachable, new nodes can learn about more peers via addr gossip.
+The equivalent command-line option is `-addnode=<testnet-vps-ip>:49616`. Once one node is reachable, connected nodes can learn about more peers via address gossip.
 
 ## DNS seeders (recommended for public networks)
 

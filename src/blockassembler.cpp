@@ -92,7 +92,7 @@ static bool HasRequiredCoinbasePayment(const CMutableTransaction& txCoinbase, co
     const int nHeight = pindexPrev->nHeight + 1;
     if (!Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0))
         return true;
-    if (GetMasternodePayment(nHeight) <= 0)
+    if (GetMasternodePayment(nHeight, GetBlockValue(nHeight, pindexPrev->nChainMinted)) <= 0)
         return true;
     if (GetMutableValueOut(txCoinbase) > 0)
         return true;
@@ -168,7 +168,7 @@ CMutableTransaction CreateCoinbaseTx(const CScript& scriptPubKeyIn, CBlockIndex*
 
     // If no payee was detected, then the whole block value goes to the first output.
     if (txCoinbase.vout.size() == 1) {
-        txCoinbase.vout[0].nValue = GetBlockValue(nHeight);
+        txCoinbase.vout[0].nValue = GetBlockValue(nHeight, pindexPrev->nChainMinted);
     }
 
     return txCoinbase;

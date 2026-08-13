@@ -17,21 +17,47 @@ Mainnet Parameters
 | Parameter | Value |
 |--------|--------|
 | Ticker | `OLC` |
-| Genesis timestamp | `2026-08-02 16:00:00 UTC` |
-| Genesis block hash | `00000e7a809b258b8a8bb8e79bf69f34209c0b74bfdde08a7a2e0d7c98cc9787` |
+| Genesis timestamp | `2026-08-02 12:00:00 UTC` |
+| Genesis block hash | `0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e` |
 | Address prefixes | P2PKH starts with `o`, script `g`, staking `f` |
 | P2P / RPC ports | `39616` / `39618` (testnet `49616` / `49618`) |
 | BIP44 coin type | `5150` |
 | Target block spacing | `2 minutes` |
 | Supply cap | `777,777,777 OLC` |
-| Premine | `264,444,444.18 OLC` at height `1` |
+| Height-1 reward | `264,444,444.18 OLC`, paid to the miner of block 1 |
 | PoS activation | Height `10,081` (about `14 days` after genesis) |
 | Block subsidy | `10 OLC` until the cap is reached |
 | Masternode collateral | `4,000 OLC` |
 | Post-PoS reward split | `4` to the staker, `6` to the masternode |
 | Governance cycle | `10,080` blocks (`14 days`) |
 
-Mainnet supply is capped in consensus. Transaction fees are paid to miners during the PoW bootstrap phase and burned once PoS is active. Post-v5.5 governance cycles can allocate up to `55,555 OLC` per month (two 14-day cycles).
+Mainnet and testnet supply are capped in consensus at `777,777,777 OLC`, inclusive of the
+height-1 reward, ordinary subsidies, masternode rewards, and governance payments. The
+height-1 reward has no predetermined recipient: the valid block template pays whoever
+mines block 1. Transaction fees are paid to miners during the PoW bootstrap phase and
+burned once PoS is active. Post-v5.5 governance cycles can allocate up to `55,555 OLC`
+per month (two 14-day cycles), subject to the same hard supply cap.
+
+Early-network quorum policy
+---------------------------
+
+Mainnet and testnet intentionally use `LLMQ_TEST` for ChainLocks during early rollout:
+3 members, a minimum of 2 participants, and a threshold of 2. The larger
+`LLMQ_50_60` definition remains available but is not selected; its configured size is
+50, minimum size 40, and signing threshold 30.
+
+Height `100,000` is a review point, not an automatic activation. The project can assess
+the observed masternode population there and choose an appropriate quorum in a future
+explicit network upgrade. A spork does not automatically switch quorum type when a
+participant count is reached, and no automatic one-way switch is currently configured.
+
+Peer discovery before seed VPS hosts are available
+---------------------------------------------------
+
+This source tree intentionally has no mainnet or testnet DNS/fixed seeds yet. Early
+testnet nodes must be given at least one reachable peer with `addnode=` or `-addnode`.
+See [doc/seeders.md](doc/seeders.md). DNS and fixed seeds can be added after the VPS
+listeners exist, without inventing placeholder production endpoints.
 
 Masternodes (deterministic, since v1.1.0)
 -----------------------------------------
@@ -178,6 +204,11 @@ brew install berkeley-db@4
 ```bash
 ./build-depends.sh --clean
 ```
+
+**"block index lacks cumulative issuance data"**
+
+The hard-cap implementation stores cumulative issuance in every block index entry.
+Development datadirs created by an older binary must be rebuilt once with `-reindex`.
 
 Advanced Build
 --------------

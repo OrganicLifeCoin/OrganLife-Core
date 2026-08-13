@@ -319,6 +319,15 @@ BOOST_FIXTURE_TEST_CASE(dmn_payee_test, TestChain100Setup)
     ReplacePayeeOutput(coinbase, payeeScript, GenerateRandomAddress());
     badBlock.vtx[0] = MakeTransactionRef(coinbase);
     badBlock.hashMerkleRoot = BlockMerkleRoot(badBlock);
+
+    // Outside a governance payment window, the deterministic payee is fully
+    // derivable from the chain and must remain enforced while tier-two data is
+    // syncing (the same state used during initial block download).
+    BOOST_REQUIRE_GE((nHeight + 1) % Params().GetConsensus().nBudgetCycleBlocks, 100);
+    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_INITIAL);
+    BOOST_CHECK(!IsBlockPayeeValid(badBlock, chainActive.Tip()));
+    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_FINISHED);
+
     {
         auto pBadBlock = std::make_shared<CBlock>(badBlock);
         SolveBlock(pBadBlock, nHeight + 1);

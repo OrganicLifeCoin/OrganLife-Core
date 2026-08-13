@@ -149,7 +149,7 @@ size_t CCoinsViewDB::EstimateSize() const
     return db.EstimateSize(DB_COIN, (char)(DB_COIN+1));
 }
 
-CBlockTreeDB::CBlockTreeDB(size_t nCacheSize, bool fMemory, bool fWipe) : CDBWrapper(GetDataDir() / "blocks" / "index", nCacheSize, fMemory, fWipe, DBI_SER_VERSION_NO_ZC)
+CBlockTreeDB::CBlockTreeDB(size_t nCacheSize, bool fMemory, bool fWipe) : CDBWrapper(GetDataDir() / "blocks" / "index", nCacheSize, fMemory, fWipe, DBI_SER_VERSION_CHAIN_MINT)
 {
 }
 
@@ -299,6 +299,9 @@ bool CBlockTreeDB::LoadBlockIndexGuts(std::function<CBlockIndex*(const uint256&)
         if (pcursor->GetKey(key) && key.first == DB_BLOCK_INDEX) {
             CDiskBlockIndex diskindex;
             if (pcursor->GetValue(diskindex)) {
+                if (!diskindex.fHasChainMinted) {
+                    return error("%s: block index lacks cumulative issuance data; restart with -reindex", __func__);
+                }
                 // Construct block index object
                 CBlockIndex* pindexNew = insertBlockIndex(diskindex.GetBlockHash());
                 pindexNew->pprev = insertBlockIndex(diskindex.hashPrev);
@@ -313,6 +316,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts(std::function<CBlockIndex*(const uint256&)
                 pindexNew->nNonce = diskindex.nNonce;
                 pindexNew->nStatus = diskindex.nStatus;
                 pindexNew->nTx = diskindex.nTx;
+                pindexNew->nChainMinted = diskindex.nChainMinted;
 
                 // sapling
                 pindexNew->nSaplingValue  = diskindex.nSaplingValue;

@@ -17,7 +17,8 @@ extern CMasternodePayments masternodePayments;
 
 bool IsBlockPayeeValid(const CBlock& block, const CBlockIndex* pindexPrev);
 std::string GetRequiredPaymentsString(int nBlockHeight);
-bool IsBlockValueValid(int nHeight, CAmount& nExpectedValue, CAmount nMinted, CAmount& nBudgetAmt);
+bool IsBlockValueValid(int nHeight, CAmount& nExpectedValue, CAmount nMinted, CAmount& nBudgetAmt,
+                       CAmount nChainMinted = 0, CAmount nRecycledFees = 0);
 void FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTransaction& txCoinstake, const CBlockIndex* pindexPrev, bool fProofOfStake);
 bool CanBuildRequiredMasternodePayment(const CBlockIndex* pindexPrev);
 

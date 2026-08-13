@@ -13,6 +13,7 @@
 #include "primitives/transaction.h"
 #include "script/sign.h"
 #include "spork.h"
+#include "streams.h"
 #include "validation.h"
 
 #include <boost/test/unit_test.hpp>
@@ -188,6 +189,40 @@ BOOST_AUTO_TEST_CASE(subsidy_policy_scope_test)
     BOOST_CHECK_EQUAL(GetBlockValue(2), 10 * COIN);
 
     SelectParams(CBaseChainParams::MAIN);
+}
+
+BOOST_AUTO_TEST_CASE(hard_supply_cap_uses_parent_chain_mint_test)
+{
+    SelectParams(CBaseChainParams::MAIN);
+    const CAmount maxMoneyOut = Params().GetConsensus().nMaxMoneyOut;
+
+    BOOST_CHECK_EQUAL(GetBlockValue(2, maxMoneyOut - 7 * COIN), 7 * COIN);
+    BOOST_CHECK_EQUAL(GetBlockValue(2, maxMoneyOut), 0);
+    BOOST_CHECK_EQUAL(GetBlockValue(2, maxMoneyOut + COIN), 0);
+    BOOST_CHECK_EQUAL(GetBlockValue(2, Params().GetConsensus().nPremineReward), 10 * COIN);
+}
+
+BOOST_AUTO_TEST_CASE(block_index_chain_mint_roundtrip_test)
+{
+    CBlockIndex index;
+    index.nHeight = 42;
+    index.nChainMinted = 123456789 * COIN;
+
+    CDataStream stream(SER_DISK, DBI_SER_VERSION_CHAIN_MINT);
+    stream << CDiskBlockIndex(&index);
+
+    CDiskBlockIndex decoded;
+    stream >> decoded;
+    BOOST_CHECK(decoded.fHasChainMinted);
+    BOOST_CHECK_EQUAL(decoded.nChainMinted, index.nChainMinted);
+
+    CDataStream legacyStream(SER_DISK, DBI_SER_VERSION_NO_ZC);
+    legacyStream << CDiskBlockIndex(&index);
+
+    CDiskBlockIndex legacyDecoded;
+    legacyStream >> legacyDecoded;
+    BOOST_CHECK(!legacyDecoded.fHasChainMinted);
+    BOOST_CHECK_EQUAL(legacyDecoded.nChainMinted, 0);
 }
 
 BOOST_AUTO_TEST_CASE(consensus_upgrade_schedule_safety_test)
