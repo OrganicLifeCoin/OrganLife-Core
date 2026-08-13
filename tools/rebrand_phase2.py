@@ -113,7 +113,7 @@ SKIP_EXTS = {
     ".a", ".o", ".so", ".dylib", ".dll", ".exe", ".dat", ".zip", ".gz",
 }
 
-PROTECT_SUBSTR = ["cteam.png", "cteam.ico", "cteam.icns", "CTEAM.icns", "CTEAMCoin.png"]
+PROTECT_SUBSTR = ["cteam.png", "cteam.ico", "cteam.icns", "organiclife.icns", "CTEAMCoin.png"]
 
 
 def protect(text):

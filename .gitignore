@@ -235,7 +235,7 @@ to_backport.txt
 /organiclife-macos-universal-daemon/params/sapling-spend.params
 /organiclife-macos-universal/OrganicLife.app/Contents/_CodeSignature/CodeResources
 /organiclife-macos-universal/OrganicLife.app/Contents/MacOS/OrganicLife
-/organiclife-macos-universal/OrganicLife.app/Contents/Resources/CTEAM.icns
+/organiclife-macos-universal/OrganicLife.app/Contents/Resources/organiclife.icns
 /organiclife-macos-universal/OrganicLife.app/Contents/CodeResources
 /organiclife-macos-universal/bin/organiclife-cli
 /organiclife-macos-universal/bin/organiclife-tx

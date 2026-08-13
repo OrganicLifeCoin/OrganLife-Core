@@ -607,16 +607,16 @@ if [[ -n "$ICON_PNG" ]] && command -v iconutil >/dev/null 2>&1 && command -v sip
   # 1024x1024 (optional but recommended)
   sips -z 1024 1024 "$ICON_PNG" --out "$ICONSET_DIR/OrganicLife.iconset/icon_512x512@2x.png" >/dev/null || true
 
-  if iconutil -c icns "$ICONSET_DIR/OrganicLife.iconset" -o "$APP_BUNDLE/Contents/Resources/CTEAM.icns" >/dev/null 2>&1; then
-    ICON_FILE="CTEAM.icns"
+  if iconutil -c icns "$ICONSET_DIR/OrganicLife.iconset" -o "$APP_BUNDLE/Contents/Resources/organiclife.icns" >/dev/null 2>&1; then
+    ICON_FILE="organiclife.icns"
   fi
   rm -rf "$ICONSET_DIR" 2>/dev/null || true
 fi
 
 # Reuse the checked-in app icon if generation from a source PNG is unavailable.
 if [[ -z "$ICON_FILE" ]] && [[ -f "$REPO_ROOT/src/qt/res/icons/bitcoin.icns" ]]; then
-  cp -f "$REPO_ROOT/src/qt/res/icons/bitcoin.icns" "$APP_BUNDLE/Contents/Resources/CTEAM.icns"
-  ICON_FILE="CTEAM.icns"
+  cp -f "$REPO_ROOT/src/qt/res/icons/bitcoin.icns" "$APP_BUNDLE/Contents/Resources/organiclife.icns"
+  ICON_FILE="organiclife.icns"
 fi
 
 ICON_PLIST_BLOCK=""

@@ -62,8 +62,8 @@ for name, size in [("icon_16x16", 16), ("icon_16x16@2x", 32), ("icon_32x32", 32)
                    ("icon_256x256", 256), ("icon_256x256@2x", 512),
                    ("icon_512x512", 512), ("icon_512x512@2x", 1024)]:
     coin.resize((size, size), Image.LANCZOS).save(f"{iconset}/{name}.png")
-subprocess.run(["iconutil", "-c", "icns", iconset, "-o", f"{ICONS}/CTEAM.icns"], check=True)
-print("icns -> src/qt/res/icons/CTEAM.icns")
+subprocess.run(["iconutil", "-c", "icns", iconset, "-o", f"{ICONS}/organiclife.icns"], check=True)
+print("icns -> src/qt/res/icons/organiclife.icns")
 
 # ---- share/pixmaps (linux/windows installer icons) ----
 PX = os.path.join(ROOT, "share/pixmaps")

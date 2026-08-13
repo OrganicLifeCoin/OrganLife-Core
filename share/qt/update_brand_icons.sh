@@ -90,8 +90,8 @@ SIZES_ICNS=(16 32 64 128 256 512 1024)
 for size in "${SIZES_ICNS[@]}"; do
   resize_png "$SRC_ICON" "$TMPDIR/icon-${size}.png" "$size"
 done
-python3 "$ICNS_PACKER" "$ROOT_DIR/src/qt/res/icons/CTEAM.icns" $(for size in "${SIZES_ICNS[@]}"; do printf "%q " "$TMPDIR/icon-${size}.png"; done)
-cp -f "$ROOT_DIR/src/qt/res/icons/CTEAM.icns" "$ROOT_DIR/src/qt/res/icons/bitcoin.icns"
+python3 "$ICNS_PACKER" "$ROOT_DIR/src/qt/res/icons/organiclife.icns" $(for size in "${SIZES_ICNS[@]}"; do printf "%q " "$TMPDIR/icon-${size}.png"; done)
+cp -f "$ROOT_DIR/src/qt/res/icons/organiclife.icns" "$ROOT_DIR/src/qt/res/icons/bitcoin.icns"
 cp -f "$ROOT_DIR/src/qt/res/icons/bitcoin.icns" "$ROOT_DIR/share/pixmaps/bitcoin.icns"
 
 echo "[ICON] Done."
