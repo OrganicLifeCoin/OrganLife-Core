@@ -58,8 +58,8 @@ BOOST_AUTO_TEST_CASE(extract_cold_staking_destination_keys)
 
 static CScript GetNewP2CS(CKey& stakerKey, CKey& ownerKey, bool fLastOutFree)
 {
-    stakerKey = KeyIO::DecodeSecret("UEQDtAwzyCRBw4PhEHx29w1sU1FmYAw3v4qA44LjuMPUK63mkDt1");
-    ownerKey = KeyIO::DecodeSecret("ULZUnyxnEJpZLvauU5anBRQsxuerQZasoZmNveXASCoQToZgCVdj");
+    stakerKey = KeyIO::DecodeSecret("7foaQjrxdq55V8YvMm5tVjsAscL6W1F1HfF3GvBaeqdYB5RsjxiE");
+    ownerKey = KeyIO::DecodeSecret("7mxqKYsjtwUStzk8bYieXEGBNWjBNPtqBABG9WN1Bh3UKnyFbW7x");
     return fLastOutFree ? GetScriptForStakeDelegationLOF(stakerKey.GetPubKey().GetID(), ownerKey.GetPubKey().GetID())
                         : GetScriptForStakeDelegation(stakerKey.GetPubKey().GetID(), ownerKey.GetPubKey().GetID());
 }
@@ -148,7 +148,7 @@ BOOST_AUTO_TEST_CASE(coldstake_lof_script)
     SignColdStake(tx, 0, scriptP2CS, stakerKey, true);
     BOOST_CHECK(CheckP2CSScript(tx.vin[0].scriptSig, scriptP2CS, tx, err));
 
-    const CKey& dummyKey = KeyIO::DecodeSecret("UEQDtAwzyCRBw4PhEHx29w1sU1FmYAw3v4qA44LjuMPUK63mkDt1");
+    const CKey& dummyKey = KeyIO::DecodeSecret("7foaQjrxdq55V8YvMm5tVjsAscL6W1F1HfF3GvBaeqdYB5RsjxiE");
     const CKeyID& dummyKeyID = dummyKey.GetPubKey().GetID();
     const CScript& dummyP2PKH = GetDummyP2PKH(dummyKeyID);
 
@@ -224,7 +224,7 @@ BOOST_AUTO_TEST_CASE(coldstake_script)
     SignColdStake(tx, 0, scriptP2CS, stakerKey, true);
     BOOST_CHECK(CheckP2CSScript(tx.vin[0].scriptSig, scriptP2CS, tx, err));
 
-    const CKey& dummyKey = KeyIO::DecodeSecret("UEQDtAwzyCRBw4PhEHx29w1sU1FmYAw3v4qA44LjuMPUK63mkDt1");
+    const CKey& dummyKey = KeyIO::DecodeSecret("7foaQjrxdq55V8YvMm5tVjsAscL6W1F1HfF3GvBaeqdYB5RsjxiE");
     const CKeyID& dummyKeyID = dummyKey.GetPubKey().GetID();
     const CScript& dummyP2PKH = GetDummyP2PKH(dummyKeyID);
 

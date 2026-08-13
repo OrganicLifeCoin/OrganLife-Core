@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE(bloom_create_insert_serialize_with_tweak)
 
 BOOST_AUTO_TEST_CASE(bloom_create_insert_key)
 {
-    std::string strSecret = std::string("7BVUB125r8U16wTBBrbXjviFoATFQhkdbHtZNu3RWrpXGZSywM5");
+    std::string strSecret = std::string("2XHzemdePzTXMug9BHKeAMNcWJrS3pcvDT3bU5RpLmtcg2nPf1R");
     CKey key = KeyIO::DecodeSecret(strSecret);
     CPubKey pubkey = key.GetPubKey();
     std::vector<unsigned char> vchPubKey(pubkey.begin(), pubkey.end());
