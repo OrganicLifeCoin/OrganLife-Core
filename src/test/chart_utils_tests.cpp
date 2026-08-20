@@ -67,4 +67,22 @@ BOOST_AUTO_TEST_CASE(month_empty_window_keeps_chart_controls_visible)
     BOOST_CHECK(!ShouldShowEmptyChart(true, true, true));
 }
 
+BOOST_AUTO_TEST_CASE(only_staking_and_masternode_rewards_are_charted)
+{
+    BOOST_CHECK(!IsMasternodeRewardTypeForChart(chart::detail::TX_TYPE_GENERATED));
+    BOOST_CHECK(IsMasternodeRewardTypeForChart(chart::detail::TX_TYPE_MN_REWARD));
+    BOOST_CHECK(IsMasternodeRewardTypeForChart(chart::detail::TX_TYPE_BUDGET_PAYMENT));
+
+    const std::vector<ChartStakeSample> rows = {
+        {2026, 8, 1, 264444444 * COIN, chart::detail::TX_TYPE_GENERATED}, // premine
+        {2026, 8, 2, 10 * COIN, chart::detail::TX_TYPE_GENERATED},       // mined block
+        {2026, 8, 3, 6 * COIN, chart::detail::TX_TYPE_MN_REWARD},
+        {2026, 8, 4, 4 * COIN, chart::detail::TX_TYPE_STAKE_MINT},
+    };
+
+    const ChartRewardAggregation result = AggregateChartRewards(rows, ChartBucketMode::Year);
+    BOOST_CHECK_EQUAL(result.amountsBy.at(8).first, 4 * COIN);
+    BOOST_CHECK_EQUAL(result.amountsBy.at(8).second, 6 * COIN);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

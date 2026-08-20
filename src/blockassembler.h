@@ -209,6 +209,24 @@ void IncrementExtraNonce(std::shared_ptr<CBlock>& pblock, int nHeight, unsigned 
 int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev);
 int32_t ComputeBlockVersion(const Consensus::Params& consensusParams, int nHeight);
 
+/**
+ * Compute the block timestamp of the next PoS block on top of pindexPrev.
+ *
+ * Returns the current time slot when it is strictly greater than the parent's
+ * block time; otherwise the slot right after the parent. When
+ * fEnforceFutureDrift is true (off-regtest) and the result would exceed the
+ * future-drift limit, returns 0 to signal that the staker must wait for the
+ * clock to advance.
+ *
+ * With the drift limit enforced, the returned timestamp can never produce a
+ * block rejected with "time-too-new" - even when the parent block was accepted
+ * with a near-future timestamp (which previously made the staker build on a
+ * future slot and permanently wedge the chain on small networks). On regtest
+ * future timestamps are allowed (CheckBlockTime is a no-op), so the drift
+ * limit is not enforced there.
+ */
+int64_t GetNextPoSBlockTime(const CBlockIndex* pindexPrev, bool fEnforceFutureDrift);
+
 // Visible for testing purposes only
 bool CreateCoinbaseTx(CBlock* pblock, const CScript& scriptPubKeyIn, CBlockIndex* pindexPrev);
 CMutableTransaction CreateCoinbaseTx(const CScript& scriptPubKeyIn, CBlockIndex* pindexPrev);

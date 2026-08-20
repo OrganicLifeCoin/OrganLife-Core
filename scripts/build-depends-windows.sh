@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build OrganicLife Windows binaries on Ubuntu VPS
+# Build OrganicLifeCoin Windows binaries on Ubuntu VPS
 # Usage: ./build-depends-windows.sh
 # This script installs dependencies, builds the Windows depends, configures, and compiles everything
 
@@ -349,7 +349,7 @@ configure_project() {
 
 # Build the project
 build_project() {
-    log_step "Building OrganicLife..."
+    log_step "Building OrganicLifeCoin..."
     log_info "Building with $JOBS parallel jobs..."
     
     make -j$JOBS
@@ -374,7 +374,7 @@ package_binaries() {
     log_step "Packaging binaries..."
     
     VERSION=$(git describe --tags --dirty 2>/dev/null || echo "unknown")
-    PACKAGE_DIR="organiclife-windows-$VERSION"
+    PACKAGE_DIR="OrganicLifeCoin-windows-$VERSION"
     
     mkdir -p "$PACKAGE_DIR"
 
@@ -384,7 +384,7 @@ package_binaries() {
     cp src/organiclife-tx.exe "$PACKAGE_DIR/" 2>/dev/null || true
     cp src/qt/organiclife-qt.exe "$PACKAGE_DIR/" 2>/dev/null || true
 
-    # Include Sapling params so the wallet can copy them to %APPDATA%\\OrganicLifeParams on first run
+    # Include Sapling params so the wallet can copy them to %APPDATA%\\OrganicLifeCoinParams on first run
     if [ -f "params/sapling-spend.params" ] && [ -f "params/sapling-output.params" ]; then
         mkdir -p "$PACKAGE_DIR/params"
         cp params/sapling-spend.params "$PACKAGE_DIR/params/"
@@ -414,17 +414,17 @@ print_summary() {
     echo "  2. Run it (no installation needed)"
     echo ""
     echo "Package location:"
-    ls -lh organiclife-windows-*.zip 2>/dev/null || true
+    ls -lh OrganicLifeCoin-windows-*.zip 2>/dev/null || true
     echo ""
     echo "Installer:"
-    ls -lh organiclife-*-win64-setup*.exe 2>/dev/null || true
+    ls -lh OrganicLifeCoin-*-win64-setup*.exe 2>/dev/null || true
     echo ""
 }
 
 # Main function
 main() {
     echo "========================================"
-    echo "  OrganicLife Windows Build Script"
+    echo "  OrganicLifeCoin Windows Build Script"
     echo "========================================"
     echo ""
 
@@ -432,7 +432,7 @@ main() {
     
     # Check if running from correct directory
     if [ ! -f "configure.ac" ] || [ ! -d "src" ]; then
-        log_error "Please run this script from the OrganicLife source directory"
+        log_error "Please run this script from the OrganicLifeCoin source directory"
         exit 1
     fi
     

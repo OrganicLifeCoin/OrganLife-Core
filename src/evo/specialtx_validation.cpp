@@ -70,8 +70,8 @@ static bool CheckService(const CService& addr, CValidationState& state)
         return state.DoS(10, false, REJECT_INVALID, "bad-protx-ipaddr-port");
     }
 
-    // !TODO: add support for IPv6 and Tor
-    if (!addr.IsIPv4()) {
+    // Both IPv4 and IPv6 services are supported. Tor/I2P/CJDNS are not.
+    if (!addr.IsIPv4() && !addr.IsIPv6()) {
         return state.DoS(10, false, REJECT_INVALID, "bad-protx-ipaddr");
     }
 

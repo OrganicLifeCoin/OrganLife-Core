@@ -15,12 +15,16 @@
 #include "script/sign.h"
 #include "test/util/blocksutil.h"
 #include "tiertwo/tiertwo_sync_state.h"
+#include "timedata.h"
 #include "util/blockstatecatcher.h"
 #include "util/validation.h"
+#include "utiltime.h"
 #include "validation.h"
 #include "wallet/wallet.h"
 
 #include <boost/test/unit_test.hpp>
+
+bool CheckForCoins(CWallet* pwallet, std::vector<CStakeableOutput>* availableCoins, bool lastResult);
 
 BOOST_AUTO_TEST_SUITE(pos_validations_tests)
 
@@ -93,6 +97,58 @@ BOOST_FIXTURE_TEST_CASE(coinstake_tests, TestPoSChainSetup)
     pblock = std::make_shared<CBlock>(pblocktemplate->block);
     ProcessNewBlock(pblock, nullptr);
     BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), pblock->GetHash());
+}
+
+BOOST_FIXTURE_TEST_CASE(check_for_coins_rescans_after_same_tip_restart, TestPoSChainSetup)
+{
+    std::vector<CStakeableOutput> expectedCoins;
+    BOOST_REQUIRE(pwalletMain->StakeableCoins(&expectedCoins));
+    BOOST_REQUIRE(!expectedCoins.empty());
+
+    const CBlockIndex* tip = WITH_LOCK(cs_main, return chainActive.Tip());
+    BOOST_REQUIRE(tip != nullptr);
+    {
+        WAIT_LOCK(g_best_block_mutex, lock);
+        g_best_block = tip->GetBlockHash();
+    }
+
+    pwalletMain->pStakerStatus->SetLastTip(tip);
+    pwalletMain->pStakerStatus->SetLastTime(GetAdjustedTime());
+    pwalletMain->pStakerStatus->SetLastTries(123);
+
+    std::vector<CStakeableOutput> availableCoins;
+    BOOST_CHECK_MESSAGE(CheckForCoins(pwalletMain.get(), &availableCoins, false),
+                        "staking should rescan stakeable coins after a miner restart on the same tip");
+    BOOST_CHECK_EQUAL(availableCoins.size(), expectedCoins.size());
+}
+
+BOOST_FIXTURE_TEST_CASE(get_next_pos_block_time_waits_when_parent_is_ahead, TestPoSChainSetup)
+{
+    const Consensus::Params& consensus = Params().GetConsensus();
+    const int64_t slotLen = consensus.nTimeSlotLength;
+    CBlockIndex* tip = WITH_LOCK(cs_main, return chainActive.Tip());
+
+    // Pin "now" a few slots past the tip: the next PoS block time is the
+    // current time slot and never beyond the future-drift limit.
+    const int64_t baseSlot = GetTimeSlot(tip->GetBlockTime()) + 10 * slotLen;
+    SetMockTime(baseSlot);
+    BOOST_CHECK_GT(GetCurrentTimeSlot(), tip->GetBlockTime());
+    BOOST_CHECK_EQUAL(GetNextPoSBlockTime(tip, true), GetCurrentTimeSlot());
+
+    // Reproduce the production stall: the tip is accepted with a near-future
+    // timestamp, right at the future-drift limit. The next valid timestamp
+    // (the slot after the parent) would be beyond the limit and rejected with
+    // "time-too-new", so the staker must wait (return 0) instead of minting it.
+    tip->nTime = tip->MaxFutureBlockTime();
+    BOOST_CHECK_EQUAL(GetNextPoSBlockTime(tip, true), 0);
+
+    // Once the clock advances past the parent, a valid timestamp exists again
+    // and it never exceeds the future-drift limit.
+    SetMockTime(tip->GetBlockTime() + slotLen);
+    BOOST_CHECK_NE(GetNextPoSBlockTime(tip, true), 0);
+    BOOST_CHECK_LE(GetNextPoSBlockTime(tip, true), tip->MaxFutureBlockTime());
+
+    SetMockTime(0);
 }
 
 BOOST_FIXTURE_TEST_CASE(v6_pos_coinbase_without_masternode_payee_is_valid, TestPoSChainSetup)

@@ -225,8 +225,8 @@ void CActiveDeterministicMasternodeManager::UpdatedBlockTip(const CBlockIndex* p
 
 bool CActiveDeterministicMasternodeManager::IsValidNetAddr(const CService& addrIn)
 {
-    // TODO: check IPv6 and TOR addresses
-    return Params().IsRegTestNet() || (addrIn.IsIPv4() && IsReachable(addrIn) && addrIn.IsRoutable());
+    // TODO: check TOR addresses
+    return Params().IsRegTestNet() || ((addrIn.IsIPv4() || addrIn.IsIPv6()) && IsReachable(addrIn) && addrIn.IsRoutable());
 }
 
 bool GetActiveDMNKeys(CBLSSecretKey& key, CTxIn& vin)

@@ -803,8 +803,16 @@ bool StartDeterministicMasternode(CWallet& wallet,
         // lock the collateral output so it can't be spent
         WITH_LOCK(wallet.cs_wallet, wallet.LockCoin(pl.collateralOutpoint));
         return true;
+    } catch (const UniValue& uv) {
+        // JSONRPCError() throws a UniValue (not a std::exception); surface its
+        // message instead of letting it escape (and crash the Qt GUI).
+        errorOut = uv["message"].get_str();
+        return false;
     } catch (const std::exception& e) {
         errorOut = e.what();
+        return false;
+    } catch (...) {
+        errorOut = "unknown error during deterministic masternode start";
         return false;
     }
 }

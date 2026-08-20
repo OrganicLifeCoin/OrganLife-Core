@@ -506,4 +506,78 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_orders_gov_vote_lock_before_cast)
     mempool.clear();
 }
 
+BOOST_AUTO_TEST_CASE(staker_slot_wait_is_bounded_for_future_attempt)
+{
+    const CBlockIndex* tip = WITH_LOCK(cs_main, return chainActive.Tip());
+    const int64_t currentSlot = GetCurrentTimeSlot();
+    const int64_t slotLen = Params().GetConsensus().nTimeSlotLength;
+
+    // A null status (e.g. no staking) never forces a wait.
+    BOOST_CHECK(ShouldStakerWaitForSlot(nullptr, tip, currentSlot) == StakerSlotWait::Proceed);
+
+    CStakerStatus status;
+
+    // A fresh status never forces a wait.
+    BOOST_CHECK(ShouldStakerWaitForSlot(&status, tip, currentSlot) == StakerSlotWait::Proceed);
+
+    // Already attempted the current slot -> wait for the next one.
+    status.SetLastTip(tip);
+    status.SetLastTime(currentSlot);
+    BOOST_CHECK(ShouldStakerWaitForSlot(&status, tip, currentSlot) == StakerSlotWait::Wait);
+
+    // A new tip is available -> search again regardless of the recorded slot.
+    status.SetLastTip(nullptr);
+    BOOST_CHECK(ShouldStakerWaitForSlot(&status, tip, currentSlot) == StakerSlotWait::Proceed);
+
+    // The production stall: the recorded attempt lies in the future (a stale
+    // artifact of a previously minted too-future slot). Waiting for it would
+    // wedge the minter forever, so the status is reset and staking proceeds.
+    status.SetLastTip(tip);
+    status.SetLastTime(currentSlot + slotLen);
+    BOOST_CHECK(ShouldStakerWaitForSlot(&status, tip, currentSlot) == StakerSlotWait::Proceed);
+    BOOST_CHECK_EQUAL(status.GetLastTime(), 0);
+    BOOST_CHECK_EQUAL(status.GetLastTip(), nullptr);
+
+    // A past slot -> a fresh kernel search for the current slot; status intact.
+    status.SetLastTip(tip);
+    status.SetLastTime(currentSlot - slotLen);
+    BOOST_CHECK(ShouldStakerWaitForSlot(&status, tip, currentSlot) == StakerSlotWait::Proceed);
+    BOOST_CHECK_EQUAL(status.GetLastTime(), currentSlot - slotLen);
+}
+
+BOOST_AUTO_TEST_CASE(can_stake_during_stale_tip_decision)
+{
+    const int localHeight = 39153;
+    const int64_t now = 1786800000;
+    const int64_t maxTipAge = 6 * 60 * 60;
+    const int tol = 2;
+
+    // A fresh header (tip not stale): the normal staking gates apply, so the
+    // stale-tip allowance is not granted.
+    BOOST_CHECK(!CanStakeDuringStaleTip(localHeight, localHeight, now - 10, now, maxTipAge,
+                                        {39153, 39153}, 2, true, tol));
+
+    // Uniformly stale network: local == best header, peers at the tip, none
+    // ahead. Staking must be allowed so a running node can revive the chain
+    // without a restart.
+    BOOST_CHECK(CanStakeDuringStaleTip(localHeight, localHeight, now - maxTipAge - 1, now, maxTipAge,
+                                       {39153, 39153, 39152}, 2, true, tol));
+
+    // A reachable peer with a better header blocks staking (catch up first).
+    BOOST_CHECK(!CanStakeDuringStaleTip(localHeight, localHeight + 10, now - maxTipAge - 1, now, maxTipAge,
+                                        {39153, 39153}, 2, true, tol));
+
+    // A peer ahead of the local tip blocks staking (avoid forking).
+    BOOST_CHECK(!CanStakeDuringStaleTip(localHeight, localHeight, now - maxTipAge - 1, now, maxTipAge,
+                                        {39153, localHeight + 5}, 2, true, tol));
+
+    // Not enough peers near the tip blocks staking.
+    BOOST_CHECK(!CanStakeDuringStaleTip(localHeight, localHeight, now - maxTipAge - 1, now, maxTipAge,
+                                        {30000}, 2, true, tol));
+
+    // Without a near-tip requirement, a single trustworthy peer suffices.
+    BOOST_CHECK(CanStakeDuringStaleTip(localHeight, localHeight, now - maxTipAge - 1, now, maxTipAge,
+                                       {39153}, 1, false, tol));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

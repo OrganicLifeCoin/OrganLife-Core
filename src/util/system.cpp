@@ -534,13 +534,13 @@ void PrintExceptionContinue(const std::exception* pex, const char* pszThread)
 
 fs::path GetDefaultDataDir()
 {
-// Windows < Vista: C:\Documents and Settings\Username\Application Data\OrganicLife
-// Windows >= Vista: C:\Users\Username\AppData\Roaming\OrganicLife
+// Windows < Vista: C:\Documents and Settings\Username\Application Data\OrganicLifeCoin
+// Windows >= Vista: C:\Users\Username\AppData\Roaming\OrganicLifeCoin
 // Mac: ~/Library/Application Support/OrganicLife
 // Unix: ~/.organiclifecoin
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "OrganicLife";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "OrganicLifeCoin";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -617,13 +617,13 @@ static bool CopyFileIfMissing(const fs::path& src, const fs::path& dst)
 static fs::path ZC_GetBaseParamsDir()
 {
     // Copied from GetDefaultDataDir and adapter for zcash params.
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\OrganicLifeParams
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\OrganicLifeParams
+    // Windows < Vista: C:\Documents and Settings\Username\Application Data\OrganicLifeCoinParams
+    // Windows >= Vista: C:\Users\Username\AppData\Roaming\OrganicLifeCoinParams
     // Mac: ~/Library/Application Support/OrganicLifeParams
     // Unix: ~/.organiclifecoin-params
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "OrganicLifeParams";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "OrganicLifeCoinParams";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -922,6 +922,11 @@ void ArgsManager::ReadConfigFile(const std::string& confPath)
                         "# Auto-generated " << PIVX_CONF_FILENAME << "\n"
                         "# Created because no config file was found.\n"
                         "#\n"
+                        "# Default to the testnet so new users never connect to the\n"
+                        "# main chain by accident. Remove this line or set it to 0\n"
+                        "# to use the mainnet.\n"
+                        "testnet=1\n"
+                        "\n"
                         "# RPC credentials (rpcpassword was randomly generated):\n"
                         "rpcuser=organicliferpc\n"
                         "rpcpassword=" << rpcpassword << "\n"
@@ -930,7 +935,7 @@ void ArgsManager::ReadConfigFile(const std::string& confPath)
                         "# Run as a background daemon:\n"
                         "daemon=1\n"
                         "\n"
-                        "# Enable staking by default on mainnet.\n"
+                        "# Enable staking by default.\n"
                         "staking=1\n"
                         "\n"
                         "# Listen for connections:\n"

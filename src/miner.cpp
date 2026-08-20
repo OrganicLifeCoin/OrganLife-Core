@@ -42,6 +42,29 @@
 double dHashesPerSec = 0.0;
 int64_t nHPSTimerStart = 0;
 
+StakerSlotWait ShouldStakerWaitForSlot(CStakerStatus* status, const CBlockIndex* pindexPrev, int64_t currentSlot)
+{
+    if (!status || status->GetLastHash() != pindexPrev->GetBlockHash())
+        return StakerSlotWait::Proceed;   // a new tip (or fresh status): search again
+
+    const int64_t nLastTime = status->GetLastTime();
+    if (nLastTime == currentSlot)
+        return StakerSlotWait::Wait;      // already attempted this exact slot
+
+    if (nLastTime > currentSlot) {
+        // The recorded attempt lies in the future: it can never be reached by
+        // waiting, so clear it to avoid wedging the minter indefinitely (e.g.
+        // after a clock jump, or a stale artifact of a previously minted
+        // too-future slot which would otherwise stall the whole network).
+        LogPrintf("%s: resetting staker status with future attempt time %d (current slot %d)\n",
+                  __func__, nLastTime, currentSlot);
+        status->SetNull();
+        return StakerSlotWait::Proceed;
+    }
+
+    return StakerSlotWait::Proceed;       // a new slot to search
+}
+
 std::unique_ptr<CBlockTemplate> CreateNewBlockWithKey(std::unique_ptr<CReserveKey>& reservekey, CWallet* pwallet)
 {
     CPubKey pubkey;
@@ -118,8 +141,16 @@ bool CheckForCoins(CWallet* pwallet, std::vector<CStakeableOutput>* availableCoi
     // control the amount of times the client will check for mintable coins (every block)
     {
         WAIT_LOCK(g_best_block_mutex, lock);
-        if (pwallet->pStakerStatus->GetLastTip() && g_best_block == pwallet->pStakerStatus->GetLastHash())
-            return lastResult;
+        if (pwallet->pStakerStatus->GetLastTip() && g_best_block == pwallet->pStakerStatus->GetLastHash()) {
+            const bool restartedAfterActiveAttempt =
+                    !lastResult &&
+                    availableCoins != nullptr &&
+                    availableCoins->empty() &&
+                    pwallet->pStakerStatus->GetLastTries() > 0 &&
+                    pwallet->pStakerStatus->IsActive();
+            if (!restartedAfterActiveAttempt)
+                return lastResult;
+        }
     }
     return pwallet->StakeableCoins(availableCoins);
 }
@@ -140,9 +171,6 @@ bool RequiresNearTipStakingPeerEvidence(const CChainParams& params)
 
 static bool CanStakeDuringStaleTipInitialDownload()
 {
-    if (!IsInitialBlockDownload())
-        return false;
-
     int localHeight = -1;
     int bestHeaderHeight = -1;
     int64_t bestHeaderTime = 0;
@@ -155,23 +183,12 @@ static bool CanStakeDuringStaleTipInitialDownload()
         bestHeaderHeight = pindexBestHeader->nHeight;
         bestHeaderTime = pindexBestHeader->GetBlockTime();
     }
-
-    if (localHeight < bestHeaderHeight)
-        return false;
-    if (bestHeaderTime >= GetTime() - nMaxTipAge)
-        return false;
     if (!g_connman)
         return false;
 
+    std::vector<int> peerHeights;
     std::vector<CNodeStats> vstats;
     g_connman->GetNodeStats(vstats);
-
-    static constexpr int PEER_HEIGHT_TOLERANCE = 2;
-    const int minPeerEvidence = GetMinimumStakingPeerEvidence(Params());
-    const bool requireNearTip = RequiresNearTipStakingPeerEvidence(Params());
-    int usablePeers = 0;
-    int nearTipPeers = 0;
-    int peersAhead = 0;
 
     for (const CNodeStats& stats : vstats) {
         if (stats.m_masternode_connection || stats.m_masternode_probe_connection)
@@ -187,26 +204,59 @@ static bool CanStakeDuringStaleTipInitialDownload()
             if (nodeState.nCommonHeight > 0)
                 peerHeight = std::max(peerHeight, nodeState.nCommonHeight);
         }
-
-        usablePeers++;
-        if (peerHeight > localHeight + PEER_HEIGHT_TOLERANCE)
-            peersAhead++;
-        if (peerHeight >= localHeight - PEER_HEIGHT_TOLERANCE)
-            nearTipPeers++;
+        peerHeights.push_back(peerHeight);
     }
 
-    const bool canStake = usablePeers >= minPeerEvidence &&
-                          (!requireNearTip || nearTipPeers >= minPeerEvidence) &&
-                          peersAhead == 0;
+    static constexpr int PEER_HEIGHT_TOLERANCE = 2;
+    const int minPeerEvidence = GetMinimumStakingPeerEvidence(Params());
+    const bool requireNearTip = RequiresNearTipStakingPeerEvidence(Params());
+    const bool canStake = CanStakeDuringStaleTip(localHeight, bestHeaderHeight, bestHeaderTime,
+                                                 GetTime(), nMaxTipAge, peerHeights,
+                                                 minPeerEvidence, requireNearTip,
+                                                 PEER_HEIGHT_TOLERANCE);
     if (canStake) {
         static int64_t nLastLog = 0;
         if (GetTime() - nLastLog > 60) {
-            LogPrintf("Staking allowed during stale-tip IBD: localHeight=%d bestHeaderHeight=%d peers=%d nearTipPeers=%d\n",
-                      localHeight, bestHeaderHeight, usablePeers, nearTipPeers);
+            LogPrintf("Staking allowed during stale-tip IBD: localHeight=%d bestHeaderHeight=%d peers=%d\n",
+                      localHeight, bestHeaderHeight, (int)peerHeights.size());
             nLastLog = GetTime();
         }
     }
     return canStake;
+}
+
+bool CanStakeDuringStaleTip(const int localHeight,
+                            const int bestHeaderHeight,
+                            const int64_t bestHeaderTime,
+                            const int64_t now,
+                            const int64_t maxTipAge,
+                            const std::vector<int>& peerHeights,
+                            const int minPeerEvidence,
+                            const bool requireNearTip,
+                            const int peerHeightTolerance)
+{
+    // The tip is not stale: the normal staking gates apply.
+    if (bestHeaderTime >= now - maxTipAge)
+        return false;
+
+    // A better header is known: catch up before staking (avoid forking).
+    if (localHeight < bestHeaderHeight)
+        return false;
+
+    int usablePeers = 0;
+    int nearTipPeers = 0;
+    int peersAhead = 0;
+    for (const int peerHeight : peerHeights) {
+        usablePeers++;
+        if (peerHeight > localHeight + peerHeightTolerance)
+            peersAhead++;
+        if (peerHeight >= localHeight - peerHeightTolerance)
+            nearTipPeers++;
+    }
+
+    return usablePeers >= minPeerEvidence &&
+           (!requireNearTip || nearTipPeers >= minPeerEvidence) &&
+           peersAhead == 0;
 }
 
 static bool HasSufficientStakingPeers(const CBlockIndex* pindexPrev)
@@ -292,6 +342,21 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
         // tends to produce frequent competing tips and deep reorgs when multiple nodes
         // are mining. Override with -minpowconnections=N.
         if (!fProofOfStake && Params().MiningRequiresPeers() && g_connman) {
+            // Never mine with zero connections: the hash loop below breaks immediately
+            // when unconnected, so without this gate the miner would busy-loop rebuilding
+            // block templates (each rebuild re-validates the template under cs_main),
+            // pegging a core and starving the network threads - which in turn keeps any
+            // peer from connecting at all (observed as mass disconnects).
+            if (g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) == 0) {
+                static int64_t nLastLog = 0;
+                if (GetTime() - nLastLog > 30) {
+                    LogPrintf("PoW mining paused: no connected peers\n");
+                    nLastLog = GetTime();
+                }
+                MilliSleep(5000);
+                continue;
+            }
+
             // Keep this opt-in: by default, allow mining even with few peers.
             const int minPowConnections = gArgs.GetArg("-minpowconnections", 0);
             if (minPowConnections > 0) {
@@ -307,12 +372,32 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
                 std::vector<CNodeStats> vstats;
                 g_connman->GetNodeStats(vstats);
                 for (const auto& stats : vstats) {
+                    if (stats.m_masternode_connection || stats.m_masternode_probe_connection)
+                        continue;
+                    if (stats.nVersion <= 0 || stats.nStartingHeight <= 0)
+                        continue;
+                    // Best height known for this peer. Peers that connected after the
+                    // initial sync (typically inbound ones) never set nCommonHeight, so
+                    // fall back through the sync height to the announced starting height
+                    // (same resolution as HasSufficientStakingPeers).
+                    int peerHeight = stats.nStartingHeight;
                     CNodeStateStats st;
-                    if (!GetNodeStateStats(stats.nodeid, st)) continue;
-                    // Consider a peer near-tip if we share a common height within 2 blocks of our tip.
-                    if (st.nCommonHeight >= pindexPrev->nHeight - 2) nearTipPeers++;
+                    if (GetNodeStateStats(stats.nodeid, st)) {
+                        if (st.nSyncHeight > 0)
+                            peerHeight = std::max(peerHeight, st.nSyncHeight);
+                        if (st.nCommonHeight > 0)
+                            peerHeight = std::max(peerHeight, st.nCommonHeight);
+                    }
+                    // Consider a peer near-tip if its best known height is within 2 blocks of our tip.
+                    if (peerHeight >= pindexPrev->nHeight - 2) nearTipPeers++;
                 }
                 if (nearTipPeers < minPowConnections) {
+                    static int64_t nLastLog = 0;
+                    if (GetTime() - nLastLog > 30) {
+                        LogPrintf("PoW mining paused: need %d near-tip peer(s), have %d at height %d\n",
+                                  minPowConnections, nearTipPeers, pindexPrev->nHeight);
+                        nLastLog = GetTime();
+                    }
                     MilliSleep(5000);
                     continue;
                 }
@@ -364,9 +449,9 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
             }
 
             //search our map of hashed blocks, see if bestblock has been hashed yet
-            if (pwallet->pStakerStatus &&
-                    pwallet->pStakerStatus->GetLastHash() == pindexPrev->GetBlockHash() &&
-                    pwallet->pStakerStatus->GetLastTime() >= GetCurrentTimeSlot()) {
+            //(sleep until the next slot when the current one was already tried,
+            // and never wait on a recorded attempt that lies in the future)
+            if (ShouldStakerWaitForSlot(pwallet->pStakerStatus, pindexPrev, GetCurrentTimeSlot()) == StakerSlotWait::Wait) {
                 MilliSleep(2000);
                 continue;
             }
@@ -390,7 +475,13 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
         std::unique_ptr<CBlockTemplate> pblocktemplate((fProofOfStake ?
                                                         BlockAssembler(Params(), DEFAULT_PRINTPRIORITY).CreateNewBlock(CScript(), pwallet, true, &availableCoins) :
                                                         CreateNewBlockWithKey(pReservekey, pwallet)));
-        if (!pblocktemplate) continue;
+        if (!pblocktemplate) {
+            // PoW: a null template is a persistent condition (e.g. keypool exhausted:
+            // GetReservedKey fails), so sleep to avoid a zero-work retry loop.
+            // PoS: the slot-wait / gate logic above already paces retries.
+            if (!fProofOfStake) MilliSleep(5000);
+            continue;
+        }
         std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>(pblocktemplate->block);
 
         // POS - block found: process it
@@ -431,12 +522,26 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
                     SetThreadPriority(THREAD_PRIORITY_LOWEST);
 
                     // In regression test mode, stop mining after a block is found. This
-                    // allows developers to controllably generate a block on demand.
+                    // allows developers to controllably generate blocks on demand.
                     if (Params().IsRegTestNet())
                         throw boost::thread_interrupted();
 
-                    // Sleep for a short while to avoid spamming the network on low difficulty
-                    MilliSleep(100);
+                    // Sleep for a short while to avoid spamming the network on low difficulty.
+                    // On a chain sitting at (or near) the minimum difficulty, block discovery
+                    // is nearly instant, and unthrottled mining would emit blocks far faster
+                    // than the target cadence; DGW3 triples the difficulty for every such
+                    // over-fast block and the whole network stalls once the difficulty outruns
+                    // every miner. If our block was accepted, keep production at or below one
+                    // block per target spacing by sleeping out the rest of the window.
+                    int64_t nSleepMillis = 100;
+                    const CBlockIndex* pindexNewTip = GetChainTip();
+                    if (pindexNewTip && pindexNewTip->GetBlockHash() == pblock->GetHash()) {
+                        const int64_t nNextDue = pindexNewTip->GetBlockTime() + consensus.nTargetSpacing;
+                        const int64_t nWaitSeconds = nNextDue - GetAdjustedTime();
+                        if (nWaitSeconds > 0)
+                            nSleepMillis = std::min<int64_t>(nWaitSeconds, consensus.nTargetSpacing) * 1000;
+                    }
+                    MilliSleep(nSleepMillis);
 
                     break;
                 }

@@ -337,12 +337,15 @@ BOOST_AUTO_TEST_CASE(testnet_staking_peer_threshold_test)
     SelectParams(CBaseChainParams::MAIN);
 }
 
-BOOST_AUTO_TEST_CASE(testnet_fixed_seed_policy_test)
+BOOST_AUTO_TEST_CASE(testnet_bootstrap_seed_policy_test)
 {
     SelectParams(CBaseChainParams::TESTNET);
 
-    // Fixed seeds are intentionally empty until public OrganicLife seed nodes are deployed.
+    BOOST_CHECK_EQUAL(Params().GetDefaultPort(), 49716);
     BOOST_CHECK(Params().FixedSeeds().empty());
+    BOOST_REQUIRE_EQUAL(Params().DNSSeeds().size(), 2);
+    BOOST_CHECK_EQUAL(Params().DNSSeeds()[0].host, "2.29.11.56");
+    BOOST_CHECK_EQUAL(Params().DNSSeeds()[1].host, "2.29.14.202");
 
     SelectParams(CBaseChainParams::MAIN);
 }

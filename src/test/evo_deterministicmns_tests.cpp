@@ -1445,4 +1445,50 @@ BOOST_AUTO_TEST_CASE(dmn_getlistforblock_genesis_anchor)
     }
 }
 
+// Creates a ProRegTx carrying the given service address. It uses an internal
+// collateral (first output) and carries no payload signature, which is enough
+// for the non-contextual checks (CheckSpecialTxNoContext).
+static CMutableTransaction CreateProRegTxWithService(const CService& service)
+{
+    ProRegPL pl;
+    pl.collateralOutpoint = COutPoint(UINT256_ZERO, 0); // internal collateral
+    pl.addr = service;
+    CKey ownerKey = GetRandomKey();
+    pl.keyIDOwner = ownerKey.GetPubKey().GetID();
+    pl.pubKeyOperator = GetRandomBLSKey().GetPublicKey();
+    pl.keyIDVoting = pl.keyIDOwner;
+    pl.scriptPayout = GenerateRandomAddress();
+    pl.nOperatorReward = 0;
+
+    CMutableTransaction tx;
+    tx.nVersion = CTransaction::TxVersion::SAPLING;
+    tx.nType = CTransaction::TxType::PROREG;
+    tx.vout.emplace_back(Params().GetConsensus().nMNCollateralAmt, GenerateRandomAddress());
+
+    pl.inputsHash = CalcTxInputsHash(tx);
+    SetTxPayload(tx, pl);
+    return tx;
+}
+
+BOOST_AUTO_TEST_CASE(protx_service_accepts_ipv6)
+{
+    BasicTestingSetup setup(CBaseChainParams::REGTEST);
+
+    // IPv4 service registrations keep being accepted (control).
+    const CService ipv4Service = LookupNumeric("1.1.1.1", Params().GetDefaultPort());
+    BOOST_CHECK(ipv4Service.IsValid());
+    CValidationState state;
+    BOOST_CHECK_MESSAGE(
+        WITH_LOCK(cs_main, return CheckSpecialTxNoContext(CreateProRegTxWithService(ipv4Service), state);),
+        state.GetRejectReason());
+
+    // An IPv6 service must be accepted as well (masternodes on IPv6).
+    const CService ipv6Service = LookupNumeric("2001:4860:4860::8888", Params().GetDefaultPort());
+    BOOST_CHECK(ipv6Service.IsIPv6());
+    state = CValidationState();
+    BOOST_CHECK_MESSAGE(
+        WITH_LOCK(cs_main, return CheckSpecialTxNoContext(CreateProRegTxWithService(ipv6Service), state);),
+        state.GetRejectReason());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

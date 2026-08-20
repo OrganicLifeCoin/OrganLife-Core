@@ -1520,6 +1520,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     if (block.GetHash() == consensus.hashGenesisBlock) {
         if (!fJustCheck) {
             view.SetBestBlock(pindex->GetBlockHash());
+            evoDb->WriteBestBlock(pindex->GetBlockHash());
         }
         return true;
     }
@@ -2500,7 +2501,7 @@ static CBlockIndex* AddToBlockIndex(const CBlock& block) EXCLUSIVE_LOCKS_REQUIRE
             // compute and set new V1 stake modifier (entropy bits)
             pindexNew->SetNewStakeModifier();
 
-        } else {
+        } else if (block.IsProofOfStake()) {
             // compute and set new V2 stake modifier (hash of prevout and prevModifier)
             pindexNew->SetNewStakeModifier(block.vtx[1]->vin[0].prevout.hash);
         }

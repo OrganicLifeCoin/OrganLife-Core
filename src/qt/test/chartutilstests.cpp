@@ -78,7 +78,7 @@ void ChartUtilsTests::rewardTypeClassificationIncludesV6CoinbaseMasternodePaymen
     QVERIFY(!IsMasternodeRewardTypeForChart(TransactionRecord::StakeMint));
     QVERIFY(IsMasternodeRewardTypeForChart(TransactionRecord::MNReward));
     QVERIFY(IsMasternodeRewardTypeForChart(TransactionRecord::BudgetPayment));
-    QVERIFY(IsMasternodeRewardTypeForChart(TransactionRecord::Generated));
+    QVERIFY(!IsMasternodeRewardTypeForChart(TransactionRecord::Generated));
 }
 
 void ChartUtilsTests::chartRewardAggregationUsesCopiedRows()
@@ -98,8 +98,7 @@ void ChartUtilsTests::chartRewardAggregationUsesCopiedRows()
     QVERIFY(byMonth.hasMasternodeRewards);
 
     const ChartRewardAggregation byYear = AggregateChartRewards(rows, ChartBucketMode::All);
-    QCOMPARE(byYear.amountsBy.at(2025).first, 0LL);
-    QCOMPARE(byYear.amountsBy.at(2025).second, static_cast<long long>(4 * COIN));
+    QVERIFY(byYear.amountsBy.find(2025) == byYear.amountsBy.end());
     QCOMPARE(byYear.amountsBy.at(2026).first, static_cast<long long>(5 * COIN));
     QCOMPARE(byYear.amountsBy.at(2026).second, static_cast<long long>(5 * COIN));
 }

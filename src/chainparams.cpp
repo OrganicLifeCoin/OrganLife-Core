@@ -278,7 +278,7 @@ public:
         pchMessageStart[1] = 0x2f;
         pchMessageStart[2] = 0x01;
         pchMessageStart[3] = 0x8a;
-        nDefaultPort = 39616;
+        nDefaultPort = 43721;
 
         // Seed nodes (bootstrap). TODO(launch): add OrganicLife seed nodes here,
         // e.g. vSeeds.emplace_back("seed.organiclifecoin.example", true);
@@ -414,9 +414,11 @@ public:
         pchMessageStart[1] = 0xf2;
         pchMessageStart[2] = 0x5f;
         pchMessageStart[3] = 0xe6;
-        nDefaultPort = 49616;
+        nDefaultPort = 49716;
 
-        // Seed nodes (bootstrap). TODO(launch): add OrganicLife testnet seed nodes here.
+        // Seed nodes (bootstrap).
+        vSeeds.emplace_back("2.29.11.56");
+        vSeeds.emplace_back("2.29.14.202");
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 127);   // testnet addresses start with 't'
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 196);   // testnet script addresses start with '2'
@@ -428,8 +430,7 @@ public:
         // Testnet BIP44 coin type is '1' (all coins' testnet default)
         base58Prefixes[EXT_COIN_TYPE] = {0x80, 0x00, 0x00, 0x01};
 
-        // Fixed seeds for OrganicLife testnet
-        // TODO(launch): add fixed seeds once public testnet listeners exist.
+        // Fixed seeds are not needed while the bootstrap peers above are available.
         vFixedSeeds = {};
 
         fRequireStandard = false;

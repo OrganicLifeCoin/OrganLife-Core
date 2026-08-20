@@ -99,7 +99,7 @@ make_zip() {
 copy_windows_installer() {
   local version installer_expected installer_found
   version="$(get_client_package_version "$REPO_ROOT/configure.ac")"
-  installer_expected="organiclife-${version}-win64-setup.exe"
+  installer_expected="OrganicLifeCoin-${version}-win64-setup.exe"
 
   if [ -f "$REPO_ROOT/$installer_expected" ]; then
     installer_found="$REPO_ROOT/$installer_expected"

@@ -6,6 +6,7 @@
 
 #include "wallet/test/wallet_test_fixture.h"
 
+#include "blockassembler.h"
 #include "consensus/merkle.h"
 #include "rpc/server.h"
 #include "util/system.h"
@@ -871,3 +872,32 @@ BOOST_AUTO_TEST_CASE(abandoned_tx_clears_stale_pending_balance)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_CASE(testnet_rescan_handles_null_genesis_sapling_root, TestnetSetup)
+{
+    CKey coinbaseKey;
+    coinbaseKey.MakeNewKey(true);
+    const CScript scriptPubKey = GetScriptForRawPubKey(coinbaseKey.GetPubKey());
+
+    std::unique_ptr<CBlockTemplate> blockTemplate = BlockAssembler(
+            Params(), false).CreateNewBlock(scriptPubKey);
+    BOOST_REQUIRE(blockTemplate);
+
+    std::shared_ptr<CBlock> block = std::make_shared<CBlock>(blockTemplate->block);
+    BOOST_REQUIRE(SolveBlock(block, 1));
+    BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+
+    CWallet wallet("testnet-rescan", WalletDatabase::CreateMock());
+    bool firstRun;
+    BOOST_REQUIRE_EQUAL(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+    {
+        LOCK(wallet.cs_wallet);
+        BOOST_REQUIRE(wallet.AddKeyPubKey(coinbaseKey, coinbaseKey.GetPubKey()));
+    }
+
+    WalletRescanReserver reserver(&wallet);
+    BOOST_REQUIRE(reserver.reserve());
+    CBlockIndex* genesis = WITH_LOCK(cs_main, return chainActive.Genesis());
+    BOOST_REQUIRE(genesis);
+    BOOST_CHECK_EQUAL(nullptr, wallet.ScanForWalletTransactions(genesis, nullptr, reserver));
+}

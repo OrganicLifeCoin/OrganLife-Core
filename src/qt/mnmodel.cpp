@@ -14,6 +14,8 @@
 #include "rpc/rpcevo.h"
 #include "tiertwo/tiertwo_sync_state.h"
 
+#include <univalue.h>
+
 #include <QHostAddress>
 
 MNModel::MNModel(QObject *parent) : QAbstractTableModel(parent) {}
@@ -22,6 +24,7 @@ MNModel::MNModel(QObject *parent) : QAbstractTableModel(parent) {}
 // entry is not (yet) registered.
 static CDeterministicMNCPtr findDMN(const CMasternodeConfig::CMasternodeEntry& mne)
 {
+    if (!deterministicMNManager) return nullptr;
     CService service;
     if (!Lookup(mne.getIp(), service, Params().GetDefaultPort(), false)) return nullptr;
     return deterministicMNManager->GetListAtChainTip().GetMNByService(service);
@@ -189,8 +192,16 @@ bool MNModel::startDMN(const CMasternodeConfig::CMasternodeEntry& mne, std::stri
         if (!StartDeterministicMasternode(*walletModel->getWallet(), mne, txid, strError))
             return false;
         return true;
+    } catch (const UniValue& uv) {
+        // JSONRPCError() throws a UniValue (not a std::exception). Catch it
+        // here so it cannot propagate through the Qt event handler and crash.
+        strError = uv["message"].get_str();
+        return false;
     } catch (const std::exception& e) {
         strError = e.what();
+        return false;
+    } catch (...) {
+        strError = "unknown error during masternode start";
         return false;
     }
 }

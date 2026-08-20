@@ -20,7 +20,7 @@ Mainnet Parameters
 | Genesis timestamp | `2026-08-02 12:00:00 UTC` |
 | Genesis block hash | `0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e` |
 | Address prefixes | P2PKH starts with `o`, script `g`, staking `f` |
-| P2P / RPC ports | `39616` / `39618` (testnet `49616` / `49618`) |
+| P2P / RPC ports | `43721` / `43723` (testnet `49716` / `49718`) |
 | BIP44 coin type | `5150` |
 | Target block spacing | `2 minutes` |
 | Supply cap | `777,777,777 OLC` |

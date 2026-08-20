@@ -96,13 +96,7 @@ MasterNodeWizardDialog::MasterNodeWizardDialog(WalletModel* model, MNModel* _mnM
     initCssEditLine(ui->lineEditPort);
     ui->stackedWidget->setCurrentIndex(pos);
     ui->lineEditPort->setEnabled(false);    // use default port number
-    if (walletModel->isRegTestNetwork()) {
-        ui->lineEditPort->setText("51616");
-    } else if (walletModel->isTestNetwork()) {
-        ui->lineEditPort->setText("41616");
-    } else {
-        ui->lineEditPort->setText("31616");
-    }
+    ui->lineEditPort->setText(QString::number(Params().GetDefaultPort()));
 
     // Confirm icons
     ui->stackedIcon1->addWidget(icConfirm1);
@@ -176,6 +170,19 @@ void MasterNodeWizardDialog::accept()
 }
 
 bool MasterNodeWizardDialog::createMN()
+{
+    try {
+        return createMNInternal();
+    } catch (const std::exception& e) {
+        returnStr = tr("Unexpected error: %1").arg(QString::fromStdString(e.what()));
+        return false;
+    } catch (...) {
+        returnStr = tr("Unexpected error");
+        return false;
+    }
+}
+
+bool MasterNodeWizardDialog::createMNInternal()
 {
     if (!walletModel) {
         returnStr = tr("walletModel not set");

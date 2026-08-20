@@ -67,6 +67,31 @@ int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParam
     return nNewTime - nOldTime;
 }
 
+int64_t GetNextPoSBlockTime(const CBlockIndex* pindexPrev, bool fEnforceFutureDrift)
+{
+    const Consensus::Params& consensus = Params().GetConsensus();
+    const int64_t slotLen = consensus.nTimeSlotLength;
+
+    // A valid TimeV2 block must be timestamped strictly after the parent. Prefer
+    // the current time slot; if it is not past the parent (the parent was
+    // accepted with a near-future timestamp), fall back to the slot right after
+    // the parent, preserving the historical UpdateTime behavior.
+    int64_t nBlockTime = GetCurrentTimeSlot();
+    if (nBlockTime <= pindexPrev->GetBlockTime()) {
+        nBlockTime = GetTimeSlot(pindexPrev->GetBlockTime()) + slotLen;
+    }
+
+    // Off-regtest the fallback slot may be beyond the future-drift limit (e.g.
+    // the strict 14s mainnet drift with a parent timestamped a slot ahead):
+    // minting it would fail validation with "time-too-new" and wedge the stake
+    // minter, stalling the whole network. Wait for the clock to advance instead.
+    // (On regtest future timestamps are allowed and CheckBlockTime is a no-op.)
+    if (fEnforceFutureDrift && nBlockTime > pindexPrev->MaxFutureBlockTime())
+        return 0;
+
+    return nBlockTime;
+}
+
 static CMutableTransaction NewCoinbase(const int nHeight, const CScript* pScriptPubKey = nullptr)
 {
     CMutableTransaction txCoinbase;
@@ -116,6 +141,27 @@ bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet
 
     assert(pindexPrev);
     UpdateTime(pblock, Params().GetConsensus(), pindexPrev);
+
+    // Never search kernel slots in the future. UpdateTime can bump the block
+    // time past the future-drift limit when the parent was accepted with a
+    // near-future timestamp; a block minted on such a slot would be rejected
+    // with "time-too-new". Wait for the clock to advance instead, so the stake
+    // minter cannot wedge permanently and stall the whole network.
+    const bool fEnforceFutureDrift = !Params().IsRegTestNet();
+    const int64_t nPoSBlockTime = GetNextPoSBlockTime(pindexPrev, fEnforceFutureDrift);
+    if (nPoSBlockTime == 0) {
+        LogPrint(BCLog::STAKING, "%s: parent block time %d ahead of current slot %d, waiting\n",
+                 __func__, pindexPrev->GetBlockTime(), GetCurrentTimeSlot());
+        // Signal the miner that the current slot has been considered and is not
+        // usable, so the slot-wait logic sleeps until the next slot instead of
+        // busy-looping over an unusable block time.
+        if (pwallet->pStakerStatus) {
+            pwallet->pStakerStatus->SetLastTip(pindexPrev);
+            pwallet->pStakerStatus->SetLastTime(GetCurrentTimeSlot());
+        }
+        return false;
+    }
+    pblock->nTime = nPoSBlockTime;
     pblock->nBits = GetNextWorkRequired(pindexPrev, pblock);
 
     // Sync wallet before create coinstake

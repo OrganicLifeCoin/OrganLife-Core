@@ -54,8 +54,10 @@ namespace detail {
 // Keep these numeric values aligned with TransactionRecord::Type. The
 // Qt-free unit tests include this header without pulling in Qt types.
 static constexpr int TX_TYPE_GENERATED = 1; // TransactionRecord::Generated
+static constexpr int TX_TYPE_STAKE_MINT = 2; // TransactionRecord::StakeMint
 static constexpr int TX_TYPE_MN_REWARD = 6; // TransactionRecord::MNReward
 static constexpr int TX_TYPE_BUDGET_PAYMENT = 7; // TransactionRecord::BudgetPayment
+static constexpr int TX_TYPE_STAKE_DELEGATED = 9; // TransactionRecord::StakeDelegated
 
 inline int ClampInt(const int value, const int low, const int high)
 {
@@ -180,8 +182,13 @@ inline bool ShouldShowEmptyChart(const bool hasVisibleValues, const bool hasFilt
 inline bool IsMasternodeRewardTypeForChart(const int txType)
 {
     return txType == chart::detail::TX_TYPE_MN_REWARD
-            || txType == chart::detail::TX_TYPE_BUDGET_PAYMENT
-            || txType == chart::detail::TX_TYPE_GENERATED;
+            || txType == chart::detail::TX_TYPE_BUDGET_PAYMENT;
+}
+
+inline bool IsStakingRewardTypeForChart(const int txType)
+{
+    return txType == chart::detail::TX_TYPE_STAKE_MINT
+            || txType == chart::detail::TX_TYPE_STAKE_DELEGATED;
 }
 
 inline int ChartBucketForSample(const ChartStakeSample& sample, const ChartBucketMode mode)
@@ -205,12 +212,14 @@ inline ChartRewardAggregation AggregateChartRewards(const std::vector<ChartStake
         const int bucket = ChartBucketForSample(sample, mode);
         if (bucket <= 0) continue;
 
-        const long long amount = std::llabs(sample.amount);
-        auto& values = result.amountsBy[bucket];
         if (IsMasternodeRewardTypeForChart(sample.txType)) {
+            auto& values = result.amountsBy[bucket];
+            const long long amount = std::llabs(sample.amount);
             values.second += amount;
             result.hasMasternodeRewards = true;
-        } else {
+        } else if (IsStakingRewardTypeForChart(sample.txType)) {
+            auto& values = result.amountsBy[bucket];
+            const long long amount = std::llabs(sample.amount);
             values.first += amount;
         }
     }

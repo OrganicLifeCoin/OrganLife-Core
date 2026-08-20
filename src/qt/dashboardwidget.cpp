@@ -1863,8 +1863,7 @@ void DashboardWidget::onHideChartsChanged(bool fHide)
             stakesFilter->setTypeFilter(TransactionFilterProxy::TYPE(TransactionRecord::StakeMint) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::StakeDelegated) |
                                         TransactionFilterProxy::TYPE(TransactionRecord::MNReward) |
-                                        TransactionFilterProxy::TYPE(TransactionRecord::BudgetPayment) |
-                                        TransactionFilterProxy::TYPE(TransactionRecord::Generated));
+                                        TransactionFilterProxy::TYPE(TransactionRecord::BudgetPayment));
         }
         stakesFilter->setSourceModel(txModel);
         hasStakes = stakesFilter->rowCount() > 0;

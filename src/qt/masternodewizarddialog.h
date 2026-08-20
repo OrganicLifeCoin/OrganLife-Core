@@ -48,6 +48,7 @@ private:
     WalletModel* walletModel{nullptr};
     MNModel* mnModel{nullptr};
     bool createMN();
+    bool createMNInternal();
     void inform(const QString& text);
 };
 

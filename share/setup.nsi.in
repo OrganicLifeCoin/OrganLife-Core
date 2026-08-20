@@ -1,11 +1,11 @@
-Name "@PACKAGE_NAME@ (64-bit)"
+Name "OrganicLifeCoin (64-bit)"
 
 RequestExecutionLevel user
 SetCompressor zlib
 
 # General Symbol Definitions
-!define REGKEY "SOFTWARE\$(^Name)"
-!define COMPANY "@PACKAGE_NAME@ project"
+!define REGKEY "SOFTWARE\OrganicLifeCoin"
+!define COMPANY "OrganicLifeCoin project"
 !define URL @PACKAGE_URL@
 
 # MUI Symbol Definitions
@@ -18,7 +18,7 @@ SetCompressor zlib
 !define MUI_STARTMENUPAGE_REGISTRY_ROOT HKCU
 !define MUI_STARTMENUPAGE_REGISTRY_KEY ${REGKEY}
 !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME StartMenuGroup
-!define MUI_STARTMENUPAGE_DEFAULTFOLDER "@PACKAGE_NAME@"
+!define MUI_STARTMENUPAGE_DEFAULTFOLDER "OrganicLifeCoin"
 !define MUI_FINISHPAGE_RUN $INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@
 !define MUI_UNICON "@abs_top_srcdir@/share/pixmaps/organiclife.ico"
 !define MUI_UNWELCOMEFINISHPAGE_BITMAP "@abs_top_srcdir@/share/pixmaps/nsis-wizard.bmp"
@@ -45,20 +45,20 @@ Var StartMenuGroup
 !insertmacro MUI_LANGUAGE English
 
 # Installer attributes
-OutFile @abs_top_srcdir@/@PACKAGE_TARNAME@-@PACKAGE_VERSION@-win64-setup.exe
-InstallDir $LOCALAPPDATA\OrganicLife
+OutFile @abs_top_srcdir@/OrganicLifeCoin-@PACKAGE_VERSION@-win64-setup.exe
+InstallDir $LOCALAPPDATA\OrganicLifeCoin
 CRCCheck on
 XPStyle on
 BrandingText " "
 ShowInstDetails show
 VIProductVersion @CLIENT_VERSION_MAJOR@.@CLIENT_VERSION_MINOR@.@CLIENT_VERSION_REVISION@.@CLIENT_VERSION_BUILD@
-VIAddVersionKey ProductName "@PACKAGE_NAME@"
+VIAddVersionKey ProductName "OrganicLifeCoin"
 VIAddVersionKey ProductVersion "@PACKAGE_VERSION@"
 VIAddVersionKey CompanyName "${COMPANY}"
 VIAddVersionKey CompanyWebsite "${URL}"
 VIAddVersionKey FileVersion "@PACKAGE_VERSION@"
-VIAddVersionKey FileDescription "Installer for @PACKAGE_NAME@"
-VIAddVersionKey LegalCopyright "Copyright (C) 2015-@COPYRIGHT_YEAR@ The OrganicLife Coin developers"
+VIAddVersionKey FileDescription "Installer for OrganicLifeCoin"
+VIAddVersionKey LegalCopyright "Copyright (C) 2015-@COPYRIGHT_YEAR@ The OrganicLifeCoin developers"
 InstallDirRegKey HKCU "${REGKEY}" Path
 ShowUninstDetails show
 
@@ -74,7 +74,7 @@ Section -Main SEC0000
     File @abs_top_srcdir@/release/@BITCOIN_CLI_NAME@@EXEEXT@
     SetOutPath $INSTDIR\doc
     File /r @abs_top_srcdir@/doc\*.*
-    SetOutPath $APPDATA\OrganicLifeParams
+    SetOutPath $APPDATA\OrganicLifeCoinParams
     File @abs_top_srcdir@/params/sapling-output.params
     File @abs_top_srcdir@/params/sapling-spend.params
     SetOutPath $INSTDIR
@@ -88,7 +88,7 @@ Section -post SEC0001
     !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory $SMPROGRAMS\$StartMenuGroup
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\$(^Name).lnk" $INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@
-    CreateShortcut "$SMPROGRAMS\$StartMenuGroup\@PACKAGE_NAME@ (testnet, 64-bit).lnk" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "-testnet" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" 1
+    CreateShortcut "$SMPROGRAMS\$StartMenuGroup\OrganicLifeCoin (testnet, 64-bit).lnk" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "-testnet" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" 1
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\Uninstall $(^Name).lnk" $INSTDIR\uninstall.exe
     !insertmacro MUI_STARTMENU_WRITE_END
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" DisplayName "$(^Name)"
@@ -100,7 +100,7 @@ Section -post SEC0001
     WriteRegDWORD HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" NoModify 1
     WriteRegDWORD HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" NoRepair 1
     WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@" "URL Protocol" ""
-    WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@" "" "URL:OrganicLife"
+    WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@" "" "URL:OrganicLifeCoin"
     WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@\DefaultIcon" "" $INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@
     WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@\shell\open\command" "" '"$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "%1"'
 SectionEnd
@@ -132,8 +132,8 @@ Section -un.post UNSEC0001
     DeleteRegKey HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)"
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\Uninstall $(^Name).lnk"
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\$(^Name).lnk"
-    Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\@PACKAGE_NAME@ (testnet, 64-bit).lnk"
-    Delete /REBOOTOK "$SMSTARTUP\OrganicLife.lnk"
+    Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\OrganicLifeCoin (testnet, 64-bit).lnk"
+    Delete /REBOOTOK "$SMSTARTUP\OrganicLifeCoin.lnk"
     Delete /REBOOTOK $INSTDIR\uninstall.exe
     Delete /REBOOTOK $INSTDIR\debug.log
     Delete /REBOOTOK $INSTDIR\db.log
