@@ -27,6 +27,7 @@
 #include <QKeyEvent>
 #include <QMenu>
 #include <QScrollBar>
+#include <QSignalBlocker>
 #include <QThread>
 #include <QTime>
 #include <QStringList>
@@ -73,8 +74,12 @@ const struct {
     {"misc", ":/icons/tx_inout"},
     {nullptr, nullptr}};
 
-RPCConsole::RPCConsole(QWidget* parent) : QDialog(parent, Qt::WindowSystemMenuHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint),
+RPCConsole::RPCConsole(QWidget* parent, ViewMode mode) : QDialog(parent, Qt::WindowSystemMenuHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint),
                                           ui(new Ui::RPCConsole),
+                                          viewMode(mode),
+                                          geometryKey(mode == ViewMode::PeersAndConsole
+                                                          ? QStringLiteral("nFocusedNetworkDialogWindow")
+                                                          : QStringLiteral("nRPCConsoleWindow")),
                                           clientModel(nullptr),
                                           walletModel(nullptr),
                                           historyPtr(0),
@@ -83,7 +88,10 @@ RPCConsole::RPCConsole(QWidget* parent) : QDialog(parent, Qt::WindowSystemMenuHi
                                           banTableContextMenu(nullptr)
 {
     ui->setupUi(this);
-    GUIUtil::restoreWindowGeometry("nRPCConsoleWindow", this->size(), this);
+    if (viewMode == ViewMode::PeersAndConsole) {
+        configureFocusedNetworkMode();
+    }
+    GUIUtil::restoreWindowGeometry(geometryKey, this->size(), this);
 
 #ifndef Q_OS_MAC
     ui->openDebugLogfileButton->setIcon(QIcon(":/icons/export"));
@@ -129,11 +137,42 @@ RPCConsole::RPCConsole(QWidget* parent) : QDialog(parent, Qt::WindowSystemMenuHi
 
 RPCConsole::~RPCConsole()
 {
-    GUIUtil::saveWindowGeometry("nRPCConsoleWindow", this);
+    GUIUtil::saveWindowGeometry(geometryKey, this);
     Q_EMIT stopExecutor();
     RPCUnsetTimerInterface(rpcTimerInterface);
     delete rpcTimerInterface;
     delete ui;
+}
+
+void RPCConsole::configureFocusedNetworkMode()
+{
+    setObjectName(QStringLiteral("focusedNetworkDialog"));
+    setProperty("designRole", QStringLiteral("focused-network-dialog"));
+    setWindowTitle(tr("Network peers and console"));
+    setMinimumSize(760, 520);
+    resize(900, 600);
+
+    if (layout()) {
+        layout()->setContentsMargins(18, 18, 18, 18);
+        layout()->setSpacing(12);
+    }
+
+    {
+        const QSignalBlocker blocker(ui->tabWidget);
+        ui->tabWidget->clear();
+        ui->tabWidget->addTab(ui->tab_peers, tr("Peers"));
+        ui->tabWidget->addTab(ui->tab_console, tr("Console"));
+        ui->tabWidget->setCurrentWidget(ui->tab_peers);
+    }
+    ui->tabWidget->setProperty("designRole", QStringLiteral("network-tools-tabs"));
+    ui->peerWidget->setProperty("designRole", QStringLiteral("network-peers-table"));
+    ui->messagesWidget->setProperty("designRole", QStringLiteral("network-console-output"));
+    ui->lineEdit->setProperty("designRole", QStringLiteral("network-console-input"));
+    ui->clearButton->setProperty("designRole", QStringLiteral("network-console-clear"));
+    ui->clearButton->setIcon(QIcon());
+    ui->clearButton->setText(tr("Clear"));
+    ui->clearButton->setMinimumSize(72, 40);
+    ui->clearButton->setMaximumSize(QWIDGETSIZE_MAX, 40);
 }
 
 bool RPCConsole::eventFilter(QObject* obj, QEvent* event)
@@ -650,31 +689,31 @@ void RPCConsole::updateTrafficStats(quint64 totalBytesIn, quint64 totalBytesOut)
 
 void RPCConsole::showInfo()
 {
-    ui->tabWidget->setCurrentIndex(0);
+    ui->tabWidget->setCurrentWidget(ui->tab_info);
     show();
 }
 
 void RPCConsole::showConsole()
 {
-    ui->tabWidget->setCurrentIndex(1);
+    ui->tabWidget->setCurrentWidget(ui->tab_console);
     show();
 }
 
 void RPCConsole::showNetwork()
 {
-    ui->tabWidget->setCurrentIndex(2);
+    ui->tabWidget->setCurrentWidget(ui->tab_nettraffic);
     show();
 }
 
 void RPCConsole::showPeers()
 {
-    ui->tabWidget->setCurrentIndex(3);
+    ui->tabWidget->setCurrentWidget(ui->tab_peers);
     show();
 }
 
 void RPCConsole::showRepair()
 {
-    ui->tabWidget->setCurrentIndex(4);
+    ui->tabWidget->setCurrentWidget(ui->tab_repair);
     show();
 }
 

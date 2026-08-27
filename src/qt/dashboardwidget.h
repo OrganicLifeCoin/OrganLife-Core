@@ -133,6 +133,9 @@ public Q_SLOTS:
 Q_SIGNALS:
     /** Notify that a new transaction appeared */
     void incomingTransaction(const QString& date, int unit, const CAmount& amount, const QString& type, const QString& address);
+    void networkToolsRequested();
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 private Q_SLOTS:
     void handleTransactionClicked(const QModelIndex &index);
     void changeTheme(bool isLightTheme, QString &theme) override;

@@ -287,6 +287,7 @@ void OrganicLifeGUI::connectActions()
     connect(navMenu, &NavMenuWidget::walletLockRequested, topBar, &TopBar::toggleWalletLock);
     connect(navMenu, &NavMenuWidget::walletSelectorRequested, topBar, &TopBar::showWalletSelector);
     connect(topBar, &TopBar::connectionCountChanged, dashboard, &DashboardWidget::setNumConnections);
+    connect(dashboard, &DashboardWidget::networkToolsRequested, this, &OrganicLifeGUI::openNetworkMonitor);
     connect(topBar, &TopBar::stakingStatusChanged, dashboard, &DashboardWidget::setStakingStatusActive);
     connect(topBar, &TopBar::blockHeightChanged, dashboard, &DashboardWidget::setBlockHeight);
     connect(topBar, &TopBar::onShowHideColdStakingChanged, navMenu, &NavMenuWidget::onShowHideColdStakingChanged);
@@ -657,7 +658,18 @@ void OrganicLifeGUI::goToReceive()
 
 void OrganicLifeGUI::openNetworkMonitor()
 {
-    settingsWidget->openNetworkMonitor();
+    if (!rpcConsole) {
+        rpcConsole = new RPCConsole(this, RPCConsole::ViewMode::PeersAndConsole);
+        rpcConsole->setStyleSheet(styleSheet());
+        rpcConsole->setClientModel(clientModel);
+#ifdef ENABLE_WALLET
+        rpcConsole->setWalletModel(currentWalletModel());
+#endif
+        connect(rpcConsole, &RPCConsole::handleRestart, this, &OrganicLifeGUI::handleRestart);
+    }
+    rpcConsole->showPeers();
+    rpcConsole->raise();
+    rpcConsole->activateWindow();
 }
 
 void OrganicLifeGUI::showTop(QWidget* view)

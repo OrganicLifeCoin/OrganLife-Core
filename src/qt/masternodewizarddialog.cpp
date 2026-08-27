@@ -15,6 +15,7 @@
 
 #include <QLabel>
 #include <QRegularExpression>
+#include <algorithm>
 
 static inline QString formatParagraph(const QString& str) {
     return "<p align=\"justify\" style=\"text-align:center;\">" + str + "</p>";
@@ -55,6 +56,14 @@ MasterNodeWizardDialog::MasterNodeWizardDialog(WalletModel* model, MNModel* _mnM
     setCssProperty({ui->groupBoxName, ui->groupContainer}, "container-border");
     setCssProperty({ui->pushNumber1, ui->pushNumber3, ui->pushNumber4}, "btn-number-check");
     setCssProperty({ui->pushName1, ui->pushName3, ui->pushName4}, "btn-name-check");
+    setMinimumWidth(760);
+    ensurePolished();
+    for (QPushButton* stepLabel : {ui->pushName1, ui->pushName3, ui->pushName4}) {
+        const int labelWidth = stepLabel->fontMetrics().horizontalAdvance(stepLabel->text()) + 32;
+        stepLabel->setMinimumWidth(std::max(112, labelWidth));
+        stepLabel->setMaximumWidth(QWIDGETSIZE_MAX);
+        stepLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    }
 
     ui->pushNumber1->setEnabled(false);
     ui->pushNumber3->setEnabled(false);
@@ -122,6 +131,7 @@ MasterNodeWizardDialog::MasterNodeWizardDialog(WalletModel* model, MNModel* _mnM
 
 void MasterNodeWizardDialog::showEvent(QShowEvent *event)
 {
+    FocusedDialog::showEvent(event);
     if (ui->btnNext) ui->btnNext->setFocus();
 }
 

@@ -29,6 +29,8 @@
 #include <QPainter>
 #include <QPropertyAnimation>
 #include <QCursor>
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QThread>
@@ -509,6 +511,13 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     syncLayout->addWidget(syncDivider);
     syncLayout->addWidget(dashboardBlockHeight);
     ApplyStatusState(dashboardSyncBadge, QStringLiteral("neutral"));
+    dashboardConnectionBadge->setCursor(Qt::PointingHandCursor);
+    dashboardConnectionBadge->setFocusPolicy(Qt::TabFocus);
+    dashboardConnectionBadge->setAccessibleName(tr("Network connections"));
+    dashboardConnectionBadge->setAccessibleDescription(tr("Open peers and debug console"));
+    dashboardConnectionBadge->installEventFilter(this);
+    dashboardConnectionIcon->installEventFilter(this);
+    dashboardConnectionStatus->installEventFilter(this);
     setNumConnections(0);
     setStakingStatusActive(false);
     balanceColumn->addWidget(statusCluster, 0, Qt::AlignRight);
@@ -760,6 +769,29 @@ bool hasCharts = false;
         ui->labelEmptyChart->setText(tr("No charts library"));
     }
     setTransactionsOnly(false);
+}
+
+bool DashboardWidget::eventFilter(QObject* watched, QEvent* event)
+{
+    auto* watchedWidget = qobject_cast<QWidget*>(watched);
+    const bool connectionBadgeTarget = watched == dashboardConnectionBadge ||
+                                       (dashboardConnectionBadge && watchedWidget && dashboardConnectionBadge->isAncestorOf(watchedWidget));
+    if (connectionBadgeTarget && event) {
+        if (event->type() == QEvent::MouseButtonRelease) {
+            const auto* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->button() == Qt::LeftButton) {
+                Q_EMIT networkToolsRequested();
+                return true;
+            }
+        } else if (event->type() == QEvent::KeyPress) {
+            const auto* keyEvent = static_cast<QKeyEvent*>(event);
+            if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter || keyEvent->key() == Qt::Key_Space) {
+                Q_EMIT networkToolsRequested();
+                return true;
+            }
+        }
+    }
+    return PWidget::eventFilter(watched, event);
 }
 
 void DashboardWidget::setTransactionsOnly(bool showTransactionsOnly)

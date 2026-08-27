@@ -17,6 +17,7 @@
 #include "governancewidget.h"
 #include "guiutil.h"
 #include "loadingdialog.h"
+#include "masternodewizarddialog.h"
 #include "masternodeswidget.h"
 #include "mnmodel.h"
 #include "networkstyle.h"
@@ -3878,7 +3879,7 @@ void GovernanceDialogTests::governanceHeaderCtaUsesInsetContentPadding()
 
     const QStringList requiredSnippets = {
         QStringLiteral("findChild<QWidget*>(\"layoutOptions2\")"),
-        QStringLiteral("setContentsMargins(12, 6, 8, 6)")
+        QStringLiteral("setContentsMargins(16, 12, 12, 12)")
     };
 
     for (const QString& snippet : requiredSnippets) {
@@ -4074,38 +4075,94 @@ void GovernanceDialogTests::governanceHeaderBandAvoidsSeparateWarningFillAndReac
              "Dark theme should not define a separate governance band-fill background");
 }
 
-void GovernanceDialogTests::governanceHeaderCtaMatchesHeaderHeight()
+void GovernanceDialogTests::governanceCreateProposalMatchesRailActionHeight()
 {
-    QFile uiFile(resolveQtSourceFile("forms/governancewidget.ui"));
-    QVERIFY2(uiFile.open(QIODevice::ReadOnly | QIODevice::Text), "Failed to open governancewidget.ui");
-    const QString uiSource = QString::fromUtf8(uiFile.readAll());
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
 
-    const int headerStart = uiSource.indexOf(QStringLiteral("<widget class=\"QWidget\" name=\"containerTitles\""));
-    QVERIFY(headerStart >= 0);
-    if (headerStart < 0) {
-        QFAIL("Governance header band widget not found");
-        return;
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    GovernanceWidget widget(&mainWindow);
+    auto* createProposal = widget.findChild<OptionButton*>("btnCreateProposal");
+    QVERIFY(createProposal != nullptr);
+    if (!createProposal) return;
+
+    QCOMPARE(createProposal->minimumHeight(), 96);
+    QCOMPARE(createProposal->maximumHeight(), 96);
+    QCOMPARE(createProposal->property("controlRole").toString(), QStringLiteral("side-action"));
+}
+
+void GovernanceDialogTests::mainScreensExposeSharedContentCardRoles()
+{
+    const struct ScreenExpectation {
+        QString path;
+        QStringList widgetExpressions;
+    } expectations[] = {
+        {QStringLiteral("send.cpp"), {QStringLiteral("recipientFormCard")}},
+        {QStringLiteral("receivewidget.cpp"), {QStringLiteral("ui->layoutQR")}},
+        {QStringLiteral("addresseswidget.cpp"), {QStringLiteral("ui->listAddresses"), QStringLiteral("ui->emptyContainer")}},
+        {QStringLiteral("masternodeswidget.cpp"), {QStringLiteral("ui->listMn"), QStringLiteral("ui->emptyContainer")}},
+        {QStringLiteral("governancewidget.cpp"), {QStringLiteral("ui->mainContainer"), QStringLiteral("ui->emptyContainer")}},
+        {QStringLiteral("settings/settingswidget.cpp"), {QStringLiteral("ui->stackedWidgetContainer")}}
+    };
+
+    for (const auto& expectation : expectations) {
+        QFile file(resolveQtSourceFile(expectation.path));
+        QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(expectation.path));
+        const QString source = QString::fromUtf8(file.readAll());
+        for (const QString& widgetExpression : expectation.widgetExpressions) {
+            const QString assignment = QStringLiteral("%1->setProperty(\"designRole\", QStringLiteral(\"content-card\"))")
+                                           .arg(widgetExpression);
+            QVERIFY2(source.contains(assignment),
+                     qPrintable(QString("%1 must assign the shared content-card role to %2")
+                                    .arg(expectation.path, widgetExpression)));
+        }
     }
-    const QString headerSlice = uiSource.mid(headerStart, 900);
-    const QRegularExpression headerMinHeightRe(
-            QStringLiteral(R"(<property name=\"minimumSize\">\s*<size>\s*<width>0</width>\s*<height>64</height>)"),
-            QRegularExpression::DotMatchesEverythingOption);
-    QVERIFY2(headerMinHeightRe.match(headerSlice).hasMatch(),
-             "Governance header band should keep its compact 64px minimum height");
 
-    const int ctaStart = uiSource.indexOf(QStringLiteral("<widget class=\"OptionButton\" name=\"btnCreateProposal\""));
-    QVERIFY(ctaStart >= 0);
-    if (ctaStart < 0) {
-        QFAIL("Create Proposal CTA widget not found");
-        return;
+    for (const QString& cssPath : {QStringLiteral("res/css/style_light.css"),
+                                   QStringLiteral("res/css/style_dark.css")}) {
+        QFile file(resolveQtSourceFile(cssPath));
+        QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(cssPath));
+        const QString css = QString::fromUtf8(file.readAll());
+        QVERIFY2(css.contains(QStringLiteral("*[designRole=\"content-card\"]")),
+                 qPrintable(cssPath + QStringLiteral(" must style the shared content-card role")));
     }
+}
 
-    const QString ctaSlice = uiSource.mid(ctaStart, 900);
-    const QRegularExpression minHeightRe(
-            QStringLiteral(R"(<property name=\"minimumSize\">\s*<size>\s*<width>0</width>\s*<height>64</height>)"),
-            QRegularExpression::DotMatchesEverythingOption);
-    QVERIFY2(minHeightRe.match(ctaSlice).hasMatch(),
-             "Create Proposal CTA should match the compact 64px governance header height");
+void GovernanceDialogTests::dashboardConnectionBadgeOpensFocusedPeersConsole()
+{
+    QFile dashboardHeaderFile(resolveQtSourceFile("dashboardwidget.h"));
+    QFile dashboardSourceFile(resolveQtSourceFile("dashboardwidget.cpp"));
+    QFile guiSourceFile(resolveQtSourceFile("organiclifegui.cpp"));
+    QFile consoleHeaderFile(resolveQtSourceFile("rpcconsole.h"));
+    QFile consoleSourceFile(resolveQtSourceFile("rpcconsole.cpp"));
+    QVERIFY(dashboardHeaderFile.open(QIODevice::ReadOnly | QIODevice::Text));
+    QVERIFY(dashboardSourceFile.open(QIODevice::ReadOnly | QIODevice::Text));
+    QVERIFY(guiSourceFile.open(QIODevice::ReadOnly | QIODevice::Text));
+    QVERIFY(consoleHeaderFile.open(QIODevice::ReadOnly | QIODevice::Text));
+    QVERIFY(consoleSourceFile.open(QIODevice::ReadOnly | QIODevice::Text));
+
+    const QString dashboardHeader = QString::fromUtf8(dashboardHeaderFile.readAll());
+    const QString dashboardSource = QString::fromUtf8(dashboardSourceFile.readAll());
+    const QString guiSource = QString::fromUtf8(guiSourceFile.readAll());
+    const QString consoleHeader = QString::fromUtf8(consoleHeaderFile.readAll());
+    const QString consoleSource = QString::fromUtf8(consoleSourceFile.readAll());
+
+    QVERIFY2(dashboardHeader.contains(QStringLiteral("void networkToolsRequested();")),
+             "Dashboard must expose an interaction from its connection badge");
+    QVERIFY2(dashboardSource.contains(QStringLiteral("Q_EMIT networkToolsRequested();")),
+             "Clicking the connection badge must request the focused network tools");
+    QVERIFY2(guiSource.contains(QStringLiteral("&DashboardWidget::networkToolsRequested")) &&
+                 guiSource.contains(QStringLiteral("&OrganicLifeGUI::openNetworkMonitor")),
+             "The dashboard connection badge must be wired to the network dialog");
+    QVERIFY2(consoleHeader.contains(QStringLiteral("PeersAndConsole")),
+             "RPCConsole must expose a focused Peers/Console presentation mode");
+    QVERIFY2(consoleSource.contains(QStringLiteral("ui->tab_peers")) &&
+                 consoleSource.contains(QStringLiteral("ui->tab_console")) &&
+                 consoleSource.contains(QStringLiteral("focused-network-dialog")),
+             "Focused network tools must retain only Peers and Console and use dedicated styling");
+    QVERIFY2(consoleSource.contains(QStringLiteral("QSignalBlocker blocker(ui->tabWidget)")),
+             "Focused network setup must suppress transient tab-change signals while rebuilding tabs");
 }
 
 void GovernanceDialogTests::governanceWarningBandUsesRoundedBorderInBothThemes()
@@ -4376,7 +4433,7 @@ void GovernanceDialogTests::mainScreenWidgetsRemoveOuterHeaderInsets()
         QString path;
         QString snippet;
     } expectations[] = {
-        {QStringLiteral("send.cpp"), QStringLiteral("ui->left->setContentsMargins(0,0,0,20);")},
+        {QStringLiteral("send.cpp"), QStringLiteral("ui->left->setContentsMargins(0, 0, 0, 0);")},
         {QStringLiteral("receivewidget.cpp"), QStringLiteral("ui->left->setContentsMargins(0,0,0,20);")},
         {QStringLiteral("addresseswidget.cpp"), QStringLiteral("ui->left->setContentsMargins(0,0,0,20);")},
         {QStringLiteral("masternodeswidget.cpp"), QStringLiteral("ui->left->setContentsMargins(0,0,0,20);")},
@@ -5585,6 +5642,66 @@ void GovernanceDialogTests::createProposalDialogHasComfortableMinimumWidthForSte
              "Create proposal dialog should open wide enough to avoid clipping top step header");
 }
 
+void GovernanceDialogTests::masternodeWizardStepLabelsDoNotClipWithScaledFonts()
+{
+    const QFont originalAppFont = QApplication::font();
+    struct FontRestorer {
+        QFont font;
+        ~FontRestorer() { QApplication::setFont(font); }
+    } restorer{originalAppFont};
+
+    QFont scaledFont = originalAppFont;
+    const qreal basePointSize = originalAppFont.pointSizeF() > 0.0 ? originalAppFont.pointSizeF() : 10.0;
+    scaledFont.setPointSizeF(basePointSize * 1.25);
+    QApplication::setFont(scaledFont);
+
+    MNModel mnModel(nullptr);
+    MasterNodeWizardDialog dialog(nullptr, &mnModel);
+    dialog.show();
+    QTest::qWait(40);
+    QCoreApplication::processEvents();
+
+    for (const QString& objectName : {QStringLiteral("pushName1"),
+                                      QStringLiteral("pushName3"),
+                                      QStringLiteral("pushName4")}) {
+        auto* stepButton = dialog.findChild<QPushButton*>(objectName);
+        QVERIFY2(stepButton != nullptr, qPrintable(QString("Missing %1").arg(objectName)));
+        if (!stepButton) continue;
+
+        const int comfortableTextWidth = stepButton->fontMetrics().horizontalAdvance(stepButton->text()) + 32;
+        QVERIFY2(stepButton->width() >= comfortableTextWidth,
+                 qPrintable(QString("%1 clips its label (width=%2 required=%3)")
+                                .arg(objectName)
+                                .arg(stepButton->width())
+                                .arg(comfortableTextWidth)));
+    }
+
+    auto* nextButton = dialog.findChild<QPushButton*>("btnNext");
+    auto* backButton = dialog.findChild<QPushButton*>("btnBack");
+    QVERIFY(nextButton != nullptr);
+    QVERIFY(backButton != nullptr);
+    if (nextButton && backButton) {
+        QVERIFY(nextButton->minimumHeight() >= 44);
+        QVERIFY(backButton->minimumHeight() >= 44);
+    }
+}
+
+void GovernanceDialogTests::masternodeWizardUsesSharedBaseShowEvent()
+{
+    QFile sourceFile(resolveQtSourceFile("masternodewizarddialog.cpp"));
+    QVERIFY(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString source = QString::fromUtf8(sourceFile.readAll());
+    const int showStart = source.indexOf(QStringLiteral("void MasterNodeWizardDialog::showEvent"));
+    const int acceptStart = source.indexOf(QStringLiteral("void MasterNodeWizardDialog::accept"), showStart);
+    QVERIFY(showStart >= 0);
+    QVERIFY(acceptStart > showStart);
+    if (showStart < 0 || acceptStart <= showStart) return;
+
+    const QString showBody = source.mid(showStart, acceptStart - showStart);
+    QVERIFY2(showBody.contains(QStringLiteral("FocusedDialog::showEvent(event);")),
+             "Masternode wizard must preserve shared dialog centering, icon resolution, and focus handling");
+}
+
 void GovernanceDialogTests::txDetailDialogCentersOnParentWindow()
 {
     QWidget parent;
@@ -5758,6 +5875,60 @@ void GovernanceDialogTests::txDetailDialogConflictActionResolutionRules()
              TxDetailDialog::ConflictAction::HideFromHistory);
     QCOMPARE(TxDetailDialog::resolveConflictAction(TransactionStatus::Confirmed, false, false),
              TxDetailDialog::ConflictAction::None);
+}
+
+void GovernanceDialogTests::sendRecipientFieldsStayInsideFormCard()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    SendWidget widget(&mainWindow);
+    QWidget* formCard = widget.findChild<QWidget*>("recipientFormCard");
+    QLabel* addressLabel = widget.findChild<QLabel*>("labelSubtitleAddress");
+    QScrollArea* recipientRows = widget.findChild<QScrollArea*>("scrollArea");
+    QVERIFY(formCard != nullptr);
+    QVERIFY(addressLabel != nullptr);
+    QVERIFY(recipientRows != nullptr);
+    if (!formCard || !addressLabel || !recipientRows) return;
+
+    QVERIFY(formCard->isAncestorOf(addressLabel));
+    QVERIFY(formCard->isAncestorOf(recipientRows));
+    QCOMPARE(formCard->property("designRole").toString(), QStringLiteral("content-card"));
+    QCOMPARE(recipientRows->property("designRole").toString(), QStringLiteral("content-card-body"));
+    QVERIFY(formCard->layout() != nullptr);
+    QCOMPARE(formCard->layout()->spacing(), 12);
+    QVERIFY(recipientRows->widget() != nullptr);
+    QVERIFY(recipientRows->widget()->layout() != nullptr);
+    QCOMPARE(recipientRows->widget()->layout()->contentsMargins().top(), 8);
+}
+
+void GovernanceDialogTests::sendScreenUsesAlignedOuterGrid()
+{
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle != nullptr);
+    if (!networkStyle) return;
+
+    OrganicLifeGUI mainWindow(networkStyle.get(), nullptr);
+    SendWidget widget(&mainWindow);
+    widget.resize(1280, 720);
+    widget.show();
+    QTest::qWait(20);
+    QCoreApplication::processEvents();
+
+    QWidget* header = widget.findChild<QWidget*>("containerHeader");
+    QWidget* firstSideAction = widget.findChild<QWidget*>("btnCoinControl");
+    QLayout* outerLayout = widget.findChild<QLayout*>("horizontalLayout_2");
+    QVERIFY(header != nullptr);
+    QVERIFY(firstSideAction != nullptr);
+    QVERIFY(outerLayout != nullptr);
+    if (!header || !firstSideAction || !outerLayout) return;
+
+    QCOMPARE(header->mapTo(&widget, QPoint(0, 0)).y(),
+             firstSideAction->mapTo(&widget, QPoint(0, 0)).y());
+    QCOMPARE(outerLayout->contentsMargins(), QMargins(16, 16, 16, 16));
+    QCOMPARE(outerLayout->spacing(), 12);
 }
 
 void GovernanceDialogTests::sendWidgetRecoveryRulesForFailedBroadcast()

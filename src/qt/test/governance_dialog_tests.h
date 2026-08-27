@@ -111,19 +111,21 @@ private Q_SLOTS:
     void governanceHeaderCtaHasHoverTreatmentInBothThemes();
     void governanceHeaderCtaHoverStateTogglesInnerPanelProperty();
     void governanceHeaderBandAvoidsSeparateWarningFillAndReachesLeftEdge();
-    void governanceHeaderCtaMatchesHeaderHeight();
+    void governanceCreateProposalMatchesRailActionHeight();
     void governanceWarningBandUsesRoundedBorderInBothThemes();
     void governanceDashboardShellUsesSubtleDarkBorder();
     void mainScreenUiFormsUsePremiumHeaderContainers();
     void mainScreenWidgetsUseSharedPremiumHeaderClasses();
     void mainScreenPremiumHeaderStylesExistInBothThemes();
     void mainScreenWidgetsUseSharedPremiumRailClasses();
+    void dashboardConnectionBadgeOpensFocusedPeersConsole();
     void mainScreenPremiumRailStylesExistInBothThemes();
     void mainScreenWidgetsNormalizePremiumRailGutters();
     void premiumRailOptionTilesUseTallerSizingContract();
     void mainScreenWidgetsRemoveOuterHeaderInsets();
     void premiumRailOptionTilesWrapTextAndUseTighterStackSpacing();
     void premiumRailOptionTilesUseCtaStyleArrowChrome();
+    void mainScreensExposeSharedContentCardRoles();
     void qtStartupKeepsQt5HighDpiAttributes();
     void premiumHeadersRemainExpandableWithScaledFonts();
     void walletShellKeepsBrandIslandOutsideNavigation();
@@ -200,6 +202,8 @@ private Q_SLOTS:
     void proposalInfoDialogShowsCoinVoteTotals();
     void transactionRecordHandlesMalformedProposalMetadata();
     void createProposalDialogHasComfortableMinimumWidthForStepHeader();
+    void masternodeWizardStepLabelsDoNotClipWithScaledFonts();
+    void masternodeWizardUsesSharedBaseShowEvent();
     void txDetailDialogCentersOnParentWindow();
     void txDetailDialogUsesSharedDraggableHeaderChrome();
     void txDetailDialogCloseIconIsResolvedAtRuntime();
@@ -208,6 +212,8 @@ private Q_SLOTS:
     void txDetailDialogExposesAbandonActionPlaceholder();
     void txDetailDialogConflictActionVisibilityRules();
     void txDetailDialogConflictActionResolutionRules();
+    void sendRecipientFieldsStayInsideFormCard();
+    void sendScreenUsesAlignedOuterGrid();
     void sendWidgetRecoveryRulesForFailedBroadcast();
 };
 

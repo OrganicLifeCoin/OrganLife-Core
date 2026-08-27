@@ -5689,6 +5689,69 @@ QToolButton[cssClass="nav-utility-button"]:checked { color: #F3F1E8; }
     background-color: #0D1512;
     border: 0;
 }
+*[designRole="content-card"] {
+    background-color: #121F1A;
+    border: 1px solid #2B3D34;
+    border-radius: 16px;
+}
+*[designRole="content-card-body"] {
+    background-color: #121F1A;
+    border: 0;
+}
+QStackedWidget[designRole="content-card"] QWidget[designRole="settings-content-page"],
+QStackedWidget[designRole="content-card"] QWidget[cssClass="container"] {
+    background-color: #121F1A;
+    border: 0;
+}
+QDialog[designRole="focused-network-dialog"] {
+    background-color: #0D1512;
+    color: #F3F1E8;
+}
+QDialog[designRole="focused-network-dialog"] QTabWidget[designRole="network-tools-tabs"]::pane {
+    background-color: #121F1A;
+    border: 1px solid #2B3D34;
+    border-radius: 16px;
+    top: -1px;
+}
+QDialog[designRole="focused-network-dialog"] QTabBar::tab {
+    min-width: 108px;
+    min-height: 38px;
+    padding: 0 16px;
+    margin-right: 6px;
+    color: #A9B0A9;
+    background-color: #16251E;
+    border: 1px solid #2B3D34;
+    border-radius: 10px;
+}
+QDialog[designRole="focused-network-dialog"] QTabBar::tab:selected {
+    color: #FFFFFF;
+    background-color: #3C812B;
+    border-color: #5D913F;
+}
+QDialog[designRole="focused-network-dialog"] QTableView[designRole="network-peers-table"],
+QDialog[designRole="focused-network-dialog"] QTextEdit[designRole="network-console-output"],
+QDialog[designRole="focused-network-dialog"] QLineEdit[designRole="network-console-input"] {
+    color: #F3F1E8;
+    background-color: #101B16;
+    border: 1px solid #2B3D34;
+    border-radius: 10px;
+    selection-background-color: #527344;
+}
+QDialog[designRole="focused-network-dialog"] QPushButton[designRole="network-console-clear"] {
+    color: #DDE7D8;
+    background-color: #1C3026;
+    border: 1px solid #3B5547;
+    border-radius: 9px;
+    font-weight: 600;
+}
+QScrollArea[designRole="content-card"] QWidget#qt_scrollarea_viewport {
+    background-color: #121F1A;
+    border: 0;
+}
+QScrollArea[designRole="content-card-body"] QWidget#qt_scrollarea_viewport {
+    background-color: #121F1A;
+    border: 0;
+}
 *[cssClass="screen-main-surface"] *[cssClass="screen-header-band"],
 *[cssClass="screen-header-band"] {
     background-color: #121F1A;
@@ -5796,4 +5859,45 @@ QLabel[cssClass="dashboard-chart-tooltip"] {
     padding: 4px 7px;
     font-size: 10px;
     font-weight: 600;
+}
+
+/* Shared modern form language for top-level wallet screens. */
+*[cssClass="screen-main-surface"] QLineEdit,
+*[cssClass="screen-main-surface"] QTextEdit,
+*[cssClass="screen-main-surface"] QPlainTextEdit,
+*[cssClass="screen-main-surface"] QSpinBox,
+*[cssClass="screen-main-surface"] QDoubleSpinBox,
+*[cssClass="screen-main-surface"] QComboBox {
+    color: #F3F1E8;
+    background-color: #101B16;
+    border: 1px solid #2B3D34;
+    border-radius: 9px;
+    selection-color: #FFFFFF;
+    selection-background-color: #527344;
+}
+*[cssClass="screen-main-surface"] QCheckBox {
+    color: #A9B0A9;
+}
+*[cssClass="screen-main-surface"] *[cssClass="text-subtitle"],
+*[cssClass="screen-side-rail"] *[cssClass="text-subtitle"],
+QStackedWidget[designRole="content-card"] *[cssClass="text-subtitle"] {
+    color: #A9B0A9;
+}
+QStackedWidget[designRole="content-card"] *[cssClass="text-title-screen"] {
+    color: #F3F1E8;
+    font-weight: 600;
+}
+QStackedWidget[designRole="content-card"] *[cssClass="text-title"] {
+    color: #A8CB83;
+    font-weight: 600;
+}
+QStackedWidget[designRole="content-card"] *[cssClass="container-divider"] {
+    background-color: #2B3D34;
+}
+QStackedWidget[designRole="content-card"] QPushButton[cssClass="btn-edit-primary-folder"] {
+    color: #DDE3DD;
+    background-color: #101B16;
+    border: 1px solid #2B3D34;
+    border-radius: 9px;
+    padding: 10px 42px 10px 12px;
 }

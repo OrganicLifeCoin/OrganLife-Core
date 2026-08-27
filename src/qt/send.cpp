@@ -27,6 +27,8 @@
 #include "sendchangeaddressdialog.h"
 #include "sendconfirmdialog.h"
 
+#include <QVBoxLayout>
+
 #define REQUEST_PREPARE_TX 1
 #define REQUEST_REFRESH_BALANCE 2
 #define REQUEST_BROADCAST_TX 3
@@ -97,11 +99,13 @@ SendWidget::SendWidget(OrganicLifeGUI* parent) :
     this->setStyleSheet(parent->styleSheet());
 
     /* Containers */
+    ui->horizontalLayout_2->setContentsMargins(16, 16, 16, 16);
+    ui->horizontalLayout_2->setSpacing(12);
     setCssProperty(ui->left, "screen-main-surface");
-    ui->left->setContentsMargins(0,0,0,20);
+    ui->left->setContentsMargins(0, 0, 0, 0);
     ui->right->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->right, "screen-side-rail");
-    ui->right->setContentsMargins(0,10,0,0);
+    ui->right->setContentsMargins(0, 0, 0, 0);
     ui->container_right->setContentsMargins(0, 0, 0, 0);
     ui->container_right->setSpacing(6);
     ui->verticalLayout_4->removeItem(ui->verticalSpacer_8);
@@ -110,6 +114,44 @@ SendWidget::SendWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout_4->setSpacing(6);
     ui->containerHeader->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->containerHeader, "screen-header-band");
+    ui->containerHeader->setMinimumHeight(96);
+
+    int recipientLabelsIndex = -1;
+    for (int i = 0; i < ui->verticalLayout_22->count(); ++i) {
+        if (ui->verticalLayout_22->itemAt(i)->layout() == ui->horizontalLayout) {
+            recipientLabelsIndex = i;
+            break;
+        }
+    }
+    const int recipientRowsIndex = ui->verticalLayout_22->indexOf(ui->scrollArea);
+    Q_ASSERT(recipientLabelsIndex >= 0);
+    Q_ASSERT(recipientRowsIndex >= 0);
+    const int recipientCardIndex = qMin(recipientLabelsIndex, recipientRowsIndex);
+
+    ui->verticalLayout_22->removeItem(ui->horizontalLayout);
+    ui->verticalLayout_22->removeWidget(ui->scrollArea);
+    auto* recipientFormCard = new QWidget(ui->left);
+    recipientFormCard->setObjectName(QStringLiteral("recipientFormCard"));
+    recipientFormCard->setProperty("designRole", QStringLiteral("content-card"));
+    recipientFormCard->setAttribute(Qt::WA_StyledBackground, true);
+    auto* recipientFormLayout = new QVBoxLayout(recipientFormCard);
+    recipientFormLayout->setContentsMargins(0, 10, 0, 0);
+    recipientFormLayout->setSpacing(12);
+    recipientFormLayout->addLayout(ui->horizontalLayout);
+    recipientFormLayout->addWidget(ui->scrollArea, 1);
+    ui->verticalLayout_22->insertWidget(recipientCardIndex, recipientFormCard, 1);
+    for (int i = 0; i < ui->verticalLayout_22->count(); ++i) {
+        ui->verticalLayout_22->setStretch(i, 0);
+    }
+    ui->verticalLayout_22->setStretch(ui->verticalLayout_22->indexOf(recipientFormCard), 1);
+
+    ui->scrollArea->setProperty("designRole", QStringLiteral("content-card-body"));
+    ui->scrollArea->setAttribute(Qt::WA_StyledBackground, true);
+    ui->scrollArea->setStyleSheet(QString());
+    ui->scrollAreaWidgetContents->setProperty("designRole", QStringLiteral("content-card-body"));
+    ui->scrollAreaWidgetContents->setAttribute(Qt::WA_StyledBackground, true);
+    ui->scrollAreaWidgetContents->setStyleSheet(QString());
+    ui->verticalLayout_7->setContentsMargins(0, 8, 0, 0);
 
     /* Light Font */
     QFont fontLight;

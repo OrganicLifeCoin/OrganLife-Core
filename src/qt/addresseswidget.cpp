@@ -87,6 +87,9 @@ AddressesWidget::AddressesWidget(OrganicLifeGUI* parent) :
     ui->verticalSpacer_8 = nullptr;
     ui->verticalLayout_4->setSpacing(6);
     setCssProperty(ui->listAddresses, "container");
+    ui->listAddresses->setProperty("designRole", QStringLiteral("content-card"));
+    ui->emptyContainer->setProperty("designRole", QStringLiteral("content-card"));
+    ui->emptyContainer->setAttribute(Qt::WA_StyledBackground, true);
     ui->containerHeader->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->containerHeader, "screen-header-band");
 

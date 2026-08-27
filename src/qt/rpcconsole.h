@@ -37,7 +37,12 @@ class RPCConsole : public QDialog
     Q_OBJECT
 
 public:
-    explicit RPCConsole(QWidget* parent);
+    enum class ViewMode {
+        Full,
+        PeersAndConsole
+    };
+
+    explicit RPCConsole(QWidget* parent, ViewMode viewMode = ViewMode::Full);
     ~RPCConsole();
 
     void setClientModel(ClientModel* model);
@@ -130,6 +135,7 @@ Q_SIGNALS:
     void handleRestart(QStringList args);
 
 private:
+    void configureFocusedNetworkMode();
     static QString FormatBytes(quint64 bytes);
     void startExecutor();
     void setTrafficGraphRange(int mins);
@@ -147,6 +153,8 @@ private:
     };
 
     Ui::RPCConsole* ui;
+    ViewMode viewMode;
+    QString geometryKey;
     QPointer<ClientModel> clientModel;
     QPointer<WalletModel> walletModel;
     QPointer<RPCExecutor> rpcExecutor;

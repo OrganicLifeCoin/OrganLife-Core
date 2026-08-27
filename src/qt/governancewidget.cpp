@@ -65,6 +65,8 @@ GovernanceWidget::GovernanceWidget(OrganicLifeGUI* parent) :
     setCssProperty(ui->mainContainer, "governance-dashboard-surface");
     setCssProperty(ui->scrollArea, "governance-dashboard-surface");
     setCssProperty(ui->emptyContainer, "governance-dashboard-surface");
+    ui->mainContainer->setProperty("designRole", QStringLiteral("content-card"));
+    ui->emptyContainer->setProperty("designRole", QStringLiteral("content-card"));
 
     /* Title */
     ui->labelTitle->setText(tr("Governance"));
@@ -124,14 +126,15 @@ GovernanceWidget::GovernanceWidget(OrganicLifeGUI* parent) :
 
     // Create proposal
     setCssProperty(ui->btnCreateProposal, "governance-header-cta", true);
-    ui->btnCreateProposal->setMinimumHeight(64);
-    ui->btnCreateProposal->setMaximumHeight(64);
+    ui->btnCreateProposal->setProperty("controlRole", QStringLiteral("side-action"));
+    ui->btnCreateProposal->setMinimumHeight(96);
+    ui->btnCreateProposal->setMaximumHeight(96);
     ui->btnCreateProposal->setTitleClassAndText("governance-cta-title", tr("Create Proposal"));
     ui->btnCreateProposal->setSubTitleClassAndText("governance-cta-subtitle", tr("Prepare and submit a new proposal."));
     ui->btnCreateProposal->setRightIconClass("governance-cta-arrow", true);
     if (QWidget* ctaBody = ui->btnCreateProposal->findChild<QWidget*>("layoutOptions2")) {
         ctaBody->setAttribute(Qt::WA_Hover, true);
-        ctaBody->setContentsMargins(12, 6, 8, 6);
+        ctaBody->setContentsMargins(16, 12, 12, 12);
     }
     connect(ui->btnCreateProposal, &OptionButton::clicked, this, &GovernanceWidget::onCreatePropClicked);
     ui->emptyContainer->setVisible(false);

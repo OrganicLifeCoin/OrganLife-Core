@@ -84,6 +84,9 @@ MasterNodesWidget::MasterNodesWidget(OrganicLifeGUI *parent) :
     ui->verticalLayout_4->setSpacing(6);
     ui->containerHeader->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->containerHeader, "screen-header-band");
+    ui->listMn->setProperty("designRole", QStringLiteral("content-card"));
+    ui->emptyContainer->setProperty("designRole", QStringLiteral("content-card"));
+    ui->emptyContainer->setAttribute(Qt::WA_StyledBackground, true);
 
     /* Light Font */
     QFont fontLight;

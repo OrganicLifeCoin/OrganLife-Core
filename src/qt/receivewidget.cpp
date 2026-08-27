@@ -49,6 +49,8 @@ ReceiveWidget::ReceiveWidget(OrganicLifeGUI* parent) :
     ui->verticalLayout->setSpacing(6);
     ui->containerHeader->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->containerHeader, "screen-header-band");
+    ui->layoutQR->setProperty("designRole", QStringLiteral("content-card"));
+    ui->layoutQR->setAttribute(Qt::WA_StyledBackground, true);
 
     // Title
     setCssProperty(ui->labelTitle, "screen-header-title");

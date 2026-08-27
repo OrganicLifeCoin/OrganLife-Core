@@ -28,6 +28,8 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
     ui->left->setContentsMargins(20,20,20,20);
     setCssProperty(ui->right, "screen-side-rail");
     ui->right->setContentsMargins(20,16,20,20);
+    ui->stackedWidgetContainer->setProperty("designRole", QStringLiteral("content-card"));
+    ui->stackedWidgetContainer->setAttribute(Qt::WA_StyledBackground, true);
 
     ui->verticalLayout->setAlignment(Qt::AlignTop);
 
@@ -92,6 +94,23 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
     settingsDisplayOptionsWidget = new SettingsDisplayOptionsWidget(window, this);
     settingsInformationWidget = new SettingsInformationWidget(window, this);
     settingsConsoleWidget = new SettingsConsoleWidget(window, this);
+
+    const QList<QWidget*> settingsPages = {
+        settingsBackupWallet,
+        settingsExportCsvWidget,
+        settingsBitToolWidget,
+        settingsSingMessageWidgets,
+        settingsWalletRepairWidget,
+        settingsWalletOptionsWidget,
+        settingsMainOptionsWidget,
+        settingsDisplayOptionsWidget,
+        settingsInformationWidget,
+        settingsConsoleWidget,
+    };
+    for (QWidget* page : settingsPages) {
+        page->setProperty("designRole", QStringLiteral("settings-content-page"));
+        page->setAttribute(Qt::WA_StyledBackground, true);
+    }
 
     ui->stackedWidgetContainer->addWidget(settingsBackupWallet);
     ui->stackedWidgetContainer->addWidget(settingsExportCsvWidget);
