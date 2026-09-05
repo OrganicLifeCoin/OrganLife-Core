@@ -10,6 +10,10 @@ namespace interfaces {
 
     WalletBalances Wallet::getBalances() {
         WalletBalances result;
+        if (Params().IsTestChain()) {
+            for (const auto& coin : m_wallet.GetPQUnspent()) result.balance += coin.Value();
+            return result;
+        }
         CWallet::Balance balance = m_wallet.GetBalance();
         result.balance = balance.m_mine_trusted + balance.m_mine_trusted_shield;
         result.unconfirmed_balance = balance.m_mine_untrusted_pending;

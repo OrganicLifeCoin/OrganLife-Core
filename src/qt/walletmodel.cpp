@@ -11,6 +11,7 @@
 #include "interfaces/handler.h"
 #include "masternode-payments.h"
 #include "net.h"
+#include "pqaddress.h"
 #include "sapling/key_io_sapling.h"
 #include "sapling/sapling_operation.h"
 #include "sapling/transaction_builder.h"
@@ -232,6 +233,11 @@ void WalletModel::applyHiddenTransactions()
 
 CAmount WalletModel::getBalance(const CCoinControl* coinControl, bool fIncludeDelegated, bool fUnlockedOnly, bool fIncludeShielded) const
 {
+    if (Params().IsTestChain()) {
+        CAmount balance = 0;
+        for (const COutput& out : wallet->GetPQUnspent(!fUnlockedOnly)) balance += out.Value();
+        return balance;
+    }
     if (coinControl) {
         CAmount nBalance = 0;
         CWallet::AvailableCoinsFilter coinsFilter;
@@ -476,6 +482,10 @@ void WalletModel::updateWatchOnlyFlag(bool fHaveWatchonly)
 
 bool WalletModel::validateAddress(const QString& address)
 {
+    if (Params().IsTestChain()) {
+        pq::KeyID id;
+        return pq::DecodeAddress(address.toStdString(), Params().NetworkIDString(), id);
+    }
     // Only regular base58 addresses and shielded addresses accepted here
     bool isStaking = false, isExchange = false;
     CWDestination dest = Standard::DecodeDestination(address.toStdString(), isStaking, isExchange);
@@ -486,11 +496,16 @@ bool WalletModel::validateAddress(const QString& address)
 
 bool WalletModel::validateAddress(const QString& address, bool fStaking)
 {
+    if (Params().IsTestChain()) return !fStaking && validateAddress(address);
     return IsValidDestinationString(address.toStdString(), fStaking);
 }
 
 bool WalletModel::validateAddress(const QString& address, bool fStaking, bool& isShielded)
 {
+    if (Params().IsTestChain()) {
+        isShielded = false;
+        return !fStaking && validateAddress(address);
+    }
     bool isStaking = false, isExchange = false;
     CWDestination dest = Standard::DecodeDestination(address.toStdString(), isStaking, isExchange);
     if (IsShieldedDestination(dest)) {
@@ -542,6 +557,25 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
 
     if (isStakingOnlyUnlocked()) {
         return StakingOnlyUnlocked;
+    }
+
+    if (Params().IsTestChain()) {
+        if (recipients.size() != 1) return TransactionCreationFailed;
+        const SendCoinsRecipient& recipient = recipients.front();
+        if (!validateAddress(recipient.address)) return InvalidAddress;
+        if (recipient.amount <= 0) return InvalidAmount;
+
+        CAmount fee = 0;
+        std::string reason;
+        if (!wallet->CreatePQTransaction(recipient.address.toStdString(), recipient.amount,
+                                         transaction->getTransaction(), fee, reason)) {
+            if (reason == "Insufficient eligible confirmed funds") return AmountExceedsBalance;
+            Q_EMIT message(tr("Send Coins"), tr("Transaction creation failed!\n%1")
+                    .arg(QString::fromStdString(reason)), CClientUIInterface::MSG_ERROR);
+            return TransactionCreationFailed;
+        }
+        transaction->setTransactionFee(fee);
+        return OK;
     }
 
     QSet<QString> setAddress; // Used to detect duplicates
@@ -673,7 +707,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(WalletModelTransaction& tran
     // and emit coinsSent signal for each recipient
     for (const SendCoinsRecipient& rcp : transaction.getRecipients()) {
         // Don't touch the address book when we have a payment request
-        {
+        if (newTx->nType != CTransaction::PQ) {
             bool isStaking = false, isExchange = false, isShielded = false;
             auto address = Standard::DecodeDestination(rcp.address.toStdString(), isStaking, isExchange, isShielded);
             std::string purpose = isShielded ? AddressBook::AddressBookPurpose::SHIELDED_SEND :

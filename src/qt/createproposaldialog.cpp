@@ -379,7 +379,7 @@ void CreateProposalDialog::onGenAddressClicked()
     if (!walletModel || !walletModel->getWallet()) return;
     const auto addresses = walletModel->getWallet()->GetPQAddresses();
     if (addresses.empty()) {
-        inform(tr("Create and back up a PQ address in the PQ Wallet first"));
+        inform(tr("Create and back up an address in Receive first"));
         return;
     }
     ui->lineEditAddress->setText(QString::fromStdString(addresses.front()));

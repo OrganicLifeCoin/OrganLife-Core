@@ -52,6 +52,7 @@ private Q_SLOTS:
     void filterChanged(const QString& str);
 
 private:
+    friend class PQWidgetTests;
     Ui::ReceiveWidget *ui{nullptr};
 
     FurAbstractListItemDelegate *delegate{nullptr};
@@ -76,6 +77,7 @@ private:
     bool isShowingDialog{false};
     // Whether the main section is presenting a shielded address or a regular one
     bool shieldedMode{false};
+    QString pqBackupDirectory;
 
 };
 

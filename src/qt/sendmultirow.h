@@ -53,6 +53,7 @@ public:
     void setLabel(const QString& label);
     void setAmount(const QString& amount);
     void setAddressAndLabelOrDescription(const QString& address, const QString& message);
+    void setPQMode(bool enabled);
     void setFocus();
     void toggleSubtractFeeFromAmount();
 

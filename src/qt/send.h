@@ -18,6 +18,8 @@
 #include "walletmodel.h"
 
 #include <atomic>
+#include <string>
+#include <vector>
 
 static const int MAX_SEND_POPUP_ENTRIES = 8;
 
@@ -46,6 +48,7 @@ public:
 
     void loadClientModel() override;
     void loadWalletModel() override;
+    void clearWalletModel() override;
 
 Q_SIGNALS:
     /** Signal raised when a URI was entered or dragged to the GUI */
@@ -89,6 +92,7 @@ private Q_SLOTS:
     void onResetSettings();
 
 private:
+    friend class PQWidgetTests;
     Ui::send *ui;
 
     SendCustomFeeDialog* customFeeDialog = nullptr;
@@ -115,6 +119,10 @@ private:
     SendMultiRow* focusedEntry = nullptr;
 
     bool isTransparent = true;
+    QString pqBackupDirectory;
+    QPointer<WalletModel> pqPreparationWallet;
+    std::vector<std::string> pqAddressesBeforePrepare;
+    bool pqPreparationTracked{false};
     void resizeMenu();
     SendMultiRow* createEntry();
     void ProcessSend(QList<SendCoinsRecipient>& recipients, bool hasShieldedOutput,
@@ -131,6 +139,8 @@ private:
     void resetChangeAddress();
     void hideContactsMenu();
     void tryRefreshAmounts();
+    void beginPQPreparation();
+    bool cleanupNewPQKeys();
 };
 
 #endif // PIVX_QT_SEND_H

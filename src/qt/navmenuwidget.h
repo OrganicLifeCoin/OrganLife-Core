@@ -37,7 +37,9 @@ Q_SIGNALS:
     void walletSelectorRequested();
 
 private Q_SLOTS:
+    void onSendClicked();
     void onDashboardClicked();
+    void onReceiveClicked();
     void onSettingsClicked();
     void onTransactionsClicked();
     void onGovClicked();

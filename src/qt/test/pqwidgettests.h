@@ -7,8 +7,9 @@ class PQWidgetTests : public QObject
 {
     Q_OBJECT
 private Q_SLOTS:
-    void noWalletIsReadOnly();
+    void seamlessWalletUsesStandardScreens();
     void actualWalletUnloadQuiescesModel();
-    void encryptedReceiveBackupAndFailure();
+    void standardReceiveUsesPQAddressAndBackup();
+    void standardSendUsesPQBackupAndHistory();
 };
 #endif

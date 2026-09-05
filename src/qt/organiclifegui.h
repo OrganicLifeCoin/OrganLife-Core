@@ -25,7 +25,8 @@
 #include "qt/settings/faqwidget.h"
 #include "qt/settings/settingswidget.h"
 #include "qt/rpcconsole.h"
-#include "pqwidget.h"
+#include "receivewidget.h"
+#include "send.h"
 #include "snackbar.h"
 #include "topbar.h"
 
@@ -73,7 +74,6 @@ public Q_SLOTS:
     void goToTransactions();
     void goToSend();
     void goToReceive();
-    void goToPQ();
     void goToGovernance();
     void goToSettings();
     void goToSettingsInfo();
@@ -155,7 +155,8 @@ private:
     ContentCornerArcWidget *contentCornerArc = nullptr;
 
     DashboardWidget *dashboard = nullptr;
-    PQWidget* pqWidget = nullptr;
+    SendWidget* sendWidget = nullptr;
+    ReceiveWidget* receiveWidget = nullptr;
     GovernanceWidget* governanceWidget = nullptr;
     SettingsWidget* settingsWidget = nullptr;
 

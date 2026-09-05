@@ -8,8 +8,12 @@
 
 #include "addresstablemodel.h"
 #include "bitcoinunits.h"
+#include "chainparams.h"
 #include "guiutil.h"
 #include "optionsmodel.h"
+#include "policy/policy.h"
+#include "pqaddress.h"
+#include "pqtransaction.h"
 #include "qtutils.h"
 #include "sendmemodialog.h"
 
@@ -108,6 +112,7 @@ bool SendMultiRow::launchMemoDialog()
 
 bool SendMultiRow::addressChanged(const QString& str, bool fOnlyValidate)
 {
+    if (!walletModel) return false;
     if (!str.isEmpty()) {
         QString trimmedStr = str.trimmed();
         bool isShielded = false;
@@ -160,7 +165,7 @@ void SendMultiRow::loadWalletModel()
 
 void SendMultiRow::updateDisplayUnit()
 {
-    // Update edit text..
+    if (!walletModel || !walletModel->getOptionsModel()) return;
     displayUnit = walletModel->getOptionsModel()->getDisplayUnit();
 }
 
@@ -202,7 +207,15 @@ bool SendMultiRow::validate()
     }
 
     // Reject dust outputs:
-    if (retval && GUIUtil::isDust(address, value)) {
+    bool isDust = false;
+    if (retval && Params().IsTestChain()) {
+        pq::KeyID id;
+        isDust = !pq::DecodeAddress(address.toStdString(), Params().NetworkIDString(), id) ||
+                 IsDust(CTxOut(value, pq::GetScript(id)), dustRelayFee);
+    } else if (retval) {
+        isDust = GUIUtil::isDust(address, value);
+    }
+    if (isDust) {
         setCssEditLine(ui->lineEditAmount, false, true);
         retval = false;
     }
@@ -215,10 +228,25 @@ SendCoinsRecipient SendMultiRow::getValue()
     recipient.address = getAddress();
     recipient.label = ui->lineEditDescription->text();
     recipient.amount = getAmountValue();
-    auto dest = Standard::DecodeDestination(recipient.address.toStdString());
-    recipient.isShieldedAddr = boost::get<libzcash::SaplingPaymentAddress>(&dest);
-    recipient.fSubtractFee = getSubtractFeeFromAmount();
+    if (Params().IsTestChain()) {
+        recipient.isShieldedAddr = false;
+        recipient.fSubtractFee = false;
+    } else {
+        auto dest = Standard::DecodeDestination(recipient.address.toStdString());
+        recipient.isShieldedAddr = boost::get<libzcash::SaplingPaymentAddress>(&dest);
+        recipient.fSubtractFee = getSubtractFeeFromAmount();
+    }
     return recipient;
+}
+
+void SendMultiRow::setPQMode(bool enabled)
+{
+    ui->labelSubtitleDescription->setVisible(!enabled);
+    ui->lineEditDescription->setVisible(!enabled);
+    ui->checkboxSubtractFeeFromAmount->setVisible(!enabled);
+    ui->btnAddMemo->setVisible(!enabled);
+    btnContact->setVisible(!enabled);
+    if (enabled) recipient.message.clear();
 }
 
 QString SendMultiRow::getAddress()

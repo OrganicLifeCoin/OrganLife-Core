@@ -10,6 +10,8 @@
 #include "chainparams.h"
 #include "key_io.h"
 #include "budget/budgetproposal.h"
+#include "pqaddress.h"
+#include "pqtransaction.h"
 #include "sapling/key_io_sapling.h"
 #include "validation.h"
 #include "wallet/wallet.h"
@@ -446,13 +448,53 @@ std::pair<bool, bool> areInputsAndOutputsFromAndToMe(const CWalletTx& wtx, Sapli
 std::vector<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet* wallet, const CWalletTx& wtx)
 {
     std::vector<TransactionRecord> parts;
-    CAmount nCredit = wtx.GetCredit(ISMINE_ALL);
-    CAmount nDebit = wtx.GetDebit(ISMINE_ALL);
+    if (wtx.tx->nType == CTransaction::PQ) {
+        CAmount pqCredit = 0;
+        CAmount pqDebit = 0;
+        std::string ownedAddress;
+        std::string externalAddress;
+        for (const CTxOut& output : wtx.tx->vout) {
+            pq::KeyID id;
+            if (!pq::ExtractID(output.scriptPubKey, id)) continue;
+            const std::string address = pq::EncodeAddress(id, Params().NetworkIDString());
+            if (wallet->IsPQMine(output)) {
+                pqCredit += output.nValue;
+                if (ownedAddress.empty()) ownedAddress = address;
+            } else if (externalAddress.empty()) {
+                externalAddress = address;
+            }
+        }
+        for (const CTxIn& input : wtx.tx->vin) {
+            const CWalletTx* previous = wallet->GetWalletTx(input.prevout.hash);
+            if (!previous || input.prevout.n >= previous->tx->vout.size()) continue;
+            const CTxOut& output = previous->tx->vout[input.prevout.n];
+            if (wallet->IsPQMine(output)) pqDebit += output.nValue;
+        }
 
-    // PQ-only value is shown by PQWidget.
-    if (wtx.tx->nType == CTransaction::PQ && nCredit == 0 && nDebit == 0) {
+        TransactionRecord record(wtx.GetHash(), wtx.GetTxTime(), wtx.tx->GetTotalSize());
+        if (wtx.IsCoinStake()) {
+            record.type = TransactionRecord::StakeMint;
+            record.address = ownedAddress;
+            record.credit = pqCredit - pqDebit;
+        } else if (pqDebit > 0 && externalAddress.empty()) {
+            record.type = TransactionRecord::SendToSelf;
+            record.address = ownedAddress;
+            record.debit = -pqDebit;
+            record.credit = pqCredit;
+        } else if (pqDebit > 0) {
+            record.type = TransactionRecord::SendToAddress;
+            record.address = externalAddress;
+            record.debit = -(pqDebit - pqCredit);
+        } else if (pqCredit > 0) {
+            record.type = TransactionRecord::RecvWithAddress;
+            record.address = ownedAddress;
+            record.credit = pqCredit;
+        }
+        if (record.debit != 0 || record.credit != 0) parts.push_back(record);
         return parts;
     }
+    CAmount nCredit = wtx.GetCredit(ISMINE_ALL);
+    CAmount nDebit = wtx.GetDebit(ISMINE_ALL);
 
     // Decompose coinstake if needed (if it's not a coinstake, the method will no perform any action).
     if (decomposeCoinStake(wallet, wtx, nCredit, nDebit, parts)) {

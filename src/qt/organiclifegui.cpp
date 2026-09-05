@@ -209,13 +209,15 @@ OrganicLifeGUI::OrganicLifeGUI(const NetworkStyle* networkStyle, QWidget* parent
 
         // Init
         dashboard = new DashboardWidget(this);
-        pqWidget = new PQWidget(this);
+        sendWidget = new SendWidget(this);
+        receiveWidget = new ReceiveWidget(this);
         governanceWidget = new GovernanceWidget(this);
         settingsWidget = new SettingsWidget(this);
 
         // Add to parent
         stackedContainer->addWidget(dashboard);
-        stackedContainer->addWidget(pqWidget);
+        stackedContainer->addWidget(sendWidget);
+        stackedContainer->addWidget(receiveWidget);
         stackedContainer->addWidget(governanceWidget);
         stackedContainer->addWidget(settingsWidget);
         stackedContainer->setCurrentWidget(dashboard);
@@ -279,7 +281,8 @@ void OrganicLifeGUI::connectActions()
     connect(topBar, &TopBar::themeChanged, navMenu, &NavMenuWidget::setThemeState);
     connect(navMenu, &NavMenuWidget::themeToggleRequested, topBar, &TopBar::toggleTheme);
     connect(navMenu, &NavMenuWidget::walletLockRequested, topBar, &TopBar::toggleWalletLock);
-    connect(pqWidget, &PQWidget::encryptWalletRequested, topBar, &TopBar::encryptWallet);
+    connect(sendWidget, &SendWidget::showHide, this, &OrganicLifeGUI::showHide);
+    connect(receiveWidget, &ReceiveWidget::showHide, this, &OrganicLifeGUI::showHide);
     connect(governanceWidget, &GovernanceWidget::showHide, this, &OrganicLifeGUI::showHide);
     connect(governanceWidget, &GovernanceWidget::execDialog, this, &OrganicLifeGUI::execDialog);
     connect(navMenu, &NavMenuWidget::walletSelectorRequested, topBar, &TopBar::showWalletSelector);
@@ -339,6 +342,7 @@ void OrganicLifeGUI::setClientModel(ClientModel* _clientModel)
 
         topBar->setClientModel(clientModel);
         dashboard->setClientModel(clientModel);
+        sendWidget->setClientModel(clientModel);
         settingsWidget->setClientModel(clientModel);
         governanceWidget->setClientModel(clientModel);
 
@@ -599,12 +603,7 @@ void OrganicLifeGUI::goToTransactions()
 
 void OrganicLifeGUI::goToSend()
 {
-    goToPQ();
-}
-
-void OrganicLifeGUI::goToPQ()
-{
-    if (Params().IsTestChain() && pqWidget) showTop(pqWidget);
+    showTop(sendWidget);
 }
 
 void OrganicLifeGUI::goToGovernance()
@@ -625,7 +624,7 @@ void OrganicLifeGUI::goToSettingsInfo()
 
 void OrganicLifeGUI::goToReceive()
 {
-    goToPQ();
+    showTop(receiveWidget);
 }
 
 void OrganicLifeGUI::openNetworkMonitor()
@@ -791,6 +790,8 @@ bool OrganicLifeGUI::addWallet(const QString& name, WalletModel* walletModel)
     if (!walletUiSignalsConnected) {
         connect(topBar, &TopBar::message, this, &OrganicLifeGUI::message);
         connect(settingsWidget, &SettingsWidget::message, this, &OrganicLifeGUI::message);
+        connect(sendWidget, &SendWidget::message, this, &OrganicLifeGUI::message);
+        connect(receiveWidget, &ReceiveWidget::message, this, &OrganicLifeGUI::message);
         connect(governanceWidget, &GovernanceWidget::message, this, &OrganicLifeGUI::message);
         connect(dashboard, &DashboardWidget::incomingTransaction, this, &OrganicLifeGUI::incomingTransaction);
         walletUiSignalsConnected = true;
@@ -815,7 +816,8 @@ bool OrganicLifeGUI::setCurrentWallet(const QString& name)
     navMenu->setWalletModel(walletModel);
     dashboard->setWalletModel(walletModel);
     topBar->setWalletModel(walletModel);
-    pqWidget->setWalletModel(walletModel);
+    sendWidget->setWalletModel(walletModel);
+    receiveWidget->setWalletModel(walletModel);
     governanceWidget->setWalletModel(walletModel);
     if (govModel) govModel->setWalletModel(walletModel);
     settingsWidget->setWalletModel(walletModel);
@@ -850,7 +852,8 @@ WalletModel* OrganicLifeGUI::removeWallet(const QString& name)
         navMenu->clearWalletModel();
         dashboard->clearWalletModel();
         topBar->clearWalletModel();
-        pqWidget->clearWalletModel();
+        sendWidget->clearWalletModel();
+        receiveWidget->clearWalletModel();
         governanceWidget->clearWalletModel();
         if (govModel) govModel->setWalletModel(nullptr);
         settingsWidget->clearWalletModel();
@@ -871,7 +874,8 @@ void OrganicLifeGUI::removeAllWallets()
     navMenu->clearWalletModel();
     dashboard->clearWalletModel();
     topBar->clearWalletModel();
-    pqWidget->clearWalletModel();
+    sendWidget->clearWalletModel();
+    receiveWidget->clearWalletModel();
     governanceWidget->clearWalletModel();
     if (govModel) govModel->setWalletModel(nullptr);
     settingsWidget->clearWalletModel();

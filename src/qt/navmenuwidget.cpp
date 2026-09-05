@@ -89,8 +89,11 @@ NavMenuWidget::NavMenuWidget(OrganicLifeGUI *mainWindow, QWidget *parent) :
     };
     ui->btnDashboard->setProperty("name", "dash");
     setupNavButton(ui->btnDashboard, tr("Dashboard"));
-    const QList<QWidget*> legacyButtons = {ui->btnSend, ui->btnReceive, ui->btnAddress,
-                                           ui->btnMaster, ui->btnColdStaking};
+    ui->btnSend->setProperty("name", "send");
+    setupNavButton(ui->btnSend, tr("Send"));
+    ui->btnReceive->setProperty("name", "receive");
+    setupNavButton(ui->btnReceive, tr("Receive"));
+    const QList<QWidget*> legacyButtons = {ui->btnAddress, ui->btnMaster, ui->btnColdStaking};
     for (QWidget* legacy : legacyButtons) {
         legacy->hide();
     }
@@ -105,21 +108,9 @@ NavMenuWidget::NavMenuWidget(OrganicLifeGUI *mainWindow, QWidget *parent) :
     ui->btnGovernance->setProperty("name", "governance");
     setupNavButton(ui->btnGovernance, tr("Governance"));
     ui->btnGovernance->setVisible(Params().IsTestChain());
-    btns = {ui->btnDashboard, transactionsButton, ui->btnSettings};
-    if (Params().IsTestChain()) {
-        auto* pqButton = new QToolButton(ui->scrollAreaNavVert);
-        pqButton->setObjectName("btnPQ");
-        pqButton->setProperty("name", "receive");
-        pqButton->setCheckable(true);
-        pqButton->setAutoExclusive(true);
-        setupNavButton(pqButton, tr("PQ Wallet"));
-        btns.insert(1, pqButton);
-        connect(pqButton, &QToolButton::clicked, this, [this, pqButton]() {
-            window->goToPQ();
-            onNavSelected(pqButton);
-        });
-        btns.insert(2, ui->btnGovernance);
-    }
+    btns = {ui->btnDashboard, ui->btnSend, ui->btnReceive, transactionsButton};
+    if (Params().IsTestChain()) btns.append(ui->btnGovernance);
+    btns.append(ui->btnSettings);
 
     // Match the PQ-only information architecture.
     for (QWidget* button : btns) ui->verticalLayout_3->removeWidget(button);
@@ -153,14 +144,24 @@ void NavMenuWidget::loadWalletModel() {
  */
 void NavMenuWidget::connectActions() {
     connect(ui->btnDashboard, &QPushButton::clicked, this, &NavMenuWidget::onDashboardClicked);
+    connect(ui->btnSend, &QPushButton::clicked, this, &NavMenuWidget::onSendClicked);
+    connect(ui->btnReceive, &QPushButton::clicked, this, &NavMenuWidget::onReceiveClicked);
     connect(ui->btnSettings, &QPushButton::clicked, this, &NavMenuWidget::onSettingsClicked);
     connect(transactionsButton, &QToolButton::clicked, this, &NavMenuWidget::onTransactionsClicked);
     connect(ui->btnGovernance, &QToolButton::clicked, this, &NavMenuWidget::onGovClicked);
 
     ui->btnDashboard->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_1));
-    transactionsButton->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_3));
-    ui->btnGovernance->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_4));
-    ui->btnSettings->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_5));
+    ui->btnSend->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_2));
+    ui->btnReceive->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_3));
+    transactionsButton->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_4));
+    ui->btnGovernance->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_5));
+    ui->btnSettings->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_6));
+}
+
+void NavMenuWidget::onSendClicked()
+{
+    window->goToSend();
+    onNavSelected(ui->btnSend);
 }
 
 void NavMenuWidget::onDashboardClicked(){
@@ -171,6 +172,12 @@ void NavMenuWidget::onDashboardClicked(){
 void NavMenuWidget::onSettingsClicked(){
     window->goToSettings();
     onNavSelected(ui->btnSettings);
+}
+
+void NavMenuWidget::onReceiveClicked()
+{
+    window->goToReceive();
+    onNavSelected(ui->btnReceive);
 }
 
 void NavMenuWidget::onTransactionsClicked()

@@ -7,7 +7,9 @@ address, transaction, or chain compatibility is provided.
 
 ## Wallet use
 
-Encrypt and fully unlock a new wallet, then use:
+Encrypt and fully unlock a new wallet. The Qt wallet uses its normal Dashboard,
+Send, Receive, and transaction-history screens; addresses and payments use the
+PQ path automatically. The matching RPCs are:
 
 - `getnewpqaddress backup_destination`
 - `listpqaddresses`
@@ -19,7 +21,8 @@ Every new receive or change key is an independent ML-DSA-44 seed stored only in
 the encrypted wallet. Address creation and payments complete a new binary wallet
 backup before exposing the address or relaying the transaction. There is no
 text private-key export, WIF, BIP32 seed, classical address, multisig, message
-signing, shielded payment, delegation, or ordinary send path.
+signing, shielded payment, or delegation. The familiar Qt Send screen is a PQ
+frontend and accepts one recipient per transaction.
 
 Addresses use canonical Bech32m with witness version 1, a 32-byte network-bound
 public-key commitment, and the HRP `olcpqregtest` or `olcpqtest`. Legacy Bech32

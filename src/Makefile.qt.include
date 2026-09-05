@@ -101,7 +101,6 @@ QT_MOC_CPP = \
   qt/moc_focuseddialog.cpp \
   qt/moc_snackbar.cpp \
   qt/moc_navmenuwidget.cpp \
-  qt/moc_pqwidget.cpp \
   qt/moc_lockunlock.cpp \
   qt/moc_expandablebutton.cpp \
   qt/moc_furabstractlistitemdelegate.cpp \
@@ -209,7 +208,7 @@ BITCOIN_QT_H = \
   qt/guitransactionsutils.h \
   qt/snackbar.h \
   qt/navmenuwidget.h \
-  qt/pqwidget.h \
+  qt/pqwalletui.h \
   qt/lockunlock.h \
   qt/receivedialog.h \
   qt/furlistrow.h \
@@ -547,7 +546,7 @@ BITCOIN_QT_WALLET_CPP = \
   qt/guitransactionsutils.cpp \
   qt/snackbar.cpp \
   qt/navmenuwidget.cpp \
-  qt/pqwidget.cpp \
+  qt/pqwalletui.cpp \
   qt/lockunlock.cpp \
   qt/receivedialog.cpp \
   qt/furabstractlistitemdelegate.cpp \

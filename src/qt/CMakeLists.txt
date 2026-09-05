@@ -113,7 +113,7 @@ SET(QT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/guitransactionsutils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/snackbar.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/navmenuwidget.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/pqwidget.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/pqwalletui.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/lockunlock.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/receivedialog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/furabstractlistitemdelegate.cpp

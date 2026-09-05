@@ -10,13 +10,18 @@
 #include "addressholder.h"
 #include "guiutil.h"
 #include "myaddressrow.h"
+#include "pqwalletui.h"
 #include "qtutils.h"
 #include "requestdialog.h"
 #include "walletmodel.h"
 
+#include <chainparams.h>
+#include <wallet/wallet.h>
+
 #include <QModelIndex>
 #include <QColor>
 #include <QDateTime>
+#include <QPointer>
 #include <QRegularExpression>
 
 #define DECORATION_SIZE 70
@@ -136,11 +141,29 @@ ReceiveWidget::ReceiveWidget(OrganicLifeGUI* parent) :
     ui->pushLeft->setChecked(true);
     connect(ui->pushLeft, &QPushButton::clicked, [this](){onTransparentSelected(true);});
     connect(ui->pushRight,  &QPushButton::clicked, [this](){onTransparentSelected(false);});
+
+    if (Params().IsTestChain()) {
+        ui->pushLeft->hide();
+        ui->pushRight->hide();
+        ui->pushButtonLabel->hide();
+        ui->labelLabel->hide();
+        ui->labelDate->hide();
+        ui->btnRequest->hide();
+        ui->btnMyAddresses->hide();
+        ui->listViewAddress->hide();
+        ui->sortWidget->hide();
+    }
 }
 
 void ReceiveWidget::loadWalletModel()
 {
     if (walletModel) {
+        if (Params().IsTestChain()) {
+            if (!info) info = new SendCoinsRecipient();
+            pqBackupDirectory = PQWalletUI::backupDirectory(walletModel);
+            refreshView();
+            return;
+        }
         this->addressTableModel = walletModel->getAddressTableModel();
         this->filter = new AddressFilterProxyModel(AddressTableModel::Receive, this);
         this->filter->setSourceModel(addressTableModel);
@@ -168,24 +191,34 @@ void ReceiveWidget::refreshView(const QModelIndex& tl, const QModelIndex& br)
 void ReceiveWidget::refreshView(const QString& refreshAddress)
 {
     try {
-        const QString& latestAddress = (refreshAddress.isEmpty()) ? addressTableModel->getAddressToShow(shieldedMode) : refreshAddress;
+        QString latestAddress = refreshAddress;
+        if (Params().IsTestChain()) {
+            if (latestAddress.isEmpty() && walletModel) {
+                const auto addresses = walletModel->getWallet()->GetPQAddresses();
+                if (!addresses.empty()) latestAddress = QString::fromStdString(addresses.back());
+            }
+        } else if (latestAddress.isEmpty()) {
+            latestAddress = addressTableModel->getAddressToShow(shieldedMode);
+        }
         if (latestAddress.isEmpty()) {
-            // Check for generation errors
-            ui->labelQrImg->setText(tr("No available address\ntry unlocking the wallet"));
-            inform(tr("Error generating address"));
+            ui->labelAddress->setText(tr("Create a new address to receive OLC"));
+            ui->labelQrImg->clear();
+            if (info) info->address.clear();
             return;
         }
 
         QString addressToShow = latestAddress;
-        int64_t time = walletModel->getKeyCreationTime(latestAddress.toStdString());
-        if (shieldedMode) {
+        int64_t time = 0;
+        if (!Params().IsTestChain()) time = walletModel->getKeyCreationTime(latestAddress.toStdString());
+        if (Params().IsTestChain() || shieldedMode) {
             addressToShow = addressToShow.left(20) + "..." + addressToShow.right(19);
         }
 
         ui->labelAddress->setText(addressToShow);
-        ui->labelDate->setText(GUIUtil::dateTimeStr(GUIUtil::dateTimeFromTimeT(static_cast<qint64>(time))));
+        if (!Params().IsTestChain())
+            ui->labelDate->setText(GUIUtil::dateTimeStr(GUIUtil::dateTimeFromTimeT(static_cast<qint64>(time))));
         updateQr(latestAddress);
-        updateLabel();
+        if (!Params().IsTestChain()) updateLabel();
     } catch (const std::runtime_error& error) {
         ui->labelQrImg->setText(tr("No available address\ntry unlocking the wallet"));
         inform(tr("Error generating address"));
@@ -264,6 +297,39 @@ void ReceiveWidget::onLabelClicked()
 
 void ReceiveWidget::onNewAddressClicked()
 {
+    if (Params().IsTestChain()) {
+        QPointer<WalletModel> operationWallet(walletModel);
+        if (!operationWallet ||
+            !PQWalletUI::ensureBackupDirectory(this, operationWallet, pqBackupDirectory) ||
+            operationWallet.isNull() || walletModel != operationWallet) return;
+        WalletModel::UnlockContext ctx(operationWallet->requestUnlock());
+        if (operationWallet.isNull() || walletModel != operationWallet) return;
+        if (!ctx.isValid()) {
+            inform(tr("Cannot create new address, wallet locked"));
+            return;
+        }
+        std::string address;
+        if (!operationWallet->getWallet()->GeneratePQAddress(address)) {
+            inform(tr("Encrypt and fully unlock the wallet before creating an address"));
+            return;
+        }
+        if (!PQWalletUI::backupSnapshot(operationWallet, pqBackupDirectory)) {
+            const bool erased = operationWallet->getWallet()->ErasePQAddress(address);
+            if (!erased) {
+                emitMessage(tr("Receive"),
+                            tr("The new PQ key could not be removed. Back up this wallet before closing it."),
+                            CClientUIInterface::MSG_ERROR);
+            } else {
+                emitMessage(tr("Receive"),
+                            tr("The encrypted wallet backup could not be saved. No address was created."),
+                            CClientUIInterface::MSG_ERROR);
+            }
+            return;
+        }
+        refreshView(QString::fromStdString(address));
+        inform(tr("New address created"));
+        return;
+    }
     try {
         WalletModel::UnlockContext ctx(walletModel->requestUnlock());
         if (!ctx.isValid()) {
