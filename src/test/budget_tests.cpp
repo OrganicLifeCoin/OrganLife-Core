@@ -6,6 +6,7 @@
 #include "test_organiclife.h"
 
 #include "budget/budgetmanager.h"
+#include "evo/deterministicmns.h"
 #include "masternode-payments.h"
 #include "spork.h"
 #include "test/util/blocksutil.h"
@@ -424,6 +425,17 @@ BOOST_FIXTURE_TEST_CASE(testnet_staking_without_masternodes, TestnetSetup)
     std::vector<CTxOut> payments;
     BOOST_REQUIRE(masternodePayments.GetMasternodeTxOuts(chainActive.Tip(), payments));
     BOOST_REQUIRE(payments.empty());
+
+    // PQ-only testnet deliberately starts without tier-two. Its background
+    // staker must still be able to build the first PoS block.
+    auto savedManager = std::move(deterministicMNManager);
+    payments.clear();
+    const bool canBuildWithoutManager = CanBuildRequiredMasternodePayment(chainActive.Tip());
+    const bool gotPaymentsWithoutManager = masternodePayments.GetMasternodeTxOuts(chainActive.Tip(), payments);
+    deterministicMNManager = std::move(savedManager);
+    BOOST_CHECK(canBuildWithoutManager);
+    BOOST_CHECK(gotPaymentsWithoutManager);
+    BOOST_CHECK(payments.empty());
 
     // A no-payee coinbase is already valid; background staking must be able
     // to advance the testnet before its first masternode is registered.

@@ -232,6 +232,11 @@ std::string GetRequiredPaymentsString(int nBlockHeight)
 
 bool CMasternodePayments::GetMasternodeTxOuts(const CBlockIndex* pindexPrev, std::vector<CTxOut>& voutMasternodePaymentsRet) const
 {
+    if (!pindexPrev)
+        return false;
+    if (!deterministicMNManager)
+        return Params().IsTestnet();
+
     if (deterministicMNManager->LegacyMNObsolete(pindexPrev->nHeight + 1)) {
         const CAmount blockValue = GetBlockValue(pindexPrev->nHeight + 1, pindexPrev->nChainMinted);
         CAmount masternodeReward = GetMasternodePayment(pindexPrev->nHeight + 1, blockValue);
