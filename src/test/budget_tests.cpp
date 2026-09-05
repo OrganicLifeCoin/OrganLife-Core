@@ -428,6 +428,7 @@ BOOST_FIXTURE_TEST_CASE(testnet_staking_without_masternodes, TestnetSetup)
 
     // PQ-only testnet deliberately starts without tier-two. Its background
     // staker must still be able to build the first PoS block.
+    enableMnSyncAndSuperblocksPayment();
     auto savedManager = std::move(deterministicMNManager);
     payments.clear();
     const bool canBuildWithoutManager = CanBuildRequiredMasternodePayment(chainActive.Tip());

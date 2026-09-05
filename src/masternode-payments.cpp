@@ -194,7 +194,7 @@ bool CanBuildRequiredMasternodePayment(const CBlockIndex* pindexPrev)
     if (!pindexPrev)
         return false;
 
-    if (Params().IsRegTestNet())
+    if (Params().IsRegTestNet() || (Params().IsTestnet() && !deterministicMNManager))
         return true;
 
     const int nHeight = pindexPrev->nHeight + 1;
