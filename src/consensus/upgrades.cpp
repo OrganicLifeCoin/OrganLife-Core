@@ -70,6 +70,10 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
                 /*.strName =*/ "Test_dummy",
                 /*.strInfo =*/ "Test dummy info",
         },
+        {
+                /*.strName =*/ "pq_payments",
+                /*.strInfo =*/ "Experimental ML-DSA-44 payments",
+        },
 };
 
 UpgradeState NetworkUpgradeState(

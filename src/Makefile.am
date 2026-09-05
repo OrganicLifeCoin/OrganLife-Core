@@ -415,14 +415,11 @@ libbitcoin_server_a_SOURCES = \
   pow.cpp \
   rest.cpp \
   rpc/blockchain.cpp \
-  rpc/masternode.cpp \
-  rpc/budget.cpp \
   rpc/mining.cpp \
   rpc/misc.cpp \
   rpc/net.cpp \
+  rpc/pqgovernance.cpp \
   rpc/rawtransaction.cpp \
-  rpc/rpcevo.cpp \
-  rpc/rpcquorums.cpp \
   rpc/server.cpp \
   script/sigcache.cpp \
   script/ismine.cpp \
@@ -464,6 +461,9 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/rpcdump.cpp \
   wallet/rpcwallet.cpp \
   wallet/hdchain.cpp \
+  wallet/pqkey.h \
+  wallet/pqkey.cpp \
+  wallet/pqwallet.cpp \
   wallet/scriptpubkeyman.cpp \
   destination_io.cpp \
   wallet/wallet.cpp \
@@ -500,6 +500,10 @@ crypto_libbitcoin_crypto_a_SOURCES = \
   crypto/sha256.h \
   crypto/sha3.h \
   crypto/sha3.cpp \
+  crypto/mldsa44.h \
+  crypto/mldsa44.cpp \
+  crypto/mldsa44_config.h \
+  crypto/mldsa44_native.c \
   crypto/sha512.h \
   crypto/siphash.cpp \
   crypto/siphash.h \
@@ -537,6 +541,10 @@ libbitcoin_common_a_SOURCES = \
   compressor.cpp \
   consensus/merkle.cpp \
   key_io.cpp \
+  pqaddress.h \
+  pqaddress.cpp \
+  pqtransaction.h \
+  pqtransaction.cpp \
   primitives/block.cpp \
   primitives/transaction.cpp \
   core_read.cpp \
@@ -786,6 +794,44 @@ IMMER_DIST = immer
 
 EXTRA_DIST = $(CTAES_DIST) rust
 EXTRA_DIST += $(IMMER_DIST)
+EXTRA_DIST += \
+  crypto/mldsa-native/LICENSE \
+  crypto/mldsa-native/mldsa_native.c \
+  crypto/mldsa-native/mldsa_native.h \
+  crypto/mldsa-native/src/cbmc.h \
+  crypto/mldsa-native/src/common.h \
+  crypto/mldsa-native/src/ct.c \
+  crypto/mldsa-native/src/ct.h \
+  crypto/mldsa-native/src/debug.c \
+  crypto/mldsa-native/src/debug.h \
+  crypto/mldsa-native/src/fips202/fips202.c \
+  crypto/mldsa-native/src/fips202/fips202.h \
+  crypto/mldsa-native/src/fips202/fips202x4.c \
+  crypto/mldsa-native/src/fips202/fips202x4.h \
+  crypto/mldsa-native/src/fips202/keccakf1600.c \
+  crypto/mldsa-native/src/fips202/keccakf1600.h \
+  crypto/mldsa-native/src/packing.c \
+  crypto/mldsa-native/src/packing.h \
+  crypto/mldsa-native/src/params.h \
+  crypto/mldsa-native/src/poly.c \
+  crypto/mldsa-native/src/poly.h \
+  crypto/mldsa-native/src/poly_kl.c \
+  crypto/mldsa-native/src/poly_kl.h \
+  crypto/mldsa-native/src/polyvec.c \
+  crypto/mldsa-native/src/polyvec.h \
+  crypto/mldsa-native/src/polyvec_lazy.c \
+  crypto/mldsa-native/src/polyvec_lazy.h \
+  crypto/mldsa-native/src/randombytes.h \
+  crypto/mldsa-native/src/reduce.h \
+  crypto/mldsa-native/src/rounding.h \
+  crypto/mldsa-native/src/sign.c \
+  crypto/mldsa-native/src/sign.h \
+  crypto/mldsa-native/src/symmetric.h \
+  crypto/mldsa-native/src/sys.h \
+  crypto/mldsa-native/src/zetas.inc \
+  crypto/mldsa-native/PROVENANCE.md \
+  test/data/mldsa44_vectors.h \
+  test/mldsa/CMakeLists.txt
 
 
 config/pivx-config.h: config/stamp-h1

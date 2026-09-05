@@ -6,6 +6,7 @@
 #include "masternodeswidget.h"
 #include "ui_masternodeswidget.h"
 
+#include "addresstablemodel.h"
 #include "coincontrol.h"
 #include "masternodewizarddialog.h"
 #include "mninfodialog.h"
@@ -199,7 +200,7 @@ void MasterNodesWidget::onMNClicked(const QModelIndex& _index)
         this->menu->setEditBtnText(tr("Start"));
         this->menu->setDeleteBtnText(tr("Delete"));
         this->menu->setCopyBtnText(tr("Info"));
-        connect(this->menu, &TooltipMenu::message, this, &AddressesWidget::message);
+        connect(this->menu, &TooltipMenu::message, this, &MasterNodesWidget::message);
         connect(this->menu, &TooltipMenu::onEditClicked, this, &MasterNodesWidget::onEditMNClicked);
         connect(this->menu, &TooltipMenu::onDeleteClicked, this, &MasterNodesWidget::onDeleteMNClicked);
         connect(this->menu, &TooltipMenu::onCopyClicked, this, &MasterNodesWidget::onInfoMNClicked);

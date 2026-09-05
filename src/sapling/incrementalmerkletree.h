@@ -13,6 +13,7 @@
 #include "sapling/sapling.h"
 #include "sapling/sapling_util.h"
 
+#include <boost/static_assert.hpp>
 #include <array>
 #include <deque>
 

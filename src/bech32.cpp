@@ -111,21 +111,21 @@ data ExpandHRP(const std::string& hrp)
 }
 
 /** Verify a checksum. */
-bool VerifyChecksum(const std::string& hrp, const data& values)
+bool VerifyChecksum(const std::string& hrp, const data& values, uint32_t constant)
 {
     // PolyMod computes what value to xor into the final values to make the checksum 0. However,
     // if we required that the checksum was 0, it would be the case that appending a 0 to a valid
     // list of values would result in a new valid list. For that reason, Bech32 requires the
     // resulting checksum to be 1 instead.
-    return PolyMod(Cat(ExpandHRP(hrp), values)) == 1;
+    return PolyMod(Cat(ExpandHRP(hrp), values)) == constant;
 }
 
 /** Create a checksum. */
-data CreateChecksum(const std::string& hrp, const data& values)
+data CreateChecksum(const std::string& hrp, const data& values, uint32_t constant)
 {
     data enc = Cat(ExpandHRP(hrp), values);
     enc.resize(enc.size() + 6); // Append 6 zeroes
-    uint32_t mod = PolyMod(enc) ^ 1; // Determine what to XOR into those 6 zeroes.
+    uint32_t mod = PolyMod(enc) ^ constant; // Determine what to XOR into those 6 zeroes.
     data ret(6);
     for (size_t i = 0; i < 6; ++i) {
         // Convert the 5-bit groups in mod to checksum values.
@@ -134,28 +134,21 @@ data CreateChecksum(const std::string& hrp, const data& values)
     return ret;
 }
 
-} // namespace
-
-namespace bech32
+std::string Encode(const std::string& hrp, const data& values, uint32_t constant)
 {
-
-/** Encode a Bech32 string. */
-std::string Encode(const std::string& hrp, const data& values) {
-    data checksum = CreateChecksum(hrp, values);
+    data checksum = CreateChecksum(hrp, values, constant);
     data combined = Cat(values, checksum);
     std::string ret = hrp + '1';
     ret.reserve(ret.size() + combined.size());
     for (auto c : combined) {
-        if (c >= 32) {
-            return "";
-        }
+        if (c >= 32) return {};
         ret += CHARSET[c];
     }
     return ret;
 }
 
-/** Decode a Bech32 string. */
-std::pair<std::string, data> Decode(const std::string& str) {
+std::pair<std::string, data> Decode(const std::string& str, uint32_t constant)
+{
     bool lower = false, upper = false;
     for (size_t i = 0; i < str.size(); ++i) {
         unsigned char c = str[i];
@@ -165,26 +158,41 @@ std::pair<std::string, data> Decode(const std::string& str) {
     }
     if (lower && upper) return {};
     size_t pos = str.rfind('1');
-    if (str.size() > 1023 || pos == str.npos || pos == 0 || pos + 7 > str.size()) {
-        return {};
-    }
+    if (str.size() > 1023 || pos == str.npos || pos == 0 || pos + 7 > str.size()) return {};
     data values(str.size() - 1 - pos);
     for (size_t i = 0; i < str.size() - 1 - pos; ++i) {
         unsigned char c = str[i + pos + 1];
         int8_t rev = (c < 33 || c > 126) ? -1 : CHARSET_REV[c];
-        if (rev == -1) {
-            return {};
-        }
+        if (rev == -1) return {};
         values[i] = rev;
     }
     std::string hrp;
-    for (size_t i = 0; i < pos; ++i) {
-        hrp += LowerCase(str[i]);
-    }
-    if (!VerifyChecksum(hrp, values)) {
-        return {};
-    }
+    for (size_t i = 0; i < pos; ++i) hrp += LowerCase(str[i]);
+    if (!VerifyChecksum(hrp, values, constant)) return {};
     return {hrp, data(values.begin(), values.end() - 6)};
+}
+
+} // namespace
+
+namespace bech32
+{
+
+/** Encode a Bech32 string. */
+std::string Encode(const std::string& hrp, const data& values) {
+    return ::Encode(hrp, values, 1);
+}
+
+/** Decode a Bech32 string. */
+std::pair<std::string, data> Decode(const std::string& str) {
+    return ::Decode(str, 1);
+}
+
+std::string EncodeM(const std::string& hrp, const data& values) {
+    return ::Encode(hrp, values, 0x2bc830a3);
+}
+
+std::pair<std::string, data> DecodeM(const std::string& str) {
+    return ::Decode(str, 0x2bc830a3);
 }
 
 } // namespace bech32

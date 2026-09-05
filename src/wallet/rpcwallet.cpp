@@ -15,10 +15,10 @@
 #include "destination_io.h"
 #include "httpserver.h"
 #include "key_io.h"
-#include "masternode-payments.h"
 #include "messagesigner.h"
 #include "net.h"
 #include "policy/feerate.h"
+#include "pqtransaction.h"
 #include "primitives/transaction.h"
 #include "rpc/server.h"
 #include "sapling/key_io_sapling.h"
@@ -33,6 +33,7 @@
 #include "wallet/walletutil.h"
 
 #include <stdint.h>
+#include <set>
 #include <univalue.h>
 
 
@@ -56,8 +57,7 @@ static bool HasUsableStakingPeerConnection()
 
 static bool HasRequiredStakingPaymentData()
 {
-    CBlockIndex* pindexPrev = WITH_LOCK(cs_main, return chainActive.Tip(););
-    return CanBuildRequiredMasternodePayment(pindexPrev);
+    return true;
 }
 
 CWallet* GetWalletForJSONRPCRequest(const JSONRPCRequest& request)
@@ -551,6 +551,143 @@ UniValue getnewaddress(const JSONRPCRequest& request)
 
     return EncodeDestination(GetNewAddressFromLabel(pwallet, AddressBook::AddressBookPurpose::RECEIVE, request.params));
 }
+
+UniValue getnewpqaddress(const JSONRPCRequest& request)
+{
+    CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
+    if (request.fHelp || request.params.size() != 1)
+        throw std::runtime_error("getnewpqaddress \"backup_destination\"\nCreate an experimental ML-DSA-44 address on testnet or regtest, including before activation.\n"
+                                "Requires an encrypted, fully unlocked wallet. Payments use dedicated PQ commands only.\n"
+                                "backup_destination must be a new file in an existing directory. The encrypted wallet snapshot is written before the address is returned.\n"
+                                "Returns {address, experimental: true, payable, warning}; payable requires active PQ consensus.\n"
+                                "The HD seed and dumpwallet do not back up PQ keys.\n");
+    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "Experimental PQ wallets require testnet or regtest");
+    LOCK2(cs_main, pwallet->cs_wallet);
+    if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the wallet before creating experimental PQ keys");
+    EnsureWalletIsUnlocked(pwallet);
+    const fs::path backup = request.params[0].get_str();
+    if (backup.empty() || fs::exists(backup))
+        throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup destination must be a new file");
+    std::string address;
+    if (!pwallet->GeneratePQAddress(address)) throw JSONRPCError(RPC_WALLET_ERROR, "Could not create and persist experimental PQ key");
+    if (!pwallet->BackupWallet(backup.string())) {
+        if (!pwallet->ErasePQAddress(address))
+            throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup and unused-key cleanup failed; back up the wallet before using any listed PQ address");
+        throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup failed; the new address was not returned");
+    }
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("address", address);
+    result.pushKV("experimental", true);
+    result.pushKV("payable", CWallet::PQPaymentsActive());
+    result.pushKV("warning", "Experimental testnet/regtest PQ commands only; payments require active upgrades. The encrypted wallet snapshot completed before this address was returned.");
+    return result;
+}
+
+UniValue listpqaddresses(const JSONRPCRequest& request)
+{
+    CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
+    if (request.fHelp || !request.params.empty())
+        throw std::runtime_error("listpqaddresses\nList experimental ML-DSA-44 addresses on testnet or regtest, including before activation.\n"
+                                "Works while locked. Returns {addresses, experimental: true, payable}.\n"
+                                "Payable requires active PQ consensus and dedicated PQ commands.\n");
+    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "Experimental PQ wallets require testnet or regtest");
+    UniValue addresses(UniValue::VARR);
+    for (const auto& address : pwallet->GetPQAddresses()) addresses.push_back(address);
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("addresses", addresses);
+    result.pushKV("experimental", true);
+    result.pushKV("payable", CWallet::PQPaymentsActive());
+    return result;
+}
+
+UniValue listpqunspent(const JSONRPCRequest& request)
+{
+    CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
+    if (request.fHelp || !request.params.empty())
+        throw std::runtime_error("listpqunspent\nList confirmed experimental PQ outputs on testnet or regtest. Works while locked.\n"
+                                "Empty before payment activation; historical pre-activation testnet marker outputs are never spendable.\n"
+                                "Locked outputs are listed but cannot be selected for payments.\n");
+    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "Experimental PQ wallets require testnet or regtest");
+    pwallet->BlockUntilSyncedToCurrentChain();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    UniValue result(UniValue::VARR);
+    for (const auto& coin : pwallet->GetPQUnspent(true)) {
+        const auto& output = coin.tx->tx->vout[coin.i];
+        pq::KeyID id;
+        if (!pq::ExtractID(output.scriptPubKey, id)) continue;
+        UniValue entry(UniValue::VOBJ);
+        entry.pushKV("txid", coin.tx->GetHash().ToString());
+        entry.pushKV("vout", coin.i);
+        entry.pushKV("address", pq::EncodeAddress(id, Params().NetworkIDString()));
+        entry.pushKV("amount", ValueFromAmount(output.nValue));
+        entry.pushKV("confirmations", coin.nDepth);
+        entry.pushKV("locked", pwallet->IsLockedCoin(coin.tx->GetHash(), coin.i));
+        entry.pushKV("experimental", true);
+        result.push_back(entry);
+    }
+    return result;
+}
+
+static UniValue SendPQPayment(const JSONRPCRequest& request)
+{
+    CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
+    if (request.fHelp || request.params.size() != 3)
+        throw std::runtime_error(request.strMethod + " \"address\" amount \"backup_destination\"\n"
+            "Send test coins to a PQ address using one or two confirmed PQ inputs and optional PQ change.\n"
+            "Requires encryption, full unlock and active PQ consensus.\n"
+            "backup_destination must be a new file in an existing directory. The encrypted wallet snapshot is written before relay.\n"
+            "Returns {txid, fee, experimental: true}.\n");
+    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "Experimental PQ wallets require testnet or regtest");
+    pwallet->BlockUntilSyncedToCurrentChain();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    if (!CWallet::PQPaymentsActive()) throw JSONRPCError(RPC_MISC_ERROR, "PQ payments are not active on this network");
+    if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the wallet before making PQ payments");
+    EnsureWalletIsUnlocked(pwallet);
+    const fs::path backup = request.params[2].get_str();
+    if (backup.empty() || fs::exists(backup))
+        throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup destination must be a new file");
+    const auto address = request.params[0].get_str();
+    pq::KeyID id;
+    if (!pq::DecodeAddress(address, Params().NetworkIDString(), id))
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid PQ address for this network");
+    const CAmount amount = AmountFromValue(request.params[1]);
+    CTransactionRef tx;
+    CAmount fee;
+    std::string reason;
+    const auto pq_addresses_before = pwallet->GetPQAddresses();
+    const auto cleanup_new_pq_keys = [&]() {
+        bool cleaned = true;
+        for (const auto& candidate : pwallet->GetPQAddresses()) {
+            if (std::find(pq_addresses_before.begin(), pq_addresses_before.end(), candidate) == pq_addresses_before.end())
+                cleaned &= pwallet->ErasePQAddress(candidate);
+        }
+        return cleaned;
+    };
+    if (!pwallet->CreatePQTransaction(address, amount, tx, fee, reason)) {
+        if (!cleanup_new_pq_keys())
+            throw JSONRPCError(RPC_WALLET_ERROR, "PQ payment preparation and unused-key cleanup failed; back up the wallet before using any listed PQ address");
+        throw JSONRPCError(RPC_WALLET_ERROR, reason);
+    }
+    if (!pwallet->BackupWallet(backup.string())) {
+        if (!cleanup_new_pq_keys())
+            throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup and unused-key cleanup failed; back up the wallet before using any listed PQ address");
+        throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup failed; the payment was not relayed");
+    }
+    const auto committed = pwallet->CommitTransaction(tx, nullptr, g_connman.get());
+    if (committed.status != CWallet::CommitStatus::OK)
+        throw JSONRPCError(RPC_WALLET_ERROR, committed.ToString());
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("txid", committed.hashTx.ToString());
+    result.pushKV("fee", ValueFromAmount(fee));
+    result.pushKV("experimental", true);
+    return result;
+}
+
+UniValue sendpqtoaddress(const JSONRPCRequest& request) { return SendPQPayment(request); }
 
 UniValue getnewexchangeaddress(const JSONRPCRequest& request)
 {
@@ -4868,6 +5005,10 @@ static const CRPCCommand commands[] =
     { "wallet",             "upgradewallet",            &upgradewallet,            true,  {} },
     { "wallet",             "sethdseed",                &sethdseed,                true,  {"newkeypool","seed"} },
     { "wallet",             "getnewaddress",            &getnewaddress,            true,  {"label"} },
+    { "wallet",             "getnewpqaddress",          &getnewpqaddress,          true,  {"backup_destination"} },
+    { "wallet",             "listpqaddresses",          &listpqaddresses,          true,  {} },
+    { "wallet",             "listpqunspent",             &listpqunspent,             true,  {} },
+    { "wallet",             "sendpqtoaddress",           &sendpqtoaddress,           false, {"address", "amount", "backup_destination"} },
     { "wallet",             "getnewexchangeaddress",    &getnewexchangeaddress,    true,  {"label"} },
     { "wallet",             "getnewstakingaddress",     &getnewstakingaddress,     true,  {"label"}  },
     { "wallet",             "getrawchangeaddress",      &getrawchangeaddress,      true,  {} },
@@ -4938,7 +5079,14 @@ void RegisterWalletRPCCommands(CRPCTable &tableRPC)
     if (gArgs.GetBoolArg("-disablewallet", false)) {
         return;
     }
+    static const std::set<std::string> pqOnlyCommands{
+        "abandontransaction", "abortrescan", "backupwallet", "encryptwallet",
+        "getnewpqaddress", "getstakingstatus", "gettransaction", "getwalletinfo",
+        "listpqaddresses", "listpqunspent", "listwallets", "rescanblockchain",
+        "sendpqtoaddress", "walletlock", "walletpassphrase", "walletpassphrasechange"
+    };
     for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++) {
+        if (!pqOnlyCommands.count(commands[vcidx].name)) continue;
         tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
     }
 }

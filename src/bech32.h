@@ -25,6 +25,12 @@ std::string Encode(const std::string& hrp, const std::vector<uint8_t>& values);
 /** Decode a Bech32 string. Returns (hrp, data). Empty hrp means failure. */
 std::pair<std::string, std::vector<uint8_t>> Decode(const std::string& str);
 
+/** Encode a Bech32m string. Returns the empty string in case of failure. */
+std::string EncodeM(const std::string& hrp, const std::vector<uint8_t>& values);
+
+/** Decode a Bech32m string. Returns (hrp, data). Empty hrp means failure. */
+std::pair<std::string, std::vector<uint8_t>> DecodeM(const std::string& str);
+
 } // namespace bech32
 
 #endif // PIVX_BECH32_H

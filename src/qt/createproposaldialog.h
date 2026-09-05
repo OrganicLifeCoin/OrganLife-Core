@@ -13,7 +13,6 @@ class CreateProposalDialog;
 class QPushButton;
 }
 
-class ContactsDropdown;
 class GovernanceModel;
 class OrganicLifeGUI;
 class SnackBar;
@@ -36,7 +35,6 @@ public Q_SLOTS:
     void propUrlChanged(const QString& newText);
     void propAmountChanged(const QString& newText);
     bool propaddressChanged(const QString& newText);
-    void onAddrListClicked();
     void onGenAddressClicked();
     void monthsEditDeselect(int i);
 
@@ -48,8 +46,6 @@ private:
     QPushButton* icConfirm1{nullptr};
     QPushButton* icConfirm2{nullptr};
     QPushButton* icConfirm3{nullptr};
-    ContactsDropdown* menuContacts{nullptr};
-    QAction* actAddrList{nullptr};
     int pos = 0;
 
     void loadSummary();

@@ -12,6 +12,7 @@
 #include "mnmodel.h"
 #include "proposalinfodialog.h"
 #include "qtutils.h"
+#include "tooltipmenu.h"
 #include "votedialog.h"
 
 #include <QDesktopServices>
@@ -170,7 +171,7 @@ void GovernanceWidget::onFilterChanged(const QString& value)
 
 void GovernanceWidget::onVoteForPropClicked(const ProposalInfo& proposalInfo)
 {
-    if (!governanceModel->isTierTwoSync()) {
+    if (!governanceModel->isChainReady()) {
         inform(tr("Node is syncing. Please wait."));
         return;
     }
@@ -184,7 +185,7 @@ void GovernanceWidget::onVoteForPropClicked(const ProposalInfo& proposalInfo)
         return;
     }
     window->showHide(true);
-    VoteDialog* dialog = new VoteDialog(window, governanceModel, mnModel, walletModel.get());
+    VoteDialog* dialog = new VoteDialog(window, governanceModel, mnModel, walletModel.data());
     dialog->setProposal(proposalInfo);
     const bool accepted = openDialogWithOpaqueBackgroundY(dialog, window, 4.5, 12, false);
     window->showHide(false);
@@ -200,7 +201,7 @@ void GovernanceWidget::onCreatePropClicked()
 {
     if (!walletModel || !governanceModel || !clientModel) return;
 
-    if (!governanceModel->isTierTwoSync()) {
+    if (!governanceModel->isChainReady()) {
         inform(tr("Node is syncing. Please wait."));
         return;
     }
@@ -224,8 +225,7 @@ void GovernanceWidget::onCreatePropClicked()
         return;
     }
 
-    auto balance = walletModel->GetWalletBalances();
-    if (balance.balance <= governanceModel->getProposalFeeAmount()) {
+    if (governanceModel->getCoinLockableBalance() <= governanceModel->getProposalFeeAmount()) {
         inform(tr("Cannot create proposal, need to have at least %1 to pay for the proposal fee").arg(
                   GUIUtil::formatBalance(governanceModel->getProposalFeeAmount() + walletModel->getNetMinFee()).toStdString().c_str()));
         return;
@@ -238,7 +238,7 @@ void GovernanceWidget::onCreatePropClicked()
     if (accepted) {
         // future: make this refresh atomic, no need to refresh the entire grid.
         tryGridRefresh(true);
-        inform(tr("Proposal transaction fee broadcasted!"));
+        inform(tr("PQ proposal broadcasted!"));
     }
     dialog->deleteLater();
 }
@@ -339,7 +339,7 @@ void GovernanceWidget::setMNModel(MNModel* _mnModel)
 
 void GovernanceWidget::loadWalletModel()
 {
-    governanceModel->setWalletModel(walletModel);
+    if (governanceModel) governanceModel->setWalletModel(walletModel);
 }
 
 void GovernanceWidget::showEvent(QShowEvent *event)
@@ -350,7 +350,7 @@ void GovernanceWidget::showEvent(QShowEvent *event)
     }
 
     if (clientModel && governanceModel) {
-        clientModel->startMasternodesTimer();
+        tierTwoSynced(governanceModel->isChainReady());
         tryGridRefresh(true); // future: move to background worker
         if (!refreshTimer->isActive()) {
             refreshTimer->start(1000 * 60 * 3.5); // Try to refresh screen 3.5 minutes
@@ -367,9 +367,6 @@ void GovernanceWidget::hideEvent(QHideEvent *event)
 {
     if (refreshTimer) {
         refreshTimer->stop();
-    }
-    if (clientModel) {
-        clientModel->stopMasternodesTimer();
     }
 }
 

@@ -41,7 +41,7 @@ static Optional<BLSKey> DecodeBLS(const CChainParams& params,
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             BLSKey key;
             ss >> key;
-            if (key.IsValid()) return {key};
+            if (key.IsValid()) return Optional<BLSKey>(std::move(key));
         }
     }
     return nullopt;

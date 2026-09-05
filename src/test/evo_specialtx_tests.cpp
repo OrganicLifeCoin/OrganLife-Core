@@ -8,6 +8,8 @@
 #include "test/data/specialtx_invalid.json.h"
 #include "test/data/specialtx_valid.json.h"
 
+#include "budget/budgetmanager.h"
+#include "budget/budgetproposal.h"
 #include "consensus/validation.h"
 #include "core_io.h"
 #include "evo/providertx.h"
@@ -17,6 +19,8 @@
 #include "messagesigner.h"
 #include "netbase.h"
 #include "primitives/transaction.h"
+#include "pqaddress.h"
+#include "pqtransaction.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -47,6 +51,20 @@ static CScript GetRandomScript()
 {
     return GetScriptForDestination(GetRandomKeyID());
 }
+
+struct TestPQKey
+{
+    mldsa44::Key key;
+    pq::KeyID id;
+
+    TestPQKey()
+    {
+        BOOST_REQUIRE(key.Generate());
+        const auto keyId = pq::GetID(key.GetPublicKey(), Params().NetworkIDString());
+        BOOST_REQUIRE(keyId);
+        id = *keyId;
+    }
+};
 
 static ProRegPL GetRandomProRegPayload()
 {
@@ -125,41 +143,62 @@ static llmq::LLMQCommPL GetRandomLLMQCommPayload()
 }
 
 static CMutableTransaction BuildGovVoteLockTx(const uint256& proposalHash,
-                                              const CKeyID& ownerKeyId,
+                                              const TestPQKey& owner,
                                               const CAmount amount,
                                               const uint32_t unlockHeight)
 {
     CMutableTransaction mtx;
-    mtx.nVersion = CTransaction::TxVersion::SAPLING;
-    mtx.nType = CTransaction::TxType::GOVVOTELOCK;
+    mtx.nVersion = 3;
+    mtx.nType = CTransaction::TxType::PQ;
+    mtx.sapData = nullopt;
     mtx.vin.emplace_back(GetRandHash(), 0);
-    mtx.vout.emplace_back(amount, GetScriptForDestination(ownerKeyId));
+    mtx.vout.emplace_back(amount, pq::GetScript(owner.id));
 
     CGovVoteLockTx lockPayload;
     lockPayload.proposalHash = proposalHash;
     lockPayload.lockAmount = amount;
     lockPayload.unlockHeight = unlockHeight;
-    lockPayload.ownerKeyId = ownerKeyId;
-    SetTxPayload(mtx, lockPayload);
+    lockPayload.ownerKeyId = owner.id;
+    pq::Payload payload;
+    payload.mode = pq::GOVERNANCE_LOCK;
+    payload.data = EncodeGovernanceData(lockPayload);
+    payload.authorizations.resize(1);
+    payload.authorizations[0].public_key = owner.key.GetPublicKey();
+    payload.authorizations[0].signature.fill(1);
+    mtx.extraPayload = pq::EncodePayload(payload);
     return mtx;
 }
 
 static CMutableTransaction BuildGovVoteCastTx(const uint256& proposalHash,
                                               const uint8_t voteDirection,
                                               const std::vector<COutPoint>& lockRefs,
-                                              const CKey& signer)
+                                              const TestPQKey& signer)
 {
     CMutableTransaction mtx;
-    mtx.nVersion = CTransaction::TxVersion::SAPLING;
-    mtx.nType = CTransaction::TxType::GOVVOTECAST;
+    mtx.nVersion = 3;
+    mtx.nType = CTransaction::TxType::PQ;
+    mtx.sapData = nullopt;
     mtx.vin.emplace_back(GetRandHash(), 0);
+    mtx.vout.emplace_back(COIN, pq::GetScript(signer.id));
 
     CGovVoteCastTx castPayload;
     castPayload.proposalHash = proposalHash;
     castPayload.voteDirection = voteDirection;
     castPayload.lockRefs = lockRefs;
-    BOOST_CHECK(CHashSigner::SignHash(castPayload.GetSignatureHash(), signer, castPayload.sig));
-    SetTxPayload(mtx, castPayload);
+    castPayload.ownerPublicKey = signer.key.GetPublicKey();
+    const auto context = pq::GovernanceSignatureContext(Params().NetworkIDString());
+    BOOST_REQUIRE(context);
+    std::vector<unsigned char> signature;
+    BOOST_REQUIRE(signer.key.Sign(castPayload.GetSignatureMessage(Params().GetConsensus().hashGenesisBlock),
+                                  *context, signature));
+    std::copy(signature.begin(), signature.end(), castPayload.sig.begin());
+    pq::Payload payload;
+    payload.mode = pq::GOVERNANCE_CAST;
+    payload.data = EncodeGovernanceData(castPayload);
+    payload.authorizations.resize(1);
+    payload.authorizations[0].public_key = signer.key.GetPublicKey();
+    payload.authorizations[0].signature.fill(1);
+    mtx.extraPayload = pq::EncodePayload(payload);
 
     return mtx;
 }
@@ -417,11 +456,9 @@ BOOST_AUTO_TEST_CASE(gov_special_txs_rejected_before_activation)
     CBlockIndex prev;
     prev.nHeight = govActivationHeight - 2;
 
-    CMutableTransaction mtx;
-    mtx.nVersion = CTransaction::TxVersion::SAPLING;
-    mtx.nType = CTransaction::TxType::GOVVOTELOCK;
-    mtx.vin.emplace_back(GetRandHash(), 0);
-    mtx.extraPayload = std::vector<uint8_t>(1, 0x01);
+    const evo_specialtx_tests::TestPQKey owner;
+    CMutableTransaction mtx = evo_specialtx_tests::BuildGovVoteLockTx(
+            GetRandHash(), owner, 10 * COIN, 50000);
 
     CValidationState state;
     BOOST_CHECK(!CheckSpecialTx(CTransaction(mtx), &prev, nullptr, state));
@@ -439,11 +476,9 @@ BOOST_AUTO_TEST_CASE(gov_special_txs_activation_boundary)
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(govActivationHeight > 0);
 
-    CMutableTransaction mtx;
-    mtx.nVersion = CTransaction::TxVersion::SAPLING;
-    mtx.nType = CTransaction::TxType::GOVVOTELOCK;
-    mtx.vin.emplace_back(GetRandHash(), 0);
-    mtx.extraPayload = std::vector<uint8_t>(1, 0x01);
+    const evo_specialtx_tests::TestPQKey owner;
+    CMutableTransaction mtx = evo_specialtx_tests::BuildGovVoteLockTx(
+            GetRandHash(), owner, 10 * COIN, 50000);
 
     // block (activation-1) must still be pre-activation
     CBlockIndex prevBefore;
@@ -473,7 +508,7 @@ BOOST_AUTO_TEST_CASE(gov_votelock_rejects_excessive_consensus_cap)
 
     CMutableTransaction mtx = evo_specialtx_tests::BuildGovVoteLockTx(
             GetRandHash(),
-            evo_specialtx_tests::GetRandomKeyID(),
+            evo_specialtx_tests::TestPQKey(),
             100001 * COIN,
             50000);
 
@@ -498,7 +533,7 @@ BOOST_AUTO_TEST_CASE(gov_votelock_rejects_missing_matching_lock_output)
 
     CMutableTransaction mtx = evo_specialtx_tests::BuildGovVoteLockTx(
             GetRandHash(),
-            evo_specialtx_tests::GetRandomKeyID(),
+            evo_specialtx_tests::TestPQKey(),
             10 * COIN,
             50000);
     mtx.vout[0].nValue = 9 * COIN;
@@ -524,14 +559,21 @@ BOOST_AUTO_TEST_CASE(gov_votecast_accepts_same_block_lock_without_mempool_lookup
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(govActivationHeight > 0);
 
-    const CKey ownerKey = evo_specialtx_tests::GetRandomKey();
-    const uint256 proposalHash = GetRandHash();
+    const evo_specialtx_tests::TestPQKey ownerKey;
+    const evo_specialtx_tests::TestPQKey recipientKey;
+    const int cycle = Params().GetConsensus().nBudgetCycleBlocks;
+    const int proposalStart = ((govActivationHeight / cycle) + 1) * cycle;
+    CBudgetProposal proposal("same-block", "https://example.test/pq", 1,
+                             pq::GetScript(recipientKey.id), 100 * COIN,
+                             proposalStart, GetRandHash());
+    BOOST_REQUIRE(g_budgetman.AddPQProposal(proposal, govActivationHeight - 1, GetTime()));
+    const uint256 proposalHash = proposal.GetHash();
     const CAmount lockAmount = 40 * COIN;
-    const uint32_t unlockHeight = 50000;
+    const uint32_t unlockHeight = proposal.GetBlockEnd() + 1;
 
     const CTransactionRef lockTx = MakeTransactionRef(evo_specialtx_tests::BuildGovVoteLockTx(
             proposalHash,
-            ownerKey.GetPubKey().GetID(),
+            ownerKey,
             lockAmount,
             unlockHeight));
     const COutPoint lockRef(lockTx->GetHash(), 0);
@@ -565,7 +607,9 @@ BOOST_AUTO_TEST_CASE(gov_votecast_accepts_same_block_lock_without_mempool_lookup
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 
     CValidationState state;
-    BOOST_CHECK(ProcessSpecialTxsInBlock(block, &index, &view, state, true));
+    BOOST_CHECK_MESSAGE(ProcessSpecialTxsInBlock(block, &index, &view, state, true),
+                        state.GetRejectReason());
+    BOOST_CHECK(g_budgetman.RemovePQProposal(proposalHash));
 }
 
 BOOST_AUTO_TEST_CASE(gov_votecast_missing_lock_is_non_bannable)
@@ -579,7 +623,7 @@ BOOST_AUTO_TEST_CASE(gov_votecast_missing_lock_is_non_bannable)
             Params().GetConsensus().vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight;
     BOOST_REQUIRE(govActivationHeight > 0);
 
-    const CKey ownerKey = evo_specialtx_tests::GetRandomKey();
+    const evo_specialtx_tests::TestPQKey ownerKey;
     const uint256 proposalHash = GetRandHash();
     const COutPoint missingLockRef(GetRandHash(), 0);
 

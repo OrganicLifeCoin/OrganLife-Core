@@ -5,6 +5,7 @@
 #include "qt/settings/exportcsv.h"
 #include "qt/settings/forms/ui_exportcsv.h"
 
+#include "addresstablemodel.h"
 #include "csvmodelwriter.h"
 #include "guiinterface.h"
 #include "guiutil.h"

@@ -14,6 +14,7 @@
 #include "chartutilstests.h"
 #include "governance_dialog_tests.h"
 #include "uritests.h"
+#include "pqwidgettests.h"
 
 #include <QApplication>
 #include <QObject>
@@ -59,6 +60,10 @@ int main(int argc, char *argv[])
 
     GovernanceDialogTests test3;
     if (QTest::qExec(&test3) != 0)
+        fInvalid = true;
+
+    PQWidgetTests pqTests;
+    if (QTest::qExec(&pqTests) != 0)
         fInvalid = true;
 
     return fInvalid;

@@ -310,7 +310,7 @@ bool TransactionRecord::decomposeShieldedDebitTransaction(const CWallet* wallet,
                                                           bool involvesWatchAddress, std::vector<TransactionRecord>& parts)
 {
     // Return early if there are no outputs.
-    if (wtx.tx->sapData->vShieldedOutput.empty()) {
+    if (!wtx.tx->sapData || wtx.tx->sapData->vShieldedOutput.empty()) {
         return false;
     }
 
@@ -348,7 +348,7 @@ bool TransactionRecord::decomposeDebitTransaction(const CWallet* wallet, const C
                                                   std::vector<TransactionRecord>& parts)
 {
     // Return early if there are no outputs.
-    if (wtx.tx->vout.empty() && wtx.tx->sapData->vShieldedOutput.empty()) {
+    if (wtx.tx->vout.empty() && (!wtx.tx->sapData || wtx.tx->sapData->vShieldedOutput.empty())) {
         return false;
     }
 
@@ -417,6 +417,8 @@ bool TransactionRecord::decomposeDebitTransaction(const CWallet* wallet, const C
 // Check whether all the shielded inputs and outputs are from and send to this wallet
 std::pair<bool, bool> areInputsAndOutputsFromAndToMe(const CWalletTx& wtx, SaplingScriptPubKeyMan* sspkm, bool& involvesWatchAddress)
 {
+    if (!wtx.tx->sapData) return std::make_pair(true, true);
+
     // Check if all the shielded spends are from me
     bool allShieldedSpendsFromMe = true;
     for (const auto& spend : wtx.tx->sapData->vShieldedSpend) {
@@ -446,6 +448,11 @@ std::vector<TransactionRecord> TransactionRecord::decomposeTransaction(const CWa
     std::vector<TransactionRecord> parts;
     CAmount nCredit = wtx.GetCredit(ISMINE_ALL);
     CAmount nDebit = wtx.GetDebit(ISMINE_ALL);
+
+    // PQ-only value is shown by PQWidget.
+    if (wtx.tx->nType == CTransaction::PQ && nCredit == 0 && nDebit == 0) {
+        return parts;
+    }
 
     // Decompose coinstake if needed (if it's not a coinstake, the method will no perform any action).
     if (decomposeCoinStake(wallet, wtx, nCredit, nDebit, parts)) {

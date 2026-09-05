@@ -18,10 +18,12 @@
 #include "operationresult.h"
 #include "support/allocators/zeroafterfree.h"
 
+#include <atomic>
 #include <map>
 #include <vector>
 
 #include <QObject>
+#include <QPointer>
 #include <QFuture>
 #include <QSettings>
 #include <QSet>
@@ -263,7 +265,7 @@ public:
         UnlockContext& operator=(UnlockContext&& rhs) { CopyFrom(std::move(rhs)); return *this; }
 
     private:
-        WalletModel *wallet;
+        QPointer<WalletModel> wallet;
         bool valid;
         WalletModel::EncryptionStatus was_status;   // original status
         mutable bool relock; // mutable, as it can be set to false by copying
@@ -376,6 +378,7 @@ public:
     void stop();
 
 private:
+    friend class PQWidgetTests;
     CWallet* wallet{nullptr};
     // Simple Wallet interface.
     // todo: Goal would be to move every CWallet* call to the wallet wrapper and
@@ -390,7 +393,7 @@ private:
     std::unique_ptr<interfaces::Handler> m_handler_show_progress;
     std::unique_ptr<interfaces::Handler> m_handler_notify_watch_only_changed;
     std::unique_ptr<interfaces::Handler> m_handler_notify_walletbacked;
-    ClientModel* m_client_model;
+    ClientModel* m_client_model{nullptr};
 
     bool fHaveWatchOnly;
     bool fForceCheckBalanceChanged;
@@ -409,8 +412,9 @@ private:
     int cachedNumBlocks;
     uint256 m_cached_best_block_hash;
 
-    QTimer* pollTimer;
+    QTimer* pollTimer{nullptr};
     QFuture<void> pollFuture;
+    std::atomic<bool> m_processing_balance{false};
     QSet<QString> m_hiddenTransactionIds;
 
     interfaces::WalletBalances getBalances() { return walletWrapper.getBalances(); };
@@ -457,8 +461,6 @@ public Q_SLOTS:
     void balanceNotify();
     /* Update transaction model after wallet changes */
     void updateTxModelData();
-    /* Balance polling process finished */
-    void pollFinished();
     /* Wallet status might have changed */
     void updateStatus();
     /* New transaction, or transaction changed status */

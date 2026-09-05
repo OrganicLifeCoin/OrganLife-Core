@@ -183,12 +183,12 @@ static const CCheckpointData data = {
 };
 
 static MapCheckpoints mapCheckpointsTestnet = {
-    {0, uint256S("0x00000da1c1aee747221262d679d0b0e18ae5b40baccd97fb09be864a2623b484")},
+    {0, uint256S("0x0000074a425b707b97fd4404f6e97f69e2fb627ee0c9e62a6800152f483a1886")},
 };
 
 static const CCheckpointData dataTestnet = {
     &mapCheckpointsTestnet,
-    1785671999,  // timestamp of genesis checkpoint block (0)
+    1788480000,  // timestamp of genesis checkpoint block (0)
     0,           // estimated tx count
     500};        // estimated tx per day
 
@@ -268,6 +268,7 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_V5_6].nActivationHeight          = 10081;
         consensus.vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight          = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
         consensus.vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight      = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
+        consensus.vUpgrades[Consensus::UPGRADE_PQ].nActivationHeight           = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -343,10 +344,10 @@ public:
     {
         strNetworkID = "test";
 
-        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin Testnet Genesis 2026-08-02", 1785671999, 2269109, 0x1e0ffff0, 1, 0 * COIN);
+        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin PQ Testnet Genesis 2026-09-04", 1788480000, 1519195, 0x1e0ffff0, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x00000da1c1aee747221262d679d0b0e18ae5b40baccd97fb09be864a2623b484"));
-        assert(genesis.hashMerkleRoot == uint256S("0x1d359659f716789e16106511749b0555742154f0efa325fac559c9136aaa9272"));
+        assert(consensus.hashGenesisBlock == uint256S("0x0000074a425b707b97fd4404f6e97f69e2fb627ee0c9e62a6800152f483a1886"));
+        assert(genesis.hashMerkleRoot == uint256S("0xc7ea6a88cd4194abfcf9943e23f6ed45e56c361fba89746f2fd58fe219740698"));
 
         consensus.fPowAllowMinDifficultyBlocks = true;
         consensus.fPowNoRetargeting = false;
@@ -392,7 +393,7 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_TESTDUMMY].nActivationHeight =
                 Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
-        consensus.vUpgrades[Consensus::UPGRADE_POS].nActivationHeight           = 5041;
+        consensus.vUpgrades[Consensus::UPGRADE_POS].nActivationHeight           = 40;
         consensus.vUpgrades[Consensus::UPGRADE_POS_V2].nActivationHeight        = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
         consensus.vUpgrades[Consensus::UPGRADE_BIP65].nActivationHeight         = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
         consensus.vUpgrades[Consensus::UPGRADE_V3_4].nActivationHeight          = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
@@ -404,16 +405,17 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_V5_6].nActivationHeight          = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
         consensus.vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight          = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
         consensus.vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight      = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
+        consensus.vUpgrades[Consensus::UPGRADE_PQ].nActivationHeight           = 1;
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
          * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
          * a large 4-byte int at any alignment.
          */
-        pchMessageStart[0] = 0xa9;
-        pchMessageStart[1] = 0xf2;
-        pchMessageStart[2] = 0x5f;
-        pchMessageStart[3] = 0xe6;
+        pchMessageStart[0] = 0x6b;
+        pchMessageStart[1] = 0xc4;
+        pchMessageStart[2] = 0x02;
+        pchMessageStart[3] = 0x11;
         nDefaultPort = 49716;
 
         // Seed nodes (bootstrap).
@@ -538,6 +540,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight =
                 Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight =
+                Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
+        consensus.vUpgrades[Consensus::UPGRADE_PQ].nActivationHeight =
                 Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
 
         /**

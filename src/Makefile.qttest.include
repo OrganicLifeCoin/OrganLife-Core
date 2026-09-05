@@ -5,11 +5,13 @@ bin_PROGRAMS += qt/test/test_organiclife-qt
 TESTS += qt/test/test_organiclife-qt
 
 TEST_QT_MOC_CPP = \
+  qt/test/moc_pqwidgettests.cpp \
   qt/test/moc_uritests.cpp \
   qt/test/moc_chartutilstests.cpp \
   qt/test/moc_governance_dialog_tests.cpp
 
 TEST_QT_H = \
+  qt/test/pqwidgettests.h \
   qt/test/uritests.h \
   qt/test/chartutilstests.h \
   qt/test/governance_dialog_tests.h
@@ -18,6 +20,7 @@ qt_test_test_organiclife_qt_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITC
   $(QT_INCLUDES) $(QT_TEST_INCLUDES)
 
 qt_test_test_organiclife_qt_SOURCES = \
+  qt/test/pqwidgettests.cpp \
   qt/test/test_main.cpp \
   qt/test/uritests.cpp \
   qt/test/chartutilstests.cpp \

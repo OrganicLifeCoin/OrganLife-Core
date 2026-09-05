@@ -10,8 +10,8 @@
 #include "blocksignature.h"
 #include "miner.h"
 #include "net.h"
+#include "pqtransaction.h"
 #include "primitives/transaction.h"
-#include "script/sign.h"
 #include "spork.h"
 #include "streams.h"
 #include "validation.h"
@@ -23,59 +23,26 @@
 
 BOOST_FIXTURE_TEST_SUITE(main_tests, TestingSetup)
 
-enum BlockSignatureType{
-    P2PK,
-    P2PKH,
-    P2CS
-};
-
-CScript GetScriptForType(CPubKey pubKey, BlockSignatureType type)
+CBlock CreateDummyBlockWithSignature(const mldsa44::Key& stakingKey)
 {
-    switch(type){
-        case P2PK:
-            return CScript() << pubKey << OP_CHECKSIG;
-        default:
-            return GetScriptForDestination(pubKey.GetID());
-    }
-}
-
-std::vector<unsigned char> CreateDummyScriptSigWithKey(CPubKey pubKey)
-{
-    std::vector<unsigned char> vchSig;
-    const CScript scriptCode;
-    DummySignatureCreator(nullptr).CreateSig(vchSig, pubKey.GetID(), scriptCode, SIGVERSION_BASE);
-    return vchSig;
-}
-
-CScript GetDummyScriptSigByType(CPubKey pubKey, bool isP2PK)
-{
-    CScript script = CScript() << CreateDummyScriptSigWithKey(pubKey);
-    if (!isP2PK)
-        script << ToByteVector(pubKey);
-    return script;
-}
-
-CBlock CreateDummyBlockWithSignature(CKey stakingKey, BlockSignatureType type, bool useInputP2PK)
-{
+    const auto id = *pq::GetID(stakingKey.GetPublicKey(), "regtest");
     CMutableTransaction txCoinStake;
-    // Dummy input
-    CTxIn input(uint256(), 0);
-    // P2PKH input
-    input.scriptSig = GetDummyScriptSigByType(stakingKey.GetPubKey(), useInputP2PK);
-    // Add dummy input
-    txCoinStake.vin.emplace_back(input);
-    // Empty first output
+    txCoinStake.nVersion = CTransaction::SAPLING;
+    txCoinStake.nType = CTransaction::PQ;
+    txCoinStake.sapData = nullopt;
+    txCoinStake.vin.emplace_back(uint256S("01"), 0);
     txCoinStake.vout.emplace_back(0, CScript());
-    // P2PK staking output
-    CScript scriptPubKey = GetScriptForType(stakingKey.GetPubKey(), type);
-    txCoinStake.vout.emplace_back(0, scriptPubKey);
+    txCoinStake.vout.emplace_back(COIN, pq::GetScript(id));
+    pq::Payload payload;
+    payload.mode = pq::STAKE;
+    payload.authorizations.resize(1);
+    payload.authorizations[0].public_key = stakingKey.GetPublicKey();
+    txCoinStake.extraPayload = pq::EncodePayload(payload);
 
-    // Now the block.
     CBlock block;
-    block.vtx.emplace_back(std::make_shared<const CTransaction>(CTransaction())); // dummy first tx
+    block.vtx.emplace_back(std::make_shared<const CTransaction>(CTransaction()));
     block.vtx.emplace_back(std::make_shared<const CTransaction>(txCoinStake));
-    SignBlockWithKey(block, stakingKey);
-
+    BOOST_REQUIRE(SignBlockWithPQKey(block, stakingKey));
     return block;
 }
 
@@ -110,26 +77,15 @@ private:
 
 BOOST_AUTO_TEST_CASE(block_signature_test)
 {
-    for (int i = 0; i < 20; ++i) {
-        CKey stakingKey;
-        stakingKey.MakeNewKey(true);
-        bool useInputP2PK = i % 2 == 0;
-
-        // Test P2PK block signature
-        CBlock block = CreateDummyBlockWithSignature(stakingKey, BlockSignatureType::P2PK, useInputP2PK);
-        BOOST_CHECK(TestBlockSignature(block));
-
-        // Test P2PKH block signature
-        block = CreateDummyBlockWithSignature(stakingKey, BlockSignatureType::P2PKH, useInputP2PK);
-        if (useInputP2PK) {
-            // If it's using a P2PK scriptsig as input and a P2PKH output
-            // The block doesn't contain the public key to verify the sig anywhere.
-            // Must fail.
-            BOOST_CHECK(!TestBlockSignature(block));
-        } else {
-            BOOST_CHECK(TestBlockSignature(block));
-        }
-    }
+    SelectParams(CBaseChainParams::REGTEST);
+    mldsa44::Key stakingKey;
+    BOOST_REQUIRE(stakingKey.Generate());
+    CBlock block = CreateDummyBlockWithSignature(stakingKey);
+    BOOST_CHECK(TestBlockSignature(block));
+    block.vchBlockSig.back() ^= 1;
+    BOOST_CHECK(!TestBlockSignature(block));
+    SelectParams(CBaseChainParams::MAIN);
+    BOOST_CHECK(!TestBlockSignature(block));
 }
 
 BOOST_AUTO_TEST_CASE(subsidy_limit_test)
@@ -249,8 +205,9 @@ BOOST_AUTO_TEST_CASE(consensus_upgrade_schedule_safety_test)
                           Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     };
 
-    const auto assert_testnet_legacy_schedule = [](const Consensus::Params& consensus) {
-        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_POS].nActivationHeight, 5041);
+    const auto assert_testnet_schedule = [](const Consensus::Params& consensus) {
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_POS].nActivationHeight, 40);
+        BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_PQ].nActivationHeight, 1);
         BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_POS_V2].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
         BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_BIP65].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
         BOOST_CHECK_EQUAL(consensus.vUpgrades[Consensus::UPGRADE_V3_4].nActivationHeight, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
@@ -268,7 +225,7 @@ BOOST_AUTO_TEST_CASE(consensus_upgrade_schedule_safety_test)
     assert_mainnet_safe_schedule(Params().GetConsensus());
 
     SelectParams(CBaseChainParams::TESTNET);
-    assert_testnet_legacy_schedule(Params().GetConsensus());
+    assert_testnet_schedule(Params().GetConsensus());
 }
 
 BOOST_AUTO_TEST_CASE(mainnet_spork_policy_test)

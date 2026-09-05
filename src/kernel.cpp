@@ -10,8 +10,7 @@
 
 #include "db.h"
 #include "legacy/stakemodifier.h"
-#include "policy/policy.h"
-#include "script/interpreter.h"
+#include "pqtransaction.h"
 #include "stakeinput.h"
 #include "util/system.h"
 #include "utilmoneystr.h"
@@ -165,11 +164,9 @@ bool CheckProofOfStake(const CBlock& block, std::string& strError, const CBlockI
         return false;
     }
     const auto& tx = block.vtx[1];
-    const CTxIn& txin = tx->vin[0];
-    ScriptError serror;
-    if (!VerifyScript(txin.scriptSig, stakePrevout.scriptPubKey, STANDARD_SCRIPT_VERIFY_FLAGS,
-             TransactionSignatureChecker(tx.get(), 0, stakePrevout.nValue), tx->GetRequiredSigVersion(), &serror)) {
-        strError = strprintf("signature fails: %s", serror ? ScriptErrorString(serror) : "");
+    std::string reason;
+    if (tx->nType != CTransaction::PQ || !pq::VerifyInputs(*tx, {stakePrevout}, Params(), reason)) {
+        strError = "PQ stake authorization fails: " + reason;
         return false;
     }
 

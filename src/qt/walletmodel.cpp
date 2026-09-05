@@ -92,6 +92,7 @@ void WalletModel::init()
 
 WalletModel::~WalletModel()
 {
+    stop();
     unsubscribeFromCoreSignals();
 }
 
@@ -313,8 +314,6 @@ static bool IsImportingOrReindexing()
     return fImporting || fReindex;
 }
 
-std::atomic<bool> processingBalance{false};
-
 bool WalletModel::processBalanceChangeInternal()
 {
     int chainHeight = getLastBlockProcessedNum();
@@ -336,23 +335,15 @@ bool WalletModel::processBalanceChangeInternal()
     setCacheBlockHash(blockHash);
     checkBalanceChanged(getBalances());
     QMetaObject::invokeMethod(this, "updateTxModelData", Qt::QueuedConnection);
-    QMetaObject::invokeMethod(this, "pollFinished", Qt::QueuedConnection);
 
     // Address in receive tab may have been used
     Q_EMIT notifyReceiveAddressChanged();
     return true;
 }
 
-static void processBalanceChange(WalletModel* walletModel)
-{
-    if (!walletModel || !walletModel->processBalanceChangeInternal()) {
-        processingBalance = false;
-    }
-}
-
 void WalletModel::pollBalanceChanged()
 {
-    if (processingBalance || !m_client_model) return;
+    if (m_processing_balance.load() || !m_client_model) return;
 
     // Wait a little bit more when the wallet is reindexing and/or importing, no need to lock cs_main so often.
     if (IsImportingOrReindexing() || m_client_model->inInitialBlockDownload()) {
@@ -374,8 +365,11 @@ void WalletModel::pollBalanceChanged()
     // BlockTip notification was received.
     if (!fForceCheckBalanceChanged && m_cached_best_block_hash == getLastBlockProcessed()) return;
 
-    processingBalance = true;
-    pollFuture = QtConcurrent::run(processBalanceChange, this);
+    if (m_processing_balance.exchange(true)) return;
+    pollFuture = QtConcurrent::run([this] {
+        processBalanceChangeInternal();
+        m_processing_balance = false;
+    });
 }
 
 void WalletModel::updateTxModelData()
@@ -404,21 +398,14 @@ void WalletModel::balanceNotify()
     Q_EMIT balanceChanged(m_cached_balances);
 }
 
-void WalletModel::pollFinished()
-{
-    processingBalance = false;
-}
-
 void WalletModel::stop()
 {
+    if (pollTimer) pollTimer->stop();
     if (pollFuture.isRunning()) {
         pollFuture.cancel();
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-        pollFuture.setSuspended(true);
-#else
-        pollFuture.setPaused(true);
-#endif
+        pollFuture.waitForFinished();
     }
+    m_processing_balance = false;
 }
 
 void WalletModel::setWalletDefaultFee(CAmount fee)
@@ -973,6 +960,7 @@ void WalletModel::unsubscribeFromCoreSignals()
 // WalletModel::UnlockContext implementation
 WalletModel::UnlockContext WalletModel::requestUnlock()
 {
+    const QPointer<WalletModel> selectedWallet(this);
     const WalletModel::EncryptionStatus status_before = getEncryptionStatus();
     if (status_before == Locked || status_before == UnlockedForStaking)
     {
@@ -980,9 +968,9 @@ WalletModel::UnlockContext WalletModel::requestUnlock()
         Q_EMIT requireUnlock();
     }
     // If wallet is still locked, unlock was failed or cancelled, mark context as invalid
-    bool valid = isWalletUnlocked();
+    bool valid = selectedWallet && selectedWallet->isWalletUnlocked();
 
-    return UnlockContext(this, valid, status_before);
+    return UnlockContext(selectedWallet.data(), valid, status_before);
 }
 
 WalletModel::UnlockContext::UnlockContext(WalletModel *_wallet, bool _valid, const WalletModel::EncryptionStatus& status_before):

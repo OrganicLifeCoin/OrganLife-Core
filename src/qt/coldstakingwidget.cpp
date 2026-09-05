@@ -627,7 +627,7 @@ void ColdStakingWidget::handleMyColdAddressClicked(const QModelIndex &_index)
         menuAddresses->setDeleteBtnText(tr("Edit"));
         menuAddresses->setCopyBtnVisible(false);
         menuAddresses->adjustSize();
-        connect(menuAddresses, &TooltipMenu::message, this, &AddressesWidget::message);
+        connect(menuAddresses, &TooltipMenu::message, this, &ColdStakingWidget::message);
         connect(menuAddresses, &TooltipMenu::onEditClicked, this, &ColdStakingWidget::onAddressCopyClicked);
         connect(menuAddresses, &TooltipMenu::onDeleteClicked, this, &ColdStakingWidget::onAddressEditClicked);
     } else {
@@ -660,7 +660,7 @@ void ColdStakingWidget::handleAddressClicked(const QModelIndex &rIndex)
         this->menu->setMinimumHeight(157);
         this->menu->setFixedHeight(157);
         this->menu->setMinimumWidth(125);
-        connect(this->menu, &TooltipMenu::message, this, &AddressesWidget::message);
+        connect(this->menu, &TooltipMenu::message, this, &ColdStakingWidget::message);
         connect(this->menu, &TooltipMenu::onEditClicked, this, &ColdStakingWidget::onEditClicked);
         connect(this->menu, &TooltipMenu::onDeleteClicked, this, &ColdStakingWidget::onDeleteClicked);
         connect(this->menu, &TooltipMenu::onCopyClicked, [this](){onLabelClicked();});

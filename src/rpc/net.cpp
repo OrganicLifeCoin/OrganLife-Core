@@ -777,6 +777,8 @@ static const CRPCCommand commands[] =
 
 void RegisterNetRPCCommands(CRPCTable &tableRPC)
 {
-    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++)
-        tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
+    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++) {
+        if (std::string(commands[vcidx].name) != "getforkguardstatus")
+            tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
+    }
 }

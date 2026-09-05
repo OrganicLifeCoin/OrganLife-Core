@@ -9,6 +9,7 @@
 #include "budget/budgetmanager.h"
 #include "chainparams.h"
 #include "evo/deterministicmns.h"
+#include "pqtransaction.h"
 #include "spork.h"
 #include "tiertwo/tiertwo_sync_state.h"
 #include "util/system.h"
@@ -50,6 +51,18 @@ bool IsBlockValueValid(int nHeight, CAmount& nExpectedValue, CAmount nMinted, CA
     // below the hard cap, governance issuance stops and ordinary rewards use
     // the remaining supply instead of creating a partial proposal payment.
     const CAmount nGovernanceCapacity = GetGovernanceCapacity(nHeight, nChainMinted, nBaseIssuanceExpected);
+    if (Params().IsTestChain() && pq::PaymentsActive(Params(), nHeight) &&
+        consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_1_GOV)) {
+        CScript payee;
+        uint256 proposalHash;
+        CAmount payment{0};
+        if (g_budgetman.GetPQPayment(nHeight, payee, payment, proposalHash) &&
+            payment > 0 && payment <= nGovernanceCapacity) {
+            nBudgetAmt = payment;
+            nExpectedValue += payment;
+        }
+        return nMinted == nExpectedValue;
+    }
     bool fUsingBudgetWindowFallback = false;
     if (!g_tiertwo_sync_state.IsSynced()) {
         //there is no budget data to use to check anything
@@ -202,7 +215,10 @@ bool CanBuildRequiredMasternodePayment(const CBlockIndex* pindexPrev)
         return true;
 
     std::vector<CTxOut> vecMnOuts;
-    return masternodePayments.GetMasternodeTxOuts(pindexPrev, vecMnOuts) && !vecMnOuts.empty();
+    // Testnet accepts an empty coinbase when no masternode payee exists.
+    // Allow its background minter to bootstrap under that same rule.
+    return masternodePayments.GetMasternodeTxOuts(pindexPrev, vecMnOuts) &&
+           (Params().IsTestnet() || !vecMnOuts.empty());
 }
 
 std::string GetRequiredPaymentsString(int nBlockHeight)

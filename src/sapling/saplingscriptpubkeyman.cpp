@@ -22,10 +22,13 @@ void SaplingScriptPubKeyMan::AddToSaplingSpends(const uint256& nullifier, const 
 {
     AssertLockHeld(wallet->cs_wallet);
     mapTxSaplingNullifiers.emplace(nullifier, wtxid);
+}
 
-    std::pair<TxNullifiers::iterator, TxNullifiers::iterator> range;
-    range = mapTxSaplingNullifiers.equal_range(nullifier);
-    wallet->SyncMetaDataN(range);
+void SaplingScriptPubKeyMan::StageSpendMetadata(CWalletTx& incoming, std::map<uint256, CWalletTx>& staged)
+{
+    AssertLockHeld(wallet->cs_wallet);
+    for (const auto& spend : incoming.tx->sapData->vShieldedSpend)
+        wallet->SyncMetaDataN(mapTxSaplingNullifiers.equal_range(spend.nullifier), incoming, staged);
 }
 
 bool SaplingScriptPubKeyMan::IsSaplingSpent(const SaplingOutPoint& op) const

@@ -49,20 +49,17 @@ QT_FORMS_UI = \
   qt/forms/defaultdialog.ui \
   qt/forms/coldstakingwidget.ui \
   qt/forms/proposalcard.ui \
-  qt/forms/mnselectiondialog.ui \
   qt/forms/votedialog.ui \
   qt/forms/createproposaldialog.ui \
   qt/forms/proposalinfodialog.ui \
   qt/forms/governancewidget.ui \
   qt/settings/forms/backupwallet.ui \
   qt/settings/forms/exportcsv.ui \
-  qt/settings/forms/bittoolwidget.ui \
   qt/settings/forms/consolewidget.ui \
   qt/settings/forms/displayoptionswidget.ui \
   qt/settings/forms/faqwidget.ui \
   qt/settings/forms/informationwidget.ui \
   qt/settings/forms/mainoptionswidget.ui \
-  qt/settings/forms/signmessagewidgets.ui \
   qt/settings/forms/walletoptionswidget.ui \
   qt/settings/forms/walletrepairwidget.ui \
   qt/settings/forms/settingswidget.ui \
@@ -104,6 +101,7 @@ QT_MOC_CPP = \
   qt/moc_focuseddialog.cpp \
   qt/moc_snackbar.cpp \
   qt/moc_navmenuwidget.cpp \
+  qt/moc_pqwidget.cpp \
   qt/moc_lockunlock.cpp \
   qt/moc_expandablebutton.cpp \
   qt/moc_furabstractlistitemdelegate.cpp \
@@ -138,20 +136,17 @@ QT_MOC_CPP = \
   qt/moc_defaultdialog.cpp \
   qt/moc_coldstakingwidget.cpp \
   qt/moc_proposalcard.cpp \
-  qt/moc_mnselectiondialog.cpp \
   qt/moc_votedialog.cpp \
   qt/moc_createproposaldialog.cpp \
   qt/moc_proposalinfodialog.cpp \
   qt/moc_governancewidget.cpp \
   qt/settings/moc_backupwallet.cpp \
   qt/settings/moc_exportcsv.cpp \
-  qt/settings/moc_bittoolwidget.cpp \
   qt/settings/moc_consolewidget.cpp \
   qt/settings/moc_displayoptionswidget.cpp \
   qt/settings/moc_faqwidget.cpp \
   qt/settings/moc_informationwidget.cpp \
   qt/settings/moc_mainoptionswidget.cpp \
-  qt/settings/moc_signmessagewidgets.cpp \
   qt/settings/moc_walletoptionswidget.cpp \
   qt/settings/moc_walletrepairwidget.cpp \
   qt/settings/moc_settingswidget.cpp \
@@ -214,6 +209,7 @@ BITCOIN_QT_H = \
   qt/guitransactionsutils.h \
   qt/snackbar.h \
   qt/navmenuwidget.h \
+  qt/pqwidget.h \
   qt/lockunlock.h \
   qt/receivedialog.h \
   qt/furlistrow.h \
@@ -255,20 +251,17 @@ BITCOIN_QT_H = \
   qt/coldstakingwidget.h \
   qt/governancemodel.h \
   qt/proposalcard.h \
-  qt/mnselectiondialog.h \
   qt/votedialog.h \
   qt/createproposaldialog.h \
   qt/proposalinfodialog.h \
   qt/governancewidget.h \
   qt/settings/backupwallet.h \
   qt/settings/exportcsv.h \
-  qt/settings/bittoolwidget.h \
   qt/settings/consolewidget.h \
   qt/settings/displayoptionswidget.h \
   qt/settings/faqwidget.h \
   qt/settings/informationwidget.h \
   qt/settings/mainoptionswidget.h \
-  qt/settings/signmessagewidgets.h \
   qt/settings/walletoptionswidget.h \
   qt/settings/walletrepairwidget.h \
   qt/settings/settingswidget.h \
@@ -554,6 +547,7 @@ BITCOIN_QT_WALLET_CPP = \
   qt/guitransactionsutils.cpp \
   qt/snackbar.cpp \
   qt/navmenuwidget.cpp \
+  qt/pqwidget.cpp \
   qt/lockunlock.cpp \
   qt/receivedialog.cpp \
   qt/furabstractlistitemdelegate.cpp \
@@ -593,20 +587,17 @@ BITCOIN_QT_WALLET_CPP = \
   qt/coldstakingwidget.cpp \
   qt/governancemodel.cpp \
   qt/proposalcard.cpp \
-  qt/mnselectiondialog.cpp \
   qt/votedialog.cpp \
   qt/createproposaldialog.cpp \
   qt/proposalinfodialog.cpp \
   qt/governancewidget.cpp \
   qt/settings/backupwallet.cpp \
   qt/settings/exportcsv.cpp \
-  qt/settings/bittoolwidget.cpp \
   qt/settings/consolewidget.cpp \
   qt/settings/displayoptionswidget.cpp \
   qt/settings/faqwidget.cpp \
   qt/settings/informationwidget.cpp \
   qt/settings/mainoptionswidget.cpp \
-  qt/settings/signmessagewidgets.cpp \
   qt/settings/walletoptionswidget.cpp \
   qt/settings/walletrepairwidget.cpp \
   qt/settings/settingswidget.cpp \
@@ -694,14 +685,14 @@ translate: $(srcdir)/qt/organiclifestrings.cpp $(QT_FORMS_UI) $(QT_FORMS_UI) $(B
 $(QT_QRC_LOCALE_CPP): $(QT_QRC_LOCALE) $(QT_QM)
 	@test -f $(QT_RCC)
 	@cp -f $< $(@D)/temp_$(<F)
-	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(QT_RCC) --compress-algo zlib --no-zstd -name organiclife_locale $(@D)/temp_$(<F) > $@.tmp && \
+	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(QT_RCC) --compress-algo zlib -name organiclife_locale $(@D)/temp_$(<F) > $@.tmp && \
 	  $(SED) -e '/^\*\*.*Created:/d' -e '/^\*\*.*by:/d' < $@.tmp > $@ && \
 	  rm -f $@.tmp
 	@rm $(@D)/temp_$(<F)
 
 $(QT_QRC_CPP): $(QT_QRC) $(QT_FORMS_H) $(RES_ICONS) $(RES_IMAGES) $(RES_CSS)
 	@test -f $(QT_RCC)
-	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(QT_RCC) --compress-algo zlib --no-zstd -name organiclife $< > $@.tmp && \
+	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(QT_RCC) --compress-algo zlib -name organiclife $< > $@.tmp && \
 	  $(SED) -e '/^\*\*.*Created:/d' -e '/^\*\*.*by:/d' < $@.tmp > $@ && \
 	  rm -f $@.tmp
 

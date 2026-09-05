@@ -546,7 +546,7 @@ BOOST_AUTO_TEST_CASE(util_GetChainName)
     BOOST_CHECK_THROW(test_args.GetChainName(), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(util_autogen_conf_defaults_to_mainnet_and_staking)
+BOOST_AUTO_TEST_CASE(util_autogen_conf_defaults_to_testnet_and_staking)
 {
     SetDataDir("autogen_conf_mainnet_defaults");
     ClearDatadirCache();
@@ -566,7 +566,7 @@ BOOST_AUTO_TEST_CASE(util_autogen_conf_defaults_to_mainnet_and_staking)
                                    std::istreambuf_iterator<char>());
 
     BOOST_CHECK_NE(conf_content.find("staking=1"), std::string::npos);
-    BOOST_CHECK_EQUAL(conf_content.find("testnet=1"), std::string::npos);
+    BOOST_CHECK_NE(conf_content.find("testnet=1"), std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(util_FormatMoney)

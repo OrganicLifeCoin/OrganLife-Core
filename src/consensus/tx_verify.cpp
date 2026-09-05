@@ -6,6 +6,7 @@
 #include "tx_verify.h"
 
 #include "consensus/consensus.h"
+#include "pqtransaction.h"
 #include "sapling/sapling_validation.h"
 #include "../validation.h"
 
@@ -33,7 +34,7 @@ unsigned int GetLegacySigOpCount(const CTransaction& tx)
     for (const CTxOut& txout : tx.vout) {
         nSigOps += txout.scriptPubKey.GetSigOpCount(false);
     }
-    return nSigOps;
+    return nSigOps + pq::GetSigOpCost(tx);
 }
 
 unsigned int GetP2SHSigOpCount(const CTransaction& tx, const CCoinsViewCache& inputs)
@@ -52,6 +53,9 @@ unsigned int GetP2SHSigOpCount(const CTransaction& tx, const CCoinsViewCache& in
 
 bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool fColdStakingActive)
 {
+    std::string pq_reason;
+    if (!pq::CheckStructure(tx, Params(), pq_reason))
+        return state.DoS(100, false, REJECT_INVALID, pq_reason);
     // Basic checks that don't depend on any context
     // Transactions containing empty `vin` must have non-empty `vShieldedSpend`,
     // or they must be quorum commitments (only one per-type allowed in a block)
@@ -128,6 +132,9 @@ bool CheckTransaction(const CTransaction& tx, CValidationState& state, bool fCol
 
 bool ContextualCheckTransaction(const CTransactionRef& tx, CValidationState& state, const CChainParams& chainparams, int nHeight, bool isMined, bool fIBD)
 {
+    std::string pq_reason;
+    if (!pq::CheckContext(*tx, chainparams, nHeight, pq_reason))
+        return state.DoS(100, false, REJECT_INVALID, pq_reason);
     // Dispatch to Sapling validator
     if (!SaplingValidation::ContextualCheckTransaction(*tx, state, chainparams, nHeight, isMined, fIBD)) {
         return false; // Failure reason has been set in validation state object

@@ -1,16 +1,16 @@
-// Copyright (c) 2017-2021 The PIVX Core developers
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// Copyright (c) 2026 The OrganicLife Coin developers
+// Distributed under the MIT software license, see the accompanying file COPYING.
 
 #ifndef PIVX_BLOCKSIGNATURE_H
 #define PIVX_BLOCKSIGNATURE_H
 
-#include "key.h"
+#include "crypto/mldsa44.h"
 #include "primitives/block.h"
-#include "keystore.h"
 
-bool SignBlockWithKey(CBlock& block, const CKey& key);
-bool SignBlock(CBlock& block, const CKeyStore& keystore);
+class CWallet;
+
+bool SignBlockWithPQKey(CBlock& block, const mldsa44::Key& key);
+bool SignBlock(CBlock& block, const CWallet& wallet);
 bool CheckBlockSignature(const CBlock& block);
 
 #endif // PIVX_BLOCKSIGNATURE_H

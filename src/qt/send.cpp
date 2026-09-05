@@ -1030,7 +1030,7 @@ void SendWidget::onMenuClicked(SendMultiRow* entry)
         this->menu->setLastBtnText(tr("Subtract fee"));
         this->menu->setMinimumHeight(157);
         this->menu->setMinimumSize(this->menu->width() + 30, this->menu->height());
-        connect(this->menu, &TooltipMenu::message, this, &AddressesWidget::message);
+        connect(this->menu, &TooltipMenu::message, this, &SendWidget::message);
         connect(this->menu, &TooltipMenu::onEditClicked, this, &SendWidget::onContactMultiClicked);
         connect(this->menu, &TooltipMenu::onDeleteClicked, this, &SendWidget::onDeleteClicked);
         connect(this->menu, &TooltipMenu::onCopyClicked, this, &SendWidget::onEntryMemoClicked);

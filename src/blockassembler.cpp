@@ -9,6 +9,7 @@
 
 #include "amount.h"
 #include "blocksignature.h"
+#include "budget/budgetmanager.h"
 #include "chain.h"
 #include "chainparams.h"
 #include "consensus/consensus.h"
@@ -20,6 +21,7 @@
 #include "masternode-payments.h"
 #include "policy/policy.h"
 #include "pow.h"
+#include "pqtransaction.h"
 #include "primitives/transaction.h"
 #include "spork.h"
 #include "timedata.h"
@@ -41,6 +43,15 @@
 
 uint64_t nLastBlockTx = 0;
 uint64_t nLastBlockSize = 0;
+
+namespace {
+bool DecodePQGovernanceCast(const CTransaction& tx, CGovVoteCastTx& cast)
+{
+    pq::Payload payload;
+    return pq::DecodePayload(tx, payload) && payload.mode == pq::GOVERNANCE_CAST &&
+           DecodeGovernanceData(payload, cast);
+}
+} // namespace
 
 int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev)
 {
@@ -103,37 +114,6 @@ static CMutableTransaction NewCoinbase(const int nHeight, const CScript* pScript
     return txCoinbase;
 }
 
-static CAmount GetMutableValueOut(const CMutableTransaction& tx)
-{
-    CAmount valueOut{0};
-    for (const CTxOut& out : tx.vout) {
-        valueOut += out.nValue;
-    }
-    return valueOut;
-}
-
-static bool HasRequiredCoinbasePayment(const CMutableTransaction& txCoinbase, const CBlockIndex* pindexPrev)
-{
-    const int nHeight = pindexPrev->nHeight + 1;
-    if (!Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0))
-        return true;
-    if (GetMasternodePayment(nHeight, GetBlockValue(nHeight, pindexPrev->nChainMinted)) <= 0)
-        return true;
-    if (GetMutableValueOut(txCoinbase) > 0)
-        return true;
-
-    // No payment in the coinbase yet. This is valid when no payee can be
-    // determined (small or unsynced network: FillBlockPayee keeps a valid
-    // empty coinbase); only pause when a payee exists but the payment is
-    // missing from the coinbase.
-    std::vector<CTxOut> vecMnOuts;
-    if (!masternodePayments.GetMasternodeTxOuts(pindexPrev, vecMnOuts) || vecMnOuts.empty())
-        return true;
-
-    LogPrintf("Staking paused: missing required coinbase masternode/budget payment at height %d\n", nHeight);
-    return false;
-}
-
 bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet,
                        std::vector<CStakeableOutput>* availableCoins, bool stopPoSOnNewBlock)
 {
@@ -181,12 +161,14 @@ bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet
     }
     // Stake found
 
-    // Create coinbase tx and add masternode/budget payments
+    // PoS rewards are paid only by the PQ coinstake.
     CMutableTransaction txCoinbase = NewCoinbase(pindexPrev->nHeight + 1);
-    FillBlockPayee(txCoinbase, txCoinStake, pindexPrev, true);
-    if (!HasRequiredCoinbasePayment(txCoinbase, pindexPrev)) {
-        return false;
-    }
+    CScript governancePayee;
+    CAmount governanceAmount{0};
+    uint256 governanceProposal;
+    if (g_budgetman.GetPQPayment(pindexPrev->nHeight + 1, governancePayee,
+                                 governanceAmount, governanceProposal))
+        txCoinStake.vout.emplace_back(governanceAmount, governancePayee);
 
     // Sign coinstake
     if (!pwallet->SignCoinStake(txCoinStake)) {
@@ -208,14 +190,12 @@ CMutableTransaction CreateCoinbaseTx(const CScript& scriptPubKeyIn, CBlockIndex*
     // Create coinbase tx
     CMutableTransaction txCoinbase = NewCoinbase(nHeight, &scriptPubKeyIn);
 
-    //Masternode and general budget payments
-    CMutableTransaction txDummy;    // POW blocks have no coinstake
-    FillBlockPayee(txCoinbase, txDummy, pindexPrev, false);
-
-    // If no payee was detected, then the whole block value goes to the first output.
-    if (txCoinbase.vout.size() == 1) {
-        txCoinbase.vout[0].nValue = GetBlockValue(nHeight, pindexPrev->nChainMinted);
-    }
+    txCoinbase.vout[0].nValue = GetBlockValue(nHeight, pindexPrev->nChainMinted);
+    CScript governancePayee;
+    CAmount governanceAmount{0};
+    uint256 governanceProposal;
+    if (g_budgetman.GetPQPayment(nHeight, governancePayee, governanceAmount, governanceProposal))
+        txCoinbase.vout.emplace_back(governanceAmount, governancePayee);
 
     return txCoinbase;
 }
@@ -287,7 +267,8 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
 
     // After v6 enforcement, add LLMQ commitments if needed
     const Consensus::Params& consensus = Params().GetConsensus();
-    if (consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0) && fIncludeQfc) {
+    if (consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0) &&
+        fIncludeQfc && llmq::quorumBlockProcessor) {
         LOCK(cs_main);
         for (const auto& p : Params().GetConsensus().llmqs) {
             CTransactionRef qcTx;
@@ -460,11 +441,8 @@ void BlockAssembler::SortForBlock(const CTxMemPool::setEntries& package, CTxMemP
 
     auto hasPendingGovLockDependency = [&](const CTxMemPool::txiter& txit) {
         const CTransaction& tx = txit->GetTx();
-        if (tx.nType != CTransaction::TxType::GOVVOTECAST) {
-            return false;
-        }
         CGovVoteCastTx castPayload;
-        if (!GetTxPayload(tx, castPayload)) {
+        if (!DecodePQGovernanceCast(tx, castPayload)) {
             return false;
         }
         for (const COutPoint& lockRef : castPayload.lockRefs) {
@@ -616,11 +594,8 @@ void BlockAssembler::addPackageTxs()
             addedGovDependencies = false;
             std::vector<CTxMemPool::txiter> current(ancestors.begin(), ancestors.end());
             for (const auto& candidate : current) {
-                if (candidate->GetTx().nType != CTransaction::TxType::GOVVOTECAST) {
-                    continue;
-                }
                 CGovVoteCastTx castPayload;
-                if (!GetTxPayload(candidate->GetTx(), castPayload)) {
+                if (!DecodePQGovernanceCast(candidate->GetTx(), castPayload)) {
                     continue;
                 }
                 for (const COutPoint& lockRef : castPayload.lockRefs) {

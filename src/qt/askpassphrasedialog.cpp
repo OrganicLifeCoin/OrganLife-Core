@@ -14,8 +14,6 @@
 
 #include "defaultdialog.h"
 #include "guiconstants.h"
-#include "guiutil.h"
-#include "loadingdialog.h"
 #include "qtutils.h"
 #include "walletmodel.h"
 
@@ -36,6 +34,7 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent, WalletModel
                                                                                                             btnWatch(nullptr)
 {
     ui->setupUi(this);
+    if (model) connect(model, &QObject::destroyed, this, &QDialog::reject);
     applyParentOrAppStyleSheet(parent);
 
     ui->labelTitle->setText("Change passphrase");
@@ -205,16 +204,14 @@ void AskPassphraseDialog::accept()
                 " <b>" + tr("LOSE ALL OF YOUR COINS") + "</b>!<br><br>" + tr("Are you sure you wish to encrypt your wallet?"),
                 tr("ENCRYPT"), tr("CANCEL")
         );
-        if (ret) {
-            newpassCache = newpass1;
-            OrganicLifeGUI* window = static_cast<OrganicLifeGUI*>(parentWidget());
-            LoadingDialog::Content loadingContent;
-            loadingContent.eyebrow = tr("Security");
-            loadingContent.title = tr("Encrypting wallet");
-            loadingContent.supportText = tr("Applying encryption and securing your wallet data.");
-            LoadingDialog *dialog = new LoadingDialog(window, loadingContent);
-            dialog->execute(this, 1);
-            openDialogWithOpaqueBackgroundFullScreen(dialog, window);
+        if (ret && model) {
+            hide();
+            if (model->setWalletEncrypted(true, newpass1)) {
+                warningMessage();
+            } else {
+                errorEncryptingWallet();
+            }
+            QDialog::accept();
         } else {
             QDialog::reject(); // Cancelled
         }
@@ -385,28 +382,6 @@ void AskPassphraseDialog::errorEncryptingWallet()
 {
     QMessageBox::critical(this, tr("Wallet encryption failed"),
                           tr("Wallet encryption failed due to an internal error. Your wallet was not encrypted."));
-}
-
-void AskPassphraseDialog::run(int type)
-{
-    if (type == 1) {
-        if (!newpassCache.empty()) {
-            QMetaObject::invokeMethod(this, "hide", Qt::QueuedConnection);
-            if (model->setWalletEncrypted(true, newpassCache)) {
-                QMetaObject::invokeMethod(this, "warningMessage", Qt::QueuedConnection);
-            } else {
-                QMetaObject::invokeMethod(this, "errorEncryptingWallet", Qt::QueuedConnection);
-            }
-            newpassCache.clear();
-            QDialog::accept(); // Success
-        }
-    }
-}
-void AskPassphraseDialog::onError(QString error, int type)
-{
-    newpassCache.clear();
-    LogPrintf("Error encrypting wallet, %s\n", error.toStdString());
-    QMetaObject::invokeMethod(this, "errorEncryptingWallet", Qt::QueuedConnection);
 }
 
 void AskPassphraseDialog::initWatch(QWidget *parent)

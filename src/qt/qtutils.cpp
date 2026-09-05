@@ -5,6 +5,7 @@
 
 #include "qtutils.h"
 
+#include "addresstablemodel.h"
 #include "guiconstants.h"
 #include "logging.h"
 #include "qrencode.h"

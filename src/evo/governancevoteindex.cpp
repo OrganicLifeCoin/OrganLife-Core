@@ -6,6 +6,7 @@
 #include "evo/governancevoteindex.h"
 
 #include "budget/budgetmanager_bridge.h"
+#include "budget/budgetmanager.h"
 #include "chain.h"
 #include "chainparams.h"
 #include "consensus/params.h"
@@ -56,7 +57,7 @@ int64_t SubFloorZero(int64_t current, int64_t delta)
 
 bool FindLockOutputIndex(const CTransaction& tx, const CGovVoteLockTx& payload, uint32_t& outputIndexRet)
 {
-    const CScript ownerScript = GetScriptForDestination(payload.ownerKeyId);
+    const CScript ownerScript = pq::GetScript(payload.ownerKeyId);
     for (uint32_t i = 0; i < tx.vout.size(); ++i) {
         const CTxOut& out = tx.vout[i];
         if (out.nValue == payload.lockAmount && out.scriptPubKey == ownerScript) {
@@ -115,11 +116,13 @@ bool CheckAndStageCast(const CGovVoteCastTx& castPayload,
                         CEvoDB& evoDb,
                         CValidationState& state)
 {
-    if (IsBudgetProposalExpired(castPayload.proposalHash, static_cast<int>(blockHeight))) {
-        return false;
-    }
+    CBudgetProposal proposal;
+    if (!g_budgetman.GetProposal(castPayload.proposalHash, proposal))
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-proposal-unknown");
+    if (static_cast<int>(blockHeight) >= proposal.GetBlockStart())
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-voting-closed");
 
-    CKeyID ownerKeyId;
+    pq::KeyID ownerKeyId;
     bool ownerSet = false;
     for (const auto& lockRef : castPayload.lockRefs) {
         CGovVoteLockRecord lockRecord;
@@ -166,6 +169,40 @@ CGovernanceVoteIndex::CGovernanceVoteIndex(CEvoDB& _evoDb) : evoDb(_evoDb)
 {
 }
 
+void CGovernanceVoteIndex::LoadProposals()
+{
+    g_budgetman.Clear();
+    std::unique_ptr<CDBIterator> it(evoDb.GetRawDB().NewIterator());
+    it->Seek(std::make_pair(EVODB_GOV_PROPOSAL, uint256{}));
+    while (it->Valid()) {
+        std::pair<std::string, uint256> key;
+        if (!it->GetKey(key) || key.first != EVODB_GOV_PROPOSAL) break;
+        CBudgetProposal proposal;
+        if (it->GetValue(proposal)) {
+            g_budgetman.AddPQProposal(proposal, -1, proposal.nTime);
+        }
+        it->Next();
+    }
+}
+
+bool CGovernanceVoteIndex::ApplyProposalTx(const CTransaction& tx, uint32_t blockHeight,
+                                            int64_t blockTime, CValidationState& state)
+{
+    pq::Payload pqPayload;
+    if (!pq::DecodePayload(tx, pqPayload) || pqPayload.mode != pq::GOVERNANCE_PROPOSAL) return true;
+
+    CGovProposalTx payload;
+    if (!DecodeGovernanceData(pqPayload, payload) || !payload.IsTriviallyValid(state))
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-proposal-payload");
+    CBudgetProposal proposal(payload.name, payload.url, payload.paymentCount,
+                             pq::GetScript(payload.recipient), payload.amount,
+                             payload.blockStart, tx.GetHash());
+    if (!g_budgetman.AddPQProposal(proposal, blockHeight, blockTime))
+        return state.DoS(100, false, REJECT_DUPLICATE, "bad-govtx-proposal-duplicate");
+    evoDb.Write(std::make_pair(EVODB_GOV_PROPOSAL, proposal.GetHash()), proposal);
+    return true;
+}
+
 bool CGovernanceVoteIndex::GetProposalTally(const uint256& proposalHash, int64_t& coinYeas, int64_t& coinNays) const
 {
     coinYeas = 0;
@@ -197,12 +234,13 @@ bool CGovernanceVoteIndex::IsLockUsedForProposal(const COutPoint& lockRef, const
 
 bool CGovernanceVoteIndex::ApplyLockTx(const CTransaction& tx, uint32_t blockHeight, CValidationState& state)
 {
-    if (tx.nType != CTransaction::TxType::GOVVOTELOCK) {
+    pq::Payload pqPayload;
+    if (!pq::DecodePayload(tx, pqPayload) || pqPayload.mode != pq::GOVERNANCE_LOCK) {
         return true;
     }
 
     CGovVoteLockTx payload;
-    if (!GetTxPayload(tx, payload) || !payload.IsTriviallyValid(state)) {
+    if (!DecodeGovernanceData(pqPayload, payload) || !payload.IsTriviallyValid(state)) {
         return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-payload");
     }
 
@@ -220,12 +258,13 @@ bool CGovernanceVoteIndex::ApplyLockTx(const CTransaction& tx, uint32_t blockHei
 
 bool CGovernanceVoteIndex::ApplyCastTx(const CTransaction& tx, uint32_t blockHeight, CValidationState& state)
 {
-    if (tx.nType != CTransaction::TxType::GOVVOTECAST) {
+    pq::Payload pqPayload;
+    if (!pq::DecodePayload(tx, pqPayload) || pqPayload.mode != pq::GOVERNANCE_CAST) {
         return true;
     }
 
     CGovVoteCastTx payload;
-    if (!GetTxPayload(tx, payload) || !payload.IsTriviallyValid(state)) {
+    if (!DecodeGovernanceData(pqPayload, payload) || !payload.IsTriviallyValid(state)) {
         return state.DoS(100, false, REJECT_INVALID, "bad-govtx-cast-payload");
     }
 
@@ -256,12 +295,13 @@ bool CGovernanceVoteIndex::ApplyCastTx(const CTransaction& tx, uint32_t blockHei
 
 bool CGovernanceVoteIndex::UndoLockTx(const CTransaction& tx)
 {
-    if (tx.nType != CTransaction::TxType::GOVVOTELOCK) {
+    pq::Payload pqPayload;
+    if (!pq::DecodePayload(tx, pqPayload) || pqPayload.mode != pq::GOVERNANCE_LOCK) {
         return true;
     }
 
     CGovVoteLockTx payload;
-    if (!GetTxPayload(tx, payload)) {
+    if (!DecodeGovernanceData(pqPayload, payload)) {
         return false;
     }
 
@@ -274,14 +314,29 @@ bool CGovernanceVoteIndex::UndoLockTx(const CTransaction& tx)
     return true;
 }
 
+bool CGovernanceVoteIndex::UndoProposalTx(const CTransaction& tx)
+{
+    pq::Payload pqPayload;
+    if (!pq::DecodePayload(tx, pqPayload) || pqPayload.mode != pq::GOVERNANCE_PROPOSAL) return true;
+    CGovProposalTx payload;
+    if (!DecodeGovernanceData(pqPayload, payload)) return false;
+    const CBudgetProposal proposal(payload.name, payload.url, payload.paymentCount,
+                                   pq::GetScript(payload.recipient), payload.amount,
+                                   payload.blockStart, tx.GetHash());
+    g_budgetman.RemovePQProposal(proposal.GetHash());
+    evoDb.Erase(std::make_pair(EVODB_GOV_PROPOSAL, proposal.GetHash()));
+    return true;
+}
+
 bool CGovernanceVoteIndex::UndoCastTx(const CTransaction& tx)
 {
-    if (tx.nType != CTransaction::TxType::GOVVOTECAST) {
+    pq::Payload pqPayload;
+    if (!pq::DecodePayload(tx, pqPayload) || pqPayload.mode != pq::GOVERNANCE_CAST) {
         return true;
     }
 
     CGovVoteCastTx payload;
-    if (!GetTxPayload(tx, payload)) {
+    if (!DecodeGovernanceData(pqPayload, payload)) {
         return false;
     }
 
@@ -325,6 +380,9 @@ bool CGovernanceVoteIndex::ProcessBlock(const CBlock& block, const CBlockIndex* 
 
     if (!fJustCheck) {
         for (const CTransactionRef& tx : block.vtx) {
+            if (!ApplyProposalTx(*tx, pindex->nHeight, pindex->GetBlockTime(), state)) {
+                return false;
+            }
             if (!ApplyLockTx(*tx, pindex->nHeight, state)) {
                 return false;
             }
@@ -337,11 +395,30 @@ bool CGovernanceVoteIndex::ProcessBlock(const CBlock& block, const CBlockIndex* 
 
     std::map<COutPoint, CGovVoteLockRecord> lockAdds;
     std::map<COutPoint, CGovVoteLockRecord> lockUpdates;
+    std::set<uint256> proposalAdds;
 
     for (const CTransactionRef& tx : block.vtx) {
-        if (tx->nType == CTransaction::TxType::GOVVOTELOCK) {
+        pq::Payload pqPayload;
+        if (!pq::DecodePayload(*tx, pqPayload)) continue;
+        if (pqPayload.mode == pq::GOVERNANCE_PROPOSAL) {
+            CGovProposalTx proposalPayload;
+            if (!DecodeGovernanceData(pqPayload, proposalPayload) || !proposalPayload.IsTriviallyValid(state))
+                return state.DoS(100, false, REJECT_INVALID, "bad-govtx-proposal-payload");
+            CBudgetProposal proposal(proposalPayload.name, proposalPayload.url,
+                                     proposalPayload.paymentCount,
+                                     pq::GetScript(proposalPayload.recipient),
+                                     proposalPayload.amount, proposalPayload.blockStart,
+                                     tx->GetHash());
+            if (!proposal.IsWellFormed(g_budgetman.GetTotalBudget(proposal.GetBlockStart())) ||
+                proposal.GetBlockStart() <= pindex->nHeight ||
+                g_budgetman.HaveProposal(proposal.GetHash()) ||
+                !proposalAdds.emplace(proposal.GetHash()).second)
+                return state.DoS(100, false, REJECT_DUPLICATE, "bad-govtx-proposal-duplicate");
+            continue;
+        }
+        if (pqPayload.mode == pq::GOVERNANCE_LOCK) {
             CGovVoteLockTx lockPayload;
-            if (!GetTxPayload(*tx, lockPayload) || !lockPayload.IsTriviallyValid(state)) {
+            if (!DecodeGovernanceData(pqPayload, lockPayload) || !lockPayload.IsTriviallyValid(state)) {
                 return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-payload");
             }
 
@@ -356,9 +433,9 @@ bool CGovernanceVoteIndex::ProcessBlock(const CBlock& block, const CBlockIndex* 
             continue;
         }
 
-        if (tx->nType == CTransaction::TxType::GOVVOTECAST) {
+        if (pqPayload.mode == pq::GOVERNANCE_CAST) {
             CGovVoteCastTx castPayload;
-            if (!GetTxPayload(*tx, castPayload) || !castPayload.IsTriviallyValid(state)) {
+            if (!DecodeGovernanceData(pqPayload, castPayload) || !castPayload.IsTriviallyValid(state)) {
                 return state.DoS(100, false, REJECT_INVALID, "bad-govtx-cast-payload");
             }
 
@@ -379,16 +456,22 @@ bool CGovernanceVoteIndex::UndoBlock(const CBlock& block, const CBlockIndex* pin
 
     for (auto it = block.vtx.rbegin(); it != block.vtx.rend(); ++it) {
         const CTransaction& tx = **it;
-        if (tx.nType == CTransaction::TxType::GOVVOTECAST) {
+        pq::Payload pqPayload;
+        if (!pq::DecodePayload(tx, pqPayload)) continue;
+        if (pqPayload.mode == pq::GOVERNANCE_CAST) {
             if (!UndoCastTx(tx)) {
                 return false;
             }
             continue;
         }
-        if (tx.nType == CTransaction::TxType::GOVVOTELOCK) {
+        if (pqPayload.mode == pq::GOVERNANCE_LOCK) {
             if (!UndoLockTx(tx)) {
                 return false;
             }
+            continue;
+        }
+        if (pqPayload.mode == pq::GOVERNANCE_PROPOSAL) {
+            if (!UndoProposalTx(tx)) return false;
         }
     }
 

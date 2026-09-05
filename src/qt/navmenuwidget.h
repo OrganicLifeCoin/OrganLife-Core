@@ -28,7 +28,6 @@ public:
 
 public Q_SLOTS:
     void selectSettings();
-    void onShowHideColdStakingChanged(bool show);
     void setThemeState(bool isLightTheme);
     void setWalletName(const QString& walletName);
 
@@ -38,15 +37,10 @@ Q_SIGNALS:
     void walletSelectorRequested();
 
 private Q_SLOTS:
-    void onSendClicked();
     void onDashboardClicked();
-    void onAddressClicked();
-    void onMasterNodesClicked();
-    void onColdStakingClicked();
-    void onGovClicked();
     void onSettingsClicked();
-    void onReceiveClicked();
     void onTransactionsClicked();
+    void onGovClicked();
     void updateButtonStyles();
 private:
     Ui::NavMenuWidget *ui;

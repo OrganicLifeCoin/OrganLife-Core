@@ -8,7 +8,7 @@
 
 #include "amount.h"
 #include "evo/evodb.h"
-#include "pubkey.h"
+#include "pqaddress.h"
 #include "serialize.h"
 #include "uint256.h"
 
@@ -18,6 +18,7 @@
 
 class CBlock;
 class CBlockIndex;
+class CBudgetProposal;
 struct CGovVoteCastTx;
 class COutPoint;
 class CTransaction;
@@ -27,7 +28,7 @@ struct CGovVoteLockRecord
 {
     uint256 proposalHash;
     CAmount lockAmount{0};
-    CKeyID ownerKeyId;
+    pq::KeyID ownerKeyId;
     uint32_t unlockHeight{0};
     uint32_t createdHeight{0};
     std::map<uint256, uint8_t> proposalVoteDirections;
@@ -54,13 +55,17 @@ class CGovernanceVoteIndex
 public:
     explicit CGovernanceVoteIndex(CEvoDB& _evoDb);
 
+    void LoadProposals();
+
     bool ProcessBlock(const CBlock& block, const CBlockIndex* pindex, CValidationState& state, bool fJustCheck);
     bool UndoBlock(const CBlock& block, const CBlockIndex* pindex);
 
     bool ApplyLockTx(const CTransaction& tx, uint32_t blockHeight, CValidationState& state);
     bool ApplyCastTx(const CTransaction& tx, uint32_t blockHeight, CValidationState& state);
+    bool ApplyProposalTx(const CTransaction& tx, uint32_t blockHeight, int64_t blockTime, CValidationState& state);
     bool UndoLockTx(const CTransaction& tx);
     bool UndoCastTx(const CTransaction& tx);
+    bool UndoProposalTx(const CTransaction& tx);
 
     bool GetLockRecord(const COutPoint& lockRef, CGovVoteLockRecord& outRecord) const;
     bool IsLockUsedForProposal(const COutPoint& lockRef, const uint256& proposalHash) const;

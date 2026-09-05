@@ -85,16 +85,14 @@ private Q_SLOTS:
     void voteDialogSetsDirectionalVoteProperties();
     void voteDialogVoteTilesToggleFromBackgroundClick();
     void voteDialogVoteModeLabelsFitWithoutClipping();
-    void voteDialogModesReserveEqualBodyHeight();
     void voteDialogFooterAvoidsLegacyCenteringSpacers();
-    void masternodeModeShowsInlineSelectionList();
     void finishedProposalCardHidesVoteButton();
     void expiredProposalCardShowsExpiredStatus();
     void proposalCardShowsCycleBasedRemainingLabel();
     void voteDialogShowsCycleBasedRemainingLabel();
     void proposalCardShowsVoteCounts();
     void proposalCardRendersContainedYesNoProgressBars();
-    void proposalCardBarsBlendMnAndCoinVotes();
+    void proposalCardBarsUseCoinVotesOnly();
     void proposalCardUsesPremiumDropShadowEffect();
     void proposalCardUsesRoundedVoteRailsInBothThemes();
     void governanceHeaderSubtitleStaysCompactWithoutLegacyHeightCap();
@@ -157,7 +155,6 @@ private Q_SLOTS:
     void dashboardChartKeepsReferenceCleanAxisTreatment();
     void dashboardChartUsesVisibleCompactTimelineLabels();
     void voteDialogSubtitleKeepsStablePaddingAcrossModes();
-    void governanceModelRequiresFullTierTwoSyncForVotingGate();
     void clientModelConnectionRefreshRules();
     void topBarConnectionStyleTracksCurrentCount();
     void lightThemeUtilitiesHaveVisibleChrome();

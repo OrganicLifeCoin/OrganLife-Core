@@ -8,9 +8,8 @@
 #define PIVX_QT_ASKPASSPHRASEDIALOG_H
 
 #include "containerdialog.h"
-#include "prunnable.h"
-#include "support/allocators/secure.h"
 #include <QCheckBox>
+#include <QPointer>
 
 class WalletModel;
 class OrganicLifeGUI;
@@ -23,7 +22,7 @@ class QCheckBox;
 
 /** Multifunctional dialog to ask for passphrases. Used for encryption, unlocking, and changing the passphrase.
  */
-class AskPassphraseDialog : public ContainerDialog, public Runnable
+class AskPassphraseDialog : public ContainerDialog
 {
     Q_OBJECT
 
@@ -60,14 +59,11 @@ public:
 private:
     Ui::AskPassphraseDialog* ui;
     Mode mode;
-    WalletModel* model;
+    QPointer<WalletModel> model;
     Context context;
     bool fCapsLock;
-    SecureString newpassCache = "";
 
     void updateWarningsLabel();
-    void run(int type) override;
-    void onError(QString error, int type) override;
     QCheckBox *btnWatch;
 
     void initWatch(QWidget *parent);

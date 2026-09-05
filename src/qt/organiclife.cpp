@@ -37,7 +37,6 @@
 
 #ifdef ENABLE_WALLET
 #include "governancemodel.h"
-#include "mnmodel.h"
 #include "paymentserver.h"
 #include "walletmodel.h"
 #include "interfaces/wallet.h"
@@ -328,7 +327,6 @@ private:
     WalletModel* walletModel{nullptr};
     std::vector<WalletModel*> walletModels;
     GovernanceModel* govModel{nullptr};
-    MNModel* mnModel{nullptr};
     std::unique_ptr<interfaces::Handler> walletLoadHandler;
     std::unique_ptr<interfaces::Handler> walletUnloadHandler;
 #endif
@@ -443,6 +441,8 @@ BitcoinApplication::~BitcoinApplication()
     delete window;
     window = nullptr;
 #ifdef ENABLE_WALLET
+    delete govModel;
+    govModel = nullptr;
     delete paymentServer;
     paymentServer = nullptr;
 #endif
@@ -560,8 +560,6 @@ void BitcoinApplication::subscribeToWalletLifecycleNotifications()
             if (!window->currentWalletModel()) {
                 window->setCurrentWallet(walletName);
                 walletModel = window->currentWalletModel();
-                if (mnModel) mnModel->setWalletModel(walletModel);
-                if (govModel) govModel->setWalletModel(walletModel);
             }
         }, Qt::QueuedConnection);
     }));
@@ -602,12 +600,10 @@ void BitcoinApplication::subscribeToWalletLifecycleNotifications()
             if (walletModel == removedWalletModel) {
                 walletModel = window->currentWalletModel();
             }
-            if (mnModel) mnModel->setWalletModel(walletModel);
-            if (govModel) govModel->setWalletModel(walletModel);
 
             window->persistAutoloadWalletNames(window->getWalletNames());
             delete removedWalletModel;
-        }, Qt::QueuedConnection);
+        }, GUIUtil::blockingGUIThreadConnection());
     }));
 #endif
 }
@@ -653,9 +649,6 @@ void BitcoinApplication::requestShutdown()
         govModel->stop();
         govModel->setWalletModel(nullptr);
     }
-    if (mnModel) {
-        mnModel->setWalletModel(nullptr);
-    }
     for (WalletModel* loadedWalletModel : walletModels) {
         if (loadedWalletModel) loadedWalletModel->stop();
     }
@@ -698,10 +691,8 @@ void BitcoinApplication::initializeResult(int retval)
         window->setClientModel(clientModel);
 
 #ifdef ENABLE_WALLET
-        mnModel = new MNModel(this);
-        govModel = new GovernanceModel(clientModel, mnModel);
+        govModel = new GovernanceModel(clientModel, nullptr);
         window->setGovModel(govModel);
-        window->setMNModel(mnModel);
         const std::vector<std::string> walletArgs = gArgs.GetArgs("-wallet");
         const bool hasOnlyImplicitPrimaryWalletArg = walletArgs.size() == 1 && walletArgs[0].empty();
         const bool hasExplicitWalletArgs = !walletArgs.empty() && !hasOnlyImplicitPrimaryWalletArg;
@@ -750,9 +741,6 @@ void BitcoinApplication::initializeResult(int retval)
                 window->setCurrentWallet(savedPrimaryWallet);
             }
             walletModel = window->currentWalletModel();
-            mnModel->setWalletModel(walletModel);
-            govModel->setWalletModel(walletModel);
-            mnModel->init();
         }
         window->persistAutoloadWalletNames(window->getWalletNames());
         subscribeToWalletLifecycleNotifications();

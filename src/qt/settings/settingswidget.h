@@ -10,13 +10,11 @@
 
 #include "pwidget.h"
 #include "settings/backupwallet.h"
-#include "settings/bittoolwidget.h"
 #include "settings/consolewidget.h"
 #include "settings/displayoptionswidget.h"
 #include "settings/exportcsv.h"
 #include "settings/informationwidget.h"
 #include "settings/mainoptionswidget.h"
-#include "settings/signmessagewidgets.h"
 #include "settings/walletoptionswidget.h"
 #include "settings/walletrepairwidget.h"
 
@@ -54,11 +52,6 @@ private Q_SLOTS:
     // File
     void onFileClicked();
     void onBackupWalletClicked();
-    void onSignMessageClicked();
-
-    // Wallet Configuration
-    void onConfigurationClicked();
-    void onBipToolClicked();
     void onExportCSVClicked();
 
     // Options
@@ -87,8 +80,6 @@ private:
 
     SettingsBackupWallet *settingsBackupWallet{nullptr};
     SettingsExportCSV *settingsExportCsvWidget{nullptr};
-    SettingsBitToolWidget *settingsBitToolWidget{nullptr};
-    SettingsSignMessageWidgets *settingsSingMessageWidgets{nullptr};
     SettingsWalletRepairWidget *settingsWalletRepairWidget{nullptr};
     SettingsWalletOptionsWidget *settingsWalletOptionsWidget{nullptr};
     SettingsMainOptionsWidget *settingsMainOptionsWidget{nullptr};

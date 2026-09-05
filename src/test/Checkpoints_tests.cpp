@@ -33,4 +33,13 @@ BOOST_AUTO_TEST_CASE(sanity)
     BOOST_CHECK_EQUAL(Checkpoints::GetTotalBlocksEstimate(), 0);
 }
 
+BOOST_AUTO_TEST_CASE(reset_testnet_checkpoint)
+{
+    SelectParams(CBaseChainParams::TESTNET);
+    BOOST_CHECK(Checkpoints::CheckBlock(0, Params().GetConsensus().hashGenesisBlock));
+    BOOST_CHECK(!Checkpoints::CheckBlock(0,
+        uint256S("00000da1c1aee747221262d679d0b0e18ae5b40baccd97fb09be864a2623b484")));
+    BOOST_CHECK_EQUAL(Checkpoints::GetTotalBlocksEstimate(), 0);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

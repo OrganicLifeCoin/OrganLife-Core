@@ -90,6 +90,7 @@ class PivxTestFramework():
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
         self.setup_clean_chain = False
+        self.chain = "regtest"
         self.nodes = []
         self.network_thread = None
         self.mocktime = 0
@@ -228,6 +229,7 @@ class PivxTestFramework():
         if self.setup_clean_chain:
             self._initialize_chain_clean()
         else:
+            assert_equal(self.chain, "regtest")  # Cached chains are regtest-only.
             self._initialize_chain()
 
     def setup_network(self):
@@ -284,7 +286,7 @@ class PivxTestFramework():
         assert_equal(len(extra_args), num_nodes)
         assert_equal(len(binary), num_nodes)
         for i in range(num_nodes):
-            self.nodes.append(TestNode(i, self.options.tmpdir, rpchost=rpchost, timewait=self.rpc_timewait, binary=binary[i], stderr=None, mocktime=self.mocktime, coverage_dir=self.options.coveragedir, extra_conf=extra_confs[i], extra_args=extra_args[i], use_cli=self.options.usecli))
+            self.nodes.append(TestNode(i, self.options.tmpdir, rpchost=rpchost, timewait=self.rpc_timewait, binary=binary[i], stderr=None, mocktime=self.mocktime, coverage_dir=self.options.coveragedir, extra_conf=extra_confs[i], extra_args=extra_args[i], use_cli=self.options.usecli, chain=self.chain))
 
     def start_node(self, i, *args, **kwargs):
         """Start a organiclifed"""
@@ -671,7 +673,7 @@ class PivxTestFramework():
         Create an empty blockchain and num_nodes wallets.
         Useful if a test case wants complete control over initialization."""
         for i in range(self.num_nodes):
-            initialize_datadir(self.options.tmpdir, i)
+            initialize_datadir(self.options.tmpdir, i, self.chain)
 
     # PIVX Specific TestFramework
     def init_dummy_key(self):

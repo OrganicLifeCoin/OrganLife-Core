@@ -26,6 +26,8 @@ class TxDetailDialog : public FocusedDialog
 {
     Q_OBJECT
 
+    friend class PQWidgetTests;
+
 public:
     enum class ConflictAction {
         None,

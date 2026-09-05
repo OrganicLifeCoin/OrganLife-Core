@@ -15,6 +15,7 @@
 #include "blocksignature.h"
 #include "budget/budgetmanager.h"
 #include "chainparams.h"
+#include "pqtransaction.h"
 #include "checkpoints.h"
 #include "checkqueue.h"
 #include "consensus/consensus.h"
@@ -22,6 +23,7 @@
 #include "consensus/tx_verify.h"
 #include "consensus/validation.h"
 #include "evo/evodb.h"
+#include "evo/governancevoteindex.h"
 #include "evo/specialtx_validation.h"
 #include "flatfile.h"
 #include "guiinterface.h"
@@ -1162,9 +1164,42 @@ bool CheckTxInputs(const CTransaction& tx, CValidationState& state, const CCoins
 bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsViewCache &inputs, bool fScriptChecks, unsigned int flags, bool cacheStore, PrecomputedTransactionData& precomTxData, std::vector<CScriptCheck> *pvChecks)
 {
     if (!tx.IsCoinBase()) {
+        const int spend_height = GetSpendHeight(inputs);
+        std::string pq_reason;
+        if (!pq::CheckContext(tx, Params(), spend_height, pq_reason))
+            return state.DoS(100, false, REJECT_INVALID, pq_reason);
 
-        if (!Consensus::CheckTxInputs(tx, state, inputs, GetSpendHeight(inputs)))
+        if (!Consensus::CheckTxInputs(tx, state, inputs, spend_height))
             return false;
+
+        if (governanceVoteIndex) {
+            for (const auto& input : tx.vin) {
+                CGovVoteLockRecord lock;
+                if (governanceVoteIndex->GetLockRecord(input.prevout, lock) &&
+                    spend_height < static_cast<int>(lock.unlockHeight))
+                    return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-spend-early");
+            }
+        }
+
+        // Mandatory even when legacy Script checks are skipped. PQ authorizations
+        // require the complete, current UTXO view, including earlier txs in a block.
+        if (tx.nType == CTransaction::PQ) {
+            std::vector<CTxOut> prevouts;
+            prevouts.reserve(tx.vin.size());
+            for (const auto& input : tx.vin) {
+                const Coin& coin = inputs.AccessCoin(input.prevout);
+                prevouts.push_back(coin.out);
+            }
+            std::string reason;
+            if (!pq::VerifyInputs(tx, prevouts, Params(), reason))
+                return state.DoS(100, false, REJECT_INVALID, reason);
+            return true;
+        } else if (Params().IsTestChain()) {
+            for (const auto& input : tx.vin) {
+                if (pq::HasMarker(inputs.AccessCoin(input.prevout).out.scriptPubKey))
+                    return state.DoS(100, false, REJECT_INVALID, "bad-pq-spend-type");
+            }
+        }
 
         if (pvChecks)
             pvChecks->reserve(tx.vin.size());
@@ -1488,9 +1523,6 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         return error("%s: CheckBlock failed for %s: %s", __func__, block.GetHash().ToString(), FormatStateMessage(state));
     }
 
-    if (pindex->pprev && pindex->phashBlock && llmq::chainLocksHandler->HasConflictingChainLock(pindex->nHeight, pindex->GetBlockHash())) {
-        return state.DoS(10, error("%s: conflicting with chainlock", __func__), REJECT_INVALID, "bad-chainlock");
-    }
     // verify that the view's current state corresponds to the previous block
     uint256 hashPrevBlock = pindex->pprev == nullptr ? UINT256_ZERO : pindex->pprev->GetBlockHash();
     if (hashPrevBlock != view.GetBestBlock())
@@ -1584,6 +1616,12 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     bool fSaplingMaintenance =  (block.nTime > sporkManager.GetSporkValue(SPORK_20_SAPLING_MAINTENANCE));
     for (unsigned int i = 0; i < block.vtx.size(); i++) {
         const CTransaction& tx = *block.vtx[i];
+
+        // Recheck height-dependent PQ rules on disk reconnect/reindex too,
+        // including coinbase outputs (which never pass through CheckInputs).
+        std::string pq_reason;
+        if (!pq::CheckContext(tx, Params(), pindex->nHeight, pq_reason))
+            return state.DoS(100, false, REJECT_INVALID, pq_reason);
 
         nInputs += tx.vin.size();
         nSigOps += GetLegacySigOpCount(tx);
@@ -1695,19 +1733,18 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
                                     __func__, FormatMoney(nMint), FormatMoney(nExpectedMint)),
                          REJECT_INVALID, "bad-blk-amount");
     }
-
-    // Deterministic masternode payees are derived from the chain and remain
-    // enforceable during IBD. Governance recipients alone may be deferred by
-    // IsBlockPayeeValid while their off-chain vote data is still syncing.
-    if (!IsBlockPayeeValid(block, pindex->pprev)) {
-        mapRejectedBlocks.emplace(block.GetHash(), GetTime());
-        return state.DoS(0, false, REJECT_INVALID, "bad-cb-payee", false, "Couldn't find masternode/budget payment");
-    }
-
-    // After v6 enforcement: Check that the coinbase pays the exact amount
-    if (isPoSBlock && isV6UpgradeEnforced && !IsCoinbaseValueValid(block.vtx[0], nBudgetAmt, state, pindex->pprev)) {
-        // pass the state returned by the function above
-        return false;
+    if (nBudgetAmt > 0) {
+        CScript expectedPayee;
+        CAmount expectedAmount{0};
+        uint256 proposalHash;
+        const CTransaction& paymentTx = isPoSBlock ? *block.vtx[1] : *block.vtx[0];
+        if (!g_budgetman.GetPQPayment(pindex->nHeight, expectedPayee, expectedAmount, proposalHash) ||
+            expectedAmount != nBudgetAmt ||
+            std::none_of(paymentTx.vout.begin(), paymentTx.vout.end(),
+                         [&](const CTxOut& out) {
+                             return out.nValue == expectedAmount && out.scriptPubKey == expectedPayee;
+                         }))
+            return state.DoS(100, false, REJECT_INVALID, "bad-pq-governance-payee");
     }
 
     if (!control.Wait())
@@ -1995,9 +2032,6 @@ bool static DisconnectTip(CValidationState& state, const CChainParams& chainpara
     // 0-confirmed or conflicted:
     GetMainSignals().BlockDisconnected(pblock, pindexDelete->GetBlockHash(), pindexDelete->nHeight, pindexDelete->GetBlockTime());
 
-    // Update MN manager cache
-    deterministicMNManager->SetTipIndex(pindexDelete->pprev);
-
     return true;
 }
 
@@ -2114,11 +2148,6 @@ bool static ConnectTip(CValidationState& state, CBlockIndex* pindexNew, const st
     disconnectpool.removeForBlock(blockConnecting.vtx);
     // Update chainActive & related variables.
     UpdateTip(pindexNew);
-    // Update TierTwo managers
-    g_budgetman.SetBestHeight(pindexNew->nHeight);
-    // Update MN manager cache
-    deterministicMNManager->SetTipIndex(pindexNew);
-
     int64_t nTime6 = GetTimeMicros();
     nTimePostConnect += nTime6 - nTime5;
     nTimeTotal += nTime6 - nTime1;
@@ -2276,10 +2305,15 @@ static bool ActivateBestChainStep(CValidationState& state, CBlockIndex* pindexMo
         }
     }
 
+    const int pq_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_PQ].nActivationHeight;
     if (fBlocksDisconnected) {
         // If any blocks were disconnected, disconnectpool may be non empty.  Add
         // any disconnected transactions back to the mempool.
         UpdateMempoolForReorg(disconnectpool, true);
+    } else if (Params().IsTestChain() && pindexOldTip &&
+               pindexOldTip->nHeight + 1 < pq_activation_height && chainActive.Height() + 1 >= pq_activation_height) {
+        // Activation invalidates every pending non-PQ transaction and its descendants.
+        mempool.removeForReorg(pcoinsTip.get(), chainActive.Height() + 1, STANDARD_LOCKTIME_VERIFY_FLAGS);
     }
     mempool.check(pcoinsTip.get());
 
@@ -3072,12 +3106,6 @@ bool AcceptBlockHeader(const CBlock& block, CValidationState& state, CBlockIndex
     if (!ContextualCheckBlockHeader(block, state, pindexPrev))
         return error("%s: ContextualCheckBlockHeader failed for block %s: %s", __func__, hash.ToString(), FormatStateMessage(state));
 
-    // Check for conflicting chainlocks UNLESS that's the genesis block
-    if (block.GetHash() != Params().GetConsensus().hashGenesisBlock) {
-        if (llmq::chainLocksHandler->HasConflictingChainLock(pindexPrev->nHeight + 1, hash)) {
-            return state.DoS(10, error("%s: conflicting with chainlock", __func__), REJECT_INVALID, "bad-chainlock");
-        }
-    }
     if (pindex == nullptr)
         pindex = AddToBlockIndex(block);
 
@@ -3434,10 +3462,6 @@ bool TestBlockValidity(CValidationState& state, const CBlock& block, CBlockIndex
         LogPrintf("%s : No longer working on chain tip\n", __func__);
         return false;
     }
-    if (llmq::chainLocksHandler->HasConflictingChainLock(pindexPrev->nHeight + 1, block.GetHash())) {
-        return state.DoS(10, error("%s: conflicting with chainlock", __func__), REJECT_INVALID, "bad-chainlock");
-    }
-
     CCoinsViewCache viewNew(pcoinsTip.get());
     CBlockIndex indexDummy(block);
     indexDummy.pprev = pindexPrev;

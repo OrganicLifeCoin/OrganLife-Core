@@ -150,6 +150,9 @@ public:
     bool IsBudgetPaymentBlock(int nBlockHeight) const;
     bool IsBudgetPaymentBlock(int nBlockHeight, int& nCountThreshold) const;
     bool AddProposal(CBudgetProposal& budgetProposal);
+    bool AddPQProposal(CBudgetProposal budgetProposal, int blockHeight, int64_t blockTime);
+    bool RemovePQProposal(const uint256& proposalHash);
+    bool GetPQPayment(int blockHeight, CScript& payee, CAmount& amount, uint256& proposalHash) const;
     bool AddFinalizedBudget(CFinalizedBudget& finalizedBudget, CNode* pfrom = nullptr);
     void ForceAddFinalizedBudget(const uint256& nHash, const uint256& feeTxId, const CFinalizedBudget& finalizedBudget);
     uint256 SubmitFinalBudget();

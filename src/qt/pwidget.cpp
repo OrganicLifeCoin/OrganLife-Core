@@ -5,6 +5,7 @@
 
 #include "pwidget.h"
 #include "addresstablemodel.h"
+#include "clientmodel.h"
 #include "loadingdialog.h"
 #include "optionsmodel.h"
 #include "qtutils.h"

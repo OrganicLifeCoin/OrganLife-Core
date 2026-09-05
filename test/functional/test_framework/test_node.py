@@ -54,9 +54,11 @@ class TestNode():
     To make things easier for the test writer, any unrecognised messages will
     be dispatched to the RPC connection."""
 
-    def __init__(self, i, dirname, rpchost, timewait, binary, stderr, mocktime, coverage_dir, extra_conf=None, extra_args=None, use_cli=False):
+    def __init__(self, i, dirname, rpchost, timewait, binary, stderr, mocktime, coverage_dir, extra_conf=None, extra_args=None, use_cli=False, chain="regtest"):
         self.index = i
         self.datadir = os.path.join(dirname, "node" + str(i))
+        self.chain = chain
+        self.chain_path = os.path.join(self.datadir, "testnet" if chain == "test" else chain)
         self.rpchost = rpchost
         self.rpc_timeout = timewait
         if binary is None:
@@ -123,7 +125,7 @@ class TestNode():
         # Delete any existing cookie file -- if such a file exists (eg due to
         # unclean shutdown), it will get overwritten anyway by organiclifed, and
         # potentially interfere with our attempt to authenticate
-        delete_cookie_file(self.datadir)
+        delete_cookie_file(self.datadir, self.chain)
         self.process = subprocess.Popen(self.args + extra_args, stderr=stderr, *args, **kwargs)
         self.running = True
         self.log.debug("organiclifed started, waiting for RPC to come up")
@@ -135,7 +137,7 @@ class TestNode():
         for _ in range(poll_per_s * self.rpc_timeout):
             assert self.process.poll() is None, "organiclifed exited with status %i during initialization" % self.process.returncode
             try:
-                rpc = get_rpc_proxy(rpc_url(self.datadir, self.index, self.rpchost),
+                rpc = get_rpc_proxy(rpc_url(self.datadir, self.index, self.rpchost, self.chain),
                                     self.index,
                                     timeout=self.rpc_timeout,
                                     coveragedir=self.coverage_dir)
@@ -263,7 +265,7 @@ class TestNode():
 
     @contextlib.contextmanager
     def assert_debug_log(self, expected_msgs):
-        debug_log = os.path.join(self.datadir, 'regtest', 'debug.log')
+        debug_log = os.path.join(self.chain_path, 'debug.log')
         with open(debug_log, encoding='utf-8') as dl:
             dl.seek(0, 2)
             prev_size = dl.tell()

@@ -34,6 +34,7 @@ namespace DBKeys {
     const std::string KEYMETA{"keymeta"};
     const std::string KEY{"key"};
     const std::string MASTER_KEY{"mkey"};
+    const std::string PQ_KEY{"pqkey44"};
     const std::string MINVERSION{"minversion"};
     const std::string NAME{"name"};
     const std::string ORDERPOSNEXT{"orderposnext"};
@@ -190,6 +191,16 @@ bool WalletBatch::WriteWitnessCacheSize(int64_t nWitnessCacheSize)
 bool WalletBatch::WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey)
 {
     return WriteIC(std::make_pair(std::string(DBKeys::MASTER_KEY), nID), kMasterKey, true);
+}
+
+bool WalletBatch::WritePQKey(const pq::KeyID& id, const pqwallet::Record& record)
+{
+    return WriteIC(std::make_pair(DBKeys::PQ_KEY, id), record, false);
+}
+
+bool WalletBatch::ErasePQKey(const pq::KeyID& id)
+{
+    return EraseIC(std::make_pair(DBKeys::PQ_KEY, id));
 }
 
 bool WalletBatch::WriteCScript(const uint160& hash, const CScript& redeemScript)
@@ -480,6 +491,16 @@ bool ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue, CW
                 return false;
             }
             wss.fIsEncrypted = true;
+        } else if (strType == DBKeys::PQ_KEY) {
+            pq::KeyID id;
+            pqwallet::Record record;
+            ssKey >> id;
+            ssValue >> record;
+            if (!ssKey.empty() || !ssValue.empty() || !pwallet->LoadPQKey(id, record)) {
+                strErr = "Error reading wallet database: experimental PQ key record corrupt or wrong network";
+                return false;
+            }
+            wss.fIsEncrypted = true;
         } else if (strType == DBKeys::KEYMETA) {
             CPubKey vchPubKey;
             ssKey >> vchPubKey;
@@ -627,7 +648,7 @@ bool ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue, CW
 bool WalletBatch::IsKeyType(const std::string& strType)
 {
     return (strType == DBKeys::KEY ||
-            strType == DBKeys::MASTER_KEY || strType == DBKeys::CRYPTED_KEY ||
+            strType == DBKeys::MASTER_KEY || strType == DBKeys::CRYPTED_KEY || strType == DBKeys::PQ_KEY ||
             strType == DBKeys::SAP_KEY || strType == DBKeys::SAP_KEY_CRIPTED);
 }
 
@@ -693,6 +714,9 @@ DBErrors WalletBatch::LoadWallet(CWallet* pwallet)
 
     if (fNoncriticalErrors && result == DB_LOAD_OK)
         result = DB_NONCRITICAL_ERROR;
+
+    if (!pwallet->GetPQAddresses().empty() && !pwallet->HasEncryptionKeys())
+        result = DB_CORRUPT;
 
     // Any wallet corruption at all: skip any rewriting or
     // upgrading, we don't want to make it worse.

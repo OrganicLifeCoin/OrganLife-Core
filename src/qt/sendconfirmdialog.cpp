@@ -167,7 +167,7 @@ TxDetailDialog::ConflictAction TxDetailDialog::resolveConflictAction(
 
 void TxDetailDialog::setInputsType(CTransactionRef tx)
 {
-    if (tx->sapData && tx->sapData->vShieldedSpend.empty()) {
+    if (!tx->sapData || tx->sapData->vShieldedSpend.empty()) {
         ui->labelTitlePrevTx->setText(tr("Previous Transaction"));
         ui->labelOutputIndex->setText(tr("Output Index"));
     } else {
@@ -430,7 +430,7 @@ void TxDetailDialog::onInputsClicked()
             if (showGrid) {
                 CTransactionRef walletTx = (this->tx) ? this->tx->getTransaction() : model->getTx(this->txHash)->tx;
                 if (walletTx) {
-                    if (walletTx->sapData && walletTx->sapData->vShieldedSpend.empty()) {
+                    if (!walletTx->sapData || walletTx->sapData->vShieldedSpend.empty()) {
                         // transparent inputs
                         ui->gridInputs->setMinimumHeight(50 + (50 * walletTx->vin.size()));
                         int i = 1;

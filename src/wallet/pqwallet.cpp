@@ -1,0 +1,271 @@
+// Copyright (c) 2026 The OrganicLife Coin developers
+// Distributed under the MIT software license, see the accompanying file COPYING.
+
+#include <wallet/wallet.h>
+#include <coincontrol.h>
+#include <evo/governancevoteindex.h>
+#include <key_io.h>
+#include <policy/policy.h>
+#include <pqtransaction.h>
+#include <random.h>
+#include <script/sign.h>
+#include <validation.h>
+#include <wallet/fees.h>
+#include <algorithm>
+
+bool CWallet::GeneratePQAddress(std::string& address)
+{
+    address.clear();
+    LOCK2(cs_wallet, cs_KeyStore);
+    if (!Params().IsTestChain() || !IsCrypted() || IsLocked() || fWalletUnlockStaking) return false;
+    pqwallet::SecureBytes seed(mldsa44::SEED_SIZE);
+    GetStrongRandBytes(seed.data(), seed.size());
+    pqwallet::Record record;
+    if (!pqwallet::EncryptSeed(seed, vMasterKey, Params().NetworkIDString(), record)) return false;
+    const auto id = pq::GetID(record.public_key, Params().NetworkIDString());
+    if (!id || m_pq_keys.count(*id) || !WalletBatch(*database).WritePQKey(*id, record)) return false;
+    m_pq_keys.emplace(*id, record);
+    address = pq::EncodeAddress(*id, Params().NetworkIDString());
+    return true;
+}
+
+bool CWallet::ErasePQAddress(const std::string& address)
+{
+    LOCK2(cs_wallet, cs_KeyStore);
+    pq::KeyID id;
+    if (!pq::DecodeAddress(address, Params().NetworkIDString(), id) || !m_pq_keys.count(id) ||
+        !WalletBatch(*database).ErasePQKey(id)) return false;
+    m_pq_keys.erase(id);
+    return true;
+}
+
+std::vector<std::string> CWallet::GetPQAddresses() const
+{
+    LOCK(cs_KeyStore);
+    std::vector<std::string> addresses;
+    if (!Params().IsTestChain()) return addresses;
+    for (const auto& entry : m_pq_keys) addresses.push_back(pq::EncodeAddress(entry.first, Params().NetworkIDString()));
+    return addresses;
+}
+
+bool CWallet::GetPQKey(const std::string& address, mldsa44::Key& key) const
+{
+    key.Clear();
+    pq::KeyID id;
+    if (!pq::DecodeAddress(address, Params().NetworkIDString(), id)) return false;
+    return GetPQKey(id, key, false);
+}
+
+bool CWallet::GetPQKey(const pq::KeyID& id, mldsa44::Key& key, bool staking) const
+{
+    key.Clear();
+    LOCK2(cs_wallet, cs_KeyStore);
+    if (!Params().IsTestChain() || !IsCrypted() || IsLocked() || (!staking && fWalletUnlockStaking)) return false;
+    const auto entry = m_pq_keys.find(id);
+    return entry != m_pq_keys.end() && pqwallet::DecryptKey(vMasterKey, entry->second, Params().NetworkIDString(), key);
+}
+
+bool CWallet::LoadPQKey(const pq::KeyID& id, const pqwallet::Record& record)
+{
+    LOCK(cs_KeyStore);
+    const auto expected_id = pq::GetID(record.public_key, Params().NetworkIDString());
+    if (!Params().IsTestChain() || record.version != 1 || !expected_id || id != *expected_id ||
+        m_pq_keys.count(id) || !SetCrypted()) return false;
+    m_pq_keys.emplace(id, record);
+    return true;
+}
+
+bool CWallet::PQPaymentsActive()
+{
+    LOCK(cs_main);
+    return pq::PaymentsActive(Params(), chainActive.Height() + 1);
+}
+
+bool CWallet::IsPQMine(const CTxOut& output) const
+{
+    LOCK(cs_KeyStore);
+    pq::KeyID id;
+    return Params().IsTestChain() && pq::ExtractID(output.scriptPubKey, id) && m_pq_keys.count(id);
+}
+
+bool CWallet::InvolvesPQ(const CTransaction& tx) const
+{
+    LOCK(cs_wallet);
+    for (const auto& output : tx.vout) if (IsPQMine(output)) return true;
+    for (const auto& input : tx.vin) {
+        const auto previous = mapWallet.find(input.prevout.hash);
+        if (previous != mapWallet.end() && input.prevout.n < previous->second.tx->vout.size() &&
+            IsPQMine(previous->second.tx->vout[input.prevout.n])) return true;
+    }
+    return false;
+}
+
+std::vector<COutput> CWallet::GetPQUnspent(bool include_locked) const
+{
+    LOCK2(cs_main, cs_wallet);
+    std::vector<COutput> coins;
+    if (!PQPaymentsActive()) return coins;
+    // ponytail: scan the existing wallet map; add an index only if measured wallet size warrants it.
+    for (const auto& item : mapWallet) {
+        const auto& wtx = item.second;
+        const auto* block = LookupBlockIndex(wtx.m_confirm.hashBlock);
+        if (!wtx.isConfirmed() || !block || !chainActive.Contains(block) || !CheckFinalTx(wtx.tx)) continue;
+        const int depth = wtx.GetDepthInMainChain();
+        if (depth < 1 || wtx.GetBlocksToMaturity() > 0) continue;
+        for (size_t i = 0; i < wtx.tx->vout.size(); ++i) {
+            const auto& output = wtx.tx->vout[i];
+            const COutPoint outpoint(item.first, i);
+            const auto& chain_coin = pcoinsTip->AccessCoin(outpoint);
+            CGovVoteLockRecord governance_lock;
+            const bool governance_locked = governanceVoteIndex &&
+                    governanceVoteIndex->GetLockRecord(outpoint, governance_lock) &&
+                    chainActive.Height() + 1 < static_cast<int>(governance_lock.unlockHeight);
+            if (IsPQMine(output) && output.nValue > 0 && Params().GetConsensus().MoneyRange(output.nValue) && !IsSpent(outpoint) &&
+                (include_locked || !IsLockedCoin(outpoint.hash, outpoint.n)) && !governance_locked &&
+                !chain_coin.IsSpent() && chain_coin.out == output && !mempool.isSpent(outpoint))
+                coins.emplace_back(&wtx, i, depth, false, false, false);
+        }
+    }
+    return coins;
+}
+
+bool CWallet::CreatePQTransaction(const std::string& address, CAmount amount,
+                                  CTransactionRef& tx, CAmount& fee, std::string& reason)
+{
+    pq::KeyID recipient_id;
+    if (!pq::DecodeAddress(address, Params().NetworkIDString(), recipient_id)) {
+        tx.reset();
+        fee = 0;
+        reason = "Invalid PQ address for this network";
+        return false;
+    }
+    return CreatePQTransaction({CTxOut(amount, pq::GetScript(recipient_id))}, pq::TRANSFER, {},
+                               tx, fee, reason);
+}
+
+bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mode,
+                                  const std::vector<unsigned char>& data,
+                                  CTransactionRef& tx, CAmount& fee, std::string& reason)
+{
+    tx.reset();
+    fee = 0;
+    reason.clear();
+    LOCK2(cs_main, cs_wallet);
+    LOCK(cs_KeyStore);
+    const auto fail = [&](const char* message) { reason = message; return false; };
+    const auto& consensus = Params().GetConsensus();
+    if (!PQPaymentsActive()) return fail("PQ payments are not active on this network");
+    if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
+        return fail("PQ payments require an encrypted, fully unlocked wallet");
+    if ((mode != pq::TRANSFER && !pq::IsGovernanceMode(mode)) ||
+        (pq::IsGovernanceMode(mode) != !data.empty()) || outputs.size() != 1)
+        return fail("Invalid PQ transaction mode or outputs");
+    CAmount amount = 0;
+    for (const CTxOut& output : outputs) {
+        pq::KeyID id;
+        if (!pq::ExtractID(output.scriptPubKey, id) || output.nValue <= 0 ||
+            !consensus.MoneyRange(output.nValue) ||
+            output.nValue > consensus.nMaxMoneyOut - amount || IsDust(output, dustRelayFee))
+            return fail("Invalid PQ output");
+        amount += output.nValue;
+    }
+
+    CMutableTransaction tx_new;
+    tx_new.nVersion = CTransaction::SAPLING;
+    tx_new.nType = CTransaction::PQ;
+    tx_new.sapData = nullopt;
+    pq::Payload payload;
+    payload.mode = mode;
+    payload.data = data;
+    pq::KeyID governance_change_id{};
+    std::vector<COutput> coins = GetPQUnspent();
+    // ponytail: largest-first selection is bounded to two PQ inputs; no coin-selection framework.
+    std::sort(coins.begin(), coins.end(), [](const COutput& a, const COutput& b) { return a.Value() > b.Value(); });
+    CAmount selected_value = 0;
+    bool built = false;
+    reason = "Insufficient eligible confirmed funds";
+    for (const auto& candidate : coins) {
+        const COutPoint outpoint(candidate.tx->GetHash(), candidate.i);
+        if (IsLockedCoin(outpoint.hash, outpoint.n) || IsSpent(outpoint) || mempool.isSpent(outpoint)) continue;
+        const auto& chain_coin = pcoinsTip->AccessCoin(outpoint);
+        if (chain_coin.IsSpent() || chain_coin.out != candidate.tx->tx->vout[candidate.i]) continue;
+        if (candidate.Value() <= 0 || !consensus.MoneyRange(candidate.Value()) ||
+            candidate.Value() > consensus.nMaxMoneyOut - selected_value) return fail("PQ input amount out of range");
+        selected_value += candidate.Value();
+        tx_new.vin.emplace_back(outpoint);
+        tx_new.vout = outputs;
+        pq::KeyID id;
+        if (!pq::ExtractID(chain_coin.out.scriptPubKey, id)) return fail("Invalid owned PQ output");
+        if (tx_new.vin.size() == 1) governance_change_id = id;
+        payload.authorizations.emplace_back();
+        payload.authorizations.back().public_key = m_pq_keys.at(id).public_key;
+        tx_new.extraPayload = pq::EncodePayload(payload);
+        const CAmount minimum_fee = GetMinimumFee(GetSerializeSize(tx_new, PROTOCOL_VERSION), nTxConfirmTarget, mempool);
+        if (selected_value >= amount && selected_value - amount >= minimum_fee) {
+            const auto change_script = pq::GetScript(pq::KeyID{});
+            tx_new.vout.emplace_back(0, change_script);
+            fee = GetMinimumFee(GetSerializeSize(tx_new, PROTOCOL_VERSION), nTxConfirmTarget, mempool);
+            const CAmount change = selected_value - amount - fee;
+            if (change > 0 && !IsDust(CTxOut(change, change_script), dustRelayFee)) {
+                pq::KeyID change_id = governance_change_id;
+                if (!pq::IsGovernanceMode(mode)) {
+                    std::string change_address;
+                    if (!GeneratePQAddress(change_address) ||
+                        !pq::DecodeAddress(change_address, Params().NetworkIDString(), change_id))
+                        return fail("Could not persist PQ change key; transaction was not broadcast");
+                }
+                tx_new.vout.back() = CTxOut(change, pq::GetScript(change_id));
+            } else {
+                tx_new.vout.pop_back();
+                fee = selected_value - amount;
+            }
+            built = true;
+            break;
+        }
+        if (tx_new.vin.size() == pq::MAX_INPUTS) break;
+    }
+    if (!built) return false;
+
+    // Re-read complete spent outputs from the trusted chain view before signing.
+    std::vector<CTxOut> prevouts;
+    CAmount input_value = 0;
+    for (const auto& input : tx_new.vin) {
+        const auto& coin = pcoinsTip->AccessCoin(input.prevout);
+        if (coin.IsSpent() || IsSpent(input.prevout) || IsLockedCoin(input.prevout.hash, input.prevout.n) ||
+            mempool.isSpent(input.prevout) || coin.nHeight > chainActive.Height()) return fail("PQ input is no longer available");
+        if (!consensus.MoneyRange(coin.out.nValue) || coin.out.nValue > consensus.nMaxMoneyOut - input_value)
+            return fail("PQ input amount out of range");
+        input_value += coin.out.nValue;
+        prevouts.push_back(coin.out);
+    }
+    const CTransaction signing_tx(tx_new);
+    for (size_t i = 0; i < tx_new.vin.size(); ++i) {
+        pq::KeyID id;
+        mldsa44::Key key;
+        if (!pq::ExtractID(prevouts[i].scriptPubKey, id) ||
+            !GetPQKey(pq::EncodeAddress(id, Params().NetworkIDString()), key)) return fail("Could not decrypt PQ input key");
+        const auto message = pq::SignatureMessage(signing_tx, prevouts, payload, consensus.hashGenesisBlock, i);
+        std::vector<unsigned char> signature;
+        const auto context = pq::SignatureContext(Params().NetworkIDString());
+        if (message.empty() || !context || !key.Sign(message, *context, signature) ||
+            signature.size() != payload.authorizations[i].signature.size()) return fail("Signing PQ transaction failed");
+        std::copy(signature.begin(), signature.end(), payload.authorizations[i].signature.begin());
+    }
+    tx_new.extraPayload = pq::EncodePayload(payload);
+    const CTransaction finalized(tx_new);
+    if (!pq::VerifyInputs(finalized, prevouts, Params(), reason)) return false;
+    CAmount output_value = 0;
+    for (const auto& output : tx_new.vout) {
+        if (!consensus.MoneyRange(output.nValue) || output.nValue > consensus.nMaxMoneyOut - output_value ||
+            IsDust(output, dustRelayFee)) return fail("Invalid PQ output amount");
+        output_value += output.nValue;
+    }
+    if (output_value > input_value) return fail("PQ inputs do not cover outputs");
+    fee = input_value - output_value;
+    const auto size = GetSerializeSize(finalized, PROTOCOL_VERSION);
+    if (fee > maxTxFee || fee < GetMinimumFee(size, nTxConfirmTarget, mempool) || fee < minRelayTxFee.GetFee(size))
+        return fail("PQ transaction fee is outside wallet policy");
+    tx = MakeTransactionRef(std::move(tx_new));
+    reason.clear();
+    return true;
+}

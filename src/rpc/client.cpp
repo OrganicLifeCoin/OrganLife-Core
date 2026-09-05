@@ -65,6 +65,7 @@ static const CRPCConvertParam vRPCConvertParams[] = {
     { "getblockindexstats", 1, "range" },
     { "getblocktemplate", 0, "template_request" },
     { "getfeeinfo", 0, "blocks" },
+    { "sendpqtoaddress", 1, "amount" },
     { "getshieldbalance", 1, "minconf" },
     { "getshieldbalance", 2, "include_watchonly" },
     { "getminedcommitment", 0, "llmq_type" },

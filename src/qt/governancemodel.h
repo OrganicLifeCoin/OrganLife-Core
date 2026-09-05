@@ -10,10 +10,9 @@
 #include "operationresult.h"
 #include "uint256.h"
 
-#include <atomic>
 #include <cstdint>
-#include <string>
 #include <list>
+#include <string>
 #include <utility>
 
 #include <QObject>
@@ -71,34 +70,15 @@ public:
     std::string statusToStr() const;
 };
 
-struct VoteInfo {
-    enum VoteDirection {
-        ABSTAIN = 0,
-        YES     = 1,
-        NO      = 2
-    };
-
-    explicit VoteInfo(const COutPoint _mnId, VoteDirection _vote, std::string _mnAlias, int64_t _time) :
-        mnVoter(_mnId), vote(_vote), mnAlias(std::move(_mnAlias)), time(_time) {}
-    COutPoint mnVoter;
-    VoteDirection vote;
-    std::string mnAlias;
-    int64_t time;
-};
-
-struct HybridVoteStatus
+struct CoinVoteStatus
 {
-    int64_t mnYes{0};
-    int64_t mnNo{0};
     int64_t coinYes{0};
     int64_t coinNo{0};
-    double k{0.0};
-    double combinedScore{0.0};
+    int64_t netCoinVotes{0};
     int cutoffHeight{0};
 };
 
 class CBudgetProposal;
-class TransactionRecord;
 class MNModel;
 class WalletModel;
 
@@ -120,11 +100,9 @@ public:
     // Returns true if there is at least one proposal cached
     bool hasProposals();
     // Whether a visual refresh is needed
-    bool isRefreshNeeded() { return refreshNeeded; }
+    bool isRefreshNeeded() { return true; }
     // Return the number of blocks per budget cycle
     int getNumBlocksPerBudgetCycle() const;
-    // Return the minimum time when an MN can update a vote for a proposal
-    int getProposalVoteUpdateMinTime() const;
     // Return the budget maximum available amount for the running chain
     CAmount getMaxAvailableBudgetAmount() const;
     // Return the proposal maximum payments count for the running chain
@@ -135,15 +113,12 @@ public:
     // Returns the sum of all of the passing proposals
     CAmount getBudgetAllocatedAmount() const { return allocatedAmount; };
     CAmount getBudgetAvailableAmount() const { return getMaxAvailableBudgetAmount() - allocatedAmount; };
-    // Return the votes that the local masternodes did for the inputted proposal
-    std::vector<VoteInfo> getLocalMNsVotesForProposal(const ProposalInfo& propInfo);
     // Check if the URL is valid.
     OperationResult validatePropURL(const QString& url) const;
     OperationResult validatePropName(const QString& name) const;
     OperationResult validatePropAmount(CAmount amount) const;
     OperationResult validatePropPaymentCount(int paymentCount) const;
-    // Whether the tier two network synchronization has finished or not
-    bool isTierTwoSync();
+    bool isChainReady();
 
     // Creates a proposal, crafting and broadcasting the fee transaction,
     // storing it locally to be broadcasted when the fee tx proposal depth
@@ -154,10 +129,6 @@ public:
                                    CAmount nAmount,
                                    const std::string& strPaymentAddr);
 
-    virtual OperationResult voteForProposal(const ProposalInfo& prop,
-                                            bool isVotePositive,
-                                            const std::vector<std::string>& mnVotingAlias);
-
     virtual OperationResult createVoteLockAndCast(const ProposalInfo& prop,
                                                   bool isVotePositive,
                                                   CAmount lockAmount,
@@ -165,33 +136,19 @@ public:
 
     virtual CAmount getCoinLockableBalance() const;
 
-    OperationResult getProposalHybridVoteStatus(const ProposalInfo& prop, HybridVoteStatus& status);
+    OperationResult getProposalCoinVoteStatus(const ProposalInfo& prop, CoinVoteStatus& status);
 
-    // Stop internal timers
-    void stop();
-
-public Q_SLOTS:
-    void pollGovernanceChanged();
-    void txLoaded(const QString& hash, const int txType, const int txStatus);
+    void stop() {}
 
 private:
     QPointer<ClientModel> clientModel;
     QPointer<WalletModel> walletModel;
-    MNModel* mnModel{nullptr};
-    std::atomic<bool> refreshNeeded{false};
 
     // Cached amount
     CAmount allocatedAmount{0};
 
-    QTimer* pollTimer{nullptr};
-    // Cached proposals waiting for the minimum required confirmations
-    // to be broadcasted to the network.
-    std::vector<CBudgetProposal> waitingPropsForConfirmations;
-
-    void scheduleBroadcast(const CBudgetProposal& proposal);
-
     // Util function to create a ProposalInfo object
-    ProposalInfo buildProposalInfo(const CBudgetProposal* prop, bool isPassing, bool isPending);
+    ProposalInfo buildProposalInfo(const CBudgetProposal* prop, bool isPassing);
 };
 
 #endif // PIVX_QT_GOVERNANCEMODEL_H

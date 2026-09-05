@@ -8,8 +8,7 @@
 
 #include "bitcoinunits.h"
 #include "chainparams.h"
-#include "mnmodel.h"
-#include "mnselectiondialog.h"
+#include "organiclifegui.h"
 #include "qtutils.h"
 #include "walletmodel.h"
 
@@ -18,7 +17,6 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLineEdit>
-#include <QListWidgetItem>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QScreen>
@@ -30,7 +28,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <unordered_set>
 
 namespace {
 QString FormatDurationLabel(int64_t seconds)
@@ -115,9 +112,9 @@ VoteDialog::VoteDialog(QWidget *parent, GovernanceModel* _govModel, MNModel* _mn
     ContainerDialog(parent),
     ui(new Ui::VoteDialog),
     govModel(_govModel),
-    mnModel(_mnModel),
     walletModel(_walletModel)
 {
+    Q_UNUSED(_mnModel);
     ui->setupUi(this);
     applyParentOrAppStyleSheet(parent);
     initRoundedContainerFrame(ui->frame, 16);
@@ -206,7 +203,11 @@ VoteDialog::VoteDialog(QWidget *parent, GovernanceModel* _govModel, MNModel* _mn
     initVoteCheck(ui->containerYes, checkBoxYes, progressBarYes, "Yes", Qt::LayoutDirection::LeftToRight, true);
 
     GUIUtil::setupAmountWidget(ui->lineEditCoinAmount, this);
-    ui->radioModeMasternode->setChecked(true);
+    ui->radioModeCoinLock->setChecked(true);
+    ui->labelVoteMode->hide();
+    ui->radioModeMasternode->hide();
+    ui->radioModeCoinLock->hide();
+    ui->containerMnMode->hide();
 
     // Guard against platform/font scaling collisions in coin mode layout.
     ui->containerVotes->setMinimumHeight(40);
@@ -287,7 +288,6 @@ VoteDialog::VoteDialog(QWidget *parent, GovernanceModel* _govModel, MNModel* _mn
     setMinimumSize(520, 280);
     resize(baseDialogWidth, baseDialogHeight);
 
-    connect(ui->btnSelectMasternodes, &QPushButton::clicked, this, &VoteDialog::onMnSelectionClicked);
     connect(ui->btnEsc, &QPushButton::clicked, this, &VoteDialog::close);
     connect(ui->btnCancel, &QPushButton::clicked, this, &VoteDialog::close);
     connect(ui->btnSave, &QPushButton::clicked, this, &VoteDialog::onAcceptClicked);
@@ -300,17 +300,11 @@ VoteDialog::VoteDialog(QWidget *parent, GovernanceModel* _govModel, MNModel* _mn
     connect(ui->lineEditCoinAmount, &QLineEdit::textChanged, this, [this](const QString&) {
         updateCoinAmountValidationState();
     });
-    connect(ui->listMasternodesInline, &QListWidget::itemChanged, [this](QListWidgetItem* /*item*/) {
-        if (updatingInlineMnList) return;
-        syncSelectedMasternodesFromInlineList();
-        updateMnSelectionNum();
-    });
     ui->containerNo->installEventFilter(this);
     ui->containerYes->installEventFilter(this);
     progressBarNo->installEventFilter(this);
     progressBarYes->installEventFilter(this);
 
-    refreshInlineMnList();
     updateVoteModeUi();
 }
 
@@ -325,19 +319,16 @@ void VoteDialog::setProposal(const ProposalInfo& prop)
     const QString durationText = prop.remainingPayments <= 0 ? QString() :
             tr(" (~%1)").arg(FormatDurationLabel(static_cast<int64_t>(prop.remainingPayments) * BudgetCycleSeconds()));
     ui->labelTime->setText(cycleText + durationText);
-    double totalVotes = prop.votesYes + prop.votesNo;
-    double percentageNo = (totalVotes == 0) ? 0 :  (prop.votesNo / totalVotes) * 100;
-    double percentageYes = (totalVotes == 0) ? 0 : (prop.votesYes / totalVotes) * 100;
+    const double totalVotes = prop.coinVotesYes + prop.coinVotesNo;
+    const double percentageNo = (totalVotes == 0) ? 0 : (prop.coinVotesNo / totalVotes) * 100;
+    const double percentageYes = (totalVotes == 0) ? 0 : (prop.coinVotesYes / totalVotes) * 100;
     progressBarNo->setValue((int)percentageNo);
     progressBarYes->setValue((int)percentageYes);
-    checkBoxNo->setText(QString::number(prop.votesNo) + " /  " + QString::number(percentageNo) + "% " + tr("No"));
-    checkBoxYes->setText(tr("Yes") + " " + QString::number(prop.votesYes) + " / " + QString::number(percentageYes) + "%");
-    votes = govModel->getLocalMNsVotesForProposal(prop);
-    refreshInlineMnList();
+    checkBoxNo->setText(QString::number(prop.coinVotesNo) + " /  " + QString::number(percentageNo) + "% " + tr("No"));
+    checkBoxYes->setText(tr("Yes") + " " + QString::number(prop.coinVotesYes) + " / " + QString::number(percentageYes) + "%");
     updateCoinModeInfo();
-    updateHybridStatusText();
+    updateCoinVoteStatusText();
     updateVoteModeUi();
-    updateMnSelectionNum();
 }
 
 void VoteDialog::onAcceptClicked()
@@ -359,61 +350,33 @@ void VoteDialog::onAcceptClicked()
         return;
     }
 
-    if (isCoinVoteMode()) {
-        std::unique_ptr<WalletModel::UnlockContext> unlockCtx;
-        if (walletModel) {
-            unlockCtx = std::make_unique<WalletModel::UnlockContext>(walletModel->requestUnlock());
-            if (!unlockCtx->isValid()) {
-                inform(tr("Wallet must be unlocked to vote with coin locks"));
-                return;
-            }
+    std::unique_ptr<WalletModel::UnlockContext> unlockCtx;
+    if (walletModel) {
+        unlockCtx = std::make_unique<WalletModel::UnlockContext>(walletModel->requestUnlock());
+        if (!unlockCtx->isValid()) {
+            inform(tr("Wallet must be unlocked to vote with coin locks"));
+            return;
         }
+    }
 
-        CAmount lockAmount = 0;
-        const OperationResult amountValidation = validateCoinLockAmount(&lockAmount);
-        if (!amountValidation) {
-            ui->labelCoinValidationHint->setText(QString::fromStdString(amountValidation.getError()));
-            applyCoinAmountInvalidState(true);
-            inform(QString::fromStdString(amountValidation.getError()));
-            return;
-        }
-
-        const uint32_t unlockHeight = autoUnlockHeight();
-        if (unlockHeight == 0) {
-            inform(tr("Cannot compute unlock height for this proposal"));
-            return;
-        }
-        auto res = govModel->createVoteLockAndCast(*proposal, isPositive, lockAmount, unlockHeight);
-        if (!res) {
-            ui->labelCoinValidationHint->setText(QString::fromStdString(res.getError()));
-            applyCoinAmountInvalidState(true);
-            inform(QString::fromStdString(res.getError()));
-            return;
-        }
-        accept();
+    CAmount lockAmount = 0;
+    const OperationResult amountValidation = validateCoinLockAmount(&lockAmount);
+    if (!amountValidation) {
+        ui->labelCoinValidationHint->setText(QString::fromStdString(amountValidation.getError()));
+        applyCoinAmountInvalidState(true);
+        inform(QString::fromStdString(amountValidation.getError()));
         return;
     }
 
-    syncSelectedMasternodesFromInlineList();
-    if (vecSelectedMn.empty()) {
-        inform(tr("Missing voting masternodes selection"));
+    const uint32_t unlockHeight = autoUnlockHeight();
+    if (unlockHeight == 0) {
+        inform(tr("Cannot compute unlock height for this proposal"));
         return;
     }
-
-    // Check time between votes.
-    for (const auto& vote : votes) {
-        auto it = std::find(vecSelectedMn.begin(), vecSelectedMn.end(), vote.mnAlias);
-        if (it != vecSelectedMn.end()) {
-            if (vote.time + govModel->getProposalVoteUpdateMinTime() > GetAdjustedTime()) {
-                inform(tr("Time between votes is too soon, have to wait %1 minutes").arg(govModel->getProposalVoteUpdateMinTime()/60));
-                return;
-            }
-        }
-    }
-
-    // Craft and broadcast vote
-    auto res = govModel->voteForProposal(*proposal, isPositive, vecSelectedMn);
+    auto res = govModel->createVoteLockAndCast(*proposal, isPositive, lockAmount, unlockHeight);
     if (!res) {
+        ui->labelCoinValidationHint->setText(QString::fromStdString(res.getError()));
+        applyCoinAmountInvalidState(true);
         inform(QString::fromStdString(res.getError()));
         return;
     }
@@ -685,23 +648,6 @@ void VoteDialog::showEvent(QShowEvent *event)
     ContainerDialog::showEvent(event);
 }
 
-void VoteDialog::onMnSelectionClicked()
-{
-    OrganicLifeGUI* window = dynamic_cast<OrganicLifeGUI*>(parent());
-    if (!mnSelectionDialog) {
-        mnSelectionDialog = new MnSelectionDialog(window);
-        mnSelectionDialog->setModel(mnModel, govModel->getProposalVoteUpdateMinTime());
-    }
-    mnSelectionDialog->setMnVoters(votes);
-    mnSelectionDialog->updateView();
-    mnSelectionDialog->resize(size());
-    if (openDialogWithOpaqueBackgroundY(mnSelectionDialog, window, 4.5, 5, false)) {
-        vecSelectedMn = mnSelectionDialog->getSelectedMnAlias();
-        setInlineSelectedMasternodes(vecSelectedMn);
-        updateMnSelectionNum();
-    }
-}
-
 void VoteDialog::onCheckBoxClicked(QCheckBox* checkBox, QProgressBar* /*progressBar*/, bool isVoteYes)
 {
     if (isVoteYes) {
@@ -809,7 +755,7 @@ bool VoteDialog::eventFilter(QObject* watched, QEvent* event)
 
 bool VoteDialog::isCoinVoteMode() const
 {
-    return ui->radioModeCoinLock->isChecked();
+    return true;
 }
 
 CAmount VoteDialog::parseCoinLockAmount(bool& ok) const
@@ -940,8 +886,8 @@ void VoteDialog::updateCoinAmountValidationState()
 
 uint32_t VoteDialog::autoUnlockHeight() const
 {
-    if (!proposal || proposal->endBlock <= 0) return 0;
-    return static_cast<uint32_t>(proposal->endBlock);
+    if (!proposal || proposal->endBlock <= 0 || proposal->endBlock == std::numeric_limits<int>::max()) return 0;
+    return static_cast<uint32_t>(proposal->endBlock + 1);
 }
 
 CAmount VoteDialog::getCoinLockableBalance() const
@@ -981,125 +927,12 @@ void VoteDialog::applyCoinAmountPreset(int basisPoints)
     updateCoinAmountValidationState();
 }
 
-void VoteDialog::refreshInlineMnList()
-{
-    if (!ui->listMasternodesInline) {
-        return;
-    }
-
-    std::unordered_set<std::string> selectedAliases(vecSelectedMn.begin(), vecSelectedMn.end());
-    if (selectedAliases.empty()) {
-        for (const auto& vote : votes) {
-            selectedAliases.insert(vote.mnAlias);
-        }
-    }
-
-    updatingInlineMnList = true;
-    ui->listMasternodesInline->clear();
-
-    if (!mnModel || mnModel->rowCount() == 0) {
-        auto* emptyItem = new QListWidgetItem(tr("No masternodes available"), ui->listMasternodesInline);
-        emptyItem->setFlags(Qt::NoItemFlags);
-        updatingInlineMnList = false;
-        vecSelectedMn.clear();
-        updateInlineMnSummary();
-        return;
-    }
-
-    for (int i = 0; i < mnModel->rowCount(); ++i) {
-        const QString alias = mnModel->index(i, MNModel::ALIAS, QModelIndex()).data().toString();
-        const QString status = mnModel->index(i, MNModel::STATUS, QModelIndex()).data().toString();
-        if (alias.isEmpty()) {
-            continue;
-        }
-
-        auto* item = new QListWidgetItem(tr("%1  •  %2").arg(alias, status), ui->listMasternodesInline);
-        item->setData(Qt::UserRole, alias);
-        item->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
-        item->setCheckState(selectedAliases.count(alias.toStdString()) > 0 ? Qt::Checked : Qt::Unchecked);
-
-        if (status != "ENABLED") {
-            item->setFlags(Qt::NoItemFlags);
-            item->setToolTip(tr("Only ENABLED masternodes can vote"));
-            item->setCheckState(Qt::Unchecked);
-        }
-    }
-
-    updatingInlineMnList = false;
-    syncSelectedMasternodesFromInlineList();
-    updateInlineMnSummary();
-}
-
-void VoteDialog::syncSelectedMasternodesFromInlineList()
-{
-    if (!ui->listMasternodesInline) {
-        return;
-    }
-
-    std::vector<std::string> selected;
-    selected.reserve(static_cast<size_t>(ui->listMasternodesInline->count()));
-    for (int i = 0; i < ui->listMasternodesInline->count(); ++i) {
-        QListWidgetItem* item = ui->listMasternodesInline->item(i);
-        if (!item) {
-            continue;
-        }
-        const QVariant aliasData = item->data(Qt::UserRole);
-        if (!aliasData.isValid() || !item->flags().testFlag(Qt::ItemIsEnabled)) {
-            continue;
-        }
-        if (item->checkState() == Qt::Checked) {
-            selected.emplace_back(aliasData.toString().toStdString());
-        }
-    }
-    vecSelectedMn = std::move(selected);
-    updateInlineMnSummary();
-}
-
-void VoteDialog::setInlineSelectedMasternodes(const std::vector<std::string>& selected)
-{
-    if (!ui->listMasternodesInline) {
-        return;
-    }
-
-    std::unordered_set<std::string> selectedAliases(selected.begin(), selected.end());
-    updatingInlineMnList = true;
-    for (int i = 0; i < ui->listMasternodesInline->count(); ++i) {
-        QListWidgetItem* item = ui->listMasternodesInline->item(i);
-        if (!item) {
-            continue;
-        }
-        const QVariant aliasData = item->data(Qt::UserRole);
-        if (!aliasData.isValid() || !item->flags().testFlag(Qt::ItemIsEnabled)) {
-            continue;
-        }
-        item->setCheckState(selectedAliases.count(aliasData.toString().toStdString()) > 0 ? Qt::Checked : Qt::Unchecked);
-    }
-    updatingInlineMnList = false;
-    syncSelectedMasternodesFromInlineList();
-}
-
-void VoteDialog::updateInlineMnSummary()
-{
-    if (vecSelectedMn.empty() && !votes.empty()) {
-        ui->labelMnInlineSummary->setText(tr("No masternodes selected (you already voted with %1)").arg(votes.size()));
-        return;
-    }
-    ui->labelMnInlineSummary->setText(tr("%1 masternodes selected").arg(vecSelectedMn.size()));
-}
-
 void VoteDialog::updateVoteModeUi()
 {
-    const bool coinMode = isCoinVoteMode();
-    ui->containerCoinMode->setVisible(coinMode);
-    ui->containerMnMode->setVisible(!coinMode);
-    ui->labelSubtitle->setText(coinMode ?
-            tr("Select vote direction and coin lock details") :
-            tr("Select vote direction and the masternodes that will vote for it"));
-    ui->labelMessage->setText(tr("You can change your vote later"));
-    ui->labelMessage->setVisible(!coinMode);
-    if (!coinMode) {
-        refreshInlineMnList();
-    }
+    ui->containerCoinMode->setVisible(true);
+    ui->containerMnMode->setVisible(false);
+    ui->labelSubtitle->setText(tr("Select vote direction and PQ coin lock details"));
+    ui->labelMessage->setVisible(false);
     updateCoinModeInfo();
     updateCoinAmountValidationState();
 }
@@ -1141,15 +974,15 @@ void VoteDialog::updateCoinModeInfo()
     ui->labelCoinValidationHint->setVisible(false);
 }
 
-void VoteDialog::updateHybridStatusText()
+void VoteDialog::updateCoinVoteStatusText()
 {
     if (!proposal) {
         ui->labelHybridStatus->setVisible(false);
         return;
     }
 
-    HybridVoteStatus status;
-    auto result = govModel->getProposalHybridVoteStatus(*proposal, status);
+    CoinVoteStatus status;
+    auto result = govModel->getProposalCoinVoteStatus(*proposal, status);
     if (!result) {
         ui->labelHybridStatus->setVisible(false);
         return;
@@ -1157,26 +990,10 @@ void VoteDialog::updateHybridStatusText()
 
     ui->labelHybridStatus->setVisible(true);
     ui->labelHybridStatus->setText(
-            tr("MN %1/%2 | Coin %3/%4 | Score %5")
-                    .arg(status.mnYes)
-                    .arg(status.mnNo)
+            tr("PQ coin vote: Yes %1 | No %2 | Net %3")
                     .arg(status.coinYes)
                     .arg(status.coinNo)
-                    .arg(QString::number(status.combinedScore, 'f', 2)));
-}
-
-void VoteDialog::updateMnSelectionNum()
-{
-    updateInlineMnSummary();
-
-    QString text;
-    if (vecSelectedMn.empty()) {
-        text = !votes.empty() ? tr("You have voted with %1 Masternodes for this proposal\nChange votes").arg(votes.size()) :
-                tr("Open advanced masternode selector");
-    } else {
-        text = tr("%1 Masternodes selected to vote").arg(vecSelectedMn.size());
-    }
-    ui->btnSelectMasternodes->setText(text);
+                    .arg(status.netCoinVotes));
 }
 
 void VoteDialog::inform(const QString& text)

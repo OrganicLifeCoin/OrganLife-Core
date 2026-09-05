@@ -10,6 +10,7 @@
 #include "chain.h"
 #include "coins.h"
 #include "chainparams.h"
+#include "pqtransaction.h"
 #include "clientversion.h"
 #include "consensus/validation.h"
 #include "evo/deterministicmns.h"
@@ -467,7 +468,7 @@ static bool CheckLLMQCommitmentTx(const CTransaction& tx, const CBlockIndex* pin
 
 static bool FindGovLockOutputIndex(const CTransaction& tx, const CGovVoteLockTx& payload, uint32_t& outputIndexRet)
 {
-    const CScript ownerScript = GetScriptForDestination(payload.ownerKeyId);
+    const CScript ownerScript = pq::GetScript(payload.ownerKeyId);
     for (uint32_t i = 0; i < tx.vout.size(); ++i) {
         const CTxOut& out = tx.vout[i];
         if (out.nValue == payload.lockAmount && out.scriptPubKey == ownerScript) {
@@ -478,12 +479,44 @@ static bool FindGovLockOutputIndex(const CTransaction& tx, const CGovVoteLockTx&
     return false;
 }
 
-static bool CheckGovVoteLockTx(const CTransaction& tx, CValidationState& state)
+static bool CheckGovProposalTx(const CTransaction& tx, const CBlockIndex* pindexPrev,
+                               CValidationState& state)
 {
+    pq::Payload pqPayload;
+    CGovProposalTx pl;
+    if (!pq::DecodePayload(tx, pqPayload) || !DecodeGovernanceData(pqPayload, pl))
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-proposal-payload");
+    if (!pl.IsTriviallyValid(state)) return false;
+
+    CBudgetProposal proposal(pl.name, pl.url, pl.paymentCount, pq::GetScript(pl.recipient),
+                             pl.amount, pl.blockStart, tx.GetHash());
+    if (!proposal.IsWellFormed(g_budgetman.GetTotalBudget(pl.blockStart)))
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-proposal");
+    if (pindexPrev && pl.blockStart <= static_cast<uint32_t>(pindexPrev->nHeight + 1))
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-proposal-start");
+    // Context-free block checks may revisit an already-connected proposal.
+    if (pindexPrev && g_budgetman.HaveProposal(proposal.GetHash()))
+        return state.DoS(100, false, REJECT_DUPLICATE, "bad-govtx-proposal-duplicate");
+
+    pq::KeyID burnId;
+    const uint256 proposalHash = proposal.GetHash();
+    std::copy(proposalHash.begin(), proposalHash.end(), burnId.begin());
+    const CScript burnScript = pq::GetScript(burnId);
+    const bool hasFee = std::any_of(tx.vout.begin(), tx.vout.end(), [&](const CTxOut& out) {
+        return out.nValue == PROPOSAL_FEE_TX && out.scriptPubKey == burnScript;
+    });
+    if (!hasFee) return state.DoS(100, false, REJECT_INVALID, "bad-govtx-proposal-fee");
+    return true;
+}
+
+static bool CheckGovVoteLockTx(const CTransaction& tx, const CBlockIndex* pindexPrev,
+                               CValidationState& state)
+{
+    pq::Payload pqPayload;
     CGovVoteLockTx pl;
-    if (!GetValidatedTxPayload(tx, pl, state)) {
-        return false;
-    }
+    if (!pq::DecodePayload(tx, pqPayload) || !DecodeGovernanceData(pqPayload, pl))
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-payload");
+    if (!pl.IsTriviallyValid(state)) return false;
 
     if (pl.lockAmount < GOV_VOTE_LOCK_MIN_AMOUNT) {
         return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-amount");
@@ -497,6 +530,15 @@ static bool CheckGovVoteLockTx(const CTransaction& tx, CValidationState& state)
     if (!FindGovLockOutputIndex(tx, pl, lockOutputIndex)) {
         return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-output");
     }
+    if (pindexPrev) {
+        CBudgetProposal proposal;
+        if (!g_budgetman.GetProposal(pl.proposalHash, proposal))
+            return state.DoS(100, false, REJECT_INVALID, "bad-govtx-proposal-unknown");
+        if (pindexPrev->nHeight + 1 >= proposal.GetBlockStart())
+            return state.DoS(100, false, REJECT_INVALID, "bad-govtx-voting-closed");
+        if (pl.unlockHeight <= static_cast<uint32_t>(proposal.GetBlockEnd()))
+            return state.DoS(100, false, REJECT_INVALID, "bad-govtx-unlock-too-early");
+    }
 
     return true;
 }
@@ -505,10 +547,10 @@ static bool CheckGovProposalVotingWindow(const uint256& proposalHash, int nextBl
 {
     CBudgetProposal proposal;
     if (!g_budgetman.GetProposal(proposalHash, proposal)) {
-        return true;
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-proposal-unknown");
     }
-    if (proposal.GetBlockEnd() < nextBlockHeight) {
-        return false;
+    if (nextBlockHeight >= proposal.GetBlockStart()) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-voting-closed");
     }
     return true;
 }
@@ -518,8 +560,10 @@ static bool CheckGovVoteCastTx(const CTransaction& tx,
                                const CCoinsViewCache* view,
                                CValidationState& state)
 {
+    pq::Payload pqPayload;
     CGovVoteCastTx pl;
-    if (!GetValidatedTxPayload(tx, pl, state)) {
+    if (!pq::DecodePayload(tx, pqPayload) || !DecodeGovernanceData(pqPayload, pl) ||
+        !pl.IsTriviallyValid(state)) {
         return false;
     }
 
@@ -529,12 +573,8 @@ static bool CheckGovVoteCastTx(const CTransaction& tx,
     assert(view != nullptr);
     const int nextBlockHeight = pindexPrev->nHeight + 1;
 
-    if (!CheckGovProposalVotingWindow(pl.proposalHash, nextBlockHeight, state)) {
-        return false;
-    }
-
     std::set<COutPoint> uniqueRefs;
-    CKeyID ownerKeyId;
+    pq::KeyID ownerKeyId;
     bool ownerSet = false;
     for (const auto& lockRef : pl.lockRefs) {
         if (!uniqueRefs.emplace(lockRef).second) {
@@ -556,7 +596,9 @@ static bool CheckGovVoteCastTx(const CTransaction& tx,
                 const auto itLookup = g_govVoteLockLookup->find(lockRef.hash);
                 if (itLookup != g_govVoteLockLookup->end()) {
                     lockTx = itLookup->second;
-                    lockPayloadLoaded = GetTxPayload(*lockTx, lockPayload);
+                    pq::Payload lockPQPayload;
+                    lockPayloadLoaded = pq::DecodePayload(*lockTx, lockPQPayload) &&
+                                        DecodeGovernanceData(lockPQPayload, lockPayload);
                 }
             }
             if (!lockPayloadLoaded) {
@@ -566,7 +608,9 @@ static bool CheckGovVoteCastTx(const CTransaction& tx,
                     // Reject, but don't assign a ban score for missing dependency races.
                     return state.DoS(0, false, REJECT_INVALID, "bad-govtx-lock-not-found");
                 }
-                lockPayloadLoaded = GetTxPayload(*lockTx, lockPayload);
+                pq::Payload lockPQPayload;
+                lockPayloadLoaded = pq::DecodePayload(*lockTx, lockPQPayload) &&
+                                    DecodeGovernanceData(lockPQPayload, lockPayload);
             }
         } else {
             // Try to get lock record from governance vote index (for confirmed locks)
@@ -586,7 +630,9 @@ static bool CheckGovVoteCastTx(const CTransaction& tx,
             if (!lockPayloadLoaded) {
                 uint256 lockHashBlock;
                 if (GetTransaction(lockRef.hash, lockTx, lockHashBlock, true)) {
-                    lockPayloadLoaded = GetTxPayload(*lockTx, lockPayload);
+                    pq::Payload lockPQPayload;
+                    lockPayloadLoaded = pq::DecodePayload(*lockTx, lockPQPayload) &&
+                                        DecodeGovernanceData(lockPQPayload, lockPayload);
                 }
             }
         }
@@ -596,21 +642,14 @@ static bool CheckGovVoteCastTx(const CTransaction& tx,
             return state.DoS(0, false, REJECT_INVALID, "bad-govtx-lock-missing");
         }
         
-        if (lockTx && lockTx->nType != CTransaction::TxType::GOVVOTELOCK) {
-            return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-type");
-        }
         if (lockTx) {
             if (lockRef.n >= lockTx->vout.size()) {
                 return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-ref");
             }
             const CTxOut& referencedOutput = lockTx->vout[lockRef.n];
-            CTxDestination ownerDest;
-            if (!ExtractDestination(referencedOutput.scriptPubKey, ownerDest)) {
-                return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-ref");
-            }
-            const CKeyID* ownerFromRef = boost::get<CKeyID>(&ownerDest);
-            if (ownerFromRef == nullptr ||
-                    *ownerFromRef != lockPayload.ownerKeyId ||
+            pq::KeyID ownerFromRef;
+            if (!pq::ExtractID(referencedOutput.scriptPubKey, ownerFromRef) ||
+                    ownerFromRef != lockPayload.ownerKeyId ||
                     referencedOutput.nValue != lockPayload.lockAmount) {
                 return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-ref");
             }
@@ -630,10 +669,15 @@ static bool CheckGovVoteCastTx(const CTransaction& tx,
         }
     }
 
-    std::string strError;
-    if (!CHashSigner::VerifyHash(pl.GetSignatureHash(), ownerKeyId, pl.sig, strError)) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-sig", false, strError);
-    }
+    const auto signerId = pq::GetID(pl.ownerPublicKey, Params().NetworkIDString());
+    const auto context = pq::GovernanceSignatureContext(Params().NetworkIDString());
+    if (!signerId || *signerId != ownerKeyId || !context ||
+        !mldsa44::Verify(pl.ownerPublicKey,
+                        pl.GetSignatureMessage(Params().GetConsensus().hashGenesisBlock),
+                        *context, pl.sig))
+        return state.DoS(100, false, REJECT_INVALID, "bad-govtx-sig");
+
+    if (!CheckGovProposalVotingWindow(pl.proposalHash, nextBlockHeight, state)) return false;
 
     return true;
 }
@@ -659,8 +703,8 @@ static bool CheckSpecialTxBasic(const CTransaction& tx, CValidationState& state)
                          REJECT_INVALID, "bad-txns-type-version");
     }
 
-    // Cannot be coinbase/coinstake tx
-    if (tx.IsCoinBase() || tx.IsCoinStake()) {
+    // PQ coinstakes carry their ML-DSA authorization in the special payload.
+    if (tx.IsCoinBase() || (tx.IsCoinStake() && tx.nType != CTransaction::PQ)) {
         return state.DoS(10, error("%s: Special tx is coinbase or coinstake", __func__),
                          REJECT_INVALID, "bad-txns-special-coinbase");
     }
@@ -680,11 +724,6 @@ static bool CheckSpecialTxBasic(const CTransaction& tx, CValidationState& state)
     return true;
 }
 
-static bool IsGovernanceSpecialTxType(const CTransaction& tx)
-{
-    return tx.nType == CTransaction::TxType::GOVVOTELOCK || tx.nType == CTransaction::TxType::GOVVOTECAST;
-}
-
 // contextual and non-contextual per-type checks
 // - pindexPrev=null: CheckBlock-->CheckSpecialTxNoContext
 // - pindexPrev=chainActive.Tip: AcceptToMemoryPoolWorker-->CheckSpecialTx
@@ -698,21 +737,33 @@ bool CheckSpecialTx(const CTransaction& tx, const CBlockIndex* pindexPrev, const
         return false;
     }
     if (pindexPrev) {
-        const bool isGovSpecialTx = IsGovernanceSpecialTxType(tx);
+        const int nextHeight = pindexPrev->nHeight + 1;
         // reject special transactions before enforcement
-        if (!tx.IsNormalType() && !isGovSpecialTx &&
-                !Params().GetConsensus().NetworkUpgradeActive(pindexPrev->nHeight + 1, Consensus::UPGRADE_V6_0)) {
+        if (!tx.IsNormalType() &&
+                !(tx.nType == CTransaction::PQ && pq::PaymentsActive(Params(), nextHeight)) &&
+                !Params().GetConsensus().NetworkUpgradeActive(nextHeight, Consensus::UPGRADE_V6_0)) {
             return state.DoS(100, error("%s: Special tx when v6 upgrade not enforced yet", __func__),
                              REJECT_INVALID, "bad-txns-v6-not-active");
-        }
-        if (isGovSpecialTx &&
-                !Params().GetConsensus().NetworkUpgradeActive(pindexPrev->nHeight + 1, Consensus::UPGRADE_V6_1_GOV)) {
-            return state.DoS(100, error("%s: Governance special tx before activation", __func__),
-                             REJECT_INVALID, "bad-txns-gov-not-active");
         }
     }
     // per-type checks
     switch (tx.nType) {
+        case CTransaction::TxType::PQ: {
+            std::string reason;
+            if (!pq::CheckStructure(tx, Params(), reason))
+                return state.DoS(100, false, REJECT_INVALID, reason);
+            pq::Payload payload;
+            if (!pq::DecodePayload(tx, payload))
+                return state.DoS(100, false, REJECT_INVALID, "bad-pq-payload");
+            if (pq::IsGovernanceMode(payload.mode) && pindexPrev &&
+                !Params().GetConsensus().NetworkUpgradeActive(pindexPrev->nHeight + 1,
+                                                               Consensus::UPGRADE_V6_1_GOV))
+                return state.DoS(100, false, REJECT_INVALID, "bad-txns-gov-not-active");
+            if (payload.mode == pq::GOVERNANCE_PROPOSAL) return CheckGovProposalTx(tx, pindexPrev, state);
+            if (payload.mode == pq::GOVERNANCE_LOCK) return CheckGovVoteLockTx(tx, pindexPrev, state);
+            if (payload.mode == pq::GOVERNANCE_CAST) return CheckGovVoteCastTx(tx, pindexPrev, view, state);
+            return true;
+        }
         case CTransaction::TxType::NORMAL: {
             // nothing to check
             return true;
@@ -737,12 +788,9 @@ bool CheckSpecialTx(const CTransaction& tx, const CBlockIndex* pindexPrev, const
             // quorum commitment
             return CheckLLMQCommitmentTx(tx, pindexPrev, state);
         }
-        case CTransaction::TxType::GOVVOTELOCK: {
-            return CheckGovVoteLockTx(tx, state);
-        }
-        case CTransaction::TxType::GOVVOTECAST: {
-            return CheckGovVoteCastTx(tx, pindexPrev, view, state);
-        }
+        case CTransaction::TxType::GOVVOTELOCK:
+        case CTransaction::TxType::GOVVOTECAST:
+            return state.DoS(100, false, REJECT_INVALID, "bad-govtx-legacy-type");
     }
 
     return state.DoS(10, error("%s: special tx %s with invalid type %d", __func__, tx.GetHash().ToString(), tx.nType),
@@ -760,9 +808,21 @@ bool ProcessSpecialTxsInBlock(const CBlock& block, const CBlockIndex* pindex, co
     AssertLockHeld(cs_main);
 
     GovVoteLockLookupMap lockLookup;
+    std::set<COutPoint> newLockOutputs;
     for (const CTransactionRef& tx : block.vtx) {
-        if (tx->nType == CTransaction::TxType::GOVVOTELOCK) {
+        pq::Payload payload;
+        if (pq::DecodePayload(*tx, payload) && payload.mode == pq::GOVERNANCE_LOCK) {
             lockLookup.emplace(tx->GetHash(), tx);
+            CGovVoteLockTx lock;
+            uint32_t output{0};
+            if (DecodeGovernanceData(payload, lock) && FindGovLockOutputIndex(*tx, lock, output))
+                newLockOutputs.emplace(tx->GetHash(), output);
+        }
+    }
+    for (const CTransactionRef& tx : block.vtx) {
+        for (const CTxIn& input : tx->vin) {
+            if (newLockOutputs.count(input.prevout))
+                return state.DoS(100, false, REJECT_INVALID, "bad-govtx-lock-spend-same-block");
         }
     }
     const ScopedGovVoteLockLookup scopedLockLookup(&lockLookup);
@@ -775,35 +835,12 @@ bool ProcessSpecialTxsInBlock(const CBlock& block, const CBlockIndex* pindex, co
         }
     }
 
-    if (governanceVoteIndex && !governanceVoteIndex->ProcessBlock(block, pindex, state, fJustCheck)) {
-        return false;
-    }
-
-    if (!llmq::quorumBlockProcessor->ProcessBlock(block, pindex, state, fJustCheck)) {
-        // pass the state returned by the function above
-        return false;
-    }
-
-    if (!deterministicMNManager->ProcessBlock(block, pindex, state, fJustCheck)) {
-        // pass the state returned by the function above
-        return false;
-    }
-
-    return true;
+    return !governanceVoteIndex || governanceVoteIndex->ProcessBlock(block, pindex, state, fJustCheck);
 }
 
 bool UndoSpecialTxsInBlock(const CBlock& block, const CBlockIndex* pindex)
 {
-    if (!deterministicMNManager->UndoBlock(block, pindex)) {
-        return false;
-    }
-    if (!llmq::quorumBlockProcessor->UndoBlock(block, pindex)) {
-        return false;
-    }
-    if (governanceVoteIndex && !governanceVoteIndex->UndoBlock(block, pindex)) {
-        return false;
-    }
-    return true;
+    return !governanceVoteIndex || governanceVoteIndex->UndoBlock(block, pindex);
 }
 
 uint256 CalcTxInputsHash(const CTransaction& tx)

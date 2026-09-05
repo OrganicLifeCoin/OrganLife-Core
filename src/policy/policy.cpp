@@ -6,6 +6,7 @@
 // NOTE: This file is intended to be customised by the end user, and includes only local node policy logic
 
 #include "policy/policy.h"
+#include "pqtransaction.h"
 
 #include "consensus/tx_verify.h" // for IsFinal()
 #include "tinyformat.h"
@@ -32,7 +33,10 @@ CAmount GetDustThreshold(const CTxOut& txout, const CFeeRate& dustRelayFeeIn)
         return 0;
 
     size_t nSize = GetSerializeSize(txout, 0);
-    nSize += (32 + 4 + 1 + 107 + 4); // the 148 mentioned above
+    pq::KeyID id;
+    // Include the fixed authorization payload in a PQ output's future spend cost.
+    nSize += Params().IsTestChain() && pq::ExtractID(txout.scriptPubKey, id) ?
+        (32 + 4 + 1 + 4 + pq::AUTH_SIZE + 3) : (32 + 4 + 1 + 107 + 4);
     return dustRelayFeeIn.GetFee(nSize);
 }
 
@@ -100,7 +104,9 @@ bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
 bool IsStandardTx(const CTransactionRef& tx, int nBlockHeight, std::string& reason)
 {
     AssertLockHeld(cs_main);
-    if (!Params().GetConsensus().NetworkUpgradeActive(nBlockHeight, Consensus::UPGRADE_V5_0)) {
+    if (!pq::CheckStructure(*tx, Params(), reason)) return false;
+    if (!Params().GetConsensus().NetworkUpgradeActive(nBlockHeight, Consensus::UPGRADE_V5_0) &&
+        !(tx->nType == CTransaction::PQ && pq::PaymentsActive(Params(), nBlockHeight))) {
         // Before v5, all txes with version other than STANDARD_VERSION (1) are considered non-standard
         if (tx->nVersion != CTransaction::TxVersion::LEGACY) {
             reason = "version";
@@ -163,6 +169,11 @@ bool IsStandardTx(const CTransactionRef& tx, int nBlockHeight, std::string& reas
     unsigned int nDataOut = 0;
     txnouttype whichType;
     for (const CTxOut& txout : tx->vout) {
+        pq::KeyID pq_id;
+        if (Params().IsTestChain() && tx->nType == CTransaction::PQ && pq::ExtractID(txout.scriptPubKey, pq_id)) {
+            if (IsDust(txout, dustRelayFee)) { reason = "dust"; return false; }
+            continue;
+        }
         if (!::IsStandard(txout.scriptPubKey, whichType)) {
             reason = "scriptpubkey";
             return false;
@@ -201,6 +212,8 @@ bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs)
         txnouttype whichType;
         // get the scriptPubKey corresponding to this input:
         const CScript& prevScript = prev.scriptPubKey;
+        pq::KeyID pq_id;
+        if (Params().IsTestChain() && tx.nType == CTransaction::PQ && pq::ExtractID(prevScript, pq_id)) continue;
         if (!Solver(prevScript, whichType, vSolutions))
             return false;
 

@@ -102,7 +102,6 @@ BITCOIN_TESTS =\
   test/bip32_tests.cpp \
   test/bloom_tests.cpp \
   test/bls_tests.cpp \
-  test/budget_hybrid_score_tests.cpp \
   test/budget_tests.cpp \
   test/checkblock_tests.cpp \
   test/chart_utils_tests.cpp \
@@ -111,6 +110,8 @@ BITCOIN_TESTS =\
   test/convertbits_tests.cpp \
   test/compress_tests.cpp \
   test/crypto_tests.cpp \
+  test/mldsa_tests.cpp \
+  test/pqtransaction_tests.cpp \
   test/cuckoocache_tests.cpp \
   test/DoS_tests.cpp \
   test/evo_deterministicmns_tests.cpp \
@@ -181,6 +182,8 @@ SAPLING_TESTS =\
 
 if ENABLE_WALLET
 BITCOIN_TESTS += \
+  test/pqkey_tests.cpp \
+  wallet/test/pqwallet_tests.cpp \
   wallet/test/wallet_tests.cpp \
   wallet/test/crypto_tests.cpp
 

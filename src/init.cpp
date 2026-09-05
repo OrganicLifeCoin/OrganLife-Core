@@ -15,18 +15,17 @@
 
 #include "init.h"
 
-#include "activemasternode.h"
 #include "addrman.h"
 #include "amount.h"
-#include "bls/bls_wrapper.h"
 #include "checkpoints.h"
 #include "compat/sanity.h"
 #include "consensus/upgrades.h"
+#include "evo/evodb.h"
+#include "evo/governancevoteindex.h"
 #include "fs.h"
 #include "httpserver.h"
 #include "httprpc.h"
 #include "invalid.h"
-#include "key.h"
 #include "mapport.h"
 #include "miner.h"
 #include "netbase.h"
@@ -39,9 +38,6 @@
 #include "script/standard.h"
 #include "scheduler.h"
 #include "shutdown.h"
-#include "spork.h"
-#include "sporkdb.h"
-#include "tiertwo/init.h"
 #include "txdb.h"
 #include "torcontrol.h"
 #include "guiinterface.h"
@@ -181,7 +177,6 @@ public:
 };
 
 static std::unique_ptr<CCoinsViewErrorCatcher> pcoinscatcher;
-static std::unique_ptr<ECCVerifyHandle> globalVerifyHandle;
 
 static boost::thread_group threadGroup;
 static CScheduler scheduler;
@@ -258,7 +253,6 @@ void Interrupt()
     InterruptREST();
     InterruptTorControl();
     InterruptMapPort();
-    InterruptTierTwo();
     if (g_connman)
         g_connman->Interrupt();
 }
@@ -282,7 +276,6 @@ void Shutdown()
     StopREST();
     StopRPC();
     StopHTTPServer();
-    StopTierTwoThreads();
 #ifdef ENABLE_WALLET
     StopAllWalletStakingThreads();
     for (CWalletRef pwallet : vpwallets) {
@@ -310,7 +303,6 @@ void Shutdown()
     g_connman.reset();
     peerLogic.reset();
 
-    DumpTierTwo();
     if (::mempool.IsLoaded() && gArgs.GetBoolArg("-persistmempool", DEFAULT_PERSIST_MEMPOOL)) {
         DumpMempool(::mempool);
     }
@@ -352,17 +344,14 @@ void Shutdown()
         pcoinscatcher.reset();
         pcoinsdbview.reset();
         pblocktree.reset();
-        pSporkDB.reset();
-        DeleteTierTwo();
+        governanceVoteIndex.reset();
+        evoDb.reset();
     }
 #ifdef ENABLE_WALLET
     for (CWalletRef pwallet : vpwallets) {
         pwallet->Flush(true);
     }
 #endif
-
-    // Tier two
-    ResetTierTwoInterfaces();
 
 #if ENABLE_ZMQ
     if (pzmqNotificationInterface) {
@@ -392,8 +381,6 @@ void Shutdown()
     }
     vpwallets.clear();
 #endif
-    globalVerifyHandle.reset();
-    ECC_Stop();
     LogPrintf("%s: done\n", __func__);
 }
 
@@ -474,7 +461,6 @@ std::string HelpMessage(HelpMessageMode mode)
     if (showDebug) {
         strUsage += HelpMessageOpt("-dbbatchsize", strprintf("Maximum database write batch size in bytes (default: %u)", nDefaultDbBatchSize));
     }
-    strUsage += HelpMessageOpt("-paramsdir=<dir>", strprintf("Specify zk params directory (default: %s)", ZC_GetParamsDir().string()));
     strUsage += HelpMessageOpt("-debuglogfile=<file>", strprintf("Specify location of debug log file: this can be an absolute path or a path relative to the data directory (default: %s)", DEFAULT_DEBUGLOGFILE));
     strUsage += HelpMessageOpt("-disablesystemnotifications", strprintf("Disable OS notifications for incoming transactions (default: %u)", 0));
     strUsage += HelpMessageOpt("-dbcache=<n>", strprintf("Set database cache size in megabytes (%d to %d, default: %d)", nMinDbCache, nMaxDbCache, nDefaultDbCache));
@@ -570,7 +556,6 @@ std::string HelpMessage(HelpMessageMode mode)
         strUsage += HelpMessageOpt("-forkguardstablesamples=<n>", "Override ForkGuard stable samples required to leave recovery");
         strUsage += HelpMessageOpt("-forkguardrecoverytimeoutsamples=<n>", "Override ForkGuard recovery timeout in update samples");
         strUsage += HelpMessageOpt("-forkguardminpeerevidence=<n>", "Override minimum peers required before ForkGuard can leave caution mode");
-        strUsage += HelpMessageOpt("-sporkkey=<privkey>", "Enable spork administration functionality with the appropriate private key.");
         strUsage += HelpMessageOpt("-nuparams=upgradeName:activationHeight", "Use given activation height for specified network upgrade (regtest-only)");
     }
     strUsage += HelpMessageOpt("-debug=<category>", strprintf("Output debugging information (default: %u, supplying <category> is optional)", 0) + ". " +
@@ -597,7 +582,6 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-shrinkdebugfile", "Shrink debug.log file on client startup (default: 1 when no -debug)");
     AppendParamsHelpMessages(strUsage, showDebug);
 
-    strUsage += GetTierTwoHelpString(showDebug);
 
     strUsage += HelpMessageGroup("Node relay options:");
     if (showDebug) {
@@ -773,9 +757,6 @@ void ThreadImport(const std::vector<fs::path>& vImportFiles)
         StartShutdown();
     }
 
-    // tier two
-    InitTierTwoChainTip();
-
     if (gArgs.GetBoolArg("-persistmempool", DEFAULT_PERSIST_MEMPOOL)) {
         LoadMempool(::mempool);
     }
@@ -788,11 +769,6 @@ void ThreadImport(const std::vector<fs::path>& vImportFiles)
  */
 bool InitSanityCheck(void)
 {
-    if (!ECC_InitSanityCheck()) {
-        UIError(_("Elliptic curve cryptography sanity check failure. Aborting."));
-        return false;
-    }
-
     if (!glibc_sanity_test() || !glibcxx_sanity_test()) {
         return false;
     }
@@ -802,41 +778,7 @@ bool InitSanityCheck(void)
         return false;
     }
 
-    if (!BLSInit()) {
-        return false;
-    }
-
     return true;
-}
-
-static void LoadSaplingParams()
-{
-    struct timeval tv_start{}, tv_end{};
-    float elapsed;
-    gettimeofday(&tv_start, nullptr);
-
-    try {
-        initZKSNARKS();
-    } catch (std::runtime_error &e) {
-        std::string strError = strprintf(_("Cannot find the Sapling parameters in the following directory:\n%s"), ZC_GetParamsDir());
-        std::string strErrorPosix =
-            _("If you are running from the source tree, run params/install-params.sh and then restart.\n"
-              "On macOS, you can also build and run the .app bundle (make deploy), which includes these files.");
-        std::string strErrorWin = strprintf(_("Please copy the included params files to the %s directory."), ZC_GetParamsDir());
-        uiInterface.ThreadSafeMessageBox(strError + "\n"
-#ifndef WIN32
-                      + strErrorPosix,
-#else
-                      + strErrorWin,
-#endif
-                                            "", CClientUIInterface::MSG_ERROR);
-        StartShutdown();
-        return;
-    }
-
-    gettimeofday(&tv_end, nullptr);
-    elapsed = float(tv_end.tv_sec-tv_start.tv_sec) + (tv_end.tv_usec-tv_start.tv_usec)/float(1000000);
-    LogPrintf("Loaded Sapling parameters in %fs seconds.\n", elapsed);
 }
 
 bool AppInitServers()
@@ -1114,9 +1056,6 @@ bool AppInitParameterInteraction()
     // Check for -tor - as this is a privacy risk to continue, exit here
     if (gArgs.GetBoolArg("-tor", false))
         return UIError(strprintf(_("Error: Unsupported argument %s found, use %s."), "-tor", "-onion"));
-    // Exit early if -masternode=1 and -listen=0
-    if (gArgs.GetBoolArg("-masternode", DEFAULT_MASTERNODE) && !gArgs.GetBoolArg("-listen", DEFAULT_LISTEN))
-        return UIError(strprintf(_("Error: %s must be true if %s is set."), "-listen", "-masternode"));
     if (gArgs.GetBoolArg("-benchmark", false))
         UIWarning(strprintf(_("Warning: Unsupported argument %s ignored, use %s"), "-benchmark", "-debug=bench."));
 
@@ -1230,10 +1169,7 @@ bool AppInitSanityChecks()
 {
     // ********************************************************* Step 4: sanity checks
 
-    // Initialize elliptic curve code
     RandomInit();
-    ECC_Start();
-    globalVerifyHandle.reset(new ECCVerifyHandle());
 
     // Sanity check
     if (!InitSanityCheck())
@@ -1245,6 +1181,9 @@ bool AppInitSanityChecks()
 
 bool AppInitMain()
 {
+    if (!Params().IsTestChain()) {
+        return UIError(_("Mainnet is disabled in this pre-launch PQ-only build. Use testnet or regtest."));
+    }
     // ********************************************************* Step 4a: application initialization
     // After daemonization get the data directory lock again and hold on to it until exit
     // This creates a slight window for a race condition to happen, however this condition is harmless: it
@@ -1294,12 +1233,6 @@ bool AppInitMain()
             threadGroup.create_thread(&ThreadScriptCheck);
     }
 
-    if (gArgs.IsArgSet("-sporkkey")) // spork priv key
-    {
-        if (!sporkManager.SetPrivKey(gArgs.GetArg("-sporkkey", "")))
-            return UIError(_("Unable to sign spork message, wrong key?"));
-    }
-
     // Start the lightweight task scheduler thread
     CScheduler::Function serviceLoop = std::bind(&CScheduler::serviceQueue, &scheduler);
     threadGroup.create_thread(std::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
@@ -1310,9 +1243,6 @@ bool AppInitMain()
     }, 60000);
 
     GetMainSignals().RegisterBackgroundSignalScheduler(scheduler);
-
-    // Initialize Sapling circuit parameters
-    LoadSaplingParams();
 
     /* Register RPC commands regardless of -server setting so they will be
      * available in the GUI RPC console even if external calls are disabled.
@@ -1338,12 +1268,8 @@ bool AppInitMain()
         // Delete the local blockchain folders to force a resync from scratch to get a consistent blockchain-state
         fs::path blocksDir = GetBlocksDir();
         fs::path chainstateDir = GetDataDir() / "chainstate";
-        fs::path sporksDir = GetDataDir() / "sporks";
-        fs::path evoDir = GetDataDir() / "evodb";
-
-        LogPrintf("Deleting blockchain folders blocks, chainstate, sporks and evodb\n");
-        std::vector<fs::path> removeDirs{blocksDir, chainstateDir, sporksDir, evoDir};
-        // We delete in 4 individual steps in case one of the folder is missing already
+        LogPrintf("Deleting blockchain folders blocks and chainstate\n");
+        std::vector<fs::path> removeDirs{blocksDir, chainstateDir};
         try {
             for (const auto& dir : removeDirs) {
                 if (fs::exists(dir)) {
@@ -1501,8 +1427,6 @@ bool AppInitMain()
     }
 #endif
 
-    InitTierTwoInterfaces();
-
     // ********************************************************* Step 7: load block chain
 
     fReindex = gArgs.GetBoolArg("-reindex", false);
@@ -1547,12 +1471,11 @@ bool AppInitMain()
                 // potentially wipe/reopen it (avoid self-deadlocking on the LOCK file).
                 pblocktree.reset();
                 pblocktree.reset(new CBlockTreeDB(nBlockTreeDBCache, false, fReset));
-
-                //OrganicLife specific: spork DB
-                pSporkDB.reset();
-                pSporkDB.reset(new CSporkDB(0, false, false));
-
-                InitTierTwoPreChainLoad(fReindex);
+                governanceVoteIndex.reset();
+                evoDb.reset();
+                evoDb.reset(new CEvoDB(64 << 20, false, fReset));
+                governanceVoteIndex.reset(new CGovernanceVoteIndex(*evoDb));
+                governanceVoteIndex->LoadProposals();
 
                 if (fReset) {
                     pblocktree->WriteReindexing(true);
@@ -1560,10 +1483,6 @@ bool AppInitMain()
 
                 // End loop if shutdown was requested
                 if (ShutdownRequested()) break;
-
-                // OrganicLife: load previous sessions sporks if we have them.
-                uiInterface.InitMessage(_("Loading sporks..."));
-                sporkManager.LoadSporksFromDB();
 
                 // LoadBlockIndex will load fTxIndex from the db, or set it if
                 // we're reindexing. It will also load fHavePruned if we've
@@ -1623,8 +1542,6 @@ bool AppInitMain()
                 // The on-disk coinsdb is now in a good state, create the cache
                 pcoinsTip.reset(new CCoinsViewCache(pcoinscatcher.get()));
 
-                InitTierTwoPostCoinsCacheLoad(&scheduler);
-
                 bool is_coinsview_empty = fReset || fReindexChainState || pcoinsTip->GetBestBlock().IsNull();
                 if (!is_coinsview_empty) {
                     // LoadChainTip sets chainActive based on pcoinsTip's best block
@@ -1681,6 +1598,10 @@ bool AppInitMain()
                         strLoadError = _("Corrupted block database detected");
                         break;
                     }
+                    // VerifyDB rolls EvoDB back after its disconnect checks, but the
+                    // in-memory proposal manager is not transactional. Restore the
+                    // proposal view that corresponds to the persisted chain tip.
+                    governanceVoteIndex->LoadProposals();
                 }
             } catch (const std::exception& e) {
                 LogPrintf("%s\n", e.what());
@@ -1817,26 +1738,6 @@ bool AppInitMain()
     }
 
 
-    // ********************************************************* Step 10: setup layer 2 data
-
-    bool load_cache_files = !(fReindex || fReindexChainState);
-    {
-        LOCK(cs_main);
-        // was blocks/chainstate deleted?
-        if (chainActive.Tip() == nullptr) {
-            load_cache_files = false;
-        }
-    }
-
-    LoadTierTwo(chain_active_height, load_cache_files);
-    RegisterTierTwoValidationInterface();
-
-    // set the mode of budget voting for this node
-    SetBudgetFinMode(gArgs.GetArg("-budgetvotemode", "auto"));
-
-    // Start tier two threads and jobs
-    StartTierTwoThreadsAndScheduleJobs(threadGroup, scheduler);
-
     if (ShutdownRequested()) {
         LogPrintf("Shutdown requested. Exiting.\n");
         return false;
@@ -1944,9 +1845,6 @@ bool AppInitMain()
         }
     }
 #endif
-
-    // Enable active MN
-    if (!InitActiveMN()) return false;
 
     // ********************************************************* Step 12: finished
 

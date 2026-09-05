@@ -383,13 +383,11 @@ set(SERVER_SOURCES
         ./src/rest.cpp
         ./src/rpc/blockchain.cpp
         ./src/rpc/
-        ./src/rpc/budget.cpp
         ./src/rpc/mining.cpp
         ./src/rpc/misc.cpp
         ./src/rpc/net.cpp
+        ./src/rpc/pqgovernance.cpp
         ./src/rpc/rawtransaction.cpp
-        ./src/rpc/rpcevo.cpp
-        ./src/rpc/rpcquorums.cpp
         ./src/rpc/server.cpp
         ./src/script/sigcache.cpp
         ./src/script/ismine.cpp
@@ -437,6 +435,8 @@ set(WALLET_SOURCES
         ./src/addressbook.cpp
         ./src/crypter.cpp
         ./src/wallet/hdchain.cpp
+        ./src/wallet/pqkey.cpp
+        ./src/wallet/pqwallet.cpp
         ./src/wallet/rpcdump.cpp
         ./src/wallet/fees.cpp
         ./src/wallet/init.cpp
@@ -466,6 +466,8 @@ set(BITCOIN_CRYPTO_SOURCES
         ./src/crypto/sha256.cpp
         ./src/crypto/sha512.cpp
         ./src/crypto/sha3.cpp
+        ./src/crypto/mldsa44.cpp
+        ./src/crypto/mldsa44_native.c
         ./src/crypto/chacha20.cpp
         ./src/crypto/hmac_sha256.cpp
         ./src/crypto/rfc6979_hmac_sha256.cpp
@@ -501,6 +503,8 @@ set(BITCOIN_CRYPTO_SOURCES
         )
 add_library(BITCOIN_CRYPTO_A STATIC ${BITCOIN_CRYPTO_SOURCES})
 target_include_directories(BITCOIN_CRYPTO_A PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(BITCOIN_CRYPTO_A PRIVATE ${sodium_INCLUDE_DIR})
+target_link_libraries(BITCOIN_CRYPTO_A PUBLIC ${sodium_LIBRARY_RELEASE})
 
 
 set(COMMON_SOURCES
@@ -525,6 +529,8 @@ set(COMMON_SOURCES
         ./src/chainparams.cpp
         ./src/coins.cpp
         ./src/key_io.cpp
+        ./src/pqaddress.cpp
+        ./src/pqtransaction.cpp
         ./src/compressor.cpp
         ./src/evo/deterministicmns.cpp
         ./src/evo/evonotificationinterface.cpp

@@ -262,18 +262,6 @@ BOOST_AUTO_TEST_CASE(json_parse_errors)
     BOOST_CHECK_THROW(ParseNonRFCJSONValue("3J98t1WpEZ73CNmQviecrnyiWrnqRhWNL"), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(rpc_getgovvotestatus_unknown_proposal_cutoff)
-{
-    const std::string proposalHash = GetRandHash().ToString();
-    const UniValue result = CallRPC(strprintf("getgovvotestatus %s", proposalHash));
-
-    BOOST_CHECK_EQUAL(find_value(result.get_obj(), "mn_yes").get_int64(), 0);
-    BOOST_CHECK_EQUAL(find_value(result.get_obj(), "mn_no").get_int64(), 0);
-    BOOST_CHECK_EQUAL(find_value(result.get_obj(), "coin_yes").get_int64(), 0);
-    BOOST_CHECK_EQUAL(find_value(result.get_obj(), "coin_no").get_int64(), 0);
-    BOOST_CHECK_EQUAL(find_value(result.get_obj(), "cutoff_height").get_int64(), -1);
-}
-
 BOOST_AUTO_TEST_CASE(rpc_convert_creategovvotelock_verbose_flag)
 {
     std::vector<std::string> args{

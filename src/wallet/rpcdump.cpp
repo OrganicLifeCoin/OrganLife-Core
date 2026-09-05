@@ -535,6 +535,9 @@ UniValue dumpwallet(const JSONRPCRequest& request)
 
     EnsureWalletIsUnlocked(pwallet);
 
+    if (!pwallet->GetPQAddresses().empty())
+        throw JSONRPCError(RPC_WALLET_ERROR, "Experimental PQ keys require backupwallet; dumpwallet would be incomplete");
+
     ScriptPubKeyMan* spk_man = pwallet->GetScriptPubKeyMan();
 
     fs::path filepath = request.params[0].get_str().c_str();

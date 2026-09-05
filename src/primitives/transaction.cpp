@@ -87,7 +87,8 @@ uint256 CTransaction::ComputeHash() const
 
 size_t CTransaction::DynamicMemoryUsage() const
 {
-    return memusage::RecursiveDynamicUsage(vin) + memusage::RecursiveDynamicUsage(vout);
+    return memusage::RecursiveDynamicUsage(vin) + memusage::RecursiveDynamicUsage(vout) +
+           (extraPayload ? memusage::DynamicUsage(*extraPayload) : 0);
 }
 
 /* For backward compatibility, the hash is initialized to 0. TODO: remove the need for this default constructor entirely. */

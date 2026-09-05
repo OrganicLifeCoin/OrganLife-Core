@@ -1811,20 +1811,6 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
             pfrom->fDisconnect = true;
         }
 
-        // OrganicLife: We use certain sporks during IBD, so check to see if they are
-        // available. If not, ask the first peer connected for them.
-        // TODO: Move this to an instant broadcast of the sporks.
-        bool fMissingSporks = !pSporkDB->SporkExists(SPORK_14_NEW_PROTOCOL_ENFORCEMENT) ||
-                              !pSporkDB->SporkExists(SPORK_15_NEW_PROTOCOL_ENFORCEMENT_2) ||
-                              !pSporkDB->SporkExists(SPORK_19_COLDSTAKING_MAINTENANCE) ||
-                              !pSporkDB->SporkExists(SPORK_20_SAPLING_MAINTENANCE);
-
-        if (fMissingSporks || !fRequestedSporksIDB){
-            LogPrintf("asking peer for sporks\n");
-            connman->PushMessage(pfrom, CNetMsgMaker(nSendVersion).Make(NetMsgType::GETSPORKS));
-            fRequestedSporksIDB = true;
-        }
-
         return true;
     }
 
@@ -2590,38 +2576,10 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
     }
 
     else {
-        // Tier two msg type search
+        // This launch profile has no tier-two protocol.
         const std::vector<std::string>& allMessages = getTierTwoNetMessageTypes();
         if (std::find(allMessages.begin(), allMessages.end(), strCommand) != allMessages.end()) {
-            // Check if the dispatcher can process this message first. The
-            // dispatcher handles spork/budget/quorum/mnauth messages,
-            // including during IBD (sporks must work before chain sync).
-            if (!masternodeSync.MessageDispatcher(pfrom, strCommand, vRecv)) {
-                if (IsInitialBlockDownload()) {
-                    LogPrint(BCLog::MASTERNODE, "Ignoring tier-two message %s from peer=%d during IBD\n", strCommand, pfrom->GetId());
-                    return true;
-                }
-
-            // Probably one the extensions, future: encapsulate all of this inside tiertwo_networksync.
-            int dosScore{0};
-            if (!g_budgetman.ProcessMessage(pfrom, strCommand, vRecv, dosScore)) {
-                WITH_LOCK(cs_main, Misbehaving(pfrom->GetId(), dosScore));
-                return false;
-            }
-            if (!sporkManager.ProcessSpork(pfrom, strCommand, vRecv, dosScore)) {
-                WITH_LOCK(cs_main, Misbehaving(pfrom->GetId(), dosScore));
-                return false;
-            }
-
-            CValidationState mnauthState;
-            if (!CMNAuth::ProcessMessage(pfrom, strCommand, vRecv, *connman, mnauthState)) {
-                int dosScore{0};
-                if (mnauthState.IsInvalid(dosScore) && dosScore > 0) {
-                    LOCK(cs_main);
-                    Misbehaving(pfrom->GetId(), dosScore, mnauthState.GetRejectReason());
-                }
-            }
-            }
+            LogPrint(BCLog::NET, "Ignoring disabled tier-two command %s from peer=%d\n", strCommand, pfrom->GetId());
         } else {
             // Ignore unknown commands for extensibility
             LogPrint(BCLog::NET, "Unknown command \"%s\" from peer=%d\n", SanitizeString(strCommand), pfrom->GetId());

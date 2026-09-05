@@ -256,6 +256,7 @@ public:
         LLMQCOMM = 5,
         GOVVOTELOCK = 6,
         GOVVOTECAST = 7,
+        PQ = 8, // Experimental regtest-only funding/transfer payload.
     };
 
     static const int16_t CURRENT_VERSION = TxVersion::LEGACY;

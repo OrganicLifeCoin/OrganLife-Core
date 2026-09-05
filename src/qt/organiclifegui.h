@@ -19,17 +19,13 @@
 
 #include <map>
 
-#include "addresseswidget.h"
-#include "coldstakingwidget.h"
 #include "dashboardwidget.h"
 #include "governancewidget.h"
-#include "masternodeswidget.h"
 #include "navmenuwidget.h"
 #include "qt/settings/faqwidget.h"
 #include "qt/settings/settingswidget.h"
 #include "qt/rpcconsole.h"
-#include "receivewidget.h"
-#include "send.h"
+#include "pqwidget.h"
 #include "snackbar.h"
 #include "topbar.h"
 
@@ -41,6 +37,7 @@ class ClientModel;
 class NetworkStyle;
 class Notificator;
 class WalletModel;
+class GovernanceModel;
 class ContentCornerArcWidget;
 
 
@@ -76,10 +73,8 @@ public Q_SLOTS:
     void goToTransactions();
     void goToSend();
     void goToReceive();
-    void goToAddresses();
-    void goToMasterNodes();
+    void goToPQ();
     void goToGovernance();
-    void goToColdStaking();
     void goToSettings();
     void goToSettingsInfo();
     void openNetworkMonitor();
@@ -106,7 +101,6 @@ public Q_SLOTS:
     void incomingTransaction(const QString& date, int unit, const CAmount& amount, const QString& type, const QString& address);
 #ifdef ENABLE_WALLET
     void setGovModel(GovernanceModel* govModel);
-    void setMNModel(MNModel* mnModel);
     /** Set the wallet model.
         The wallet model represents a bitcoin wallet, and offers access to the list of transactions, address book and sending
         functionality.
@@ -148,8 +142,7 @@ private:
     bool enableWallet;
     bool m_isShuttingDown{false};
     QPointer<ClientModel> clientModel;
-    MNModel* mnModel = nullptr;
-    GovernanceModel* govModel = nullptr;
+    GovernanceModel* govModel{nullptr};
 
     // Actions
     QAction* quitAction = nullptr;
@@ -162,12 +155,8 @@ private:
     ContentCornerArcWidget *contentCornerArc = nullptr;
 
     DashboardWidget *dashboard = nullptr;
-    SendWidget *sendWidget = nullptr;
-    ReceiveWidget *receiveWidget = nullptr;
-    AddressesWidget *addressesWidget = nullptr;
-    MasterNodesWidget *masterNodesWidget = nullptr;
-    ColdStakingWidget *coldStakingWidget = nullptr;
-    GovernanceWidget* governancewidget{nullptr};
+    PQWidget* pqWidget = nullptr;
+    GovernanceWidget* governanceWidget = nullptr;
     SettingsWidget* settingsWidget = nullptr;
 
     SnackBar *snackBar = nullptr;

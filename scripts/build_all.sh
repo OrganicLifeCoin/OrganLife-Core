@@ -25,6 +25,7 @@ mkdir -p "$DIST_DIR"
 DEFAULT_BUILD_JOBS="$( (nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4) | tr -d ' ' )"
 BUILD_JOBS="${BUILD_JOBS:-$DEFAULT_BUILD_JOBS}"
 AARCH64_DEBUG="${AARCH64_DEBUG:-false}"
+SKIP_DEPENDS=false
 
 log() { echo "[build_all] $*"; }
 
@@ -118,10 +119,14 @@ copy_windows_installer() {
 
 build_linux_amd64() {
   log "building linux amd64..."
+  local linux_args=(--jobs "$BUILD_JOBS")
+  if [ "$SKIP_DEPENDS" = true ]; then
+    linux_args+=(--skip-depends)
+  fi
   if host_matches_target linux-amd64; then
-    "$REPO_ROOT/scripts/build-depends.sh" --jobs "$BUILD_JOBS"
+    "$REPO_ROOT/scripts/build-depends.sh" "${linux_args[@]}"
   else
-    "$REPO_ROOT/scripts/build-depends.sh" --jobs "$BUILD_JOBS"
+    "$REPO_ROOT/scripts/build-depends.sh" "${linux_args[@]}"
   fi
 
   local d="$REPO_ROOT/src/organiclifed"
@@ -155,6 +160,9 @@ build_linux_aarch64() {
   if [ "$AARCH64_DEBUG" = true ]; then
     aarch64_args+=(--debug)
   fi
+  if [ "$SKIP_DEPENDS" = true ]; then
+    aarch64_args+=(--skip-depends)
+  fi
   "$REPO_ROOT/scripts/build-depends-aarch64.sh" --jobs "$BUILD_JOBS" "${aarch64_args[@]}"
   fi
 
@@ -177,6 +185,9 @@ build_windows() {
   local windows_args=()
   if command -v x86_64-w64-mingw32-g++ >/dev/null 2>&1; then
     windows_args+=(--skip-system-deps)
+  fi
+  if [ "$SKIP_DEPENDS" = true ]; then
+    windows_args+=(--skip-depends)
   fi
   "$REPO_ROOT/scripts/build-depends-windows.sh" --jobs "$BUILD_JOBS" "${windows_args[@]}"
 
@@ -208,6 +219,7 @@ main() {
       --skip-linux) do_linux=false ;;
       --skip-aarch64) do_aarch64=false ;;
       --skip-windows) do_windows=false ;;
+      --skip-depends) SKIP_DEPENDS=true ;;
       --debug-aarch64|--aarch64-debug) AARCH64_DEBUG=true ;;
       --jobs)
         if [ $# -lt 2 ]; then
@@ -219,7 +231,7 @@ main() {
         ;;
       --help|-h)
         cat <<'USAGE'
-Usage: scripts/build_all.sh [--skip-linux] [--skip-aarch64] [--skip-windows] [--debug-aarch64] [--jobs N]
+Usage: scripts/build_all.sh [--skip-linux] [--skip-aarch64] [--skip-windows] [--skip-depends] [--debug-aarch64] [--jobs N]
 USAGE
         return 0
         ;;

@@ -17,6 +17,8 @@
 #include "key_io.h"
 #include "miner.h"
 #include "net.h"
+#include "pqaddress.h"
+#include "pqtransaction.h"
 #include "rpc/server.h"
 #include "shutdown.h"
 #include "util/blockstatecatcher.h"
@@ -175,11 +177,17 @@ UniValue generatetoaddress(const JSONRPCRequest& request)
         );
 
     int nGenerate = request.params[0].get_int();
-    CTxDestination dest(DecodeDestination(request.params[1].get_str()));
-    if (!IsValidDestination(dest)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Error: Invalid address");
+    const std::string address = request.params[1].get_str();
+    CScript coinbaseScript;
+    pq::KeyID pq_id;
+    if (pq::DecodeAddress(address, Params().NetworkIDString(), pq_id)) {
+        coinbaseScript = pq::GetScript(pq_id);
+    } else {
+        const CTxDestination dest(DecodeDestination(address));
+        if (!IsValidDestination(dest))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Error: Invalid address");
+        coinbaseScript = GetScriptForDestination(dest);
     }
-    CScript coinbaseScript = GetScriptForDestination(dest);
 
     const Consensus::Params& consensus = Params().GetConsensus();
     int nHeightEnd = 0;
@@ -896,6 +904,9 @@ static const CRPCCommand commands[] =
 
 void RegisterMiningRPCCommands(CRPCTable &tableRPC)
 {
-    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++)
-        tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
+    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++) {
+        const std::string name = commands[vcidx].name;
+        if (name != "generate" && name != "getgenerate" && name != "gethashespersec" && name != "setgenerate")
+            tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
+    }
 }

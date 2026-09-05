@@ -1763,6 +1763,9 @@ static const CRPCCommand commands[] =
 
 void RegisterBlockchainRPCCommands(CRPCTable &tableRPC)
 {
-    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++)
-        tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
+    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++) {
+        const std::string name = commands[vcidx].name;
+        if (name != "getbestsaplinganchor" && name != "getbestchainlock" && name != "scantxoutset")
+            tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
+    }
 }

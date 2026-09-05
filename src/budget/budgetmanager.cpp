@@ -13,6 +13,7 @@
 #include "evo/governancevoteindex.h"
 #include "net.h"
 #include "netmessagemaker.h"
+#include "pqtransaction.h"
 #include "spork.h"
 #include "tiertwo/tiertwo_sync_state.h"
 #include "tiertwo/netfulfilledman.h"
@@ -411,6 +412,11 @@ void CBudgetManager::ForceAddFinalizedBudget(const uint256& nHash, const uint256
 bool CBudgetManager::AddProposal(CBudgetProposal& budgetProposal)
 {
     AssertLockNotHeld(cs_proposals);    // need to lock cs_main here (CheckCollateral)
+    const int nextHeight = GetBestHeight() + 1;
+    if (Params().IsTestChain() && pq::PaymentsActive(Params(), nextHeight) &&
+        Params().GetConsensus().NetworkUpgradeActive(nextHeight, Consensus::UPGRADE_V6_1_GOV)) {
+        return false;
+    }
     const uint256& nHash = budgetProposal.GetHash();
 
     if (WITH_LOCK(cs_proposals, return mapProposals.count(nHash))) {
@@ -459,6 +465,76 @@ bool CBudgetManager::AddProposal(CBudgetProposal& budgetProposal)
     LogPrint(BCLog::MNBUDGET,"%s: budget proposal %s [%s] added\n", __func__, nHash.ToString(), budgetProposal.GetName());
 
     return true;
+}
+
+bool CBudgetManager::AddPQProposal(CBudgetProposal budgetProposal, int blockHeight, int64_t blockTime)
+{
+    const uint256 proposalHash = budgetProposal.GetHash();
+    if (!budgetProposal.IsWellFormed(GetTotalBudget(budgetProposal.GetBlockStart())) ||
+        budgetProposal.GetBlockStart() <= blockHeight) return false;
+    budgetProposal.nTime = blockTime;
+    if (!budgetProposal.UpdateValid(blockHeight, 0, CBudgetProposal::HYBRID_SCORE_SCALE)) return false;
+    LOCK(cs_proposals);
+    if (mapProposals.count(proposalHash)) return false;
+    mapFeeTxToProposal.emplace(budgetProposal.GetFeeTXHash(), proposalHash);
+    mapProposals.emplace(proposalHash, std::move(budgetProposal));
+    return true;
+}
+
+bool CBudgetManager::RemovePQProposal(const uint256& proposalHash)
+{
+    LOCK(cs_proposals);
+    const auto it = mapProposals.find(proposalHash);
+    if (it == mapProposals.end()) return false;
+    mapFeeTxToProposal.erase(it->second.GetFeeTXHash());
+    mapProposals.erase(it);
+    return true;
+}
+
+bool CBudgetManager::GetPQPayment(int blockHeight, CScript& payee, CAmount& amount,
+                                  uint256& proposalHash) const
+{
+    payee.clear();
+    amount = 0;
+    proposalHash.SetNull();
+    const int cycle = Params().GetConsensus().nBudgetCycleBlocks;
+    if (cycle <= 0 || blockHeight < 0 || GetTotalBudget(blockHeight) <= 0) return false;
+    const int cycleStart = blockHeight - blockHeight % cycle;
+    const int paymentIndex = blockHeight - cycleStart;
+
+    std::vector<const CBudgetProposal*> candidates;
+    {
+        LOCK(cs_proposals);
+        for (const auto& entry : mapProposals) {
+            const CBudgetProposal& proposal = entry.second;
+            if (!proposal.IsValid() || proposal.GetBlockStart() > cycleStart ||
+                proposal.GetNetCoinVotes() <= 0) continue;
+            const int cycleIndex = (cycleStart - proposal.GetBlockStart()) / cycle;
+            if (cycleIndex < 0 || cycleIndex >= proposal.GetTotalPaymentCount()) continue;
+            candidates.push_back(&proposal);
+        }
+        std::sort(candidates.begin(), candidates.end(), [](const CBudgetProposal* a, const CBudgetProposal* b) {
+            if (a->GetNetCoinVotes() != b->GetNetCoinVotes())
+                return a->GetNetCoinVotes() > b->GetNetCoinVotes();
+            return a->GetHash() < b->GetHash();
+        });
+
+        CAmount allocated{0};
+        std::vector<const CBudgetProposal*> winners;
+        const CAmount budget = GetTotalBudget(blockHeight);
+        for (const CBudgetProposal* proposal : candidates) {
+            if (proposal->GetAmount() <= budget - allocated) {
+                winners.push_back(proposal);
+                allocated += proposal->GetAmount();
+            }
+        }
+        if (paymentIndex < 0 || static_cast<size_t>(paymentIndex) >= winners.size()) return false;
+        const CBudgetProposal& winner = *winners[paymentIndex];
+        payee = winner.GetPayee();
+        amount = winner.GetAmount();
+        proposalHash = winner.GetHash();
+    }
+    return amount > 0;
 }
 
 void CBudgetManager::CheckAndRemove()
@@ -1337,6 +1413,11 @@ bool CBudgetManager::ProcessMessage(CNode* pfrom, std::string& strCommand, CData
 int CBudgetManager::ProcessMessageInner(CNode* pfrom, std::string& strCommand, CDataStream& vRecv)
 {
     if (!g_tiertwo_sync_state.IsBlockchainSynced()) return 0;
+    const int nextHeight = GetBestHeight() + 1;
+    if (Params().IsTestChain() && pq::PaymentsActive(Params(), nextHeight) &&
+        Params().GetConsensus().NetworkUpgradeActive(nextHeight, Consensus::UPGRADE_V6_1_GOV)) {
+        return 0;
+    }
 
     if (strCommand == NetMsgType::BUDGETVOTESYNC) {
         // Masternode vote sync

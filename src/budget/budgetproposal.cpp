@@ -9,6 +9,8 @@
 #include "chainparams.h"
 #include "logging.h"
 #include "net.h"
+#include "pqaddress.h"
+#include "pqtransaction.h"
 #include "script/standard.h"
 #include "timedata.h"
 #include "util/system.h"
@@ -149,21 +151,9 @@ bool CBudgetProposal::CheckAmount(const CAmount& nTotalBudget)
 
 bool CBudgetProposal::CheckAddress()
 {
-    // !TODO: There might be an issue with multisig in the coinbase on mainnet
-    // we will add support for it in a future release.
-    if (address.IsPayToScriptHash()) {
-        strInvalid = "Multisig is not currently supported.";
-        return false;
-    }
-
-    // Check address
-    CTxDestination dest;
-    if (!ExtractDestination(address, dest, false)) {
-        strInvalid = "Invalid script";
-        return false;
-    }
-    if (!IsValidDestination(dest)) {
-        strInvalid = "Invalid recipient address";
+    pq::KeyID recipient;
+    if (!pq::ExtractID(address, recipient)) {
+        strInvalid = "Invalid PQ recipient address";
         return false;
     }
 

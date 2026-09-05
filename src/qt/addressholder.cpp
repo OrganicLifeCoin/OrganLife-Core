@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "addressholder.h"
+#include "addresstablemodel.h"
 #include "qtutils.h"
 
 void AddressHolder::init(QWidget* holder,const QModelIndex &index, bool isHovered, bool isSelected) const {

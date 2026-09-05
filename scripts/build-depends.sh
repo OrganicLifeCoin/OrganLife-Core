@@ -14,6 +14,7 @@
 #   --no-config-site  Do not use depends config.site (CONFIG_SITE)
 #   --debug           Build with debug symbols
 #   --clean           Clean build before building
+#   --skip-depends    Reuse an existing depends/$HOST prefix
 #   --force-autogen   Force running autogen.sh
 #   --jobs N          Number of parallel build jobs (default: auto)
 #   --help            Show this help message
@@ -47,6 +48,7 @@ ENABLE_ZMQ=false
 ENABLE_UPNP=false
 DEBUG_BUILD=false
 CLEAN_BUILD=false
+SKIP_DEPENDS_BUILD=false
 FORCE_AUTOGEN=false
 INSTALL_DEPS_ONLY=false
 JOBS=""
@@ -162,6 +164,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --clean)
             CLEAN_BUILD=true
+            shift
+            ;;
+        --skip-depends)
+            SKIP_DEPENDS_BUILD=true
             shift
             ;;
         --force-autogen)
@@ -1140,7 +1146,11 @@ main() {
 
     check_requirements
     check_gui_dependencies
-    build_depends
+    if [ "$SKIP_DEPENDS_BUILD" = true ]; then
+        print_info "Reusing existing dependencies in $DEPENDS_DIR/$HOST"
+    else
+        build_depends
+    fi
     distclean_tree
     run_autogen
     configure_build

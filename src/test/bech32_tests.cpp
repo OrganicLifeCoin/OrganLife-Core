@@ -97,4 +97,15 @@ BOOST_AUTO_TEST_CASE(bech32_deterministic_valid)
     }
 }
 
+BOOST_AUTO_TEST_CASE(bip350_bech32m_variant_is_distinct)
+{
+    const std::string bech32m = "A1LQFN3A";
+    const auto decoded = bech32::DecodeM(bech32m);
+    BOOST_CHECK_EQUAL(decoded.first, "a");
+    BOOST_CHECK(decoded.second.empty());
+    BOOST_CHECK(CaseInsensitiveEqual(bech32::EncodeM(decoded.first, decoded.second), bech32m));
+    BOOST_CHECK(bech32::Decode(bech32m).first.empty());
+    BOOST_CHECK(bech32::DecodeM("A12UEL5L").first.empty());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

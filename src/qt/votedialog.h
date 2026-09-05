@@ -19,9 +19,7 @@ class VoteDialog;
 }
 
 struct ProposalInfo;
-struct VoteInfo;
 class MNModel;
-class MnSelectionDialog;
 class GovernanceModel;
 class SnackBar;
 class WalletModel;
@@ -40,7 +38,6 @@ public:
 public Q_SLOTS:
     void onAcceptClicked();
     void onCheckBoxClicked(QCheckBox* checkBox, QProgressBar* progressBar, bool isVoteYes);
-    void onMnSelectionClicked();
     void onVoteModeChanged();
 
 protected:
@@ -49,7 +46,6 @@ protected:
 private:
     Ui::VoteDialog *ui;
     GovernanceModel* govModel{nullptr};
-    MNModel* mnModel{nullptr};
     WalletModel* walletModel{nullptr};
     SnackBar* snackBar{nullptr};
 
@@ -59,9 +55,6 @@ private:
     QProgressBar* progressBarYes{nullptr};
 
     std::unique_ptr<ProposalInfo> proposal;
-    std::vector<VoteInfo> votes;
-    MnSelectionDialog* mnSelectionDialog{nullptr};
-    std::vector<std::string> vecSelectedMn;
 
     void initVoteCheck(QWidget* container, QCheckBox* checkBox, QProgressBar* progressBar,
                         const QString& text, Qt::LayoutDirection direction, bool isVoteYes);
@@ -76,22 +69,16 @@ private:
     uint32_t autoUnlockHeight() const;
     CAmount getCoinLockableBalance() const;
     void applyCoinAmountPreset(int basisPoints);
-    void refreshInlineMnList();
-    void syncSelectedMasternodesFromInlineList();
-    void setInlineSelectedMasternodes(const std::vector<std::string>& selected);
-    void updateInlineMnSummary();
     void updateVoteModeUi();
     void updateCoinModeInfo();
-    void updateHybridStatusText();
+    void updateCoinVoteStatusText();
     void inform(const QString& text);
-    void updateMnSelectionNum();
     void setupStickyHeader();
     bool tryStartSystemMove();
     void applyAdaptiveLayoutForScreen();
     void applyScaleFactor(double scaleFactor);
     int scaledMetric(int baseValue, double scaleFactor, int minValue) const;
 
-    bool updatingInlineMnList{false};
     bool headerDragging{false};
     QWidget* headerBar{nullptr};
     QWidget* shellContainer{nullptr};

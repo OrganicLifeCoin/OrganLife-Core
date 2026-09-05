@@ -7,11 +7,12 @@
 #include "ui_createproposaldialog.h"
 
 #include "chainparams.h"
-#include "contactsdropdown.h"
 #include "governancemodel.h"
+#include "pqaddress.h"
 #include "pwidget.h"
 #include "qtutils.h"
 #include "snackbar.h"
+#include "wallet/wallet.h"
 
 #include <QLabel>
 #include <algorithm>
@@ -142,9 +143,8 @@ void CreateProposalDialog::setupPageTwo()
     setEditBoxStyle(ui->labelAmount, ui->lineEditAmount, "e.g 500 OLC");
     ui->labelMonths->setText(tr("Cycles"));
     setCssProperty(ui->labelMonths, "text-title");
-    setEditBoxStyle(ui->labelAddress, ui->lineEditAddress, "e.g D...something..");
-    setCssProperty(ui->lineEditAddress, "edit-primary-multi-book");
-    actAddrList = ui->lineEditAddress->addAction(QIcon("://ic-contact-arrow-down"), QLineEdit::TrailingPosition);
+    setEditBoxStyle(ui->labelAddress, ui->lineEditAddress, "PQ Bech32m address");
+    setCssProperty(ui->lineEditAddress, "edit-primary");
     GUIUtil::setupAmountWidget(ui->lineEditAmount, this);
     setCssProperty(ui->lineEditMonths, "btn-spin-box");
     ui->lineEditMonths->setMinimum(1);
@@ -160,7 +160,6 @@ void CreateProposalDialog::setupPageTwo()
 
     connect(ui->lineEditAmount, &QLineEdit::textChanged, this, &CreateProposalDialog::propAmountChanged);
     connect(ui->lineEditAddress, &QLineEdit::textChanged, this, &CreateProposalDialog::propaddressChanged);
-    connect(actAddrList, &QAction::triggered, this, &CreateProposalDialog::onAddrListClicked);
 }
 
 void CreateProposalDialog::monthsEditDeselect(int i)
@@ -213,8 +212,8 @@ bool CreateProposalDialog::propaddressChanged(const QString& str)
 {
     if (!str.isEmpty()) {
         QString trimmedStr = str.trimmed();
-        bool isShielded = false;
-        const bool valid = walletModel->validateAddress(trimmedStr, false, isShielded) && !isShielded;
+        pq::KeyID recipient;
+        const bool valid = pq::DecodeAddress(trimmedStr.toStdString(), Params().NetworkIDString(), recipient);
         setCssEditLine(ui->lineEditAddress,  valid, true);
         return valid;
     }
@@ -375,58 +374,15 @@ void CreateProposalDialog::onBackClicked()
     }
 }
 
-void CreateProposalDialog::onAddrListClicked()
-{
-    int addrSize = walletModel->getAddressTableModel()->sizeSend() +
-                       walletModel->getAddressTableModel()->sizeRecv();
-    if (addrSize == 0) {
-        inform(tr("No contacts available, you can go to the contacts screen and add some there!"));
-        return;
-    }
-
-    int rowHeight = ui->lineEditAddress->height();
-    int height = 70 * 2 + 1; // 2 rows (70 each row).
-    int width = ui->lineEditAddress->width();
-
-    if (!menuContacts) {
-        // TODO: add different row icon for contacts and own addresses.
-        // TODO: add filter/search option.
-        // TODO: fix bug that the last presented address isn't being showed.
-        menuContacts = new ContactsDropdown(
-                width,
-                height,
-                dynamic_cast<OrganicLifeGUI*>(parent()),
-                this
-        );
-        menuContacts->setWalletModel(walletModel, {AddressTableModel::Send, AddressTableModel::Receive});
-        connect(menuContacts, &ContactsDropdown::contactSelected, [this](const QString& address, const QString& label) {
-            ui->lineEditAddress->setText(address);
-        });
-
-    }
-
-    if (menuContacts->isVisible()) {
-        menuContacts->hide();
-        return;
-    }
-
-    menuContacts->resizeList(width, height);
-    menuContacts->setStyleSheet(this->styleSheet());
-    menuContacts->adjustSize();
-
-    QPoint position = ui->containerPage2->rect().bottomLeft();
-    position.setY(position.y() + rowHeight * 2 - 20);
-    position.setX(position.x() + 74); // Add widget's fixed padding manually
-    menuContacts->move(position);
-    menuContacts->show();
-}
-
 void CreateProposalDialog::onGenAddressClicked()
 {
-    std::string addrLabel = ui->lineEditPropName->text().toStdString();
-    CallResult<Destination> addr = !addrLabel.empty() ? walletModel->getNewAddress(addrLabel) : walletModel->getNewAddress("");
-    QString newAddr = QString::fromStdString(addr.getObjResult()->ToString());
-    ui->lineEditAddress->setText(newAddr);
+    if (!walletModel || !walletModel->getWallet()) return;
+    const auto addresses = walletModel->getWallet()->GetPQAddresses();
+    if (addresses.empty()) {
+        inform(tr("Create and back up a PQ address in the PQ Wallet first"));
+        return;
+    }
+    ui->lineEditAddress->setText(QString::fromStdString(addresses.front()));
 }
 
 void CreateProposalDialog::keyPressEvent(QKeyEvent *e)

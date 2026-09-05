@@ -12,6 +12,7 @@
 #include "evo/specialtx_validation.h"
 #include "evo/providertx.h"
 #include "policy/fees.h"
+#include "pqtransaction.h"
 #include "reverse_iterate.h"
 #include "streams.h"
 #include "timedata.h"
@@ -630,12 +631,13 @@ void CTxMemPool::removeRecursive(const CTransaction& origTx, MemPoolRemovalReaso
 void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight, int flags)
 {
     AssertLockHeld(cs_main);
-    // Remove transactions spending a coinbase which are now immature and no-longer-final transactions
+    // Remove transactions invalid at the new candidate height and their descendants.
     LOCK(cs);
     setEntries txToRemove;
     for (indexed_transaction_set::const_iterator it = mapTx.begin(); it != mapTx.end(); it++) {
         const CTransactionRef& tx = it->GetSharedTx();
-        if (!CheckFinalTx(tx, flags)) {
+        std::string pq_reason;
+        if (!CheckFinalTx(tx, flags) || !pq::CheckContext(*tx, Params(), nMemPoolHeight, pq_reason)) {
             txToRemove.insert(it);
         } else if (it->GetSpendsCoinbaseOrCoinstake()) {
             for (const CTxIn& txin : tx->vin) {
@@ -858,7 +860,6 @@ void CTxMemPool::removeForBlock(const std::vector<CTransactionRef>& vtx, unsigne
             RemoveStaged(stage, true, MemPoolRemovalReason::BLOCK);
         }
         removeConflicts(*tx);
-        removeProTxConflicts(*tx);
         ClearPrioritisation(tx->GetHash());
     }
     lastRollingFeeUpdate = GetTime();
@@ -991,7 +992,7 @@ void CTxMemPool::check(const CCoinsViewCache* pcoins) const
             CValidationState state;
             PrecomputedTransactionData precomTxData(tx);
             assert(CheckInputs(tx, state, mempoolDuplicate, false, 0, false, precomTxData, nullptr));
-            UpdateCoins(tx, mempoolDuplicate, 1000000);
+            UpdateCoins(tx, mempoolDuplicate, MEMPOOL_HEIGHT);
         }
     }
 
@@ -1007,7 +1008,7 @@ void CTxMemPool::check(const CCoinsViewCache* pcoins) const
         } else {
             PrecomputedTransactionData precomTxData(entry->GetTx());
             assert(CheckInputs(entry->GetTx(), state, mempoolDuplicate, false, 0, false, precomTxData, nullptr));
-            UpdateCoins(entry->GetTx(), mempoolDuplicate, 1000000);
+            UpdateCoins(entry->GetTx(), mempoolDuplicate, MEMPOOL_HEIGHT);
             stepsSinceLastRemove = 0;
         }
     }
@@ -1500,4 +1501,3 @@ void CTxMemPool::SetIsLoaded(bool loaded)
     LOCK(cs);
     m_is_loaded = loaded;
 }
-

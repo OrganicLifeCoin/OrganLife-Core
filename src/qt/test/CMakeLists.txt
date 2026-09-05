@@ -5,6 +5,7 @@ set(CMAKE_AUTOMOC ON)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Test)
 
 set(QT_TEST_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/pqwidgettests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test_main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/uritests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/chartutilstests.cpp

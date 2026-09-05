@@ -187,5 +187,6 @@ void SingleThreadedSchedulerClient::EmptyQueue() {
 
 size_t SingleThreadedSchedulerClient::CallbacksPending() {
     LOCK(m_cs_callbacks_pending);
-    return m_callbacks_pending.size();
+    // An executing callback has left the queue but must still precede a barrier.
+    return m_callbacks_pending.size() + (m_are_callbacks_running ? 1 : 0);
 }

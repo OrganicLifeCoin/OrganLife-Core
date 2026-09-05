@@ -361,6 +361,7 @@ public:
 public:
     bool TxnBegin()
     {
+        if (!pdb && !env) return true; // Dummy batches have successful no-op writes.
         if (!pdb || activeTxn)
             return false;
         DbTxn* ptxn = env->TxnBegin();
@@ -372,6 +373,7 @@ public:
 
     bool TxnCommit()
     {
+        if (!pdb && !env) return true;
         if (!pdb || !activeTxn)
             return false;
         int ret = activeTxn->commit(0);
@@ -381,6 +383,7 @@ public:
 
     bool TxnAbort()
     {
+        if (!pdb && !env) return true;
         if (!pdb || !activeTxn)
             return false;
         int ret = activeTxn->abort();

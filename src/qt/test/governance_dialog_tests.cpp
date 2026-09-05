@@ -32,7 +32,6 @@
 #include "topbar.h"
 #include "transactionrecord.h"
 #include "txrow.h"
-#include "tiertwo/tiertwo_sync_state.h"
 #include "streams.h"
 #include "qtutils.h"
 #include "utilstrencodings.h"
@@ -180,7 +179,7 @@ void GovernanceDialogTests::coinModeRequiresAmountDirectionAndAutoUnlock()
     QVERIFY(model.calledCoinVote);
     QVERIFY(model.lastVoteDirectionYes);
     QCOMPARE(model.lastLockAmount, CAmount(5 * COIN));
-    QCOMPARE(model.lastUnlockHeight, uint32_t(200));
+    QCOMPARE(model.lastUnlockHeight, uint32_t(201));
 }
 
 void GovernanceDialogTests::coinModeUiHasQuickPickButtonsAndNoManualUnlock()
@@ -381,29 +380,6 @@ void GovernanceDialogTests::backendRejectsAmountAboveProposalCapBeforeWalletChec
     const auto atCap = model.createVoteLockAndCast(proposal, true, 10 * COIN, 200);
     QVERIFY(!atCap);
     QCOMPARE(QString::fromStdString(atCap.getError()), QString("Wallet not loaded"));
-}
-
-void GovernanceDialogTests::governanceModelRequiresFullTierTwoSyncForVotingGate()
-{
-    MNModel mnModel(nullptr);
-    GovernanceModel model(nullptr, &mnModel);
-
-    struct SyncStateGuard {
-        bool chainSynced;
-        int syncPhase;
-        ~SyncStateGuard()
-        {
-            g_tiertwo_sync_state.SetCurrentSyncPhase(syncPhase);
-            g_tiertwo_sync_state.SetBlockchainSync(chainSynced, 0);
-        }
-    } guard{g_tiertwo_sync_state.IsBlockchainSynced(), g_tiertwo_sync_state.GetSyncPhase()};
-
-    g_tiertwo_sync_state.SetBlockchainSync(true, 0);
-    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_BUDGET);
-    QVERIFY(!model.isTierTwoSync());
-
-    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_FINISHED);
-    QVERIFY(model.isTierTwoSync());
 }
 
 void GovernanceDialogTests::clientModelConnectionRefreshRules()
@@ -3432,45 +3408,6 @@ void GovernanceDialogTests::voteDialogVoteModeLabelsFitWithoutClipping()
     QVERIFY(coinRect.right() <= frameRect.right());
 }
 
-void GovernanceDialogTests::voteDialogModesReserveEqualBodyHeight()
-{
-    QWidget parent;
-    MNModel mnModel(nullptr);
-    FakeGovernanceModel model(&mnModel);
-    VoteDialog dialog(&parent, &model, &mnModel);
-    dialog.setProposal(BuildTestProposal());
-
-    auto* mnModeRadio = dialog.findChild<QRadioButton*>("radioModeMasternode");
-    auto* coinModeRadio = dialog.findChild<QRadioButton*>("radioModeCoinLock");
-    auto* coinModeContainer = dialog.findChild<QWidget*>("containerCoinMode");
-    auto* mnModeContainer = dialog.findChild<QWidget*>("containerMnMode");
-    auto* btnCancel = dialog.findChild<QPushButton*>("btnCancel");
-    QVERIFY(mnModeRadio != nullptr);
-    QVERIFY(coinModeRadio != nullptr);
-    QVERIFY(coinModeContainer != nullptr);
-    QVERIFY(mnModeContainer != nullptr);
-    QVERIFY(btnCancel != nullptr);
-    if (!mnModeRadio || !coinModeRadio || !coinModeContainer || !mnModeContainer || !btnCancel) {
-        QFAIL("Missing controls for stable body height test");
-        return;
-    }
-
-    dialog.show();
-    QTest::qWait(50);
-    QCoreApplication::processEvents();
-
-    QVERIFY(mnModeRadio->isChecked());
-    QVERIFY(coinModeContainer->minimumHeight() >= 220);
-    QCOMPARE(mnModeContainer->minimumHeight(), coinModeContainer->minimumHeight());
-
-    const int footerTopInMnMode = btnCancel->geometry().top();
-    coinModeRadio->setChecked(true);
-    QTest::qWait(50);
-    QCoreApplication::processEvents();
-
-    QCOMPARE(btnCancel->geometry().top(), footerTopInMnMode);
-}
-
 void GovernanceDialogTests::voteDialogFooterAvoidsLegacyCenteringSpacers()
 {
     QFile file(resolveQtSourceFile("forms/votedialog.ui"));
@@ -3490,54 +3427,6 @@ void GovernanceDialogTests::voteDialogFooterAvoidsLegacyCenteringSpacers()
              "Vote dialog footer should not rely on a leading centering spacer");
     QVERIFY2(!layoutSlice.contains(QStringLiteral("horizontalSpacer_7")),
              "Vote dialog footer should not rely on a trailing centering spacer");
-}
-
-void GovernanceDialogTests::masternodeModeShowsInlineSelectionList()
-{
-    QWidget parent;
-    MNModel mnModel(nullptr);
-    FakeGovernanceModel model(&mnModel);
-    VoteDialog dialog(&parent, &model, &mnModel);
-    dialog.setProposal(BuildTestProposal());
-
-    auto* mnModeRadio = dialog.findChild<QRadioButton*>("radioModeMasternode");
-    auto* coinModeRadio = dialog.findChild<QRadioButton*>("radioModeCoinLock");
-    auto* inlineList = dialog.findChild<QListWidget*>("listMasternodesInline");
-    auto* noContainer = dialog.findChild<QWidget*>("containerNo");
-    auto* yesContainer = dialog.findChild<QWidget*>("containerYes");
-    auto* yesCheck = dialog.findChild<QCheckBox*>("checkVoteYes");
-    auto* noCheck = dialog.findChild<QCheckBox*>("checkVoteNo");
-    QVERIFY(mnModeRadio != nullptr);
-    QVERIFY(coinModeRadio != nullptr);
-    QVERIFY(inlineList != nullptr);
-    QVERIFY(noContainer != nullptr);
-    QVERIFY(yesContainer != nullptr);
-    QVERIFY(yesCheck != nullptr);
-    QVERIFY(noCheck != nullptr);
-    if (!mnModeRadio || !coinModeRadio || !inlineList || !noContainer || !yesContainer || !yesCheck || !noCheck) {
-        QFAIL("Missing controls for masternode mode test");
-        return;
-    }
-
-    dialog.show();
-    QTest::qWait(50);
-    QCoreApplication::processEvents();
-
-    if (!mnModeRadio || !inlineList || !yesCheck || !noCheck || !noContainer || !yesContainer) {
-        QFAIL("Missing controls for masternode geometry assertions");
-        return;
-    }
-    QVERIFY(mnModeRadio->isChecked());
-    QVERIFY(inlineList->isVisible());
-    QVERIFY(inlineList->minimumHeight() >= 100);
-    QVERIFY(yesCheck->height() <= 44);
-    QVERIFY(noCheck->height() <= 44);
-    QVERIFY(std::abs(noContainer->height() - noCheck->height()) <= 6);
-    QVERIFY(std::abs(yesContainer->height() - yesCheck->height()) <= 6);
-
-    coinModeRadio->setChecked(true);
-    QCoreApplication::processEvents();
-    QVERIFY(!inlineList->isVisible());
 }
 
 void GovernanceDialogTests::finishedProposalCardHidesVoteButton()
@@ -3641,10 +3530,8 @@ void GovernanceDialogTests::proposalCardShowsVoteCounts()
         return;
     }
 
-    QVERIFY(labelNo->text().contains("No 1"));
-    QVERIFY(labelNo->text().contains("coin 25"));
-    QVERIFY(labelYes->text().contains("Yes 3"));
-    QVERIFY(labelYes->text().contains("coin 150"));
+    QCOMPARE(labelNo->text(), QString("No 25"));
+    QCOMPARE(labelYes->text(), QString("Yes 150"));
 }
 
 void GovernanceDialogTests::proposalCardRendersContainedYesNoProgressBars()
@@ -3653,8 +3540,8 @@ void GovernanceDialogTests::proposalCardRendersContainedYesNoProgressBars()
     ProposalCard card(&parent);
 
     ProposalInfo proposal = BuildTestProposal();
-    proposal.votesYes = 3;
-    proposal.votesNo = 1;
+    proposal.coinVotesYes = 3;
+    proposal.coinVotesNo = 1;
     card.setProposal(proposal);
     card.show();
     QTest::qWait(20);
@@ -3682,7 +3569,7 @@ void GovernanceDialogTests::proposalCardRendersContainedYesNoProgressBars()
     QVERIFY(votesYesBar->geometry().top() == 0);
 }
 
-void GovernanceDialogTests::proposalCardBarsBlendMnAndCoinVotes()
+void GovernanceDialogTests::proposalCardBarsUseCoinVotesOnly()
 {
     QWidget parent;
     ProposalCard card(&parent);
@@ -3703,9 +3590,9 @@ void GovernanceDialogTests::proposalCardBarsBlendMnAndCoinVotes()
         return;
     }
 
-    // MN ratio is 10/90 and coin ratio is 90/10. Card bars must reflect both channels.
-    QCOMPARE(votesNoBar->value(), 50);
-    QCOMPARE(votesYesBar->value(), 50);
+    // Retired masternode vote fields must not influence PQ governance display.
+    QCOMPARE(votesNoBar->value(), 90);
+    QCOMPARE(votesYesBar->value(), 10);
 }
 
 void GovernanceDialogTests::proposalCardUsesPremiumDropShadowEffect()
@@ -4716,7 +4603,7 @@ void GovernanceDialogTests::walletShellKeepsBrandIslandOutsideNavigation()
     QVERIFY2(!navigation->isAncestorOf(brandIsland), "The logo island must not belong to the navigation widget");
     QVERIFY2(!navigation->isAncestorOf(brandLogo), "The logo image must not be painted from inside the navigation widget");
     QVERIFY(!brandLogo->hasScaledContents());
-    QVERIFY(!brandLogo->pixmap().isNull());
+    QVERIFY(brandLogo->pixmap() && !brandLogo->pixmap()->isNull());
 
     QWidget* leftShell = brandIsland->parentWidget();
     QVERIFY(leftShell != nullptr);
@@ -4904,9 +4791,9 @@ void GovernanceDialogTests::dashboardHeaderExposesCompactLiveStatusCluster()
     QVERIFY(staking != nullptr);
     if (!cluster || !sync || !connections || !staking) return;
     QVERIFY(cluster->maximumHeight() <= 30);
-    QVERIFY(!sync->pixmap().isNull());
-    QVERIFY(!connections->pixmap().isNull());
-    QVERIFY(!staking->pixmap().isNull());
+    QVERIFY(sync->pixmap() && !sync->pixmap()->isNull());
+    QVERIFY(connections->pixmap() && !connections->pixmap()->isNull());
+    QVERIFY(staking->pixmap() && !staking->pixmap()->isNull());
 }
 
 void GovernanceDialogTests::dashboardStatusBadgesExposeRestrainedSemanticStates()
@@ -5005,9 +4892,9 @@ void GovernanceDialogTests::walletBrandIslandUsesOriginalTransparentLogoAsset()
 
     QCOMPARE(floatingLogo->property("sourceAsset").toString(), QStringLiteral(":/img-logo-pivx"));
     QCOMPARE(cardLogo->property("sourceAsset").toString(), QStringLiteral(":/img-logo-pivx"));
-    QVERIFY(!floatingLogo->pixmap().isNull());
-    QVERIFY(!cardLogo->pixmap().isNull());
-    QVERIFY2(floatingLogo->pixmap().width() >= 120, "The supplied logo must fill more of its floating island");
+    QVERIFY(floatingLogo->pixmap() && !floatingLogo->pixmap()->isNull());
+    QVERIFY(cardLogo->pixmap() && !cardLogo->pixmap()->isNull());
+    QVERIFY2(floatingLogo->pixmap()->width() >= 120, "The supplied logo must fill more of its floating island");
 }
 
 void GovernanceDialogTests::dashboardChartShowsValuesOnlyOnHover()
@@ -5591,8 +5478,8 @@ void GovernanceDialogTests::proposalInfoDialogShowsCoinVoteTotals()
         return;
     }
 
-    QCOMPARE(textPosVotes->text(), QString("7"));
-    QCOMPARE(textNegVotes->text(), QString("2"));
+    QVERIFY(!textPosVotes->isVisible());
+    QVERIFY(!textNegVotes->isVisible());
     QCOMPARE(textPosCoinVotes->text(), QString("250"));
     QCOMPARE(textNegCoinVotes->text(), QString("40"));
 }

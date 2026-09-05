@@ -36,7 +36,7 @@
 #include "chainparams.h"
 #include "consensus/upgrades.h"
 
-#include <boost/test/unit_test.hpp>
+#include <boost/test/included/unit_test.hpp>
 
 #include <array>
 #include <map>

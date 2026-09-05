@@ -97,6 +97,292 @@ static std::string ReadFileContents(const fs::path& path)
     return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
 }
 
+namespace {
+// Exercise the real Berkeley write-error path without a production test hook.
+decltype(DB::put) saved_wallet_put;
+unsigned wallet_writes_before_failure;
+struct FailWalletTxWrites {
+    DB* db;
+    explicit FailWalletTxWrites(CWallet& wallet, unsigned allow_writes = 0)
+    {
+        std::string file;
+        auto* env = GetWalletEnv(wallet.GetDBHandle().GetPathToFile(), file);
+        db = env->mapDb.at(file)->get_DB();
+        saved_wallet_put = db->put;
+        wallet_writes_before_failure = allow_writes;
+        db->put = [](DB* handle, DB_TXN* txn, DBT* key, DBT* value, u_int32_t flags) {
+            const auto* data = static_cast<const char*>(key->data);
+            CDataStream stream(data, data + key->size, SER_DISK, CLIENT_VERSION);
+            std::string type;
+            stream >> type;
+            if (type == "tx") {
+                if (!wallet_writes_before_failure) return EIO;
+                --wallet_writes_before_failure;
+            }
+            return saved_wallet_put(handle, txn, key, value, flags);
+        };
+    }
+    ~FailWalletTxWrites() { db->put = saved_wallet_put; }
+};
+
+decltype(DB_ENV::txn_begin) saved_wallet_txn_begin;
+bool fail_wallet_txn_begin;
+unsigned failed_wallet_commits;
+struct FailWalletTransaction {
+    DB_ENV* env;
+    explicit FailWalletTransaction(CWallet& wallet, bool fail_begin)
+    {
+        std::string file;
+        env = GetWalletEnv(wallet.GetDBHandle().GetPathToFile(), file)->dbenv->get_DB_ENV();
+        saved_wallet_txn_begin = env->txn_begin;
+        fail_wallet_txn_begin = fail_begin;
+        failed_wallet_commits = 0;
+        env->txn_begin = [](DB_ENV* handle, DB_TXN* parent, DB_TXN** txn, u_int32_t flags) {
+            if (fail_wallet_txn_begin) return EIO;
+            const int result = saved_wallet_txn_begin(handle, parent, txn, flags);
+            if (!result) {
+                (*txn)->commit = [](DB_TXN* transaction, u_int32_t) {
+                    // Berkeley commit failure consumes and aborts its handle.
+                    ++failed_wallet_commits;
+                    const int aborted = transaction->abort(transaction);
+                    return aborted ? aborted : EIO;
+                };
+            }
+            return result;
+        };
+    }
+    ~FailWalletTransaction() { env->txn_begin = saved_wallet_txn_begin; }
+};
+
+void CheckMetadata(const CWalletTx& actual, const CWalletTx& expected)
+{
+    BOOST_CHECK(actual.mapValue == expected.mapValue);
+    BOOST_CHECK(actual.vOrderForm == expected.vOrderForm);
+    BOOST_CHECK_EQUAL(actual.nTimeSmart, expected.nTimeSmart);
+    BOOST_CHECK_EQUAL(actual.fFromMe, expected.fFromMe);
+}
+
+void CheckConflictMetadataPersistence(CWallet& wallet, bool sapling)
+{
+    LOCK2(cs_main, wallet.cs_wallet);
+    if (sapling) {
+        wallet.SetMinVersion(FEATURE_SAPLING);
+        wallet.SetupSPKM(false);
+    }
+    auto make_tx = [&](unsigned id, std::initializer_list<unsigned> inputs) {
+        CMutableTransaction tx;
+        tx.nLockTime = id;
+        tx.vout.emplace_back(COIN, CScript() << OP_TRUE);
+        for (const auto input : inputs) {
+            const auto hash = ArithToUint256(arith_uint256(input));
+            if (sapling) {
+                tx.nVersion = CTransaction::TxVersion::SAPLING;
+                SpendDescription spend;
+                spend.nullifier = hash;
+                tx.sapData->vShieldedSpend.push_back(spend);
+            } else {
+                tx.vin.emplace_back(hash, 0);
+            }
+        }
+        CWalletTx wtx(&wallet, MakeTransactionRef(tx));
+        wtx.mapValue["comment"] = std::to_string(id);
+        wtx.vOrderForm.emplace_back("purpose", std::to_string(id));
+        wtx.fFromMe = id % 2;
+        return wtx;
+    };
+    auto read_record = [&](const CWalletTx& wtx) {
+        CWalletTx recorded(&wallet, nullptr);
+        BerkeleyBatch batch(wallet.GetDBHandle(), "r");
+        BOOST_REQUIRE(batch.Read(std::make_pair(std::string("tx"), wtx.GetHash()), recorded));
+        return recorded;
+    };
+
+    // A simple conflicting pair must have identical live, stored and restored metadata.
+    const auto first = make_tx(1, {10});
+    const auto second = make_tx(2, {10});
+    SetMockTime(1700000000);
+    const bool first_added = wallet.AddToWallet(first);
+    SetMockTime(0);
+    BOOST_REQUIRE(first_added);
+    BOOST_REQUIRE(wallet.AddToWallet(second));
+    const auto expected = wallet.mapWallet.at(first.GetHash());
+    CheckMetadata(wallet.mapWallet.at(second.GetHash()), expected);
+    CheckMetadata(read_record(second), expected);
+    {
+        CWallet restored("conflict-reload", WalletDatabase::CreateDummy());
+        LOCK(restored.cs_wallet);
+        BOOST_REQUIRE_EQUAL(WalletBatch(wallet.GetDBHandle()).LoadWallet(&restored), DB_LOAD_OK);
+        CheckMetadata(restored.mapWallet.at(second.GetHash()), expected);
+    }
+
+    // Input order matters: the first range changes the oldest member of the
+    // second range. Staging only the new transaction would get this wrong.
+    const auto a = make_tx(3, {20});
+    const auto d = make_tx(4, {30});
+    const auto b = make_tx(5, {20, 30, 40});
+    const auto c = make_tx(6, {20, 40});
+    BOOST_REQUIRE(wallet.AddToWallet(a));
+    BOOST_REQUIRE(wallet.AddToWallet(d));
+    BOOST_REQUIRE(wallet.AddToWallet(b));
+    const auto before_b = wallet.mapWallet.at(b.GetHash());
+    const auto disk_b = read_record(b);
+    const auto order = wallet.nOrderPosNext;
+    {
+        FailWalletTxWrites fail(wallet);
+        BOOST_CHECK(!wallet.AddToWallet(c));
+        BOOST_CHECK(!wallet.mapWallet.count(c.GetHash()));
+        CheckMetadata(wallet.mapWallet.at(b.GetHash()), before_b);
+        CheckMetadata(read_record(b), disk_b);
+    }
+    {
+        // The changed peer is written first, then the incoming record fails.
+        FailWalletTxWrites fail(wallet, 1);
+        BOOST_CHECK(!wallet.AddToWallet(c));
+        BOOST_CHECK(!wallet.mapWallet.count(c.GetHash()));
+        CheckMetadata(wallet.mapWallet.at(b.GetHash()), before_b);
+        CheckMetadata(read_record(b), disk_b);
+        BerkeleyBatch batch(wallet.GetDBHandle(), "r");
+        int64_t stored_order = -1;
+        BOOST_REQUIRE(batch.Read(std::string("orderposnext"), stored_order));
+        BOOST_CHECK_EQUAL(stored_order, order);
+        CWalletTx recorded(&wallet, nullptr);
+        BOOST_CHECK(!batch.Read(std::make_pair(std::string("tx"), c.GetHash()), recorded));
+    }
+    BOOST_REQUIRE(wallet.AddToWallet(c));
+    CheckMetadata(wallet.mapWallet.at(c.GetHash()), wallet.mapWallet.at(a.GetHash()));
+    CheckMetadata(read_record(c), wallet.mapWallet.at(c.GetHash()));
+    CheckMetadata(read_record(b), wallet.mapWallet.at(b.GetHash()));
+    {
+        CWallet restored("overlapping-conflict-reload", WalletDatabase::CreateDummy());
+        LOCK(restored.cs_wallet);
+        BOOST_REQUIRE_EQUAL(WalletBatch(wallet.GetDBHandle()).LoadWallet(&restored), DB_LOAD_OK);
+        for (const auto* tx : {&a, &b, &c, &d})
+            CheckMetadata(restored.mapWallet.at(tx->GetHash()), wallet.mapWallet.at(tx->GetHash()));
+        BOOST_CHECK(restored.GetConflicts(b.GetHash()).count(c.GetHash()));
+        const auto spent = ArithToUint256(arith_uint256(40));
+        if (sapling)
+            BOOST_CHECK(restored.GetSaplingScriptPubKeyMan()->IsSaplingSpent(spent));
+        else
+            BOOST_CHECK(restored.IsSpent(spent, 0));
+    }
+}
+}
+
+BOOST_AUTO_TEST_CASE(dummy_wallet_transactions_are_successful_noops)
+{
+    auto database = WalletDatabase::CreateDummy();
+    WalletBatch batch(*database);
+    BOOST_CHECK(batch.TxnBegin());
+    BOOST_CHECK(batch.WriteOrderPosNext(1));
+    BOOST_CHECK(batch.TxnCommit());
+    BOOST_CHECK(batch.TxnBegin());
+    BOOST_CHECK(batch.TxnAbort());
+}
+
+BOOST_AUTO_TEST_CASE(wallet_transaction_begin_and_commit_failure_are_atomic)
+{
+    LOCK2(cs_main, m_wallet.cs_wallet);
+    CMutableTransaction funding;
+    funding.vout.emplace_back(2 * COIN, CScript() << OP_TRUE);
+    const auto funding_ref = MakeTransactionRef(funding);
+    BOOST_REQUIRE(m_wallet.AddToWallet(CWalletTx(&m_wallet, funding_ref)));
+    CMutableTransaction payment;
+    payment.vin.emplace_back(funding_ref->GetHash(), 0);
+    payment.vout.emplace_back(COIN, CScript() << OP_TRUE);
+    const auto payment_ref = MakeTransactionRef(payment);
+    const auto order = m_wallet.nOrderPosNext;
+    for (const bool fail_begin : {true, false}) {
+        FailWalletTransaction fail(m_wallet, fail_begin);
+        const auto result = m_wallet.CommitTransaction(payment_ref, nullptr, nullptr);
+        BOOST_CHECK_EQUAL(result.status, CWallet::CommitStatus::NotRecorded);
+        BOOST_CHECK(!m_wallet.mapWallet.count(payment_ref->GetHash()));
+        BOOST_CHECK_EQUAL(m_wallet.nOrderPosNext, order);
+        BOOST_CHECK(!m_wallet.IsSpent(funding_ref->GetHash(), 0));
+        BOOST_CHECK_EQUAL(failed_wallet_commits, fail_begin ? 0U : 1U);
+        BerkeleyBatch batch(m_wallet.GetDBHandle(), "r");
+        CWalletTx recorded(&m_wallet, nullptr);
+        BOOST_CHECK(!batch.Read(std::make_pair(std::string("tx"), payment_ref->GetHash()), recorded));
+        int64_t stored_order = -1;
+        BOOST_REQUIRE(batch.Read(std::string("orderposnext"), stored_order));
+        BOOST_CHECK_EQUAL(stored_order, order);
+    }
+    BOOST_REQUIRE(m_wallet.AddToWallet(CWalletTx(&m_wallet, payment_ref)));
+}
+
+BOOST_AUTO_TEST_CASE(ordinary_conflict_metadata_is_persisted_before_publication)
+{
+    CheckConflictMetadataPersistence(m_wallet, false);
+}
+
+BOOST_AUTO_TEST_CASE(sapling_conflict_metadata_is_persisted_before_publication)
+{
+    CheckConflictMetadataPersistence(m_wallet, true);
+}
+
+BOOST_AUTO_TEST_CASE(transaction_record_failure_does_not_publish_or_commit)
+{
+    LOCK2(cs_main, m_wallet.cs_wallet);
+    CMutableTransaction funding;
+    funding.vout.emplace_back(2 * COIN, CScript() << OP_TRUE);
+    const auto funding_ref = MakeTransactionRef(funding);
+    BOOST_REQUIRE(m_wallet.AddToWallet(CWalletTx(&m_wallet, funding_ref)));
+
+    CMutableTransaction payment;
+    payment.vin.emplace_back(funding_ref->GetHash(), 0);
+    payment.vout.emplace_back(COIN, CScript() << OP_TRUE);
+    const auto payment_ref = MakeTransactionRef(payment);
+    const COutPoint prevout(funding_ref->GetHash(), 0);
+    const auto order = m_wallet.nOrderPosNext;
+    const auto ordered_size = m_wallet.wtxOrdered.size();
+    m_wallet.LockCoin(prevout);
+    unsigned notifications = 0;
+    boost::signals2::scoped_connection connection = m_wallet.NotifyTransactionChanged.connect(
+        [&](CWallet*, const uint256&, ChangeType) { ++notifications; });
+
+    {
+        FailWalletTxWrites fail(m_wallet);
+        for (int retry = 0; retry != 2; ++retry) {
+            BOOST_CHECK(!m_wallet.AddToWallet(CWalletTx(&m_wallet, payment_ref)));
+            BOOST_CHECK(!m_wallet.mapWallet.count(payment_ref->GetHash()));
+            BOOST_CHECK_EQUAL(m_wallet.wtxOrdered.size(), ordered_size);
+            BOOST_CHECK_EQUAL(m_wallet.nOrderPosNext, order);
+            BOOST_CHECK(!m_wallet.IsSpent(prevout));
+            BOOST_CHECK(m_wallet.IsLockedCoin(prevout.hash, prevout.n));
+        }
+        const auto result = m_wallet.CommitTransaction(payment_ref, nullptr, nullptr);
+        BOOST_CHECK_EQUAL(result.status, CWallet::CommitStatus::NotRecorded);
+        BOOST_CHECK(result.hashTx.IsNull());
+        BOOST_CHECK(!m_wallet.mapWallet.count(payment_ref->GetHash()));
+        BOOST_CHECK(!mempool.exists(payment_ref->GetHash()));
+        BOOST_CHECK(!m_wallet.IsSpent(prevout));
+        BOOST_CHECK(m_wallet.IsLockedCoin(prevout.hash, prevout.n));
+
+        auto update = m_wallet.mapWallet.at(funding_ref->GetHash());
+        update.fFromMe = true;
+        BOOST_CHECK(!m_wallet.AddToWallet(update));
+        BOOST_CHECK(!m_wallet.mapWallet.at(funding_ref->GetHash()).fFromMe);
+        BOOST_CHECK_EQUAL(notifications, 0U);
+        CWalletTx recorded(&m_wallet, nullptr);
+        BerkeleyBatch batch(m_wallet.GetDBHandle(), "r");
+        BOOST_CHECK(!batch.Read(std::make_pair(std::string("tx"), payment_ref->GetHash()), recorded));
+        BOOST_REQUIRE(batch.Read(std::make_pair(std::string("tx"), funding_ref->GetHash()), recorded));
+        BOOST_CHECK(!recorded.fFromMe);
+    }
+
+    BOOST_REQUIRE(m_wallet.AddToWallet(CWalletTx(&m_wallet, payment_ref)));
+    BOOST_CHECK(m_wallet.IsSpent(prevout));
+    BOOST_CHECK(!m_wallet.IsLockedCoin(prevout.hash, prevout.n));
+    BOOST_CHECK_EQUAL(m_wallet.nOrderPosNext, order + 1);
+    BOOST_CHECK_EQUAL(m_wallet.wtxOrdered.size(), ordered_size + 1);
+    BOOST_CHECK_EQUAL(notifications, 1U);
+    connection.disconnect();
+    CWallet restored("persistence-reload", WalletDatabase::CreateDummy());
+    LOCK(restored.cs_wallet);
+    BOOST_REQUIRE_EQUAL(WalletBatch(m_wallet.GetDBHandle()).LoadWallet(&restored), DB_LOAD_OK);
+    BOOST_CHECK(restored.mapWallet.count(payment_ref->GetHash()));
+    BOOST_CHECK(restored.IsSpent(prevout));
+}
+
 BOOST_AUTO_TEST_CASE(coin_selection_tests)
 {
     CoinSet setCoinsRet, setCoinsRet2;

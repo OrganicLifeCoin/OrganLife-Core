@@ -46,9 +46,8 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
     setCssProperty(ui->pushButtonFile2, "btn-settings-options");
     setCssProperty(ui->pushButtonExportCsv, "btn-settings-options");
 
-    setCssProperty(ui->pushButtonConfiguration, "btn-settings-check");
-    setCssProperty(ui->pushButtonConfiguration3, "btn-settings-options");
-    setCssProperty(ui->pushButtonConfiguration4, "btn-settings-options");
+    ui->pushButtonConfiguration->hide();
+    ui->configurationButtonsWidget->hide();
 
     setCssProperty(ui->pushButtonOptions, "btn-settings-check");
     setCssProperty(ui->pushButtonOptions1, "btn-settings-options");
@@ -70,8 +69,6 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
         ui->pushButtonOptions1,
         ui->pushButtonOptions2,
         ui->pushButtonOptions5,
-        ui->pushButtonConfiguration3,
-        ui->pushButtonConfiguration4,
         ui->pushButtonHelp2,
         ui->pushButtonTools1,
         ui->pushButtonTools2,
@@ -79,15 +76,12 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
     };
 
     menus.insert(ui->pushButtonFile, ui->fileButtonsWidget);
-    menus.insert(ui->pushButtonConfiguration, ui->configurationButtonsWidget);
     menus.insert(ui->pushButtonOptions, ui->optionsButtonsWidget);
     menus.insert(ui->pushButtonTools, ui->toolsButtonsWidget);
     menus.insert(ui->pushButtonHelp, ui->helpButtonsWidget);
 
     settingsBackupWallet = new SettingsBackupWallet(window, this);
     settingsExportCsvWidget = new SettingsExportCSV(window, this);
-    settingsBitToolWidget = new SettingsBitToolWidget(window, this);
-    settingsSingMessageWidgets = new SettingsSignMessageWidgets(window, this);
     settingsWalletRepairWidget = new SettingsWalletRepairWidget(window, this);
     settingsWalletOptionsWidget = new SettingsWalletOptionsWidget(window, this);
     settingsMainOptionsWidget = new SettingsMainOptionsWidget(window, this);
@@ -98,8 +92,6 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
     const QList<QWidget*> settingsPages = {
         settingsBackupWallet,
         settingsExportCsvWidget,
-        settingsBitToolWidget,
-        settingsSingMessageWidgets,
         settingsWalletRepairWidget,
         settingsWalletOptionsWidget,
         settingsMainOptionsWidget,
@@ -114,8 +106,6 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
 
     ui->stackedWidgetContainer->addWidget(settingsBackupWallet);
     ui->stackedWidgetContainer->addWidget(settingsExportCsvWidget);
-    ui->stackedWidgetContainer->addWidget(settingsBitToolWidget);
-    ui->stackedWidgetContainer->addWidget(settingsSingMessageWidgets);
     ui->stackedWidgetContainer->addWidget(settingsWalletRepairWidget);
     ui->stackedWidgetContainer->addWidget(settingsWalletOptionsWidget);
     ui->stackedWidgetContainer->addWidget(settingsMainOptionsWidget);
@@ -134,11 +124,6 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
     connect(ui->pushButtonOptions1, &QPushButton::clicked, this, &SettingsWidget::onMainOptionsClicked);
     connect(ui->pushButtonOptions2, &QPushButton::clicked, this, &SettingsWidget::onWalletOptionsClicked);
     connect(ui->pushButtonOptions5, &QPushButton::clicked, this, &SettingsWidget::onDisplayOptionsClicked);
-
-    // Configuration
-    connect(ui->pushButtonConfiguration, &QPushButton::clicked, this, &SettingsWidget::onConfigurationClicked);
-    connect(ui->pushButtonConfiguration3, &QPushButton::clicked, this, &SettingsWidget::onBipToolClicked);
-    connect(ui->pushButtonConfiguration4, &QPushButton::clicked, this, &SettingsWidget::onSignMessageClicked);
 
     // Tools
     connect(ui->pushButtonTools, &QPushButton::clicked, this, &SettingsWidget::onToolsClicked);
@@ -219,8 +204,6 @@ void SettingsWidget::loadWalletModel()
 {
     this->settingsBackupWallet->setWalletModel(this->walletModel);
     this->settingsExportCsvWidget->setWalletModel(this->walletModel);
-    this->settingsSingMessageWidgets->setWalletModel(this->walletModel);
-    this->settingsBitToolWidget->setWalletModel(this->walletModel);
     this->settingsDisplayOptionsWidget->setWalletModel(this->walletModel);
     this->settingsWalletOptionsWidget->setWalletModel(this->walletModel);
     this->settingsInformationWidget->setWalletModel(this->walletModel);
@@ -232,8 +215,6 @@ void SettingsWidget::clearWalletModel()
     PWidget::clearWalletModel();
     this->settingsBackupWallet->clearWalletModel();
     this->settingsExportCsvWidget->clearWalletModel();
-    this->settingsSingMessageWidgets->clearWalletModel();
-    this->settingsBitToolWidget->clearWalletModel();
     this->settingsDisplayOptionsWidget->clearWalletModel();
     this->settingsWalletOptionsWidget->clearWalletModel();
     this->settingsInformationWidget->clearWalletModel();
@@ -319,23 +300,6 @@ void SettingsWidget::onBackupWalletClicked()
 {
     ui->stackedWidgetContainer->setCurrentWidget(settingsBackupWallet);
     selectOption(ui->pushButtonFile2);
-}
-
-void SettingsWidget::onSignMessageClicked()
-{
-    ui->stackedWidgetContainer->setCurrentWidget(settingsSingMessageWidgets);
-    selectOption(ui->pushButtonConfiguration4);
-}
-
-void SettingsWidget::onConfigurationClicked()
-{
-    selectMenu(ui->pushButtonConfiguration);
-}
-
-void SettingsWidget::onBipToolClicked()
-{
-    ui->stackedWidgetContainer->setCurrentWidget(settingsBitToolWidget);
-    selectOption(ui->pushButtonConfiguration3);
 }
 
 void SettingsWidget::onExportCSVClicked()

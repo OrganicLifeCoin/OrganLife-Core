@@ -7,12 +7,15 @@
 #include "wallet/test/wallet_test_fixture.h"
 
 #include "blockassembler.h"
+#include "budget/budgetmanager.h"
+#include "budget/budgetproposal.h"
 #include "checkpoints.h"
 #include "consensus/upgrades.h"
 #include "consensus/merkle.h"
 #include "evo/governancevotetx.h"
-#include "messagesigner.h"
 #include "miner.h"
+#include "pqaddress.h"
+#include "pqtransaction.h"
 #include "pow.h"
 #include "pubkey.h"
 #include "uint256.h"
@@ -160,6 +163,10 @@ void TestPackageSelection(const CChainParams& chainparams, CScript scriptPubKey,
 // NOTE: These tests rely on CreateNewBlock doing its own self-validation!
 BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
 {
+    // This case exercises the pre-PQ block assembler. PQ-only assembly and
+    // authorization limits are covered by pqvalidation_tests below.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ,
+                                   Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     // Note that by default, these tests run with size accounting enabled.
     const CChainParams& chainparams = Params();
     CScript scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ParseHex("8d5b4f83212214d6ef693e02e6d71969fddad976") << OP_EQUALVERIFY << OP_CHECKSIG;
@@ -403,9 +410,12 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
 BOOST_AUTO_TEST_CASE(CreateNewBlock_orders_gov_vote_lock_before_cast)
 {
     const CChainParams& chainparams = Params();
-    CScript scriptPubKey = CScript() << OP_DUP << OP_HASH160
-                                     << ParseHex("8d5b4f83212214d6ef693e02e6d71969fddad976")
-                                     << OP_EQUALVERIFY << OP_CHECKSIG;
+    mldsa44::Key ownerKey;
+    BOOST_REQUIRE(ownerKey.Generate());
+    const auto ownerKeyId = pq::GetID(ownerKey.GetPublicKey(), Params().NetworkIDString());
+    BOOST_REQUIRE(ownerKeyId);
+    const CScript ownerScript = pq::GetScript(*ownerKeyId);
+    const CScript scriptPubKey = ownerScript;
 
     std::unique_ptr<CBlockTemplate> pblocktemplate;
     BOOST_REQUIRE(pblocktemplate = BlockAssembler(chainparams, DEFAULT_PRINTPRIORITY).CreateNewBlock(scriptPubKey, &m_wallet, false));
@@ -419,7 +429,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_orders_gov_vote_lock_before_cast)
         pblock->nTime = pindexPrev->GetMedianTimePast() + 60;
         pblock->nBits = GetNextWorkRequired(pindexPrev, pblock.get());
         pblock->vtx.clear();
-        CreateCoinbaseTx(pblock.get(), CScript(), pindexPrev);
+        CreateCoinbaseTx(pblock.get(), scriptPubKey, pindexPrev);
         const int nextHeight = pindexPrev->nHeight + 1;
         if (txFirst.size() < 3 && nextHeight > 1) {
             txFirst.emplace_back(pblock->vtx[0]);
@@ -433,7 +443,8 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_orders_gov_vote_lock_before_cast)
         stateCatcher.registerEvent();
         const bool processed = ProcessNewBlock(pblock, nullptr);
         SyncWithValidationInterfaceQueue();
-        BOOST_REQUIRE(processed && stateCatcher.get().found && stateCatcher.get().state.IsValid());
+        BOOST_REQUIRE_MESSAGE(processed && stateCatcher.get().found && stateCatcher.get().state.IsValid(),
+                              "height=" << nextHeight << " " << FormatStateMessage(stateCatcher.get().state));
         pblock->hashPrevBlock = pblock->GetHash();
     }
     BOOST_REQUIRE_EQUAL(txFirst.size(), 3U);
@@ -441,42 +452,72 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_orders_gov_vote_lock_before_cast)
     const CAmount inputValueLock = txFirst[0]->vout.at(0).nValue;
     const CAmount inputValueCast = txFirst[1]->vout.at(0).nValue;
     const CAmount lockAmount = 25 * COIN;
-    const CAmount lockFee = 1 * CENT;
-    const CAmount castFee = 5 * CENT;
+    const CAmount lockFee = 1 * COIN;
+    const CAmount castFee = 1 * COIN;
 
-    CKey ownerKey;
-    ownerKey.MakeNewKey(true);
-    const CKeyID ownerKeyId = ownerKey.GetPubKey().GetID();
-    const CScript ownerScript = GetScriptForDestination(ownerKeyId);
-    const uint256 proposalHash = GetRandHash();
+    const int proposalStart = 2 * Params().GetConsensus().nBudgetCycleBlocks;
+    CBudgetProposal proposal("ordering", "https://example.invalid/ordering", 1,
+                             ownerScript, 10 * COIN, proposalStart, GetRandHash());
+    BOOST_REQUIRE(g_budgetman.AddPQProposal(proposal,
+        WITH_LOCK(cs_main, return chainActive.Height()), GetTime()));
+    const uint256 proposalHash = proposal.GetHash();
 
     CMutableTransaction lockTx;
-    lockTx.nVersion = CTransaction::TxVersion::SAPLING;
-    lockTx.nType = CTransaction::TxType::GOVVOTELOCK;
+    lockTx.nVersion = 3;
+    lockTx.nType = CTransaction::TxType::PQ;
+    lockTx.sapData = nullopt;
     lockTx.vin.emplace_back(txFirst[0]->GetHash(), 0);
-    lockTx.vin[0].scriptSig = CScript() << OP_1;
     lockTx.vout.emplace_back(lockAmount, ownerScript);
     lockTx.vout.emplace_back(inputValueLock - lockAmount - lockFee, ownerScript);
     CGovVoteLockTx lockPayload;
     lockPayload.proposalHash = proposalHash;
     lockPayload.lockAmount = lockAmount;
-    lockPayload.unlockHeight = WITH_LOCK(cs_main, return chainActive.Height()) + 100;
-    lockPayload.ownerKeyId = ownerKeyId;
-    SetTxPayload(lockTx, lockPayload);
+    lockPayload.unlockHeight = proposal.GetBlockEnd() + 1;
+    lockPayload.ownerKeyId = *ownerKeyId;
+    pq::Payload lockEnvelope;
+    lockEnvelope.mode = pq::GOVERNANCE_LOCK;
+    lockEnvelope.data = EncodeGovernanceData(lockPayload);
+    lockEnvelope.authorizations.resize(1);
+    lockEnvelope.authorizations[0].public_key = ownerKey.GetPublicKey();
+    lockTx.extraPayload = pq::EncodePayload(lockEnvelope);
+    std::vector<unsigned char> signature;
+    BOOST_REQUIRE(ownerKey.Sign(
+        pq::SignatureMessage(lockTx, {txFirst[0]->vout.at(0)}, lockEnvelope,
+                             Params().GetConsensus().hashGenesisBlock, 0),
+        *pq::SignatureContext(Params().NetworkIDString()), signature));
+    std::copy(signature.begin(), signature.end(), lockEnvelope.authorizations[0].signature.begin());
+    lockTx.extraPayload = pq::EncodePayload(lockEnvelope);
     const uint256 lockTxHash = lockTx.GetHash();
 
     CMutableTransaction castTx;
-    castTx.nVersion = CTransaction::TxVersion::SAPLING;
-    castTx.nType = CTransaction::TxType::GOVVOTECAST;
+    castTx.nVersion = 3;
+    castTx.nType = CTransaction::TxType::PQ;
+    castTx.sapData = nullopt;
     castTx.vin.emplace_back(txFirst[1]->GetHash(), 0);
-    castTx.vin[0].scriptSig = CScript() << OP_1;
     castTx.vout.emplace_back(inputValueCast - castFee, ownerScript);
     CGovVoteCastTx castPayload;
     castPayload.proposalHash = proposalHash;
     castPayload.voteDirection = CGovVoteCastTx::VOTE_YES;
     castPayload.lockRefs.emplace_back(lockTxHash, 0);
-    BOOST_REQUIRE(CHashSigner::SignHash(castPayload.GetSignatureHash(), ownerKey, castPayload.sig));
-    SetTxPayload(castTx, castPayload);
+    castPayload.ownerPublicKey = ownerKey.GetPublicKey();
+    signature.clear();
+    BOOST_REQUIRE(ownerKey.Sign(
+        castPayload.GetSignatureMessage(Params().GetConsensus().hashGenesisBlock),
+        *pq::GovernanceSignatureContext(Params().NetworkIDString()), signature));
+    std::copy(signature.begin(), signature.end(), castPayload.sig.begin());
+    pq::Payload castEnvelope;
+    castEnvelope.mode = pq::GOVERNANCE_CAST;
+    castEnvelope.data = EncodeGovernanceData(castPayload);
+    castEnvelope.authorizations.resize(1);
+    castEnvelope.authorizations[0].public_key = ownerKey.GetPublicKey();
+    castTx.extraPayload = pq::EncodePayload(castEnvelope);
+    signature.clear();
+    BOOST_REQUIRE(ownerKey.Sign(
+        pq::SignatureMessage(castTx, {txFirst[1]->vout.at(0)}, castEnvelope,
+                             Params().GetConsensus().hashGenesisBlock, 0),
+        *pq::SignatureContext(Params().NetworkIDString()), signature));
+    std::copy(signature.begin(), signature.end(), castEnvelope.authorizations[0].signature.begin());
+    castTx.extraPayload = pq::EncodePayload(castEnvelope);
     const uint256 castTxHash = castTx.GetHash();
 
     TestMemPoolEntryHelper entry;
@@ -504,6 +545,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_orders_gov_vote_lock_before_cast)
     BOOST_CHECK(lockPos < castPos);
 
     mempool.clear();
+    BOOST_CHECK(g_budgetman.RemovePQProposal(proposalHash));
 }
 
 BOOST_AUTO_TEST_CASE(staker_slot_wait_is_bounded_for_future_attempt)

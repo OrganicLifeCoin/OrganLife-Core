@@ -113,6 +113,7 @@ SET(QT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/guitransactionsutils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/snackbar.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/navmenuwidget.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/pqwidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/lockunlock.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/receivedialog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/furabstractlistitemdelegate.cpp
@@ -150,20 +151,17 @@ SET(QT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/addresseswidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/defaultdialog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/coldstakingwidget.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/mnselectiondialog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/proposalcard.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/votedialog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/createproposaldialog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/proposalinfodialog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/governancewidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/settings/backupwallet.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/settings/bittoolwidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/settings/consolewidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/settings/displayoptionswidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/settings/faqwidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/settings/informationwidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/settings/mainoptionswidget.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/settings/signmessagewidgets.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/settings/walletoptionswidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/settings/walletrepairwidget.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/settings/exportcsv.cpp

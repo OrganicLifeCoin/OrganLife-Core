@@ -513,8 +513,10 @@ DashboardWidget::DashboardWidget(OrganicLifeGUI* parent) :
     ApplyStatusState(dashboardSyncBadge, QStringLiteral("neutral"));
     dashboardConnectionBadge->setCursor(Qt::PointingHandCursor);
     dashboardConnectionBadge->setFocusPolicy(Qt::TabFocus);
+#if QT_CONFIG(accessibility)
     dashboardConnectionBadge->setAccessibleName(tr("Network connections"));
     dashboardConnectionBadge->setAccessibleDescription(tr("Open peers and debug console"));
+#endif
     dashboardConnectionBadge->installEventFilter(this);
     dashboardConnectionIcon->installEventFilter(this);
     dashboardConnectionStatus->installEventFilter(this);
@@ -1402,7 +1404,9 @@ void DashboardWidget::changeChartColors()
         linePen.setJoinStyle(Qt::RoundJoin);
         stakesLine->setPen(linePen);
         stakesLine->setPointsVisible(true);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
         stakesLine->setMarkerSize(5.5);
+#endif
     }
     if (areaStakes) {
         QLinearGradient fillGrad(0, 0, 0, 1);
@@ -1425,7 +1429,9 @@ void DashboardWidget::changeChartColors()
         mnPen.setJoinStyle(Qt::RoundJoin);
         mnLine->setPen(mnPen);
         mnLine->setPointsVisible(true);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
         mnLine->setMarkerSize(5.0);
+#endif
     }
 }
 

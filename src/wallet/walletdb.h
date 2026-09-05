@@ -10,6 +10,7 @@
 #include "amount.h"
 #include "wallet/db.h"
 #include "wallet/hdchain.h"
+#include "wallet/pqkey.h"
 #include "key.h"
 #include "keystore.h"
 #include "script/keyorigin.h"
@@ -152,6 +153,8 @@ public:
     bool WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata& keyMeta);
     bool WriteCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret, const CKeyMetadata& keyMeta);
     bool WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey);
+    bool WritePQKey(const pq::KeyID& id, const pqwallet::Record& record);
+    bool ErasePQKey(const pq::KeyID& id);
 
     bool WriteCScript(const uint160& hash, const CScript& redeemScript);
 

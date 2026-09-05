@@ -865,6 +865,10 @@ static const CRPCCommand commands[] =
 
 void RegisterMiscRPCCommands(CRPCTable &tableRPC)
 {
-    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++)
-        tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
+    for (unsigned int vcidx = 0; vcidx < ARRAYLEN(commands); vcidx++) {
+        const std::string name = commands[vcidx].name;
+        if (name == "getmemoryinfo" || name == "logging" || name == "echo" ||
+            name == "echojson" || name == "setmocktime")
+            tableRPC.appendCommand(commands[vcidx].name, &commands[vcidx]);
+    }
 }

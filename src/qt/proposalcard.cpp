@@ -161,35 +161,14 @@ void ProposalCard::setProposal(const ProposalInfo& _proposalInfo)
                                              .arg(proposalInfo.totalPayments)
                                              .arg(duration));
     }
-    const double totalVotes = _proposalInfo.votesYes + _proposalInfo.votesNo;
     const double totalCoinVotes = _proposalInfo.coinVotesYes + _proposalInfo.coinVotesNo;
-    const bool hasMnVotes = totalVotes > 0;
     const bool hasCoinVotes = totalCoinVotes > 0;
-    const double mnNoPct = hasMnVotes ? (_proposalInfo.votesNo / totalVotes) * 100 : 0;
-    const double mnYesPct = hasMnVotes ? (_proposalInfo.votesYes / totalVotes) * 100 : 0;
     const double coinNoPct = hasCoinVotes ? (_proposalInfo.coinVotesNo / totalCoinVotes) * 100 : 0;
     const double coinYesPct = hasCoinVotes ? (_proposalInfo.coinVotesYes / totalCoinVotes) * 100 : 0;
-    const double percentageNo = hasMnVotes && hasCoinVotes ? (mnNoPct + coinNoPct) / 2.0
-                             : (hasMnVotes ? mnNoPct : coinNoPct);
-    const double percentageYes = hasMnVotes && hasCoinVotes ? (mnYesPct + coinYesPct) / 2.0
-                              : (hasMnVotes ? mnYesPct : coinYesPct);
-    const int noBarValue = std::clamp(static_cast<int>(std::lround(percentageNo)), 0, 100);
-    const int yesBarValue = std::clamp(static_cast<int>(std::lround(percentageYes)), 0, 100);
-    if (hasCoinVotes) {
-        ui->labelNo->setText(tr("No %1 (coin %2)")
-                                     .arg(_proposalInfo.votesNo)
-                                     .arg(_proposalInfo.coinVotesNo));
-        ui->labelYes->setText(tr("Yes %1 (coin %2)")
-                                      .arg(_proposalInfo.votesYes)
-                                      .arg(_proposalInfo.coinVotesYes));
-    } else {
-        ui->labelNo->setText(tr("No %1 (%2%)")
-                                     .arg(_proposalInfo.votesNo)
-                                     .arg(QString::number(percentageNo, 'f', 1)));
-        ui->labelYes->setText(tr("Yes %1 (%2%)")
-                                      .arg(_proposalInfo.votesYes)
-                                      .arg(QString::number(percentageYes, 'f', 1)));
-    }
+    const int noBarValue = std::clamp(static_cast<int>(std::lround(coinNoPct)), 0, 100);
+    const int yesBarValue = std::clamp(static_cast<int>(std::lround(coinYesPct)), 0, 100);
+    ui->labelNo->setText(tr("No %1").arg(_proposalInfo.coinVotesNo));
+    ui->labelYes->setText(tr("Yes %1").arg(_proposalInfo.coinVotesYes));
 
     QString cssClassStatus;
     if (proposalInfo.status == ProposalInfo::WAITING_FOR_APPROVAL) {
@@ -204,7 +183,7 @@ void ProposalCard::setProposal(const ProposalInfo& _proposalInfo)
     } else if (proposalInfo.status == ProposalInfo::PASSING_NOT_FUNDED) {
         cssClassStatus = "card-status-not-passing";
         setStatusAndVotes(tr("Over Budget"), noBarValue, yesBarValue);
-    } else if (proposalInfo.status == ProposalInfo::NOT_PASSING && totalVotes == 0 && totalCoinVotes == 0) {
+    } else if (proposalInfo.status == ProposalInfo::NOT_PASSING && totalCoinVotes == 0) {
         cssClassStatus = "card-status-no-votes";
         setStatusAndVotes(tr("No Votes"), 50, 50);
     } else if (proposalInfo.status == ProposalInfo::NOT_PASSING) {

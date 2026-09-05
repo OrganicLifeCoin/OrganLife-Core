@@ -30,6 +30,7 @@
 #include "validationinterface.h"
 #include "script/ismine.h"
 #include "wallet/scriptpubkeyman.h"
+#include "wallet/pqkey.h"
 #include "sapling/saplingscriptpubkeyman.h"
 #include "validation.h"
 #include "wallet/walletdb.h"
@@ -588,6 +589,8 @@ private:
     //! keeps track of whether Unlock has run a thorough check before
     bool fDecryptionThoroughlyChecked{false};
 
+    std::map<pq::KeyID, pqwallet::Record> m_pq_keys GUARDED_BY(cs_KeyStore);
+
     //! Key manager //
     std::unique_ptr<ScriptPubKeyMan> m_spk_man = std::make_unique<ScriptPubKeyMan>(this);
     std::unique_ptr<SaplingScriptPubKeyMan> m_sspk_man = std::make_unique<SaplingScriptPubKeyMan>(this);
@@ -646,7 +649,8 @@ private:
     void MarkConflicted(const uint256& hashBlock, int conflicting_height, const uint256& hashTx);
 
     template <class T>
-    void SyncMetaData(std::pair<typename TxSpendMap<T>::iterator, typename TxSpendMap<T>::iterator> range);
+    void SyncMetaData(std::pair<typename TxSpendMap<T>::iterator, typename TxSpendMap<T>::iterator> range,
+                      CWalletTx& incoming, std::map<uint256, CWalletTx>& staged);
     void ChainTipAdded(const CBlockIndex *pindex, const CBlock *pblock, SaplingMerkleTree saplingTree);
 
     /* Used by TransactionAddedToMemorypool/BlockConnected/Disconnected */
@@ -708,6 +712,23 @@ public:
     /* SPKM Helpers */
     const CKeyingMaterial& GetEncryptionKey() const;
     bool HasEncryptionKeys() const;
+
+    // Experimental PQ path; separate from ordinary addresses and coin selection.
+    bool GeneratePQAddress(std::string& address);
+    bool ErasePQAddress(const std::string& address);
+    std::vector<std::string> GetPQAddresses() const;
+    bool GetPQKey(const std::string& address, mldsa44::Key& key) const;
+    bool GetPQKey(const pq::KeyID& id, mldsa44::Key& key, bool staking) const;
+    bool LoadPQKey(const pq::KeyID& id, const pqwallet::Record& record);
+    static bool PQPaymentsActive();
+    bool IsPQMine(const CTxOut& output) const;
+    bool InvolvesPQ(const CTransaction& tx) const;
+    std::vector<COutput> GetPQUnspent(bool include_locked = false) const;
+    bool CreatePQTransaction(const std::string& address, CAmount amount,
+                             CTransactionRef& tx, CAmount& fee, std::string& reason);
+    bool CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mode,
+                             const std::vector<unsigned char>& data,
+                             CTransactionRef& tx, CAmount& fee, std::string& reason);
 
     //! Get spkm
     ScriptPubKeyMan* GetScriptPubKeyMan() const;
@@ -778,7 +799,8 @@ public:
     int64_t nTimeFirstKey;
 
     // Public SyncMetadata interface used for the sapling spent nullifier map.
-    void SyncMetaDataN(std::pair<TxSpendMap<uint256>::iterator, TxSpendMap<uint256>::iterator> range);
+    void SyncMetaDataN(std::pair<TxSpendMap<uint256>::iterator, TxSpendMap<uint256>::iterator> range,
+                       CWalletTx& incoming, std::map<uint256, CWalletTx>& staged);
 
     const CWalletTx* GetWalletTx(const uint256& hash) const;
 
@@ -1101,6 +1123,7 @@ public:
         OK,
         Abandoned,              // Failed to accept to memory pool. Successfully removed from the wallet.
         NotAccepted,            // Failed to accept to memory pool. Unable to abandon.
+        NotRecorded,            // Wallet persistence failed. Not accepted or relayed.
     };
     struct CommitResult
     {

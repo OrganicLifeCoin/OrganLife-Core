@@ -52,8 +52,10 @@ void ProposalInfoDialog::setProposal(const ProposalInfo& _info)
     ui->textName->setText(QString::fromStdString(info.name));
     ui->textUrl->setText(QString::fromStdString(info.url));
     ui->textRecipient->setText(QString::fromStdString(info.recipientAdd));
-    ui->textNegVotes->setText(QString::number(info.votesNo));
-    ui->textPosVotes->setText(QString::number(info.votesYes));
+    ui->labelNegVotes->hide();
+    ui->textNegVotes->hide();
+    ui->labelPosVotes->hide();
+    ui->textPosVotes->hide();
     ui->textNegCoinVotes->setText(QString::number(info.coinVotesNo));
     ui->textPosCoinVotes->setText(QString::number(info.coinVotesYes));
     ui->textAmount->setText(GUIUtil::formatBalance(info.amount));

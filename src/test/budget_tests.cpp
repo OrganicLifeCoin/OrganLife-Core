@@ -5,7 +5,6 @@
 
 #include "test_organiclife.h"
 
-#include "bls/bls_wrapper.h"
 #include "budget/budgetmanager.h"
 #include "masternode-payments.h"
 #include "spork.h"
@@ -99,85 +98,21 @@ BOOST_AUTO_TEST_CASE(governance_cycle_realtime_equivalence)
 
 BOOST_FIXTURE_TEST_CASE(block_value, TestnetSetup)
 {
-    enableMnSyncAndSuperblocksPayment();
-    // Pin the deterministic-masternode activation above the heights tested
-    // here (with v6 at genesis, block-value checks would require the on-chain
-    // DMN list) and PoS below them (so the superblock math uses the fixed
-    // cycle budget).
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, 1000);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, 50);
-
-    int nHeight = 100; std::string strError;
+    const int nHeight = 100;
     const CAmount nBlockReward = GetBlockValue(nHeight);
     CAmount nExpectedRet = nBlockReward;
     CAmount nBudgetAmtRet = 0;
 
-    // regular block
-    BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, 0, nBudgetAmtRet));
-    BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, nBlockReward-1, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, 0);
+    // PQ-only testnet requires exact deterministic issuance.
     BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, nBlockReward, nBudgetAmtRet));
     BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward);
     BOOST_CHECK_EQUAL(nBudgetAmtRet, 0);
+    nExpectedRet = nBlockReward;
+    nBudgetAmtRet = 0;
+    BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, nBlockReward - 1, nBudgetAmtRet));
+    nExpectedRet = nBlockReward;
+    nBudgetAmtRet = 0;
     BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, nBlockReward+1, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, 0);
-
-    // superblock - create the finalized budget with a proposal, and vote on it
-    nHeight = 144;
-    const CTxIn mnVin(GetRandHash(), 0);
-    const CScript payee = GetScriptForDestination(CKeyID(uint160(ParseHex("816115944e077fe7c803cfa57f29b36bf87c1d35"))));
-    const CAmount propAmt = 100 * COIN;
-    const uint256& propHash = GetRandHash(), finTxId = GetRandHash();
-    const CTxBudgetPayment txBudgetPayment(propHash, payee, propAmt);
-    CFinalizedBudget fin("main (test)", 144, {txBudgetPayment}, finTxId);
-    const CFinalizedBudgetVote fvote(mnVin, fin.GetHash());
-    BOOST_CHECK(fin.AddOrUpdateVote(fvote, strError));
-    g_budgetman.ForceAddFinalizedBudget(fin.GetHash(), fin.GetFeeTXHash(), fin);
-
-    // check superblock's block-value
-    nExpectedRet = nBlockReward;
-    nBudgetAmtRet = 0;
-    BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, nBlockReward, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward + propAmt);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, propAmt);
-    nExpectedRet = nBlockReward;
-    nBudgetAmtRet = 0;
-    BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, nBlockReward+propAmt-1, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward + propAmt);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, propAmt);
-    nExpectedRet = nBlockReward;
-    nBudgetAmtRet = 0;
-    BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, nBlockReward+propAmt, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward + propAmt);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, propAmt);
-    nExpectedRet = nBlockReward;
-    nBudgetAmtRet = 0;
-    BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, nBlockReward+propAmt+1, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward + propAmt);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, propAmt);
-
-    // disable SPORK_13
-    const CSporkMessage& spork2 = CSporkMessage(SPORK_13_ENABLE_SUPERBLOCKS, 4070908800ULL, GetTime());
-    sporkManager.AddOrUpdateSporkMessage(spork2);
-    BOOST_CHECK(!sporkManager.IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS));
-
-    // check with spork disabled
-    nExpectedRet = nBlockReward;
-    nBudgetAmtRet = 0;
-    BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, nBlockReward, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, 0);
-    BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, nBlockReward+propAmt-1, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, 0);
-    BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, nBlockReward+propAmt, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, 0);
-    BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, nBlockReward+propAmt+1, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward);
-    BOOST_CHECK_EQUAL(nBudgetAmtRet, 0);
 }
 
 BOOST_FIXTURE_TEST_CASE(block_value_undermint, RegTestingSetup)
@@ -185,9 +120,7 @@ BOOST_FIXTURE_TEST_CASE(block_value_undermint, RegTestingSetup)
     int nHeight = 100;
     CAmount nExpectedRet = GetBlockValue(nHeight);
     CAmount nBudgetAmtRet = 0;
-    // under-minting blocks are invalid after v5.3
-    BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, -1, nBudgetAmtRet));
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V5_3, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    // PQ-only consensus rejects under-minting independently of legacy upgrades.
     BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, -1, nBudgetAmtRet));
 }
 
@@ -277,7 +210,7 @@ BOOST_FIXTURE_TEST_CASE(block_value_never_crosses_hard_supply_cap, TestnetSetup)
     BOOST_CHECK_EQUAL(nExpectedRet, 5 * COIN);
 }
 
-BOOST_FIXTURE_TEST_CASE(block_value_allows_undermint_on_testnet_after_v6_1, TestnetSetup)
+BOOST_FIXTURE_TEST_CASE(block_value_rejects_undermint_on_pq_testnet, TestnetSetup)
 {
     enableMnSyncAndSuperblocksPayment();
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_1_GOV, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
@@ -293,189 +226,7 @@ BOOST_FIXTURE_TEST_CASE(block_value_allows_undermint_on_testnet_after_v6_1, Test
     CAmount nExpectedRet = GetBlockValue(nHeight);
     CAmount nBudgetAmtRet = 0;
 
-    BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, nExpectedRet - 1, nBudgetAmtRet));
-}
-
-/**
- * 1) Create two proposals and two budget finalizations with a different proposal payment order:
-         BudA pays propA and propB, BudB pays propB and propA.
-   2) Vote both finalization budgets, adding more votes to budA (so it becomes the most voted one).
- */
-void forceAddFakeProposals(const CTxOut& payee1, const CTxOut& payee2)
-{
-    const CTxIn mnVin(GetRandHash(), 0);
-    const uint256& propHash = GetRandHash(), finTxId = GetRandHash();
-    const CTxBudgetPayment txBudgetPayment(propHash, payee1.scriptPubKey, payee1.nValue);
-
-    const CTxIn mnVin2(GetRandHash(), 0);
-    const uint256& propHash2 = GetRandHash(), finTxId2 = GetRandHash();
-    const CTxBudgetPayment txBudgetPayment2(propHash2, payee2.scriptPubKey, payee2.nValue);
-
-    // Create first finalization
-    CFinalizedBudget fin("main (test)", 144, {txBudgetPayment, txBudgetPayment2}, finTxId);
-    const CFinalizedBudgetVote fvote(mnVin, fin.GetHash());
-    const CFinalizedBudgetVote fvote1_a({GetRandHash(), 0}, fin.GetHash());
-    const CFinalizedBudgetVote fvote1_b({GetRandHash(), 0}, fin.GetHash());
-    std::string strError;
-    BOOST_CHECK(fin.AddOrUpdateVote(fvote, strError));
-    BOOST_CHECK(fin.AddOrUpdateVote(fvote1_a, strError));
-    BOOST_CHECK(fin.AddOrUpdateVote(fvote1_b, strError));
-    g_budgetman.ForceAddFinalizedBudget(fin.GetHash(), fin.GetFeeTXHash(), fin);
-
-    // Create second finalization
-    CFinalizedBudget fin2("main2 (test)", 144, {txBudgetPayment2, txBudgetPayment}, finTxId2);
-    const CFinalizedBudgetVote fvote2(mnVin2, fin2.GetHash());
-    const CFinalizedBudgetVote fvote2_a({GetRandHash(), 0}, fin2.GetHash());
-    BOOST_CHECK(fin2.AddOrUpdateVote(fvote2, strError));
-    BOOST_CHECK(fin2.AddOrUpdateVote(fvote2_a, strError));
-    g_budgetman.ForceAddFinalizedBudget(fin2.GetHash(), fin2.GetFeeTXHash(), fin2);
-}
-
-BOOST_FIXTURE_TEST_CASE(budget_blocks_payee_test, TestChain100Setup)
-{
-    // Regtest superblock is every 144 blocks.
-    for (int i=0; i<43; i++) CreateAndProcessBlock({}, coinbaseKey);
-    enableMnSyncAndSuperblocksPayment();
-    g_budgetman.Clear();
-    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height();), 143);
-    BOOST_ASSERT(g_budgetman.GetFinalizedBudgets().size() == 0);
-
-    // Now we are at the superblock height, let's add a proposal to pay.
-    const CScript payee1 = GetScriptForDestination(CKeyID(uint160(ParseHex("816115944e077fe7c803cfa57f29b36bf87c1d35"))));
-    const CAmount propAmt1 = 100 * COIN;
-    const CScript payee2 = GetScriptForDestination(CKeyID(uint160(ParseHex("8d5b4f83212214d6ef693e02e6d71969fddad976"))));
-    const CAmount propAmt2 = propAmt1;
-    forceAddFakeProposals({propAmt1, payee1}, {propAmt2, payee2});
-
-    CBlock block = CreateBlock({}, coinbaseKey);
-    // Check payee validity:
-    CTxOut payeeOut = block.vtx[0]->vout[1];
-    BOOST_CHECK_EQUAL(payeeOut.nValue, propAmt1);
-    BOOST_CHECK(payeeOut.scriptPubKey == payee1);
-
-    // Good tx
-    CMutableTransaction goodMtx(*block.vtx[0]);
-
-    // Modify payee
-    CMutableTransaction mtx(*block.vtx[0]);
-    mtx.vout[1].scriptPubKey = GetScriptForDestination(CKeyID(uint160(ParseHex("8c988f1a4a4de2161e0f50aac7f17e7f9555caa4"))));
-    block.vtx[0] = MakeTransactionRef(mtx);
-    std::shared_ptr<CBlock> pblock = FinalizeBlock(std::make_shared<CBlock>(block));
-    BOOST_CHECK(block.vtx[0]->vout[1].scriptPubKey != payee1);
-
-    // Verify block rejection reason.
-    ProcessBlockAndCheckRejectionReason(pblock, "bad-cb-payee", 143);
-
-    // Try to overmint, valid payee --> bad amount.
-    mtx = goodMtx; // reset
-    mtx.vout[1].nValue *= 2; // invalid amount
-    block.vtx[0] = MakeTransactionRef(mtx);
-    pblock = FinalizeBlock(std::make_shared<CBlock>(block));
-    BOOST_CHECK(block.vtx[0]->vout[1].scriptPubKey == payee1);
-    BOOST_CHECK(block.vtx[0]->vout[1].nValue == payeeOut.nValue * 2);
-    ProcessBlockAndCheckRejectionReason(pblock, "bad-blk-amount", 143);
-
-    // Try to send less to a valid payee --> bad amount.
-    mtx = goodMtx; // reset
-    mtx.vout[1].nValue /= 2;
-    block.vtx[0] = MakeTransactionRef(mtx);
-    pblock = FinalizeBlock(std::make_shared<CBlock>(block));
-    BOOST_CHECK(block.vtx[0]->vout[1].scriptPubKey == payee1);
-    BOOST_CHECK(block.vtx[0]->vout[1].nValue == payeeOut.nValue / 2);
-    ProcessBlockAndCheckRejectionReason(pblock, "bad-cb-payee", 143);
-
-    // Context, this has:
-    // 1) Two proposals and two budget finalizations with a different proposal payment order (read `forceAddFakeProposals()` description):
-    //      BudA pays propA and propB, BudB pays propB and propA.
-    // 2) Voted both budgets, adding more votes to budA (so it becomes the most voted one).
-    // 3) Now: in the superblock, pay to budB order (the less voted finalization) --> which will fail.
-
-    // Try to pay proposals in different order
-    mtx = goodMtx; // reset
-    std::vector<CFinalizedBudget*> vecFin = g_budgetman.GetFinalizedBudgets();
-    CFinalizedBudget* secondFin{nullptr};
-    for (auto fin : vecFin) {
-        if (!secondFin || fin->GetVoteCount() < secondFin->GetVoteCount()) {
-            secondFin = fin;
-        }
-    }
-    secondFin->GetPayeeAndAmount(144, mtx.vout[1].scriptPubKey, mtx.vout[1].nValue);
-    BOOST_CHECK(mtx.vout[1].scriptPubKey != goodMtx.vout[1].scriptPubKey);
-    BOOST_CHECK(mtx.vout[1].nValue == goodMtx.vout[1].nValue);
-    block.vtx[0] = MakeTransactionRef(mtx);
-    pblock = FinalizeBlock(std::make_shared<CBlock>(block));
-    ProcessBlockAndCheckRejectionReason(pblock, "bad-cb-payee", 143);
-
-    // Now create the good block
-    block.vtx[0] = MakeTransactionRef(goodMtx);
-    pblock = FinalizeBlock(std::make_shared<CBlock>(block));
-    ProcessNewBlock(pblock, nullptr);
-    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash();), pblock->GetHash());
-}
-
-BOOST_FIXTURE_TEST_CASE(budget_blocks_reorg_test, TestChain100Setup)
-{
-    // Regtest superblock is every 144 blocks.
-    for (int i=0; i<43; i++) CreateAndProcessBlock({}, coinbaseKey);
-    enableMnSyncAndSuperblocksPayment();
-    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height();), 143);
-
-    // Now we are at the superblock height, let's add a proposal to pay.
-    const CScript payee = GetScriptForDestination(CKeyID(uint160(ParseHex("816115944e077fe7c803cfa57f29b36bf87c1d35"))));
-    const CAmount propAmt = 100 * COIN;
-    const CScript payee2 = GetScriptForDestination(CKeyID(uint160(ParseHex("816115944e077fe7c803cfa57f29b36bf87c1d35"))));
-    const CAmount propAmt2 = propAmt * 2;
-    forceAddFakeProposals({propAmt, payee}, {propAmt2, payee2});
-
-    // This will:
-    // 1) Create a proposal to be paid at block 144 (first superblock).
-    // 1) create blocksA and blockB at block 144 (paying for the proposal).
-    // 2) Process and connect blockA.
-    // 3) Create blockC on top of BlockA and blockD on top of blockB. At height 145.
-    // 4) Process and connect blockC.
-    // 5) Now force the reorg:
-    //    a) Process blockB and blockD.
-    //    b) Create and process blockE on top of blockD.
-    // 6) Verify that tip is at blockE.
-
-    CScript forkCoinbaseScript = GetScriptForDestination(CKeyID(uint160(ParseHex("8c988f1a4a4de2161e0f50aac7f17e7f9555caa4"))));
-    CBlock blockA = CreateBlock({}, coinbaseKey, false);
-    CBlock blockB = CreateBlock({}, forkCoinbaseScript, false);
-    BOOST_CHECK(blockA.GetHash() != blockB.GetHash());
-    // Check blocks payee validity:
-    CTxOut payeeOut = blockA.vtx[0]->vout[1];
-    BOOST_CHECK_EQUAL(payeeOut.nValue, propAmt);
-    BOOST_CHECK(payeeOut.scriptPubKey == payee);
-    payeeOut = blockB.vtx[0]->vout[1];
-    BOOST_CHECK_EQUAL(payeeOut.nValue, propAmt);
-    BOOST_CHECK(payeeOut.scriptPubKey == payee);
-
-    // Now let's process BlockA:
-    auto pblockA = std::make_shared<const CBlock>(blockA);
-    ProcessNewBlock(pblockA, nullptr);
-    BOOST_CHECK(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()) == blockA.GetHash());
-
-    // Now let's create blockC on top of BlockA, blockD on top of blockB
-    // and process blockC to expand the chain.
-    CBlock blockC = CreateBlock({}, coinbaseKey, false);
-    BOOST_CHECK(blockC.hashPrevBlock == blockA.GetHash());
-    CBlock blockD = CreateBlock({}, forkCoinbaseScript, false);
-
-    // Process and connect blockC
-    ProcessNewBlock(std::make_shared<const CBlock>(blockC), nullptr);
-    BOOST_CHECK(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()) == blockC.GetHash());
-
-    // Now let's process the secondary chain
-    blockD.hashPrevBlock = blockB.GetHash();
-    std::shared_ptr<CBlock> pblockD = FinalizeBlock(std::make_shared<CBlock>(blockD));
-
-    ProcessNewBlock(std::make_shared<const CBlock>(blockB), nullptr);
-    ProcessNewBlock(pblockD, nullptr);
-    CBlock blockE = CreateBlock({}, forkCoinbaseScript, false);
-    blockE.hashPrevBlock = pblockD->GetHash();
-    std::shared_ptr<CBlock> pblockE = FinalizeBlock(std::make_shared<CBlock>(blockE));
-    ProcessNewBlock(pblockE, nullptr);
-    BOOST_CHECK(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()) == pblockE->GetHash());
+    BOOST_CHECK(!IsBlockValueValid(nHeight, nExpectedRet, nExpectedRet - 1, nBudgetAmtRet));
 }
 
 static CScript GetRandomP2PKH()
@@ -664,60 +415,33 @@ BOOST_FIXTURE_TEST_CASE(coinbase_value_deferred_when_tiertwo_unsynced, RegTestin
     BOOST_CHECK(IsCoinbaseValueValid(MakeTransactionRef(cbase), 0, state, chainActive.Tip()));
 }
 
-BOOST_AUTO_TEST_CASE(fbv_signverify_bls)
+BOOST_FIXTURE_TEST_CASE(testnet_staking_without_masternodes, TestnetSetup)
 {
-    CBLSSecretKey sk1, sk2;
-    sk1.MakeNewKey();
-    sk2.MakeNewKey();
-    BOOST_ASSERT(sk1 != sk2);
+    BOOST_CHECK(!CanBuildRequiredMasternodePayment(nullptr));
+    BOOST_CHECK(CanBuildRequiredMasternodePayment(chainActive.Tip()));
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, 1);
+    BOOST_REQUIRE(GetMasternodePayment(1) > 0);
+    std::vector<CTxOut> payments;
+    BOOST_REQUIRE(masternodePayments.GetMasternodeTxOuts(chainActive.Tip(), payments));
+    BOOST_REQUIRE(payments.empty());
 
-    CTxIn vin(COutPoint(uint256S("0000000000000000000000000000000000000000000000000000000000000002"), 0));
-    CTxIn vin2(COutPoint(uint256S("000000000000000000000000000000000000000000000000000000000000003"), 0));
-    CTxIn vin3(COutPoint(uint256S("0000000000000000000000000000000000000000000000000000000000000002"), 1));
+    // A no-payee coinbase is already valid; background staking must be able
+    // to advance the testnet before its first masternode is registered.
+    CMutableTransaction coinbase = NewCoinBase(1, 0, GetRandomP2PKH());
+    CValidationState state;
+    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_FINISHED);
+    BOOST_REQUIRE(IsCoinbaseValueValid(MakeTransactionRef(coinbase), 0, state, chainActive.Tip()));
+    BOOST_CHECK(CanBuildRequiredMasternodePayment(chainActive.Tip()));
+}
 
-    uint256 budgetHash1 = uint256S("0000000000000000000000000000000000000000000000000000000000000001");
-    uint256 budgetHash2 = uint256S("0000000000000000000000000000000000010000000000000000000000000001");
-
-    // Create serialized finalbudgetvote for budgetHash1, signed with sk1
-    CFinalizedBudgetVote vote(vin, budgetHash1);
-    BOOST_CHECK(vote.Sign(sk1));
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << vote;
-
-    // Verify received message on pk1
-    CFinalizedBudgetVote _vote;
-    ss >> _vote;
-    BOOST_CHECK(_vote.CheckSignature(sk1.GetPublicKey()));
-
-    // Failing verification on pk2
-    BOOST_CHECK(!_vote.CheckSignature(sk2.GetPublicKey()));
-
-    std::vector<unsigned char> sig = _vote.GetVchSig();
-
-    // Failing with different time
-    CFinalizedBudgetVote vote1(_vote);
-    vote1.SetTime(vote1.GetTime()+1);
-    BOOST_CHECK(!vote1.CheckSignature(sk1.GetPublicKey()));
-
-    // Failing with different budget hash
-    CFinalizedBudgetVote vote2(vin, budgetHash2);
-    vote2.SetTime(_vote.GetTime());
-    vote2.SetVchSig(sig);
-    BOOST_CHECK(!vote2.CheckSignature(sk1.GetPublicKey()));
-
-    // Failing with different vins: different txid (vin2) or voutn (vin3)
-    CFinalizedBudgetVote vote3_1(vin, budgetHash1);
-    CFinalizedBudgetVote vote3_2(vin2, budgetHash1);
-    CFinalizedBudgetVote vote3_3(vin3, budgetHash1);
-    vote3_1.SetTime(_vote.GetTime());
-    vote3_2.SetTime(_vote.GetTime());
-    vote3_3.SetTime(_vote.GetTime());
-    vote3_1.SetVchSig(sig);
-    vote3_2.SetVchSig(sig);
-    vote3_3.SetVchSig(sig);
-    BOOST_CHECK(vote3_1.CheckSignature(sk1.GetPublicKey()));    // vote3_1 == _vote
-    BOOST_CHECK(!vote3_2.CheckSignature(sk1.GetPublicKey()));
-    BOOST_CHECK(!vote3_3.CheckSignature(sk1.GetPublicKey()));
+BOOST_FIXTURE_TEST_CASE(mainnet_staking_without_masternodes_unchanged, TestingSetup)
+{
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, 1);
+    BOOST_REQUIRE(GetMasternodePayment(1) > 0);
+    std::vector<CTxOut> payments;
+    BOOST_REQUIRE(masternodePayments.GetMasternodeTxOuts(chainActive.Tip(), payments));
+    BOOST_REQUIRE(payments.empty());
+    BOOST_CHECK(!CanBuildRequiredMasternodePayment(chainActive.Tip()));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

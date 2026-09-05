@@ -19,15 +19,8 @@ void RegisterMiscRPCCommands(CRPCTable& tableRPC);
 void RegisterMiningRPCCommands(CRPCTable& tableRPC);
 /** Register raw transaction RPC commands */
 void RegisterRawTransactionRPCCommands(CRPCTable& tableRPC);
-/** Register masternode RPC commands */
-void RegisterMasternodeRPCCommands(CRPCTable& tableRPC);
-/** Register budget RPC commands */
-void RegisterBudgetRPCCommands(CRPCTable& tableRPC);
-/** Register Evo RPC commands */
-void RegisterEvoRPCCommands(CRPCTable &tableRPC);
-/** Register Quorums RPC commands */
-void RegisterQuorumsRPCCommands(CRPCTable &tableRPC);
-
+/** Register PQ-only governance RPC commands */
+void RegisterPQGovernanceRPCCommands(CRPCTable& tableRPC);
 static inline void RegisterAllCoreRPCCommands(CRPCTable& tableRPC)
 {
     RegisterBlockchainRPCCommands(tableRPC);
@@ -35,10 +28,7 @@ static inline void RegisterAllCoreRPCCommands(CRPCTable& tableRPC)
     RegisterMiscRPCCommands(tableRPC);
     RegisterMiningRPCCommands(tableRPC);
     RegisterRawTransactionRPCCommands(tableRPC);
-    RegisterMasternodeRPCCommands(tableRPC);
-    RegisterBudgetRPCCommands(tableRPC);
-    RegisterEvoRPCCommands(tableRPC);
-    RegisterQuorumsRPCCommands(tableRPC);
+    RegisterPQGovernanceRPCCommands(tableRPC);
 }
 
 #endif // PIVX_RPC_REGISTER_H

@@ -14,6 +14,7 @@
 static const std::string EVODB_BEST_BLOCK = "b_b";
 static const std::string EVODB_GOV_LOCK = "g_l";
 static const std::string EVODB_GOV_TALLY = "g_t";
+static const std::string EVODB_GOV_PROPOSAL = "g_p";
 
 class CEvoDB;
 

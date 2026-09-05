@@ -74,6 +74,9 @@ BASE_SCRIPTS= [
     'wallet_import_rescan.py',                  # ~ 204 sec
     'p2p_invalid_block.py',                     # ~ 213 sec
     'feature_reindex.py',                       # ~ 205 sec
+    'feature_pq_only.py',
+    'feature_pq_governance.py',
+    'feature_pq_pos.py',
     'rpc_scantxoutset.py',
     'feature_logging.py',                       # ~ 195 sec
     'wallet_multiwallet.py',                    # ~ 190 sec
