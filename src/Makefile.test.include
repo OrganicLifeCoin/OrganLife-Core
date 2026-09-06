@@ -112,6 +112,7 @@ BITCOIN_TESTS =\
   test/crypto_tests.cpp \
   test/mldsa_tests.cpp \
   test/pqtransaction_tests.cpp \
+  test/pqquorum_tests.cpp \
   test/cuckoocache_tests.cpp \
   test/DoS_tests.cpp \
   test/evo_deterministicmns_tests.cpp \
