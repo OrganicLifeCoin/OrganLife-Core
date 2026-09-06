@@ -5,24 +5,30 @@
 
 #include "lockunlock.h"
 #include "ui_lockunlock.h"
+#include <QGuiApplication>
+#include <QLabel>
+#include <QScreen>
+#include <algorithm>
 
 LockUnlock::LockUnlock(QWidget *parent) :
-    QWidget(parent),
+    QWidget(parent, Qt::Popup | Qt::FramelessWindowHint),
     ui(new Ui::LockUnlock)
 {
     ui->setupUi(this);
 
-    // Load css.
-    this->setStyleSheet(parent->styleSheet());
-
-    ui->container->setProperty("cssClass", "top-sub-menu");
-
-    ui->pushButtonUnlocked->setProperty("cssClass", "btn-check-lock-sub-menu-unlocked");
-    ui->pushButtonUnlocked->setStyleSheet("padding-left: 34px;");
-    ui->pushButtonLocked->setProperty("cssClass", "btn-check-lock-sub-menu-locked");
-    ui->pushButtonLocked->setStyleSheet("padding-left: 34px;");
-    ui->pushButtonStaking->setProperty("cssClass", "btn-check-lock-sub-menu-staking");
-    ui->pushButtonStaking->setStyleSheet("padding-left: 34px;");
+    setAttribute(Qt::WA_TranslucentBackground);
+    setFixedWidth(280);
+    ui->container->setProperty("cssClass", "wallet-lock-menu");
+    ui->verticalLayout->setContentsMargins(12, 12, 12, 12);
+    ui->verticalLayout->setSpacing(6);
+    auto* title = new QLabel(tr("Wallet access"), this);
+    title->setProperty("cssClass", "wallet-lock-title");
+    ui->verticalLayout->insertWidget(0, title);
+    for (auto* button : {ui->pushButtonUnlocked, ui->pushButtonLocked, ui->pushButtonStaking}) {
+        button->setProperty("cssClass", "wallet-lock-action");
+        button->setFixedHeight(44);
+        button->setCursor(Qt::PointingHandCursor);
+    }
 
     // Connect
     connect(ui->pushButtonUnlocked, &QPushButton::clicked, this, &LockUnlock::onUnlockClicked);
@@ -76,23 +82,19 @@ void LockUnlock::onStakingClicked()
     Q_EMIT lockClicked(StateClicked::UNLOCK_FOR_STAKING);
 }
 
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-void LockUnlock::enterEvent(QEnterEvent*)
-#else
-void LockUnlock::enterEvent(QEvent*)
-#endif
+void LockUnlock::showBeside(QWidget* anchor)
 {
-    isOnHover = true;
-    Q_EMIT Mouse_Entered();
-}
-
-void LockUnlock::leaveEvent(QEvent*)
-{
-    isOnHover = false;
-    Q_EMIT Mouse_Leave();
-}
-
-bool LockUnlock::isHovered()
-{
-    return isOnHover;
+    if (!anchor) return;
+    setStyleSheet(parentWidget()->styleSheet());
+    adjustSize();
+    const QPoint bottomRight = anchor->mapToGlobal(QPoint(anchor->width(), anchor->height()));
+    QPoint position(bottomRight.x() + 8, bottomRight.y() - height());
+    if (auto* screen = QGuiApplication::screenAt(anchor->mapToGlobal(anchor->rect().center()))) {
+        const QRect area = screen->availableGeometry();
+        position.setX(std::clamp(position.x(), area.left(), std::max(area.left(), area.right() - width() + 1)));
+        position.setY(std::clamp(position.y(), area.top(), std::max(area.top(), area.bottom() - height() + 1)));
+    }
+    move(position);
+    show();
+    ui->pushButtonUnlocked->setFocus(Qt::PopupFocusReason);
 }

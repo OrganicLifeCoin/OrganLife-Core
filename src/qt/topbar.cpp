@@ -651,27 +651,22 @@ void TopBar::changeTheme(bool isLightTheme, QString& theme)
 
 void TopBar::onBtnLockClicked()
 {
+    toggleWalletLock(ui->pushButtonLock);
+}
+
+void TopBar::toggleWalletLock(QWidget* anchor)
+{
     if (walletModel) {
         if (walletModel->getEncryptionStatus() == WalletModel::Unencrypted) {
             encryptWallet();
         } else {
             if (!lockUnlockWidget) {
                 lockUnlockWidget = new LockUnlock(window);
-                lockUnlockWidget->setStyleSheet("margin:0px; padding:0px;");
-                connect(lockUnlockWidget, &LockUnlock::Mouse_Leave, this, &TopBar::lockDropdownMouseLeave);
-                connect(ui->pushButtonLock, &ExpandableButton::Mouse_HoverLeave, [this]() {
-                    QMetaObject::invokeMethod(this, "lockDropdownMouseLeave", Qt::QueuedConnection);
-                });
                 connect(lockUnlockWidget, &LockUnlock::lockClicked ,this, &TopBar::lockDropdownClicked);
             }
 
             lockUnlockWidget->updateStatus(walletModel->getEncryptionStatus());
-            if (ui->pushButtonLock->width() <= 48) {
-                ui->pushButtonLock->setExpanded();
-            }
-            // Keep it open
-            ui->pushButtonLock->setKeepExpanded(true);
-            QMetaObject::invokeMethod(this, "openLockUnlock", Qt::QueuedConnection);
+            lockUnlockWidget->showBeside(anchor);
         }
     }
 }
@@ -729,21 +724,6 @@ void TopBar::openManageWalletsDialog()
     showHideOp(true);
     openDialogWithOpaqueBackgroundY(&dialog, window, 3, 5);
     refreshWalletSelector();
-}
-
-void TopBar::openLockUnlock()
-{
-    lockUnlockWidget->setFixedWidth(ui->pushButtonLock->width());
-    lockUnlockWidget->adjustSize();
-
-    lockUnlockWidget->move(
-            ui->pushButtonLock->pos().rx() + window->getNavWidth() + 10,
-            ui->pushButtonLock->y() + 36
-    );
-
-    lockUnlockWidget->raise();
-    lockUnlockWidget->activateWindow();
-    lockUnlockWidget->show();
 }
 
 void TopBar::openPassPhraseDialog(AskPassphraseDialog::Mode mode, AskPassphraseDialog::Context ctx)
@@ -841,16 +821,6 @@ void TopBar::lockDropdownClicked(const StateClicked& state)
     }
 }
 
-void TopBar::lockDropdownMouseLeave()
-{
-    if (lockUnlockWidget->isVisible() && !lockUnlockWidget->isHovered()) {
-        lockUnlockWidget->hide();
-        ui->pushButtonLock->setKeepExpanded(false);
-        ui->pushButtonLock->setSmall();
-        ui->pushButtonLock->update();
-    }
-}
-
 void TopBar::onBtnReceiveClicked()
 {
     if (walletModel) {
@@ -909,11 +879,6 @@ void TopBar::showDashboard()
 void TopBar::toggleTheme()
 {
     onThemeClicked();
-}
-
-void TopBar::toggleWalletLock()
-{
-    onBtnLockClicked();
 }
 
 void TopBar::showWalletSelector()
@@ -1279,6 +1244,7 @@ void TopBar::loadWalletModel()
 
 void TopBar::clearWalletModel()
 {
+    if (lockUnlockWidget) lockUnlockWidget->hide();
     PWidget::clearWalletModel();
     ui->pushButtonWallet->setButtonText(tr("Wallet"));
     ui->pushButtonWallet->setNoIconText(QString());
@@ -1392,7 +1358,7 @@ void TopBar::updateBalances(const interfaces::WalletBalances& newBalance)
 
 void TopBar::resizeEvent(QResizeEvent *event)
 {
-    if (lockUnlockWidget && lockUnlockWidget->isVisible()) lockDropdownMouseLeave();
+    if (lockUnlockWidget) lockUnlockWidget->hide();
     QWidget::resizeEvent(event);
 }
 

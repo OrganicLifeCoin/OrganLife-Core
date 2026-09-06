@@ -651,66 +651,14 @@ QPushButton[cssClass="btn-check-peers-inactive"] {
 
 
 
-QPushButton[cssClass="btn-check-lock-sub-menu-unlocked"] {
-    background-image: url("://ic-submenu-unlock");
-    background-position:left center;
-    background-repeat:no-repeat;
-    background-color: transparent;
-    text-align: left;
-    padding-left: 30px;
-    color:rgba(50, 54, 43, 0.7);
-    border-bottom:0px;
-    border-radius:0px;
-}
-
-QPushButton[cssClass="btn-check-lock-sub-menu-unlocked"]:checked {
-    background-color:#3B5E8C3D;
-}
-
-QPushButton[cssClass="btn-check-lock-sub-menu-unlocked"]:hover {
-    color:#32362b;
-}
-
-QPushButton[cssClass="btn-check-lock-sub-menu-locked"] {
-    background-image: url("://ic-submenu-lock");
-    background-position:left center;
-    background-repeat:no-repeat;
-    background-color: transparent;
-    text-align: left;
-    padding-left: 30px;
-    color:rgba(50, 54, 43, 0.7);
-    border-bottom:0px;
-    border-radius:0px;
-}
-
-QPushButton[cssClass="btn-check-lock-sub-menu-locked"]:checked {
-    background-color:#3B5E8C3D;
-}
-
-QPushButton[cssClass="btn-check-lock-sub-menu-locked"]:hover {
-    color:#32362b;
-}
-
-
-QPushButton[cssClass="btn-check-lock-sub-menu-staking"] {
-    background-image: url("://ic-submenu-staking");
-    background-position:left center;
-    background-repeat:no-repeat;
-    background-color: transparent;
-    text-align: left;
-    padding-left: 30px;
-    color:rgba(50, 54, 43, 0.7);
-    border-bottom:0px;
-    border-radius:0px;
-}
-
-QPushButton[cssClass="btn-check-lock-sub-menu-staking"]:checked {
-    background-color:#3B5E8C3D;
-}
-
-QPushButton[cssClass="btn-check-lock-sub-menu-staking"]:hover {
-    color:#32362b;
-}
+/* Wallet access popup anchored to the navigation rail. */
+QWidget[cssClass="wallet-lock-menu"] { background: #FFFFFF; border: 1px solid #D4DDD2; border-radius: 14px; }
+QWidget[cssClass="wallet-lock-menu"] QGroupBox { background: transparent; border: none; }
+QLabel[cssClass="wallet-lock-title"] { background: transparent; color: #657269; font-size: 13px; font-weight: 600; padding: 4px 12px 8px; }
+QPushButton[cssClass="wallet-lock-action"] { background: transparent; color: #1D2921; border: 1px solid transparent; border-radius: 8px; text-align: left; padding: 0px 14px; font-size: 14px; }
+QPushButton[cssClass="wallet-lock-action"]:checked { background: #EAF1E5; color: #365E25; font-weight: 600; }
+QPushButton[cssClass="wallet-lock-action"]:hover { background: #F1F5EE; }
+QPushButton[cssClass="wallet-lock-action"]:focus { border-color: #4E7F35; }
 
 
 *[cssClass="top-sub-menu"] {

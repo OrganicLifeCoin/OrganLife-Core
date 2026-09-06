@@ -33,7 +33,7 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     void themeToggleRequested();
-    void walletLockRequested();
+    void walletLockRequested(QWidget* anchor);
     void walletSelectorRequested();
 
 private Q_SLOTS:

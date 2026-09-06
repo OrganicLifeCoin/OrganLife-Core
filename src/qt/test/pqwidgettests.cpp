@@ -15,6 +15,8 @@
 #include "pqwalletui.h"
 #include "receivewidget.h"
 #include "send.h"
+#include "topbar.h"
+#include "lockunlock.h"
 #include "transactionrecord.h"
 #include "transactiontablemodel.h"
 #include "walletmodeltransaction.h"
@@ -54,6 +56,7 @@
 #include <QTest>
 #include <QThread>
 #include <QTimer>
+#include <QToolButton>
 #include <QtConcurrent/QtConcurrentRun>
 
 #include <algorithm>
@@ -392,6 +395,35 @@ void PQWidgetTests::standardSendUsesPQBackupAndHistory()
         send.setWalletModel(&model);
         send.hide();
         const QString previewDirectory = qEnvironmentVariable("OLC_WALLET_PREVIEW_DIR");
+        auto* topBar = window.findChild<TopBar*>();
+        QVERIFY(topBar);
+        topBar->setWalletModel(&model);
+        QToolButton* lockButton = nullptr;
+        for (auto* button : window.findChildren<QToolButton*>()) {
+            if (button->text() == tr("Lock wallet")) lockButton = button;
+        }
+        QVERIFY(lockButton);
+        window.resize(1280, 800);
+        window.show();
+        QCoreApplication::processEvents();
+        QTest::mouseClick(lockButton, Qt::LeftButton);
+        QCoreApplication::processEvents();
+        auto* lockMenu = window.findChild<LockUnlock*>();
+        QVERIFY(lockMenu && lockMenu->isVisible());
+        const QPoint anchor = lockButton->mapToGlobal(QPoint(lockButton->width(), lockButton->height()));
+        QVERIFY(lockMenu->mapToGlobal(QPoint()).x() >= anchor.x());
+        QVERIFY(lockMenu->mapToGlobal(QPoint()).y() > window.mapToGlobal(QPoint()).y() + 200);
+        QVERIFY(lockMenu->mapToGlobal(QPoint(0, lockMenu->height())).y() <= anchor.y());
+        QVERIFY(lockMenu->findChild<QPushButton*>("pushButtonUnlocked")->isChecked());
+        QTest::keyClick(lockMenu, Qt::Key_Escape);
+        QVERIFY(!lockMenu->isVisible());
+        QTest::mouseClick(lockButton, Qt::LeftButton);
+        QCoreApplication::processEvents();
+        QVERIFY(lockMenu->isVisible());
+        topBar->setWalletModel(nullptr);
+        QVERIFY(!lockMenu->isVisible());
+        QVERIFY(!wallet.IsLocked());
+        window.hide();
         struct RestoreTheme {
             QVariant theme{QSettings().value("theme")};
             ~RestoreTheme() {
@@ -423,6 +455,11 @@ void PQWidgetTests::standardSendUsesPQBackupAndHistory()
                 QVERIFY(capture("settings"));
                 window.goToDashboard();
                 QVERIFY(capture("dashboard"));
+                topBar->setWalletModel(&model);
+                QTest::mouseClick(lockButton, Qt::LeftButton);
+                QCoreApplication::processEvents();
+                QVERIFY(lockMenu->grab().save(previewDirectory + "/" + theme + "-lock-menu.png"));
+                QTest::keyClick(lockMenu, Qt::Key_Escape);
                 DefaultDialog dialog(&window);
                 dialog.setText(tr("Confirm payment"), tr("Review the recipient, amount and fee before sending."), tr("Send payment"), tr("Cancel"));
                 dialog.show();

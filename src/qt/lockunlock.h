@@ -7,7 +7,6 @@
 #define PIVX_QT_LOCKUNLOCK_H
 
 #include <QWidget>
-#include <QEnterEvent>
 #include "walletmodel.h"
 
 namespace Ui {
@@ -27,20 +26,10 @@ public:
     explicit LockUnlock(QWidget *parent = nullptr);
     ~LockUnlock();
     void updateStatus(WalletModel::EncryptionStatus status);
+    void showBeside(QWidget* anchor);
     int lock = 0;
-    bool isHovered();
 Q_SIGNALS:
-    void Mouse_Entered();
-    void Mouse_Leave();
-
     void lockClicked(const StateClicked& state);
-protected:
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
-    void enterEvent(QEnterEvent* event) override;
-#else
-    void enterEvent(QEvent* event) override;
-#endif
-    void leaveEvent(QEvent* event) override;
 
 public Q_SLOTS:
     void onLockClicked();
@@ -49,7 +38,6 @@ public Q_SLOTS:
 
 private:
     Ui::LockUnlock *ui;
-    bool isOnHover = false;
 };
 
 #endif // PIVX_QT_LOCKUNLOCK_H

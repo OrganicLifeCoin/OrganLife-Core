@@ -75,7 +75,7 @@ NavMenuWidget::NavMenuWidget(OrganicLifeGUI *mainWindow, QWidget *parent) :
     const int utilityInsertIndex = std::max(0, ui->navContainer->count() - 2);
     ui->navContainer->insertWidget(utilityInsertIndex, utilityPanel);
     connect(themeButton, &QToolButton::clicked, this, &NavMenuWidget::themeToggleRequested);
-    connect(lockButton, &QToolButton::clicked, this, &NavMenuWidget::walletLockRequested);
+    connect(lockButton, &QToolButton::clicked, this, [this] { Q_EMIT walletLockRequested(lockButton); });
     connect(walletSelectorButton, &QToolButton::clicked, this, &NavMenuWidget::walletSelectorRequested);
 
     // Buttons

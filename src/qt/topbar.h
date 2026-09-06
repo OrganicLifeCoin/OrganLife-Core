@@ -53,7 +53,7 @@ public:
 
 public Q_SLOTS:
     void toggleTheme();
-    void toggleWalletLock();
+    void toggleWalletLock(QWidget* anchor);
     void showWalletSelector();
     void updateBalances(const interfaces::WalletBalances& newBalance);
     void updateDisplayUnit();
@@ -85,10 +85,8 @@ private Q_SLOTS:
     void onThemeClicked();
     void onBtnLockClicked();
     void onWalletButtonClicked();
-    void lockDropdownMouseLeave();
     void lockDropdownClicked(const StateClicked&);
     void refreshStatus();
-    void openLockUnlock();
     void onColdStakingClicked();
     void refreshButtonLayouts();
     void onStatusButtonHover();
