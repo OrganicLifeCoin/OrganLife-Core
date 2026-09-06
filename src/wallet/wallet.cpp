@@ -3413,8 +3413,12 @@ bool CWallet::CreateCoinStake(
         // Make sure the wallet is unlocked and shutdown hasn't been requested
         if (IsLocked() || ShutdownRequested()) return false;
 
-        // Make sure the stake input hasn't been spent since last check
-        if (WITH_LOCK(cs_wallet, return IsSpent(outPoint))) {
+        // A cached candidate can become collateral or be manually locked after selection.
+        const bool unavailable = [&] {
+            LOCK2(cs_main, cs_wallet);
+            return IsSpent(outPoint) || IsLockedCoin(outPoint.hash, outPoint.n) || IsPQCollateral(outPoint);
+        }();
+        if (unavailable) {
             // remove it from the available coins
             it = availableCoins->erase(it);
             continue;
@@ -3482,7 +3486,10 @@ bool CWallet::CreateCoinStake(
 
 bool CWallet::SignCoinStake(CMutableTransaction& txNew) const
 {
+    LOCK2(cs_main, cs_wallet);
     if (txNew.vin.size() != 1 || !txNew.vin[0].scriptSig.empty() || !CTransaction(txNew).IsCoinStake()) return false;
+    const auto& outpoint = txNew.vin[0].prevout;
+    if (IsPQCollateral(outpoint) || IsLockedCoin(outpoint.hash, outpoint.n)) return false;
     const CWalletTx* previous = GetWalletTx(txNew.vin[0].prevout.hash);
     if (!previous || txNew.vin[0].prevout.n >= previous->tx->vout.size()) return false;
     const CTxOut& prevout = previous->tx->vout[txNew.vin[0].prevout.n];

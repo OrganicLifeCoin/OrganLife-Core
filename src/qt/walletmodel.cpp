@@ -237,7 +237,7 @@ CAmount WalletModel::getBalance(const CCoinControl* coinControl, bool fIncludeDe
 {
     if (Params().IsTestChain()) {
         CAmount balance = 0;
-        for (const COutput& out : wallet->GetPQUnspent(!fUnlockedOnly)) {
+        for (const COutput& out : wallet->GetPQUnspent(!fUnlockedOnly, coinControl)) {
             if (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected(COutPoint(out.tx->GetHash(), out.i)))
                 balance += out.Value();
         }

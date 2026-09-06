@@ -723,7 +723,11 @@ public:
     static bool PQPaymentsActive();
     bool IsPQMine(const CTxOut& output) const;
     bool InvolvesPQ(const CTransaction& tx) const;
-    std::vector<COutput> GetPQUnspent(bool include_locked = false) const;
+    // Caller holds cs_main. Reads the confirmed registry, never wallet lock state.
+    bool IsPQCollateral(const COutPoint& outpoint) const;
+    // Include protected collateral for display, or explicitly selected payment inputs.
+    // Coin control never overrides manual locks; staking uses neither override.
+    std::vector<COutput> GetPQUnspent(bool include_locked = false, const CCoinControl* coin_control = nullptr) const;
     bool CreatePQTransaction(const std::string& address, CAmount amount,
                              CTransactionRef& tx, CAmount& fee, std::string& reason,
                              const CCoinControl* coin_control = nullptr, bool subtract_fee = false);

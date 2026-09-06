@@ -10,6 +10,11 @@
 #include <txdb.h>
 #include <blockassembler.h>
 #include <boost/test/unit_test.hpp>
+#ifdef ENABLE_WALLET
+#include <wallet/wallet.h>
+#include <interfaces/wallet.h>
+#include <coincontrol.h>
+#endif
 
 namespace {
 template<typename Base> struct MNSetupT : Base {
@@ -926,6 +931,139 @@ BOOST_AUTO_TEST_CASE(startup_replay_preserves_pre_pq_path_and_checks_v6_tip)
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_FIXTURE_TEST_SUITE(pqmn_runtime_tests, MNSetupT<TestingSetup>)
+
+#ifdef ENABLE_WALLET
+BOOST_AUTO_TEST_CASE(wallet_collateral_selection_staking_and_undo)
+{
+    struct DiskWallet : CWallet {
+        using CWallet::CWallet;
+        ~DiskWallet() { GetDBHandle().Flush(true); }
+    } wallet("pqmn-wallet", WalletDatabase::Create(GetDataDir() / "pqmn-wallet"));
+    bool firstRun;
+    BOOST_REQUIRE_EQUAL(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+    const SecureString passphrase = "pqmn-test-only";
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    BOOST_REQUIRE(wallet.Unlock(passphrase));
+    std::string address;
+    BOOST_REQUIRE(wallet.GeneratePQAddress(address));
+    BOOST_REQUIRE(wallet.GetPQKey(address, keys[2]));
+    // Mature synthetic wallet UTXOs on a real isolated chain. Registry mutations
+    // below use real role/fee signatures and the real transactional index.
+    for (int height = 1; height <= Params().GetConsensus().nStakeMinDepth; ++height) {
+        auto candidate = BlockAssembler(Params(), false).CreateNewBlock(pq::GetScript(ID(3)), nullptr, false, nullptr, true);
+        BOOST_REQUIRE(candidate);
+        auto block = std::make_shared<CBlock>(candidate->block);
+        BOOST_REQUIRE(SolveBlock(block, height));
+        BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+    }
+    LOCK2(cs_main, wallet.cs_wallet);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+    const CAmount amount = Params().GetConsensus().nMNCollateralAmt;
+    CMutableTransaction source;
+    source.vin.emplace_back(uint256S("9876"), 0);
+    source.vout.emplace_back(amount, pq::GetScript(ID(2)));
+    source.vout.emplace_back(10 * COIN, pq::GetScript(ID(2)));
+    const auto sourceRef = MakeTransactionRef(source);
+    const COutPoint held(sourceRef->GetHash(), 0), free(sourceRef->GetHash(), 1);
+    wallet.SetLastBlockProcessed(chainActive.Tip());
+    BOOST_REQUIRE(wallet.AddToWalletIfInvolvingMe(sourceRef,
+        {CWalletTx::Status::CONFIRMED, 1, chainActive[1]->GetBlockHash(), 0}, true));
+    for (uint32_t i = 0; i < 2; ++i) {
+        Coin coin(source.vout[i], 1, false, false);
+        pcoinsTip->AddCoin(COutPoint(sourceRef->GetHash(), i), Coin(coin), false);
+        view.AddCoin(COutPoint(sourceRef->GetHash(), i), std::move(coin), false);
+    }
+    const auto stake = [&] {
+        CMutableTransaction tx;
+        tx.vin.emplace_back(held);
+        tx.vout.emplace_back(0, CScript());
+        tx.vout.push_back(source.vout[0]);
+        return tx;
+    };
+    auto before = stake();
+    BOOST_REQUIRE(wallet.SignCoinStake(before));
+    BOOST_REQUIRE_EQUAL(wallet.GetPQUnspent().size(), 2U);
+    BOOST_CHECK_EQUAL(wallet.GetStakingBalance(false), amount + 10 * COIN);
+    auto operation = Registration(); operation.collateral = held;
+    const CTransaction registration(Transaction(operation));
+    pqmn::Index registry(*evoDb, Params()); std::string reason;
+    auto transaction = evoDb->BeginTransaction();
+    BOOST_REQUIRE_MESSAGE(registry.Apply(registration, view, chainActive.Height(), reason), reason);
+    const auto checkProtected = [&] {
+        const auto coins = wallet.GetPQUnspent();
+        BOOST_CHECK_EQUAL(coins.size(), 1U);
+        for (const auto& coin : coins) BOOST_CHECK(COutPoint(coin.tx->GetHash(), coin.i) == free);
+        BOOST_CHECK_EQUAL(wallet.GetPQUnspent(true).size(), 2U);
+        BOOST_CHECK_EQUAL(interfaces::Wallet(wallet).getBalances().balance, amount + 10 * COIN);
+        BOOST_CHECK_EQUAL(wallet.GetStakingBalance(false), 10 * COIN);
+        std::vector<CStakeableOutput> stakeable;
+        BOOST_REQUIRE(wallet.StakeableCoins(&stakeable));
+        BOOST_CHECK_EQUAL(stakeable.size(), 1U);
+        for (const auto& coin : stakeable) BOOST_CHECK(COutPoint(coin.tx->GetHash(), coin.i) == free);
+        auto blocked = stake();
+        BOOST_CHECK(!wallet.SignCoinStake(blocked));
+    };
+    checkProtected();
+    CTransactionRef payment; CAmount fee;
+    BOOST_REQUIRE(wallet.CreatePQTransaction(address, COIN, payment, fee, reason));
+    BOOST_REQUIRE_EQUAL(payment->vin.size(), 1U);
+    BOOST_CHECK(payment->vin[0].prevout == free);
+    BOOST_CHECK(!wallet.CreatePQTransaction(address, 11 * COIN, payment, fee, reason));
+    CCoinControl control; control.Select(held);
+    BOOST_REQUIRE(wallet.CreatePQTransaction(address, COIN, payment, fee, reason, &control));
+    BOOST_REQUIRE_EQUAL(payment->vin.size(), 1U);
+    BOOST_CHECK(payment->vin[0].prevout == held); // Deliberate collateral spend.
+    control.fAllowOtherInputs = true;
+    BOOST_REQUIRE(wallet.CreatePQTransaction(address, amount + COIN, payment, fee, reason, &control));
+    BOOST_REQUIRE_EQUAL(payment->vin.size(), 2U);
+    BOOST_CHECK(payment->vin[0].prevout == held);
+    BOOST_CHECK(payment->vin[1].prevout == free);
+    BOOST_CHECK(!wallet.CreatePQTransaction({CTxOut(COIN, pq::GetScript(ID(2)))}, pq::GOVERNANCE_PROPOSAL,
+        {1}, payment, fee, reason, &control)); // Payment override cannot lock collateral into governance.
+    wallet.LockCoin(held);
+    BOOST_CHECK(!wallet.CreatePQTransaction(address, COIN, payment, fee, reason, &control));
+    wallet.UnlockCoin(held);
+    // Staking may hold a candidate list made before registration.
+    std::vector<CStakeableOutput> stale;
+    const CBlockIndex* sourceBlock = chainActive[1];
+    stale.emplace_back(wallet.GetWalletTx(sourceRef->GetHash()), 0, chainActive.Height(), sourceBlock);
+    auto blocked = stake(); int64_t time = chainActive.Tip()->GetBlockTime() + 60;
+    BOOST_CHECK(!wallet.CreateCoinStake(chainActive.Tip(), chainActive.Tip()->nBits, blocked, time, &stale, false));
+    BOOST_CHECK(stale.empty());
+    pqmn::Payload revoke; revoke.action = pqmn::Action::REVOKE;
+    revoke.registration = registration.GetHash(); revoke.sequence = 1;
+    const CTransaction revoked(Transaction(revoke));
+    BOOST_REQUIRE(registry.Apply(revoked, view, chainActive.Height(), reason));
+    checkProtected(); // Revocation does not release the bond.
+    BOOST_REQUIRE(registry.Undo(revoked.GetHash(), reason));
+    BOOST_REQUIRE(registry.Undo(registration.GetHash(), reason));
+    BOOST_CHECK_EQUAL(wallet.GetPQUnspent().size(), 2U);
+    BOOST_CHECK_EQUAL(wallet.GetStakingBalance(false), amount + 10 * COIN);
+    auto restored = stake();
+    BOOST_CHECK(wallet.SignCoinStake(restored));
+    BOOST_CHECK(wallet.ListLockedCoins().empty());
+    wallet.LockCoin(held);
+    auto manuallyLocked = stake();
+    BOOST_CHECK(!wallet.SignCoinStake(manuallyLocked));
+    BOOST_REQUIRE(registry.Apply(registration, view, chainActive.Height(), reason));
+    BOOST_REQUIRE(registry.Undo(registration.GetHash(), reason));
+    BOOST_CHECK(wallet.IsLockedCoin(held.hash, held.n)); // Undo must not undo a user's lock.
+    BOOST_CHECK_EQUAL(interfaces::Wallet(wallet).getBalances().balance, amount + 10 * COIN);
+    wallet.UnlockCoin(held);
+    BOOST_REQUIRE(registry.Apply(registration, view, chainActive.Height(), reason));
+    const auto collateralKey = std::make_pair(std::make_pair(std::string("pqmn1c"),
+        Params().GetConsensus().hashGenesisBlock), held);
+    evoDb->Write(collateralKey, uint256S("dead")); // Reverse entry points at a missing record.
+    BOOST_CHECK_THROW(wallet.GetPQUnspent(), std::runtime_error);
+    auto corruptStake = stake();
+    BOOST_CHECK_THROW(wallet.SignCoinStake(corruptStake), std::runtime_error);
+    BOOST_CHECK_THROW(wallet.CreatePQTransaction(address, COIN, payment, fee, reason, &control), std::runtime_error);
+    evoDb->Write(collateralKey, registration.GetHash());
+    auto missingRegistry = std::move(evoDb);
+    BOOST_CHECK_THROW(wallet.GetPQUnspent(), std::runtime_error);
+    evoDb = std::move(missingRegistry);
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(real_block_registration_validation_rollback_and_reorg)
 {

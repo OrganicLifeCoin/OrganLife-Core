@@ -4,6 +4,7 @@
 #include <wallet/wallet.h>
 #include <coincontrol.h>
 #include <evo/governancevoteindex.h>
+#include <evo/pqmasternode.h>
 #include <key_io.h>
 #include <policy/policy.h>
 #include <pqtransaction.h>
@@ -100,7 +101,16 @@ bool CWallet::InvolvesPQ(const CTransaction& tx) const
     return false;
 }
 
-std::vector<COutput> CWallet::GetPQUnspent(bool include_locked) const
+bool CWallet::IsPQCollateral(const COutPoint& outpoint) const
+{
+    AssertLockHeld(cs_main);
+    if (!pq::MasternodesActive(Params(), chainActive.Height() + 1)) return false;
+    if (!evoDb) throw std::runtime_error("PQ masternode registry is unavailable");
+    uint256 registration;
+    return pqmn::Index(*evoDb, Params()).FindCollateral(outpoint, registration);
+}
+
+std::vector<COutput> CWallet::GetPQUnspent(bool include_locked, const CCoinControl* coin_control) const
 {
     LOCK2(cs_main, cs_wallet);
     std::vector<COutput> coins;
@@ -121,7 +131,8 @@ std::vector<COutput> CWallet::GetPQUnspent(bool include_locked) const
                     governanceVoteIndex->GetLockRecord(outpoint, governance_lock) &&
                     chainActive.Height() + 1 < static_cast<int>(governance_lock.unlockHeight);
             if (IsPQMine(output) && output.nValue > 0 && Params().GetConsensus().MoneyRange(output.nValue) && !IsSpent(outpoint) &&
-                (include_locked || !IsLockedCoin(outpoint.hash, outpoint.n)) && !governance_locked &&
+                (include_locked || (!IsLockedCoin(outpoint.hash, outpoint.n) &&
+                    (!IsPQCollateral(outpoint) || (coin_control && coin_control->IsSelected(outpoint))))) && !governance_locked &&
                 !chain_coin.IsSpent() && chain_coin.out == output && !mempool.isSpent(outpoint))
                 coins.emplace_back(&wtx, i, depth, false, false, false);
         }
@@ -181,7 +192,7 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
     payload.mode = mode;
     payload.data = data;
     pq::KeyID governance_change_id{};
-    std::vector<COutput> coins = GetPQUnspent();
+    std::vector<COutput> coins = GetPQUnspent(false, mode == pq::TRANSFER ? coin_control : nullptr);
     const auto selected = [&](const COutput& out) {
         return coin_control && coin_control->IsSelected(COutPoint(out.tx->GetHash(), out.i));
     };
