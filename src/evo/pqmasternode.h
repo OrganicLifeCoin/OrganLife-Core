@@ -59,6 +59,8 @@ class Index {
     std::pair<std::string, uint256> Prefix(char kind) const;
     void Erase(const uint256& id, const Record& record);
     void Put(const uint256& id, const Record& record);
+    bool Process(const CTransaction& tx, const CCoinsViewCache& view, uint32_t height,
+                 std::string& reason, Record* checked);
 public:
     Index(CEvoDB& database, const CChainParams& chainParams) : db(database), params(chainParams) {}
     bool Get(const uint256& id, Record& record) const;
@@ -68,6 +70,9 @@ public:
     bool MatchesChainTip(const CBlockIndex* tip) const;
     // Failure writes nothing. Exceptions require caller to roll back its transaction.
     bool Apply(const CTransaction& tx, const CCoinsViewCache& view, uint32_t height, std::string& reason);
+    // Identical validation, no writes/undo or transaction ownership. Output cleared on failure.
+    bool Check(const CTransaction& tx, const CCoinsViewCache& view, uint32_t height,
+               Record& replacement, std::string& reason);
     // Missing undo or a changed after-state fails closed. Undo in reverse transaction order.
     bool Undo(const uint256& transaction, std::string& reason);
     // Isolated block lifecycle: caller validates ordinary block/transaction consensus,

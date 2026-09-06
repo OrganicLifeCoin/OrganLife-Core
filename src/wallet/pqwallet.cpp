@@ -105,6 +105,7 @@ bool CWallet::IsPQCollateral(const COutPoint& outpoint) const
 {
     AssertLockHeld(cs_main);
     if (!pq::MasternodesActive(Params(), chainActive.Height() + 1)) return false;
+    if (mempool.IsPQMNCollateral(outpoint)) return true;
     if (!evoDb) throw std::runtime_error("PQ masternode registry is unavailable");
     uint256 registration;
     return pqmn::Index(*evoDb, Params()).FindCollateral(outpoint, registration);

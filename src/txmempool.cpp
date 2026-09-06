@@ -5,6 +5,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "txmempool.h"
+#include <evo/pqmasternode.h>
 
 #include "clientversion.h"
 #include "bls/bls_wrapper.h"
@@ -360,9 +361,95 @@ void CTxMemPool::AddTransactionsUpdated(unsigned int n)
     nTransactionsUpdated += n;
 }
 
+bool CTxMemPool::IsPQMNCollateral(const COutPoint& outpoint) const
+{
+    LOCK(cs);
+    return mapPQMNCollateral.count(outpoint) != 0;
+}
+
+bool CTxMemPool::GetPQMNClaims(const CTransaction& tx, const CCoinsViewCache& coins, int height,
+                              PQMNClaims& claims, std::string& reason) const
+{
+    AssertLockHeld(cs_main);
+    LOCK(cs);
+    reason.clear(); claims = {};
+    const auto fail = [&](const char* message) { reason = message; return false; };
+    for (const auto& input : tx.vin) {
+        const auto pending = mapPQMNCollateral.find(input.prevout);
+        if (pending != mapPQMNCollateral.end() && pending->second != tx.GetHash())
+            return fail("pqmn-collateral-pending");
+    }
+    if (!pq::IsMasternode(tx)) return true;
+    if (!pq::MasternodesActive(Params(), height)) return fail("pq-masternode-inactive");
+    if (!evoDb) throw std::runtime_error("PQ masternode registry is unavailable");
+    pqmn::Record record;
+    // Confirmed-state policy: no unconfirmed fee inputs, collateral or registration dependencies.
+    if (!pqmn::Index(*evoDb, Params()).Check(tx, coins, height, record, reason)) return false;
+    pq::Payload envelope; pqmn::Payload operation;
+    if (!pq::DecodePayload(tx, envelope) || !pqmn::Decode(envelope.data, operation))
+        return fail("bad-pqmn-payload");
+    claims.registration = operation.action == pqmn::Action::REGISTER ? tx.GetHash() : operation.registration;
+    claims.collateral = record.collateral;
+    claims.keys = {*pq::GetID(record.owner, Params().NetworkIDString()),
+                   *pq::GetID(record.operatorKey, Params().NetworkIDString()), record.collateralKey};
+    claims.service = record.service;
+    if (mapNextTx.count(claims.collateral)) return fail("pqmn-collateral-spent-in-mempool");
+    // ponytail: scan compact pending claims, not transactions/signatures; add reverse
+    // key/service indexes only if measured relay traffic warrants their lifecycle cost.
+    for (const auto& item : mapPQMN) {
+        if (item.first == tx.GetHash()) continue;
+        const auto& other = item.second;
+        if (claims.registration == other.registration || claims.collateral == other.collateral)
+            return fail("pqmn-operation-pending");
+        if (claims.service != CService() && claims.service == other.service)
+            return fail("pqmn-service-pending");
+        for (const auto& key : claims.keys)
+            if (std::find(other.keys.begin(), other.keys.end(), key) != other.keys.end())
+                return fail("pqmn-key-pending");
+    }
+    return true;
+}
+
+bool CTxMemPool::CheckPQMN(const CTransaction& tx, const CCoinsViewCache& coins, int height, std::string& reason) const
+{
+    PQMNClaims claims;
+    try {
+        return GetPQMNClaims(tx, coins, height, claims, reason);
+    } catch (const std::exception& error) {
+        LogPrintf("PQ masternode relay validation unavailable: %s\n", error.what());
+        reason = "pqmn-registry-unavailable";
+        return false;
+    }
+}
+
+void CTxMemPool::removeInvalidPQMN(const CCoinsViewCache& coins, int height)
+{
+    AssertLockHeld(cs_main);
+    AssertLockHeld(cs);
+    std::vector<uint256> invalid;
+    for (const auto& item : mapPQMN) {
+        const auto tx = get(item.first); std::string reason;
+        assert(tx);
+        if (!CheckPQMN(*tx, coins, height, reason)) invalid.push_back(item.first);
+    }
+    for (const auto& id : invalid) {
+        const auto tx = get(id);
+        if (tx) removeRecursive(*tx, MemPoolRemovalReason::REORG);
+    }
+}
+
 void CTxMemPool::addUncheckedSpecialTx(const CTransaction& tx)
 {
     if (!tx.IsSpecialTx()) return;
+
+    if (pq::IsMasternode(tx)) {
+        PQMNClaims claims; std::string reason;
+        const bool valid = GetPQMNClaims(tx, *pcoinsTip, chainActive.Height() + 1, claims, reason);
+        assert(valid); // Admission has already performed these checks under cs_main.
+        mapPQMN.emplace(tx.GetHash(), claims);
+        mapPQMNCollateral.emplace(claims.collateral, tx.GetHash());
+        return;
+    }
 
     // Invalid special txes never get this far because transactions should be
     // fully checked by AcceptToMemoryPool() at this point, so we just assume that
@@ -478,6 +565,13 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
 void CTxMemPool::removeUncheckedSpecialTx(const CTransaction& tx)
 {
     if (!tx.IsSpecialTx()) return;
+
+    auto pqmn = mapPQMN.find(tx.GetHash());
+    if (pqmn != mapPQMN.end()) {
+        mapPQMNCollateral.erase(pqmn->second.collateral);
+        mapPQMN.erase(pqmn);
+        return;
+    }
 
     auto eraseProTxRef = [&](const uint256& proTxHash, const uint256& txHash) {
         auto its = mapProTxRefs.equal_range(proTxHash);
@@ -658,6 +752,7 @@ void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMem
         CalculateDescendants(it, setAllRemoves);
     }
     RemoveStaged(setAllRemoves, false, MemPoolRemovalReason::REORG);
+    removeInvalidPQMN(*pcoins, nMemPoolHeight);
 }
 
 void CTxMemPool::removeWithAnchor(const uint256& invalidRoot)
@@ -864,6 +959,7 @@ void CTxMemPool::removeForBlock(const std::vector<CTransactionRef>& vtx, unsigne
     }
     lastRollingFeeUpdate = GetTime();
     blockSinceLastRollingFeeBump = true;
+    if (!mapPQMN.empty()) removeInvalidPQMN(*pcoinsTip, nBlockHeight + 1);
 }
 
 
@@ -874,6 +970,8 @@ void CTxMemPool::_clear()
     mapNextTx.clear();
     mapProTxAddresses.clear();
     mapProTxPubKeyIDs.clear();
+    mapPQMN.clear();
+    mapPQMNCollateral.clear();
     totalTxSize = 0;
     cachedInnerUsage = 0;
     lastRollingFeeUpdate = GetTime();
@@ -1329,6 +1427,7 @@ size_t CTxMemPool::DynamicMemoryUsage() const
             memusage::DynamicUsage(mapNextTx) +
             memusage::DynamicUsage(mapDeltas) +
             memusage::DynamicUsage(mapLinks) +
+            memusage::DynamicUsage(mapPQMN) + memusage::DynamicUsage(mapPQMNCollateral) +
             cachedInnerUsage +
             memusage::DynamicUsage(mapSaplingNullifiers);
 }

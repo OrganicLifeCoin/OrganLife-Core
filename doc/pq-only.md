@@ -64,7 +64,7 @@ reindex restores the proposal, lock, vote, and payout state from the chain.
 
 ## Current safety boundary
 
-PQ masternode registry block validation is opt-in on disposable regtest nodes
+PQ masternode registry block validation and transaction relay are opt-in on disposable regtest nodes
 only (`-nuparams=pq_masternodes:HEIGHT`). The height must be positive and PQ
 payments must already be active at that height. It is disabled by default,
 and cannot activate on public testnet or mainnet. Registration/update/revocation
@@ -72,10 +72,24 @@ and collateral-spend state is validated and undone with blocks. Startup checks
 the stored activation height and registry tip; changing or disabling an indexed
 activation requires an explicit rebuild.
 
-This does not yet provide a usable masternode: registration transaction relay,
-wallet collateral protection, operator RPC/Qt flows, service verification,
-rewards and quorum finality remain unavailable. Do not use this opt-in mode with
-a value-bearing wallet.
+Relay validates against confirmed registry state without updating it. MN fee
+inputs and external collateral must be confirmed; dependent registry updates
+wait for confirmation. One operation per registration may be pending, with
+exclusive role keys, endpoints and collateral. A pending operation and an
+ordinary collateral spend conflict in either arrival order. Ordinary children
+may spend non-collateral change. Block connection and reorgs revalidate pending
+operations and remove invalid descendants.
+
+Automatic wallet funding/staking excludes confirmed and pending collateral,
+including revoked registrations. Listings/total balance retain it; explicit
+payment coin control may select confirmed collateral, but manual locks and
+pending-operation relay conflicts still apply. Protection follows registry undo
+and mempool removal without persistent automatic wallet locks.
+
+This does not yet provide a usable masternode: operator RPC/Qt flows, service
+verification, rewards and quorum finality remain unavailable. Public P2P and
+cross-platform qualification remain pending. Do not use this opt-in mode with a
+value-bearing wallet.
 
 The testnet has a fresh genesis and network magic. Mainnet startup is refused.
 Sapling parameters and tier-two services are not initialized, and their RPC

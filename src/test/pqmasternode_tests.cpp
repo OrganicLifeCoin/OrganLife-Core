@@ -10,6 +10,7 @@
 #include <txdb.h>
 #include <blockassembler.h>
 #include <boost/test/unit_test.hpp>
+#include <chrono>
 #ifdef ENABLE_WALLET
 #include <wallet/wallet.h>
 #include <interfaces/wallet.h>
@@ -102,6 +103,36 @@ struct RegistryBlock {
 }
 
 BOOST_FIXTURE_TEST_SUITE(pqmasternode_tests, MNSetup)
+
+BOOST_AUTO_TEST_CASE(read_only_validation_preserves_outer_transaction)
+{
+    LOCK(cs_main);
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    auto outer = evoDb->BeginTransaction();
+    const CTransaction reg(Transaction(Registration()));
+    pqmn::Record preview;
+    BOOST_REQUIRE(index.Check(reg, view, 20, preview, reason));
+    BOOST_CHECK(preview.collateral == collateral);
+    BOOST_CHECK(index.List().empty());
+    BOOST_CHECK(!index.Undo(reg.GetHash(), reason));
+    BOOST_REQUIRE(index.Apply(reg, view, 20, reason));
+    pqmn::Payload update; update.action = pqmn::Action::UPDATE;
+    update.registration = reg.GetHash(); update.sequence = 1;
+    update.operatorKey = keys[1].GetPublicKey(); update.payout = ID(4);
+    const CTransaction tx(Transaction(update));
+    BOOST_REQUIRE(index.Check(tx, view, 21, preview, reason));
+    BOOST_CHECK_EQUAL(preview.sequence, 1U);
+    pqmn::Record actual;
+    BOOST_REQUIRE(index.Get(reg.GetHash(), actual));
+    BOOST_CHECK_EQUAL(actual.sequence, 0U);
+    BOOST_CHECK(!index.Undo(tx.GetHash(), reason));
+    update.sequence = 2;
+    BOOST_CHECK(!index.Check(Transaction(update), view, 21, preview, reason));
+    BOOST_CHECK(SerializeHash(preview) == SerializeHash(pqmn::Record{}));
+    outer->Commit();
+    BOOST_REQUIRE(index.Get(reg.GetHash(), actual));
+    BOOST_CHECK_EQUAL(actual.sequence, 0U);
+}
 
 BOOST_AUTO_TEST_CASE(reserved_envelope_parses_but_is_disabled_by_default)
 {
@@ -932,6 +963,173 @@ BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_FIXTURE_TEST_SUITE(pqmn_runtime_tests, MNSetupT<TestingSetup>)
 
+BOOST_AUTO_TEST_CASE(pending_claim_resource_samples)
+{
+    auto candidate = BlockAssembler(Params(), false).CreateNewBlock(pq::GetScript(ID(3)), nullptr, false, nullptr, true);
+    BOOST_REQUIRE(candidate);
+    auto block = std::make_shared<CBlock>(candidate->block);
+    BOOST_REQUIRE(SolveBlock(block, 1));
+    BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+    LOCK(cs_main);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 2);
+    const auto emptyBytes = mempool.DynamicMemoryUsage();
+    for (uint32_t n = 1; n <= 1000; ++n) {
+        for (size_t role = 0; role < 3; ++role) {
+            std::array<unsigned char, mldsa44::SEED_SIZE> seed{};
+            seed[0] = role; seed[1] = n & 255; seed[2] = n >> 8; seed[3] = 0xcc;
+            BOOST_REQUIRE(keys[role].SetSeed(seed));
+        }
+        auto op = Registration(); op.service = CService();
+        op.collateral = COutPoint(uint256S("dd"), n);
+        Coin coin(CTxOut(Params().GetConsensus().nMNCollateralAmt, pq::GetScript(ID(2))), 1, false, false);
+        view.AddCoin(op.collateral, Coin(coin), false);
+        pcoinsTip->AddCoin(op.collateral, std::move(coin), false);
+        const auto tx = MakeTransactionRef(Transaction(op));
+        pcoinsTip->AddCoin(tx->vin[0].prevout, Coin(view.AccessCoin(tx->vin[0].prevout)), false);
+        CValidationState state;
+        BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, state, tx, false, nullptr), state.GetRejectReason());
+        if (n == 1 || n == 100 || n == 1000) {
+            for (int sample = 0; sample < 3; ++sample) {
+                const auto start = std::chrono::steady_clock::now();
+                std::string reason;
+                BOOST_REQUIRE(mempool.CheckPQMN(*tx, *pcoinsTip, 2, reason));
+                const auto micros = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - start).count();
+                BOOST_TEST_MESSAGE("PQ MN pending=" << n << " sample=" << sample << " check_us=" << micros
+                    << " pool_bytes=" << mempool.DynamicMemoryUsage());
+            }
+        }
+    }
+    BOOST_CHECK_EQUAL(mempool.size(), 1000U);
+    BOOST_CHECK(mempool.DynamicMemoryUsage() > emptyBytes);
+    mempool.clear();
+    BOOST_CHECK_EQUAL(mempool.DynamicMemoryUsage(), emptyBytes);
+    // M1 diagnostic sample with real signatures and synthetic confirmed UTXOs,
+    // not public-network capacity, maximum configured pool or ARM qualification.
+}
+
+BOOST_AUTO_TEST_CASE(relay_collateral_property_conflicts_and_removal)
+{
+    auto candidate = BlockAssembler(Params(), false).CreateNewBlock(pq::GetScript(ID(3)), nullptr, false, nullptr, true);
+    BOOST_REQUIRE(candidate);
+    auto block = std::make_shared<CBlock>(candidate->block);
+    BOOST_REQUIRE(SolveBlock(block, 1));
+    BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+    LOCK(cs_main);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 2);
+    pcoinsTip->AddCoin(collateral, Coin(view.AccessCoin(collateral)), false);
+    const auto funded = [&](const pqmn::Payload& op, size_t operatorKey = 1, size_t ownerKey = 0, size_t collateralKey = 2) {
+        auto tx = Transaction(op, operatorKey, false, ownerKey, collateralKey);
+        pcoinsTip->AddCoin(tx.vin[0].prevout, Coin(view.AccessCoin(tx.vin[0].prevout)), false);
+        return MakeTransactionRef(tx);
+    };
+    const auto admit = [&](const CTransactionRef& tx) {
+        CValidationState state;
+        const bool accepted = AcceptToMemoryPool(mempool, state, tx, false, nullptr);
+        BOOST_CHECK_MESSAGE(accepted, state.GetRejectReason());
+        return accepted;
+    };
+    const auto reject = [&](const CTransactionRef& tx, const std::string& expected) {
+        CValidationState state;
+        BOOST_CHECK(!AcceptToMemoryPool(mempool, state, tx, false, nullptr));
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), expected);
+        BOOST_CHECK(!mempool.exists(tx->GetHash()));
+    };
+    const auto transfer = [&](const COutPoint& input, size_t key) {
+        CMutableTransaction tx; tx.nVersion = 3; tx.nType = CTransaction::PQ; tx.sapData = nullopt;
+        tx.vin.emplace_back(input);
+        tx.vout.emplace_back(view.AccessCoin(input).out.nValue - COIN, pq::GetScript(ID(3)));
+        pq::Payload payload; payload.authorizations.resize(1);
+        payload.authorizations[0].public_key = keys[key].GetPublicKey();
+        FeeSign(tx, payload, key);
+        return MakeTransactionRef(tx);
+    };
+    const auto reg = funded(Registration());
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 3);
+    reject(reg, "bad-pq-masternode-not-active");
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 2);
+    auto bad = CMutableTransaction(*reg); pq::Payload envelope; pqmn::Payload operation;
+    BOOST_REQUIRE(pq::DecodePayload(bad, envelope)); BOOST_REQUIRE(pqmn::Decode(envelope.data, operation));
+    operation.ownerSignature[0] ^= 1; envelope.data = pqmn::Encode(operation); FeeSign(bad, envelope);
+    reject(MakeTransactionRef(bad), "bad-pqmn-registration-signature");
+    BOOST_REQUIRE(admit(reg));
+    BOOST_CHECK(mempool.IsPQMNCollateral(collateral));
+    pqmn::Index registry(*evoDb, Params()); pqmn::Record record;
+    BOOST_CHECK(!registry.Get(reg->GetHash(), record));
+    reject(funded(Registration()), "pqmn-operation-pending");
+
+    const COutPoint secondCollateral(uint256S("cc"), 0);
+    view.AddCoin(secondCollateral, Coin(CTxOut(Params().GetConsensus().nMNCollateralAmt,
+        pq::GetScript(ID(6))), 1, false, false), false);
+    pcoinsTip->AddCoin(secondCollateral, Coin(view.AccessCoin(secondCollateral)), false);
+    auto other = Registration(); other.collateral = secondCollateral;
+    other.owner = keys[4].GetPublicKey(); other.operatorKey = keys[5].GetPublicKey(); other.collateralKey = keys[6].GetPublicKey();
+    reject(funded(other, 5, 4, 6), "pqmn-service-pending");
+    BOOST_REQUIRE(Lookup("127.0.0.1:51477", other.service, 0, false));
+    other.operatorKey = keys[1].GetPublicKey();
+    reject(funded(other, 1, 4, 6), "pqmn-key-pending");
+    other.operatorKey = keys[5].GetPublicKey();
+    const auto unrelated = funded(other, 5, 4, 6);
+    BOOST_REQUIRE(admit(unrelated));
+
+    const auto spend = transfer(collateral, 2);
+    reject(spend, "pqmn-collateral-pending");
+#ifdef ENABLE_WALLET
+    CWallet wallet("pending-collateral", WalletDatabase::CreateDummy());
+    BOOST_CHECK(wallet.IsPQCollateral(collateral));
+#endif
+    mempool.removeRecursive(*reg);
+    BOOST_CHECK(!mempool.IsPQMNCollateral(collateral));
+    BOOST_REQUIRE(admit(spend));
+    reject(reg, "pqmn-collateral-spent-in-mempool");
+    mempool.removeRecursive(*spend);
+    BOOST_REQUIRE(admit(reg));
+    const COutPoint change(reg->GetHash(), 0);
+    view.AddCoin(change, Coin(reg->vout[0], MEMPOOL_HEIGHT, false, false), false);
+    const auto child = transfer(change, 3);
+    BOOST_REQUIRE(admit(child)); // Non-collateral change may have ordinary children.
+    // Use the child's still-unspent output as a fee input, independent of any registration dependency.
+    const COutPoint childChange(child->GetHash(), 0);
+    view.AddCoin(childChange, Coin(child->vout[0], MEMPOOL_HEIGHT, false, false), false);
+    const auto unconfirmed = MakeTransactionRef(Transaction(other, 5, false, 4, 6, childChange));
+    reject(unconfirmed, "bad-pqmn-input");
+    mempool.removeRecursive(*reg, MemPoolRemovalReason::EXPIRY);
+    BOOST_CHECK(!mempool.exists(child->GetHash()));
+    BOOST_CHECK(!mempool.IsPQMNCollateral(collateral));
+    BOOST_CHECK(mempool.exists(unrelated->GetHash()));
+    BOOST_CHECK(mempool.IsPQMNCollateral(secondCollateral));
+    mempool.TrimToSize(0);
+    BOOST_CHECK(!mempool.IsPQMNCollateral(secondCollateral));
+    mempool.clear(); // Reset rolling fee policy before separately exercising clear's claim cleanup.
+    BOOST_REQUIRE(admit(reg));
+    mempool.clear();
+    BOOST_CHECK(!mempool.IsPQMNCollateral(collateral));
+#ifdef ENABLE_WALLET
+    BOOST_CHECK(!wallet.IsPQCollateral(collateral));
+#endif
+    BOOST_CHECK(registry.List().empty());
+    BOOST_REQUIRE(admit(reg));
+    const auto otherSpend = transfer(secondCollateral, 6);
+    BOOST_REQUIRE(admit(otherSpend));
+    const auto reverseKey = std::make_pair(std::make_pair(std::string("pqmn1c"),
+        Params().GetConsensus().hashGenesisBlock), collateral);
+    BOOST_REQUIRE(evoDb->GetRawDB().Write(reverseKey, std::string("x")));
+    std::string reason; bool accepted = true;
+    BOOST_CHECK_NO_THROW(accepted = mempool.CheckPQMN(*reg, *pcoinsTip, 2, reason));
+    BOOST_CHECK(!accepted);
+    BOOST_CHECK_EQUAL(reason, "pqmn-registry-unavailable");
+    BOOST_REQUIRE(evoDb->GetRawDB().Erase(reverseKey));
+    auto unavailable = std::move(evoDb);
+    accepted = true;
+    BOOST_CHECK_NO_THROW(accepted = mempool.CheckPQMN(*reg, *pcoinsTip, 2, reason));
+    BOOST_CHECK(!accepted);
+    BOOST_CHECK_NO_THROW(mempool.removeForReorg(pcoinsTip.get(), 2, STANDARD_LOCKTIME_VERIFY_FLAGS));
+    evoDb = std::move(unavailable);
+    BOOST_CHECK(!mempool.exists(reg->GetHash()));
+    BOOST_CHECK(!mempool.IsPQMNCollateral(collateral));
+    BOOST_CHECK(mempool.exists(otherSpend->GetHash())); // Unrelated payments are not cleared.
+}
+
 #ifdef ENABLE_WALLET
 BOOST_AUTO_TEST_CASE(wallet_collateral_selection_staking_and_undo)
 {
@@ -1077,11 +1275,12 @@ BOOST_AUTO_TEST_CASE(real_block_registration_validation_rollback_and_reorg)
         BOOST_REQUIRE(SolveBlock(block, WITH_LOCK(cs_main, return chainActive.Height() + 1)));
         return block;
     };
-    COutPoint funding;
+    COutPoint funding, independentFunding;
     for (int height = 1; height <= 101; ++height) {
         auto block = candidate({}); BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
         BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return chainActive.Height()), height);
         if (height == 1) funding = COutPoint(block->vtx[0]->GetHash(), 0);
+        if (height == 2) independentFunding = COutPoint(block->vtx[0]->GetHash(), 0);
     }
     WAIT_LOCK(cs_main, chainLock);
     const auto parent = chainActive.Tip()->GetBlockHash();
@@ -1118,8 +1317,17 @@ BOOST_AUTO_TEST_CASE(real_block_registration_validation_rollback_and_reorg)
     BOOST_CHECK(!registry.Get(reg->GetHash(), record)); // Validation-only rolls back.
     BOOST_CHECK(evoDb->VerifyBestBlock(parent)); BOOST_CHECK(pcoinsTip->HaveCoin(funding));
     CValidationState poolState;
-    BOOST_CHECK(!AcceptToMemoryPool(mempool, poolState, reg, false, nullptr));
-    BOOST_CHECK_EQUAL(poolState.GetRejectReason(), "pq-masternode-relay-disabled");
+    BOOST_CHECK_MESSAGE(AcceptToMemoryPool(mempool, poolState, reg, false, nullptr), poolState.GetRejectReason());
+    BOOST_CHECK(mempool.exists(reg->GetHash()));
+    BOOST_CHECK(!registry.Get(reg->GetHash(), record)); // Admission cannot commit registry state.
+    auto assembled = BlockAssembler(Params(), false).CreateNewBlock(pq::GetScript(ID(3)), nullptr, false, nullptr, false);
+    BOOST_REQUIRE(assembled);
+    BOOST_CHECK(std::any_of(assembled->block.vtx.begin(), assembled->block.vtx.end(),
+        [&](const CTransactionRef& tx) { return tx->GetHash() == reg->GetHash(); }));
+    BOOST_CHECK(!registry.Get(reg->GetHash(), record)); // Template validation also rolls back.
+    CValidationState chainedState;
+    BOOST_CHECK(!AcceptToMemoryPool(mempool, chainedState, updated, false, nullptr));
+    mempool.clear();
     { REVERSE_LOCK(chainLock); BOOST_REQUIRE(ProcessNewBlock(block, nullptr)); }
     BOOST_REQUIRE_EQUAL(chainActive.Tip()->GetBlockHash(), block->GetHash());
     BOOST_REQUIRE(registry.Get(reg->GetHash(), record));
@@ -1153,6 +1361,47 @@ BOOST_AUTO_TEST_CASE(real_block_registration_validation_rollback_and_reorg)
     CValidationState restore;
     BOOST_REQUIRE(InvalidateBlock(restore, Params(), chainActive.Tip()));
     BOOST_REQUIRE(registry.Get(reg->GetHash(), record)); BOOST_CHECK_EQUAL(record.sequence, 1U);
+    // A competing mined owner update invalidates a pending update and its ordinary child.
+    // Remove the resurrected collateral spend first, so it does not conflict with the update.
+    mempool.clear();
+    view.AddCoin(independentFunding, Coin(pcoinsTip->AccessCoin(independentFunding)), false);
+    update.sequence = 2; update.payout = ID(6);
+    const auto pendingUpdate = MakeTransactionRef(Transaction(update, 1, false, 0, 2, independentFunding));
+    CValidationState pendingState;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, pendingState, pendingUpdate, false, nullptr), pendingState.GetRejectReason());
+    const COutPoint pendingChange(pendingUpdate->GetHash(), 0);
+    view.AddCoin(pendingChange, Coin(pendingUpdate->vout[0], MEMPOOL_HEIGHT, false, false), false);
+    CMutableTransaction child = spend;
+    child.vin[0].prevout = pendingChange;
+    child.vout[0].nValue = pendingUpdate->vout[0].nValue - COIN;
+    transfer.authorizations[0].public_key = keys[3].GetPublicKey();
+    FeeSign(child, transfer, 3);
+    const auto childRef = MakeTransactionRef(child);
+    CValidationState childState;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, childState, childRef, false, nullptr), childState.GetRejectReason());
+    const COutPoint confirmedChange(updated->GetHash(), 0);
+    view.AddCoin(confirmedChange, Coin(pcoinsTip->AccessCoin(confirmedChange)), false);
+    update.payout = ID(7);
+    const auto competing = MakeTransactionRef(Transaction(update, 1, false, 0, 2, confirmedChange));
+    auto competingBlock = candidate({competing}, COIN);
+    { REVERSE_LOCK(chainLock); BOOST_REQUIRE(ProcessNewBlock(competingBlock, nullptr)); }
+    BOOST_CHECK(!mempool.exists(pendingUpdate->GetHash()));
+    BOOST_CHECK(!mempool.exists(childRef->GetHash()));
+    BOOST_REQUIRE(registry.Get(reg->GetHash(), record)); BOOST_CHECK_EQUAL(record.sequence, 2U);
+    CValidationState back;
+    BOOST_REQUIRE(InvalidateBlock(back, Params(), chainActive.Tip()));
+    BOOST_REQUIRE(registry.Get(reg->GetHash(), record)); BOOST_CHECK_EQUAL(record.sequence, 1U);
+    BOOST_CHECK(mempool.exists(competing->GetHash()));
+    mempool.clear();
+    CValidationState reaccepted;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, reaccepted, pendingUpdate, false, nullptr), reaccepted.GetRejectReason());
+    CValidationState belowRegistration;
+    BOOST_REQUIRE(InvalidateBlock(belowRegistration, Params(), chainActive.Tip()));
+    BOOST_CHECK_EQUAL(chainActive.Height(), 101);
+    BOOST_CHECK(!mempool.exists(pendingUpdate->GetHash()));
+    BOOST_CHECK(!registry.Get(reg->GetHash(), record));
+    BOOST_CHECK(mempool.exists(reg->GetHash())); // The registration itself can be relayed again.
+    BOOST_CHECK(mempool.IsPQMNCollateral(COutPoint(reg->GetHash(), 0)));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

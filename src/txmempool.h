@@ -20,6 +20,7 @@
 #include "sync.h"
 #include "random.h"
 #include "netaddress.h"
+#include <pqaddress.h>
 
 #include "boost/multi_index_container.hpp"
 #include "boost/multi_index/ordered_index.hpp"
@@ -498,6 +499,17 @@ private:
     std::map<uint256, uint256> mapProTxBlsPubKeyHashes;
     std::map<COutPoint, uint256> mapProTxCollaterals;
 
+    struct PQMNClaims {
+        uint256 registration;
+        COutPoint collateral;
+        std::array<pq::KeyID, 3> keys;
+        CService service;
+    };
+    std::map<uint256, PQMNClaims> mapPQMN;
+    std::map<COutPoint, uint256> mapPQMNCollateral;
+    bool GetPQMNClaims(const CTransaction& tx, const CCoinsViewCache& coins, int height,
+                       PQMNClaims& claims, std::string& reason) const;
+
     void UpdateParent(txiter entry, txiter parent, bool add);
     void UpdateChild(txiter entry, txiter child, bool add);
 
@@ -653,6 +665,10 @@ public:
     std::vector<TxMempoolInfo> infoAll() const;
 
     bool existsProviderTxConflict(const CTransaction &tx) const;
+    bool CheckPQMN(const CTransaction& tx, const CCoinsViewCache& coins, int height, std::string& reason) const;
+    bool IsPQMNCollateral(const COutPoint& outpoint) const;
+    // Caller holds cs_main and mempool.cs; also run before resurrecting disconnected transactions.
+    void removeInvalidPQMN(const CCoinsViewCache& coins, int height);
     void removeProTxReferences(const uint256& proTxHash, MemPoolRemovalReason reason);
 
     /** Estimate fee rate needed to get into the next nBlocks

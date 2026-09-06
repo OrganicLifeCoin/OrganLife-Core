@@ -215,6 +215,19 @@ void Index::Put(const uint256& id, const Record& record) {
 
 bool Index::Apply(const CTransaction& tx, const CCoinsViewCache& view, uint32_t height, std::string& reason)
 {
+    return Process(tx, view, height, reason, nullptr);
+}
+
+bool Index::Check(const CTransaction& tx, const CCoinsViewCache& view, uint32_t height,
+                  Record& replacement, std::string& reason)
+{
+    replacement = {};
+    return Process(tx, view, height, reason, &replacement);
+}
+
+bool Index::Process(const CTransaction& tx, const CCoinsViewCache& view, uint32_t height,
+                    std::string& reason, Record* checked)
+{
     AssertLockHeld(cs_main);
     reason.clear();
     if (!params.IsTestChain() || height == 0 || tx.IsCoinBase() || tx.nType != CTransaction::PQ)
@@ -327,6 +340,10 @@ bool Index::Apply(const CTransaction& tx, const CCoinsViewCache& view, uint32_t 
     for (const auto& item : removed) undo.changes.push_back({item.first, {}, true, item.second});
     if (replace) undo.changes.push_back({id, SerializeHash(replacement), existed, original});
     if (undo.changes.size() > pq::MAX_INPUTS + 1) return Fail(reason, "bad-pqmn-undo-size");
+    if (checked) {
+        *checked = replacement;
+        return true;
+    }
     // Validation has finished. All writes belong to the caller's CEvoDB committer.
     for (const auto& item : removed) Erase(item.first, item.second);
     if (replace) {

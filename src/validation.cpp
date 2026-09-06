@@ -314,6 +314,8 @@ static void UpdateMempoolForReorg(DisconnectedBlockTransactions &disconnectpool,
     AssertLockHeld(cs_main);
     AssertLockHeld(mempool.cs);
     std::vector<uint256> vHashUpdate;
+    // Stale PQ operations must not reserve properties against a resurrected registration.
+    mempool.removeInvalidPQMN(*pcoinsTip, chainActive.Height() + 1);
     // disconnectpool's insertion_order index sorts the entries from
     // oldest to newest, but the oldest entry will be the last tx from the
     // latest mined block that was disconnected.
@@ -403,10 +405,6 @@ static bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState &state, 
         return error("%s : transaction checks for %s failed with %s", __func__, tx.GetHash().ToString(), FormatStateMessage(state));
 
     int nextBlockHeight = chainHeight + 1;
-    // Registry block qualification precedes mempool conflict/reorg support.
-    if (tx.nType == CTransaction::PQ && tx.extraPayload && tx.extraPayload->size() >= 2 &&
-        (*tx.extraPayload)[1] == pq::MASTERNODE)
-        return state.DoS(0, false, REJECT_NONSTANDARD, "pq-masternode-relay-disabled");
     // Check transaction contextually against consensus rules at block height
     if (!ContextualCheckTransaction(_tx, state, params, nextBlockHeight, false /* isMined */, IsInitialBlockDownload())) {
         return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
@@ -613,6 +611,9 @@ static bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState &state, 
         // the node is not behind and it is not dependent on any other
         // transactions in the mempool
         bool validForFeeEstimation = IsCurrentForFeeEstimation() && pool.HasNoInputsOf(tx);
+
+        if (!pool.CheckPQMN(tx, *pcoinsTip, nextBlockHeight, reason))
+            return state.Invalid(false, REJECT_NONSTANDARD, reason);
 
         // Store transaction in memory
         pool.addUnchecked(hash, entry, setAncestors, validForFeeEstimation);

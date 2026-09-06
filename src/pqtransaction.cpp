@@ -6,6 +6,11 @@
 #include <algorithm>
 
 namespace pq {
+bool IsMasternode(const CTransaction& tx)
+{
+    return tx.nType == CTransaction::PQ && tx.extraPayload && tx.extraPayload->size() >= 2 &&
+           (*tx.extraPayload)[1] == MASTERNODE;
+}
 namespace {
 bool Fail(std::string& reason, const char* message) { reason = message; return false; }
 bool HasData(uint8_t mode) { return IsGovernanceMode(mode) || mode == MASTERNODE; }
@@ -123,8 +128,7 @@ bool MasternodesActive(const CChainParams& params, int height)
 bool CheckContext(const CTransaction& tx, const CChainParams& params, int height, std::string& reason)
 {
     reason.clear();
-    if (tx.nType == CTransaction::PQ && tx.extraPayload && tx.extraPayload->size() >= 2 &&
-        (*tx.extraPayload)[1] == MASTERNODE && !MasternodesActive(params, height))
+    if (IsMasternode(tx) && !MasternodesActive(params, height))
         return Fail(reason, "bad-pq-masternode-not-active");
     // The pre-launch genesis coinbase is fixed by the network identity and is
     // never spendable. It predates PQ activation even on always-active regtest.

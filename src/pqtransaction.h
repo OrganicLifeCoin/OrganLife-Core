@@ -13,7 +13,7 @@ constexpr uint8_t STAKE = 2;
 constexpr uint8_t GOVERNANCE_PROPOSAL = 3;
 constexpr uint8_t GOVERNANCE_LOCK = 4;
 constexpr uint8_t GOVERNANCE_CAST = 5;
-// Reserved, parsed for isolated registry tests; CheckContext must reject it until activation.
+// Requires opt-in regtest registry activation; public networks remain disabled.
 constexpr uint8_t MASTERNODE = 6;
 constexpr size_t MAX_MASTERNODE_DATA_SIZE = 12000;
 constexpr size_t MAX_MASTERNODE_TX_SIZE = 24000;
@@ -33,6 +33,8 @@ struct Payload {
 };
 
 bool IsGovernanceMode(uint8_t mode);
+// Envelope classification only; does not replace structure/context/signature validation.
+bool IsMasternode(const CTransaction& tx);
 
 bool HasMarker(const CScript& script);
 CScript GetScript(const KeyID& id);
