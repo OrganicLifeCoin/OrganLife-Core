@@ -1473,7 +1473,7 @@ bool AppInitMain()
                 pblocktree.reset(new CBlockTreeDB(nBlockTreeDBCache, false, fReset));
                 governanceVoteIndex.reset();
                 evoDb.reset();
-                evoDb.reset(new CEvoDB(64 << 20, false, fReset));
+                evoDb.reset(new CEvoDB(64 << 20, false, fReset || fReindexChainState));
                 governanceVoteIndex.reset(new CGovernanceVoteIndex(*evoDb));
                 governanceVoteIndex->LoadProposals();
 
@@ -1534,7 +1534,10 @@ bool AppInitMain()
                 }
 
                 // ReplayBlocks is a no-op if we cleared the coinsviewdb with -reindex or -reindex-chainstate
-                if (!ReplayBlocks(chainparams, pcoinsdbview.get())) {
+                bool requiresReindex{false};
+                if (!ReplayBlocks(chainparams, pcoinsdbview.get(), requiresReindex)) {
+                    if (requiresReindex)
+                        return UIError(_("Inconsistent block databases. Please restart with -reindex to rebuild; no automatic rebuild was attempted."));
                     strLoadError = strprintf(_("Unable to replay blocks. You will need to rebuild the database using %s."), "-reindex");
                     break;
                 }

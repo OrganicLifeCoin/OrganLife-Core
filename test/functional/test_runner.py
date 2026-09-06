@@ -76,6 +76,7 @@ BASE_SCRIPTS= [
     'feature_reindex.py',                       # ~ 205 sec
     'feature_pq_only.py',
     'feature_pq_governance.py',
+    'feature_pq_startup.py',
     'feature_pq_pos.py',
     'rpc_scantxoutset.py',
     'feature_logging.py',                       # ~ 195 sec

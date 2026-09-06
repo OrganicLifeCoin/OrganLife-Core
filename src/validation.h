@@ -342,7 +342,8 @@ public:
 };
 
 /** Replay blocks that aren't fully applied to the database. */
-bool ReplayBlocks(const CChainParams& params, CCoinsView* view);
+// requiresReindex forbids an automatic rebuild/retry of inconsistent authoritative indexes.
+bool ReplayBlocks(const CChainParams& params, CCoinsView* view, bool& requiresReindex);
 
 inline CBlockIndex* LookupBlockIndex(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {

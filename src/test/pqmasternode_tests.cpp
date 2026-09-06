@@ -772,4 +772,95 @@ BOOST_AUTO_TEST_CASE(block_lifecycle_failed_disconnect_rolls_back_earlier_undo)
     BOOST_CHECK(marker == block.hash); BOOST_CHECK(evoDb->VerifyBestBlock(block.hash));
 }
 
+BOOST_AUTO_TEST_CASE(startup_replay_checks_clean_coin_and_evo_tips)
+{
+    LOCK(cs_main); SetDataDir("pq-startup-clean");
+    const uint256 firstHash = uint256S("1234"), secondHash = uint256S("5678");
+    CBlockIndex first, second; first.phashBlock = &firstHash; first.nHeight = 1;
+    second.phashBlock = &secondHash; second.nHeight = 2; second.pprev = &first;
+    BOOST_REQUIRE(mapBlockIndex.emplace(firstHash, &first).second);
+    BOOST_REQUIRE(mapBlockIndex.emplace(secondHash, &second).second);
+    struct Cleanup { const uint256 a, b; ~Cleanup() { mapBlockIndex.erase(a); mapBlockIndex.erase(b); } } cleanup{firstHash, secondHash};
+    CCoinsViewDB database(1 << 20, true, true); CCoinsViewCache coins(&database);
+    bool requiresReindex{true};
+    BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); // Fresh/rebuilt databases.
+    BOOST_CHECK(!requiresReindex);
+    {
+        auto transaction = evoDb->BeginTransaction(); evoDb->WriteBestBlock(firstHash);
+        BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); // Empty coins cannot conceal an old index.
+        BOOST_CHECK(requiresReindex);
+    }
+    coins.SetBestBlock(secondHash); BOOST_REQUIRE(coins.Flush());
+    for (int state = 0; state < 4; ++state) {
+        auto transaction = evoDb->BeginTransaction();
+        if (state == 0) evoDb->Erase(EVODB_BEST_BLOCK);
+        if (state == 1) evoDb->WriteBestBlock(firstHash);
+        if (state == 2) evoDb->WriteBestBlock(uint256S("ffff"));
+        // Corrupt serialized storage, not the typed transaction cache.
+        if (state == 3) BOOST_REQUIRE(evoDb->GetRawDB().Write(EVODB_BEST_BLOCK, std::string("broken")));
+        BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex));
+        BOOST_CHECK(requiresReindex);
+        BOOST_CHECK(database.GetBestBlock() == secondHash);
+        BOOST_CHECK(database.GetHeadBlocks().empty());
+        if (state == 3) BOOST_REQUIRE(evoDb->GetRawDB().Erase(EVODB_BEST_BLOCK));
+    }
+    auto transaction = evoDb->BeginTransaction(); evoDb->WriteBestBlock(secondHash);
+    BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(!requiresReindex);
+    coins.SetBestBlock(firstHash); BOOST_REQUIRE(coins.Flush()); // EvoDB ahead of coins.
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
+    coins.SetBestBlock(uint256S("abcd")); BOOST_REQUIRE(coins.Flush());
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); // Unknown coin tip.
+}
+
+BOOST_AUTO_TEST_CASE(startup_replay_refuses_partial_pq_state_before_writes)
+{
+    LOCK(cs_main); SetDataDir("pq-startup-heads");
+    const uint256 firstHash = uint256S("1234"), secondHash = uint256S("5678");
+    CBlockIndex first, second; first.phashBlock = &firstHash; first.nHeight = 1;
+    second.phashBlock = &secondHash; second.nHeight = 2; second.pprev = &first;
+    BOOST_REQUIRE(mapBlockIndex.emplace(firstHash, &first).second);
+    BOOST_REQUIRE(mapBlockIndex.emplace(secondHash, &second).second);
+    struct Cleanup { const uint256 a, b; ~Cleanup() { mapBlockIndex.erase(a); mapBlockIndex.erase(b); } } cleanup{firstHash, secondHash};
+    struct CoinDB : CCoinsViewDB { using CCoinsViewDB::CCoinsViewDB; using CCoinsViewDB::db; };
+    CoinDB database(1 << 20, true, true);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 2);
+    for (const auto& heads : std::vector<std::vector<uint256>>{{secondHash, firstHash}, {firstHash, secondHash}, {secondHash, secondHash},
+             {secondHash, uint256()}, {secondHash}, {uint256S("abcd"), firstHash}, {secondHash, uint256S("abcd")}}) {
+        BOOST_REQUIRE(database.db.Write('H', heads));
+        auto transaction = evoDb->BeginTransaction(); evoDb->WriteBestBlock(firstHash);
+        bool requiresReindex{false};
+        BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex));
+        BOOST_CHECK(requiresReindex);
+        BOOST_CHECK(database.GetHeadBlocks() == heads);
+        BOOST_CHECK(database.GetBestBlock().IsNull()); BOOST_CHECK(evoDb->VerifyBestBlock(firstHash));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(startup_replay_preserves_pre_pq_path_and_checks_v6_tip)
+{
+    LOCK(cs_main); SetDataDir("pq-startup-legacy");
+    const uint256 hash = uint256S("1234"); CBlockIndex tip;
+    tip.phashBlock = &hash; tip.nHeight = 1;
+    BOOST_REQUIRE(mapBlockIndex.emplace(hash, &tip).second);
+    struct Cleanup { const uint256 hash; ~Cleanup() { mapBlockIndex.erase(hash); } } cleanup{hash};
+    struct CoinDB : CCoinsViewDB { using CCoinsViewDB::CCoinsViewDB; using CCoinsViewDB::db; };
+    CoinDB database(1 << 20, true, true); CCoinsViewCache coins(&database);
+    coins.SetBestBlock(hash); BOOST_REQUIRE(coins.Flush());
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 100);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, 100);
+    bool requiresReindex{true};
+    BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex));
+    BOOST_CHECK(!requiresReindex); // Pre-index clean tips do not require an EvoDB marker.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, 1);
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
+    auto transaction = evoDb->BeginTransaction(); evoDb->WriteBestBlock(hash);
+    BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(!requiresReindex);
+    // An interrupted pre-PQ flush already at its target still follows legacy replay.
+    BOOST_REQUIRE(database.db.Erase('B'));
+    BOOST_REQUIRE(database.db.Write('H', std::vector<uint256>{hash, hash}));
+    BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(!requiresReindex);
+    BOOST_CHECK(database.GetHeadBlocks().empty()); BOOST_CHECK(database.GetBestBlock() == hash);
+    BOOST_CHECK(evoDb->VerifyBestBlock(hash));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

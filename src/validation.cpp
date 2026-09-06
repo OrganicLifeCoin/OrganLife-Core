@@ -3813,15 +3813,30 @@ static bool RollforwardBlock(const CBlockIndex* pindex, CCoinsViewCache& inputs,
     return true;
 }
 
-bool ReplayBlocks(const CChainParams& params, CCoinsView* view)
+bool ReplayBlocks(const CChainParams& params, CCoinsView* view, bool& requiresReindex)
 {
     LOCK(cs_main);
+    requiresReindex = false;
 
-    CCoinsViewCache cache(view);
-
-    std::vector<uint256> hashHeads = view->GetHeadBlocks();
-    if (hashHeads.empty()) return true; // We're already in a consistent state.
-    if (hashHeads.size() != 2) return error("%s: unknown inconsistent state", __func__);
+    const auto requireReindex = [&](const char* reason) {
+        requiresReindex = true;
+        return error("ReplayBlocks: %s; restart with -reindex", reason);
+    };
+    const std::vector<uint256> hashHeads = view->GetHeadBlocks();
+    if (hashHeads.empty()) {
+        const uint256 best = view->GetBestBlock();
+        if (best.IsNull()) {
+            if (evoDb->Exists(EVODB_BEST_BLOCK)) return requireReindex("Empty chainstate with an existing EvoDB tip");
+            return true; // Cold start or explicitly rebuilt databases.
+        }
+        const CBlockIndex* tip = LookupBlockIndex(best);
+        if (!tip) return requireReindex("Unknown chainstate tip");
+        if ((pq::PaymentsActive(params, tip->nHeight) ||
+             params.GetConsensus().NetworkUpgradeActive(tip->nHeight, Consensus::UPGRADE_V6_0)) &&
+            !evoDb->VerifyBestBlock(best)) return requireReindex("Chainstate and EvoDB tips do not match");
+        return true;
+    }
+    if (hashHeads.size() != 2) return requireReindex("Unknown inconsistent chainstate");
 
     uiInterface.ShowProgress(_("Replaying blocks..."), 0);
     LogPrintf("Replaying blocks\n");
@@ -3832,17 +3847,25 @@ bool ReplayBlocks(const CChainParams& params, CCoinsView* view)
 
     pindexNew = LookupBlockIndex(hashHeads[0]);
     if (!pindexNew) {
-        return error("%s: reorganization to unknown block requested", __func__);
+        return requireReindex("Reorganization to unknown block requested");
     }
 
     if (!hashHeads[1].IsNull()) { // The old tip is allowed to be 0, indicating it's the first flush.
         pindexOld = LookupBlockIndex(hashHeads[1]);
         if (!pindexOld) {
-            return error("%s: reorganization from unknown block requested", __func__);
+            return requireReindex("Reorganization from unknown block requested");
         }
         pindexFork = LastCommonAncestor(pindexOld, pindexNew);
         assert(pindexFork != nullptr);
     }
+
+    // Coin batch replay is idempotent; PQ index updates are not. Do not apply them
+    // against a partially flushed UTXO view, including rollback from an active branch.
+    if (pq::PaymentsActive(params, pindexNew->nHeight) ||
+        (pindexOld && pq::PaymentsActive(params, pindexOld->nHeight)))
+        return requireReindex("PQ chainstate update is incomplete");
+
+    CCoinsViewCache cache(view);
 
     // Rollback along the old branch.
     while (pindexOld != pindexFork) {

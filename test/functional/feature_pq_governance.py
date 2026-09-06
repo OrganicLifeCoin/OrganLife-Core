@@ -102,10 +102,11 @@ class PQGovernanceTest(PivxTestFramework):
         assert_equal(node.getbestblockhash(), payout_block)
         assert_equal(node.getgovvotestatus(proposal["proposal_hash"])["coin_yes"], 5)
 
-        self.restart_node(0, self.extra_args[0] + ["-reindex"])
-        node = self.nodes[0]
-        assert_equal(node.getbestblockhash(), payout_block)
-        assert_equal(node.getgovvotestatus(proposal["proposal_hash"])["coin_yes"], 5)
+        for rebuild in ["-reindex-chainstate", "-reindex"]:
+            self.restart_node(0, self.extra_args[0] + [rebuild])
+            node = self.nodes[0]
+            assert_equal(node.getbestblockhash(), payout_block)
+            assert_equal(node.getgovvotestatus(proposal["proposal_hash"])["coin_yes"], 5)
 
 
 if __name__ == "__main__":

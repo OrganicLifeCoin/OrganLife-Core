@@ -70,6 +70,15 @@ surfaces are absent. This remains test software until the complete local suite,
 cross-platform builds, isolated public-testnet reset, and independent
 cryptographic and consensus review are complete.
 
+Startup refuses inconsistent UTXO and EvoDB tips, an interrupted PQ UTXO batch,
+or malformed/unknown chainstate tip metadata before attempting replay. It does
+not automatically rebuild these databases, including when unknown metadata
+prevents identifying whether PQ was active. Valid pre-PQ replay is unchanged.
+After backing up the wallet, explicitly restart with `-reindex` to
+rebuild from the existing block files. `-reindex-chainstate` also rebuilds EvoDB
+so governance state is reconstructed together with the UTXO set. These options
+do not reset the chain or delete the wallet.
+
 Primary local qualification commands are:
 
 ```sh
@@ -77,11 +86,14 @@ src/test/test_organiclife --run_test=mldsa_tests,pqkey_tests,pqtransaction_tests
 python3 test/functional/feature_pq_only.py
 python3 test/functional/feature_pq_pos.py
 python3 test/functional/feature_pq_governance.py
+python3 test/functional/feature_pq_startup.py
 ```
 
 The functional tests use disposable local nodes and verify backup/restore,
 restart, reindex, transfer, staking-only unlock, PoS signing, rollback, and
 reconsideration. Governance coverage includes proposal persistence, PQ coin
 locks, ML-DSA vote authorization, deterministic treasury payment, rollback,
-reconsideration, and full reindex. Test success is not cryptographic
+reconsideration, and both reindex modes. Startup tests cover stale indexes,
+repeated refusal without changing block files, interrupted coin-batch process
+exit, and explicit rebuild recovery. Test success is not cryptographic
 certification.
