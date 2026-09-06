@@ -23,6 +23,8 @@
 #include <QDateTime>
 #include <QPointer>
 #include <QRegularExpression>
+#include <QStringListModel>
+#include <QStyledItemDelegate>
 
 #define DECORATION_SIZE 70
 #define NUM_ITEMS 3
@@ -56,11 +58,20 @@ ReceiveWidget::ReceiveWidget(OrganicLifeGUI* parent) :
     setCssProperty(ui->containerHeader, "screen-header-band");
     ui->layoutQR->setProperty("designRole", QStringLiteral("content-card"));
     ui->layoutQR->setAttribute(Qt::WA_StyledBackground, true);
+    ui->horizontalLayout_2->setContentsMargins(28, 24, 28, 24);
+    ui->horizontalLayout_2->setSpacing(24);
+    ui->containerHeader->setProperty("designRole", "page-heading");
+    ui->horizontalLayout_3->setContentsMargins(0, 0, 0, 12);
+    ui->right->setMinimumWidth(280);
+    ui->right->setMaximumWidth(340);
+    ui->layoutQR->setMaximumWidth(540);
+    ui->verticalLayout_2->setAlignment(ui->layoutQR, Qt::AlignHCenter);
 
     // Title
     setCssProperty(ui->labelTitle, "screen-header-title");
     setCssProperty(ui->labelSubtitle1, "screen-header-subtitle");
     ui->labelSubtitle1->setWordWrap(true);
+    ui->labelSubtitle1->setMaximumWidth(QWIDGETSIZE_MAX);
 
     // Address
     setCssProperty(ui->labelAddress, "label-address-box");
@@ -145,13 +156,25 @@ ReceiveWidget::ReceiveWidget(OrganicLifeGUI* parent) :
     if (Params().IsTestChain()) {
         ui->pushLeft->hide();
         ui->pushRight->hide();
+        ui->labelSubtitle2->hide();
+        ui->labelSubtitle1->setText(tr("Share your address or create a payment request to receive OLC."));
         ui->pushButtonLabel->hide();
         ui->labelLabel->hide();
         ui->labelDate->hide();
-        ui->btnRequest->hide();
-        ui->btnMyAddresses->hide();
-        ui->listViewAddress->hide();
-        ui->sortWidget->hide();
+        pqAddresses = new QStringListModel(this);
+        ui->listViewAddress->setItemDelegate(new QStyledItemDelegate(ui->listViewAddress));
+        ui->listViewAddress->setModel(pqAddresses);
+        ui->listViewAddress->setModelColumn(0);
+        ui->listViewAddress->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        ui->listViewAddress->setTextElideMode(Qt::ElideMiddle);
+        ui->listViewAddress->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        ui->listViewAddress->setProperty("designRole", "address-history");
+        ui->lineEditFilter->setPlaceholderText(tr("Search addresses"));
+        ui->comboBoxSort->hide();
+        ui->comboBoxSortOrder->hide();
+        ui->listViewAddress->show();
+        ui->sortWidget->show();
+        ui->container_right->removeItem(spacer);
     }
 }
 
@@ -161,6 +184,8 @@ void ReceiveWidget::loadWalletModel()
         if (Params().IsTestChain()) {
             if (!info) info = new SendCoinsRecipient();
             pqBackupDirectory = PQWalletUI::backupDirectory(walletModel);
+            refreshPQAddresses();
+            connect(walletModel, &WalletModel::balanceChanged, this, [this](){ refreshPQAddresses(); });
             refreshView();
             return;
         }
@@ -179,6 +204,35 @@ void ReceiveWidget::loadWalletModel()
     }
 }
 
+void ReceiveWidget::clearWalletModel()
+{
+    if (activeRequestDialog) activeRequestDialog->reject();
+    PWidget::clearWalletModel();
+    if (filter) { filter->setSourceModel(nullptr); filter->deleteLater(); filter = nullptr; }
+    addressTableModel = nullptr;
+    if (pqAddresses) pqAddresses->setStringList({});
+    if (info) *info = SendCoinsRecipient();
+    pqBackupDirectory.clear();
+    ui->labelAddress->clear();
+    ui->labelAddress->setToolTip(QString());
+    ui->labelQrImg->clear();
+    ui->labelLabel->clear();
+}
+
+void ReceiveWidget::refreshPQAddresses()
+{
+    if (!pqAddresses) return;
+    QStringList addresses;
+    if (walletModel) {
+        for (const auto& address : walletModel->getWallet()->GetPQAddresses()) {
+            const QString text = QString::fromStdString(address);
+            if (text.contains(ui->lineEditFilter->text(), Qt::CaseInsensitive)) addresses.append(text);
+        }
+    }
+    addresses.sort();
+    if (pqAddresses->stringList() != addresses) pqAddresses->setStringList(addresses);
+}
+
 void ReceiveWidget::refreshView(const QModelIndex& tl, const QModelIndex& br)
 {
     const QModelIndex& index = tl.sibling(tl.row(), AddressTableModel::Address);
@@ -194,8 +248,11 @@ void ReceiveWidget::refreshView(const QString& refreshAddress)
         QString latestAddress = refreshAddress;
         if (Params().IsTestChain()) {
             if (latestAddress.isEmpty() && walletModel) {
-                const auto addresses = walletModel->getWallet()->GetPQAddresses();
-                if (!addresses.empty()) latestAddress = QString::fromStdString(addresses.back());
+                if (info && !info->address.isEmpty()) latestAddress = info->address;
+                else {
+                    const auto addresses = walletModel->getWallet()->GetPQAddresses();
+                    if (!addresses.empty()) latestAddress = QString::fromStdString(*std::min_element(addresses.begin(), addresses.end()));
+                }
             }
         } else if (latestAddress.isEmpty()) {
             latestAddress = addressTableModel->getAddressToShow(shieldedMode);
@@ -215,6 +272,8 @@ void ReceiveWidget::refreshView(const QString& refreshAddress)
         }
 
         ui->labelAddress->setText(addressToShow);
+        ui->labelAddress->setToolTip(latestAddress);
+        ui->labelAddress->setTextInteractionFlags(Qt::TextSelectableByMouse);
         if (!Params().IsTestChain())
             ui->labelDate->setText(GUIUtil::dateTimeStr(GUIUtil::dateTimeFromTimeT(static_cast<qint64>(time))));
         updateQr(latestAddress);
@@ -248,11 +307,8 @@ void ReceiveWidget::updateQr(const QString& address)
     ui->labelQrImg->setText("");
 
     QString error;
-    QColor qrColor = isLightTheme() ? QColor("#3A2418") : QColor("#FFFFFF");
-    QColor bgColor(Qt::transparent); // Transparent background to blend with container
-
-    // Use QR code with transparent background - square modules (classic style)
-    QPixmap pixmap = encodeToQrModern(uri, error, qrColor, bgColor, 0, 4, 6);
+    // Keep a standard light quiet zone in both themes for reliable scanning.
+    QPixmap pixmap = encodeToQrModern(uri, error, QColor("#172720"), Qt::white, 0, 4, 6);
     if (!pixmap.isNull()) {
         ui->labelQrImg->setPixmap(pixmap.scaled(ui->labelQrImg->width(), ui->labelQrImg->height(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     } else {
@@ -262,6 +318,10 @@ void ReceiveWidget::updateQr(const QString& address)
 
 void ReceiveWidget::handleAddressClicked(const QModelIndex &index)
 {
+    if (Params().IsTestChain()) {
+        refreshView(index.data().toString());
+        return;
+    }
     QModelIndex rIndex = filter->mapToSource(index);
     refreshView(rIndex.data(Qt::DisplayRole).toString());
 }
@@ -327,6 +387,7 @@ void ReceiveWidget::onNewAddressClicked()
             return;
         }
         refreshView(QString::fromStdString(address));
+        refreshPQAddresses();
         inform(tr("New address created"));
         return;
     }
@@ -357,6 +418,7 @@ void ReceiveWidget::onNewAddressClicked()
 
 void ReceiveWidget::onCopyClicked()
 {
+    if (!walletModel || !info || info->address.isEmpty()) return;
     GUIUtil::setClipboard(info->address);
     inform(tr("Address copied"));
 }
@@ -364,6 +426,21 @@ void ReceiveWidget::onCopyClicked()
 
 void ReceiveWidget::onRequestClicked()
 {
+    if (Params().IsTestChain()) {
+        if (!walletModel || isShowingDialog) return;
+        if (!info || info->address.isEmpty()) onNewAddressClicked();
+        if (!walletModel || !info || info->address.isEmpty()) return;
+        isShowingDialog = true;
+        showHideOp(true);
+        RequestDialog dialog(window);
+        activeRequestDialog = &dialog;
+        dialog.setWalletModel(walletModel);
+        dialog.setReceiveAddress(info->address);
+        openDialogWithOpaqueBackgroundY(&dialog, window, 3, 5);
+        activeRequestDialog.clear();
+        isShowingDialog = false;
+        return;
+    }
     showAddressGenerationDialog(true);
 }
 
@@ -423,6 +500,8 @@ void ReceiveWidget::onSortOrderChanged(int idx)
 
 void ReceiveWidget::filterChanged(const QString& str)
 {
+    if (Params().IsTestChain()) { refreshPQAddresses(); return; }
+    if (!filter) return;
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     this->filter->setFilterRegularExpression(QRegularExpression(QRegularExpression::escape(str), QRegularExpression::CaseInsensitiveOption));
 #else
@@ -447,12 +526,13 @@ void ReceiveWidget::changeTheme(bool isLightTheme, QString& theme)
 {
     Q_UNUSED(theme);
     static_cast<AddressHolder*>(this->delegate->getRowFactory())->isLightTheme = isLightTheme;
-    if (!info->address.isEmpty()) {
+    if (info && !info->address.isEmpty()) {
         updateQr(info->address);
     }
 }
 
 ReceiveWidget::~ReceiveWidget()
 {
+    delete info;
     delete ui;
 }

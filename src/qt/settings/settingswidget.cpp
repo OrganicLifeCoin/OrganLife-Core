@@ -28,6 +28,9 @@ SettingsWidget::SettingsWidget(OrganicLifeGUI* parent) :
     ui->left->setContentsMargins(20,20,20,20);
     setCssProperty(ui->right, "screen-side-rail");
     ui->right->setContentsMargins(20,16,20,20);
+    ui->left->setMinimumWidth(240);
+    ui->left->setMaximumWidth(300);
+    ui->stackedWidgetContainer->setContentsMargins(20, 20, 20, 20);
     ui->stackedWidgetContainer->setProperty("designRole", QStringLiteral("content-card"));
     ui->stackedWidgetContainer->setAttribute(Qt::WA_StyledBackground, true);
 

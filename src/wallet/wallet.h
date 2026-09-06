@@ -725,10 +725,12 @@ public:
     bool InvolvesPQ(const CTransaction& tx) const;
     std::vector<COutput> GetPQUnspent(bool include_locked = false) const;
     bool CreatePQTransaction(const std::string& address, CAmount amount,
-                             CTransactionRef& tx, CAmount& fee, std::string& reason);
+                             CTransactionRef& tx, CAmount& fee, std::string& reason,
+                             const CCoinControl* coin_control = nullptr, bool subtract_fee = false);
     bool CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mode,
                              const std::vector<unsigned char>& data,
-                             CTransactionRef& tx, CAmount& fee, std::string& reason);
+                             CTransactionRef& tx, CAmount& fee, std::string& reason,
+                             const CCoinControl* coin_control = nullptr, bool subtract_fee = false);
 
     //! Get spkm
     ScriptPubKeyMan* GetScriptPubKeyMan() const;

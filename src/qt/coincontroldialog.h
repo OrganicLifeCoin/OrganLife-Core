@@ -64,22 +64,24 @@ public:
     void updateView();
     void refreshDialog();
     void clearPayAmounts();
-    void addPayAmount(const CAmount& amount, bool isShieldedRecipient);
+    void addPayAmount(const CAmount& amount, bool isShieldedRecipient, bool subtractFee = false);
     void setSelectionType(bool isTransparent) { fSelectTransparent = isTransparent; }
-    bool hasModel() { return model; }
+    bool hasModel() const;
 
     CCoinControl* coinControl{nullptr};
 
 private:
+    friend class PQWidgetTests;
     Ui::CoinControlDialog* ui{nullptr};
     SnackBar *snackBar{nullptr};
-    WalletModel* model{nullptr};
+    QPointer<WalletModel> model;
     int sortColumn;
     Qt::SortOrder sortOrder;
     bool forDelegation;
     int colCheckBoxWidth_treeMode{110};
     // pair (recipient amount, ishielded recipient)
     std::vector<std::pair<CAmount, bool>> payAmounts{};
+    bool subtractFeeFromAmount{false};
     unsigned int nSelectableInputs{0};
 
     // whether should show available utxo or notes.

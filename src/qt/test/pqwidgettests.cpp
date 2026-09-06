@@ -5,6 +5,10 @@
 
 #include "askpassphrasedialog.h"
 #include "defaultdialog.h"
+#include "dashboardwidget.h"
+#include "coincontroldialog.h"
+#include "requestdialog.h"
+#include "sendconfirmdialog.h"
 #include "networkstyle.h"
 #include "optionsmodel.h"
 #include "organiclifegui.h"
@@ -12,9 +16,11 @@
 #include "receivewidget.h"
 #include "send.h"
 #include "transactionrecord.h"
+#include "transactiontablemodel.h"
 #include "walletmodeltransaction.h"
 
 #include <chainparams.h>
+#include <coincontrol.h>
 #include <crypto/mldsa44.h>
 #include <guiinterface.h>
 #include <guiutil.h>
@@ -34,6 +40,11 @@
 #include <QCryptographicHash>
 #include <QDir>
 #include <QLabel>
+#include <QGridLayout>
+#include <QElapsedTimer>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QListView>
 #include <QLineEdit>
 #include <QPointer>
 #include <QPushButton>
@@ -192,7 +203,62 @@ void PQWidgetTests::standardReceiveUsesPQAddressAndBackup()
     QVERIFY(addressLabel->text().startsWith("olcpqtest1"));
     QCOMPARE(wallet.GetPQAddresses().size(), size_t(1));
     QCOMPARE(QDir(backupPath).entryList({"*.dat"}, QDir::Files).size(), 1);
+
+    // Previously the PQ screen hid every owned address and the payment-request action.
+    auto* addresses = page.findChild<QListView*>("listViewAddress");
+    QVERIFY(addresses && addresses->model());
+    QCOMPARE(addresses->model()->rowCount(), 1);
+    QVERIFY(!page.findChild<QWidget*>("btnRequest")->isHidden());
+    const QString savedAddress = QString::fromStdString(wallet.GetPQAddresses().front());
+    QVERIFY(addressLabel->toolTip().contains(savedAddress));
+
+    RequestDialog request(&mainWindow);
+    request.setWalletModel(&model);
+    request.setReceiveAddress(savedAddress);
+    request.findChild<QLineEdit*>("lineEditAmount")->setText("1.25");
+    request.findChild<QLineEdit*>("lineEditDescription")->setText("Test payment");
+    request.findChild<QPushButton*>("btnSave")->click();
+    QCOMPARE(request.findChild<QLabel*>("labelAddress")->text(), savedAddress);
+    QCOMPARE(wallet.GetPQAddresses().size(), size_t(1));
+    QCOMPARE(QDir(backupPath).entryList({"*.dat"}, QDir::Files).size(), 1);
+
+    // Switching away without destroying the old model closes its open request.
+    QTimer::singleShot(0, &page, [&] {
+        QVERIFY(page.activeRequestDialog);
+        page.setWalletModel(nullptr);
+    });
+    page.onRequestClicked();
+    QVERIFY(!page.isShowingDialog);
+    QCOMPARE(addresses->model()->rowCount(), 0);
+    QVERIFY(!addressLabel->text().contains(savedAddress));
     QSettings().remove(PQWalletUI::backupSettingsKey(&model));
+}
+
+void PQWidgetTests::chartPeriodsExistBeforeFirstReward()
+{
+#ifdef USE_QTCHARTS
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("test"));
+    OrganicLifeGUI mainWindow(networkStyle.get());
+    DashboardWidget page(&mainWindow);
+    auto* months = page.findChild<QComboBox*>("comboBoxMonths");
+    auto* years = page.findChild<QComboBox*>("comboBoxYears");
+    QVERIFY(months && years);
+    QCOMPARE(months->count(), 12);
+    QCOMPARE(years->currentText(), QString::number(QDate::currentDate().year()));
+    QVERIFY(!years->isHidden());
+    QVERIFY(months->isHidden());
+    page.findChild<QPushButton*>("pushButtonMonth")->click();
+    QVERIFY(!months->isHidden());
+    page.findChild<QPushButton*>("pushButtonAll")->click();
+    QVERIFY(years->parentWidget()->isHidden());
+
+    std::vector<ChartStakeSample> samples(100000, {2026, 9, 6, COIN, TransactionRecord::StakeMint});
+    QElapsedTimer timer;
+    timer.start();
+    const auto rewards = AggregateChartRewards(samples, ChartBucketMode::Month);
+    qInfo() << "100,000 chart samples aggregated in" << timer.nsecsElapsed() / 1000 << "us";
+    QVERIFY(!rewards.amountsBy.empty());
+#endif
 }
 
 void PQWidgetTests::standardSendUsesPQBackupAndHistory()
@@ -251,6 +317,7 @@ void PQWidgetTests::standardSendUsesPQBackupAndHistory()
         tip.phashBlock = &tipHash;
         tip.pprev = &genesis;
         tip.nHeight = 1;
+        tip.nTime = QDateTime::currentSecsSinceEpoch();
         struct ClearChain {
             CBlockIndex* oldBestHeader;
             ~ClearChain()
@@ -306,14 +373,77 @@ void PQWidgetTests::standardSendUsesPQBackupAndHistory()
         dashboard->setWalletModel(&model);
         model.emitBalanceChanged();
         QCoreApplication::processEvents();
+        TxDetailDialog detail(&window, false);
+        detail.setData(&model, model.getTransactionTableModel()->index(0, 0));
+        detail.onOutputsClicked();
+        auto* outputContainer = detail.findChild<QWidget*>("container_outputs_base");
+        auto* outputGrid = qobject_cast<QGridLayout*>(outputContainer->layout());
+        QVERIFY(outputGrid && outputGrid->itemAtPosition(0, 1));
+        auto* outputAddress = qobject_cast<QLabel*>(outputGrid->itemAtPosition(0, 0)->widget());
+        QVERIFY(outputAddress->text().startsWith("olcpqtest"));
+        QCOMPARE(wallet.GetStakingBalance(), CAmount(5 * COIN));
+        wallet.LockCoin(coin);
+        QCOMPARE(wallet.GetStakingBalance(), CAmount(0));
+        wallet.UnlockCoin(coin);
         auto* dashboardBalance = dashboard->findChild<QLabel*>("headerAvailableBalance");
         QVERIFY(dashboardBalance);
         QCOMPARE(dashboardBalance->text(), GUIUtil::formatBalance(5 * COIN, options.getDisplayUnit()));
         SendWidget send(&window);
         send.setWalletModel(&model);
+        send.hide();
+        const QString previewDirectory = qEnvironmentVariable("OLC_WALLET_PREVIEW_DIR");
+        struct RestoreTheme {
+            QVariant theme{QSettings().value("theme")};
+            ~RestoreTheme() {
+                if (theme.isValid()) QSettings().setValue("theme", theme);
+                else QSettings().remove("theme");
+            }
+        } restoreTheme;
+        if (!previewDirectory.isEmpty()) {
+            QVERIFY(QDir().mkpath(previewDirectory));
+            window.resize(1280, 800);
+            for (auto* sendPage : window.findChildren<SendWidget*>()) sendPage->setWalletModel(&model);
+            auto* receive = window.findChild<ReceiveWidget*>();
+            receive->setWalletModel(&model);
+            window.show();
+            for (const QString& theme : {QStringLiteral("default"), QStringLiteral("default-dark")}) {
+                QSettings().setValue("theme", theme);
+                QString css = GUIUtil::loadStyleSheet();
+                window.setStyleSheet(css);
+                Q_EMIT window.themeChanged(theme == "default", css);
+                const auto capture = [&](const QString& name) {
+                    QCoreApplication::processEvents();
+                    return window.grab().save(previewDirectory + "/" + theme + "-" + name + ".png");
+                };
+                window.goToSend();
+                QVERIFY(capture("send"));
+                window.goToReceive();
+                QVERIFY(capture("receive"));
+                window.goToSettings();
+                QVERIFY(capture("settings"));
+                window.goToDashboard();
+                QVERIFY(capture("dashboard"));
+                DefaultDialog dialog(&window);
+                dialog.setText(tr("Confirm payment"), tr("Review the recipient, amount and fee before sending."), tr("Send payment"), tr("Cancel"));
+                dialog.show();
+                QCoreApplication::processEvents();
+                QVERIFY(dialog.grab().save(previewDirectory + "/" + theme + "-dialog.png"));
+                dialog.hide();
+                AskPassphraseDialog unlock(AskPassphraseDialog::Mode::UnlockAnonymize, &window, &model, AskPassphraseDialog::Context::Unlock_Menu);
+                unlock.show();
+                QCoreApplication::processEvents();
+                QVERIFY(unlock.grab().save(previewDirectory + "/" + theme + "-unlock.png"));
+            }
+            window.hide();
+        }
         auto* entry = send.entries.front();
         entry->setAddress(externalAddress);
         entry->setAmount("1.00000000");
+        auto* subtractFee = entry->findChild<QCheckBox*>("checkboxSubtractFeeFromAmount");
+        QVERIFY(subtractFee);
+        subtractFee->setChecked(true);
+        QVERIFY(entry->getValue().fSubtractFee);
+        subtractFee->setChecked(false);
         QVERIFY(entry->validate());
         QVERIFY(send.findChild<QWidget*>("pushButtonAddRecipient")->isHidden());
         QVERIFY(send.findChild<QWidget*>("pushLeft")->isHidden());
@@ -322,6 +452,101 @@ void PQWidgetTests::standardSendUsesPQBackupAndHistory()
         SendCoinsRecipient recipient;
         recipient.address = externalAddress;
         recipient.amount = COIN;
+
+        std::map<WalletModel::ListCoinsKey, std::vector<WalletModel::ListCoinsValue>> available;
+        model.listCoins(available);
+        QVERIFY(!available.empty());
+        QVERIFY(!send.findChild<QWidget*>("btnCoinControl")->isHidden());
+        QVERIFY(!send.findChild<QWidget*>("btnChangeAddress")->isHidden());
+        QVERIFY(!send.findChild<QWidget*>("pushButtonFee")->isHidden());
+        CCoinControl selection;
+        selection.Select(COutPoint(uint256S("deadbeef"), 0), 5 * COIN);
+        WalletModelTransaction unavailableSelection({recipient});
+        QVERIFY(model.prepareTransaction(&unavailableSelection, &selection).status != WalletModel::OK);
+        QVERIFY(!unavailableSelection.getTransaction());
+        QCOMPARE(wallet.GetPQAddresses().size(), size_t(1));
+
+        selection.UnSelectAll();
+        selection.Select(coin, 5 * COIN);
+        send.beginPQPreparation();
+        WalletModelTransaction selectedPayment({recipient});
+        QCOMPARE(model.prepareTransaction(&selectedPayment, &selection).status, WalletModel::OK);
+        QCOMPARE(selectedPayment.getTransaction()->vin.size(), size_t(1));
+        QVERIFY(selectedPayment.getTransaction()->vin.front().prevout == coin);
+        QVERIFY(send.cleanupNewPQKeys());
+
+        selection.destPQChange = ownedAddress;
+        selection.fOverrideFeeRate = true;
+        selection.nFeeRate = CFeeRate(2 * CENT);
+        CoinControlDialog control(&window);
+        control.setModel(&model);
+        *control.coinControl = selection;
+        control.addPayAmount(COIN, false);
+        const auto totals = control.getTotals();
+        QCOMPARE(totals.nPayFee, selection.nFeeRate.GetFee(totals.nBytes));
+        QCOMPARE(totals.nChange, CAmount(4 * COIN - totals.nPayFee));
+        control.clearPayAmounts();
+        control.addPayAmount(COIN, false, true);
+        QCOMPARE(control.getTotals().nChange, CAmount(4 * COIN));
+        if (!previewDirectory.isEmpty()) {
+            control.refreshDialog();
+            control.show();
+            QCoreApplication::processEvents();
+            QVERIFY(control.grab().save(previewDirectory + "/coin-control.png"));
+            control.hide();
+        }
+        WalletModelTransaction customChange({recipient});
+        QCOMPARE(model.prepareTransaction(&customChange, &selection).status, WalletModel::OK);
+        QCOMPARE(wallet.GetPQAddresses().size(), size_t(1));
+        QVERIFY(customChange.getTransaction()->vout.back().scriptPubKey == pq::GetScript(ownedId));
+        QVERIFY(customChange.getTransactionFee() >= selection.nFeeRate.GetFee(customChange.getTransactionSize()));
+        selection.destPQChange = "not-an-address";
+        WalletModelTransaction invalidChange({recipient});
+        QVERIFY(model.prepareTransaction(&invalidChange, &selection).status != WalletModel::OK);
+        selection.destPQChange.clear();
+        wallet.LockCoin(coin);
+        WalletModelTransaction lockedSelection({recipient});
+        QVERIFY(model.prepareTransaction(&lockedSelection, &selection).status != WalletModel::OK);
+        wallet.UnlockCoin(coin);
+
+        SendCoinsRecipient subtractRecipient = recipient;
+        subtractRecipient.amount = 5 * COIN;
+        subtractRecipient.fSubtractFee = true;
+        WalletModelTransaction spendAll({subtractRecipient});
+        QCOMPARE(model.prepareTransaction(&spendAll, &selection).status, WalletModel::OK);
+        QCOMPARE(spendAll.getTransaction()->vout.size(), size_t(1));
+        QCOMPARE(spendAll.getTransaction()->vout.front().nValue + spendAll.getTransactionFee(), CAmount(5 * COIN));
+
+        CMutableTransaction extraFunding = incoming;
+        extraFunding.vin.front().prevout.hash = uint256S("9876");
+        extraFunding.vout.front().nValue = COIN;
+        const auto extraTx = MakeTransactionRef(extraFunding);
+        const COutPoint extraCoin(extraTx->GetHash(), 0);
+        {
+            LOCK2(cs_main, wallet.cs_wallet);
+            QVERIFY(wallet.AddToWalletIfInvolvingMe(extraTx,
+                {CWalletTx::Status::CONFIRMED, 1, tipHash, 2}, true));
+            pcoinsTip->AddCoin(extraCoin, Coin(extraTx->vout.front(), 1, false, false), false);
+        }
+        selection.Select(extraCoin, COIN);
+        selection.destPQChange = ownedAddress;
+        WalletModelTransaction twoSelected({recipient});
+        QCOMPARE(model.prepareTransaction(&twoSelected, &selection).status, WalletModel::OK);
+        QCOMPARE(twoSelected.getTransaction()->vin.size(), size_t(2));
+        selection.UnSelect(coin);
+        SendCoinsRecipient largerRecipient = recipient;
+        largerRecipient.amount = 2 * COIN;
+        WalletModelTransaction insufficientSelected({largerRecipient});
+        QVERIFY(model.prepareTransaction(&insufficientSelected, &selection).status != WalletModel::OK);
+        selection.fAllowOtherInputs = true;
+        WalletModelTransaction supplemented({largerRecipient});
+        QCOMPARE(model.prepareTransaction(&supplemented, &selection).status, WalletModel::OK);
+        QCOMPARE(supplemented.getTransaction()->vin.size(), size_t(2));
+        QVERIFY(supplemented.getTransaction()->vin.front().prevout == extraCoin);
+        selection.Select(coin, 5 * COIN);
+        selection.Select(COutPoint(uint256S("abcde"), 0), COIN);
+        WalletModelTransaction tooManyInputs({recipient});
+        QVERIFY(model.prepareTransaction(&tooManyInputs, &selection).status != WalletModel::OK);
 
         // A prepared payment that is cancelled must discard its unused change key.
         send.beginPQPreparation();
@@ -389,6 +614,38 @@ void PQWidgetTests::standardSendUsesPQBackupAndHistory()
         const auto backups = QDir(backupPath).entryList({"*.dat"}, QDir::Files);
         QCOMPARE(backups.size(), 1);
         paymentBackupFile = backupPath + "/" + backups.front();
+
+#ifdef USE_QTCHARTS
+        // Feed a real PQ stake through the wallet transaction model, then remove
+        // it from visible history: the chart must update without reopening it.
+        CMutableTransaction stake;
+        stake.nType = CTransaction::PQ;
+        stake.vin.emplace_back(coin);
+        stake.vout.emplace_back(0, CScript());
+        stake.vout.emplace_back(6 * COIN, pq::GetScript(ownedId));
+        const auto stakeTx = MakeTransactionRef(stake);
+        {
+            LOCK2(cs_main, wallet.cs_wallet);
+            QVERIFY(wallet.AddToWalletIfInvolvingMe(stakeTx,
+                {CWalletTx::Status::CONFIRMED, 1, tipHash, 1}, true));
+        }
+        const auto stakeHash = QString::fromStdString(stakeTx->GetHash().ToString());
+        model.getTransactionTableModel()->updateTransaction(stakeHash, CT_NEW, true);
+        QTRY_VERIFY(dashboard->chartData && dashboard->chartData->totalPiv == COIN);
+        QVERIFY(dashboard->chartHasRenderedData);
+        window.goToDashboard();
+        window.show();
+        QCoreApplication::processEvents();
+        QTRY_VERIFY(dashboard->chartTimeline->width() >= dashboard->chartView->viewport()->width() - 20);
+        if (!previewDirectory.isEmpty()) {
+            QVERIFY(window.grab().save(previewDirectory + "/dashboard-reward.png"));
+        }
+        window.hide();
+        model.getTransactionTableModel()->hideTransaction(stakeHash);
+        QTRY_VERIFY(dashboard->chartData && dashboard->chartData->totalPiv == 0);
+        dashboard->setWalletModel(nullptr);
+        QVERIFY(dashboard->chartStakeRowsSnapshot.empty());
+#endif
     }
 
     DiskWallet restored("pq-standard-send-restored",

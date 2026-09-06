@@ -14,6 +14,7 @@
 #include "wallet/wallet.h"
 #include "walletmodel.h"
 #include "net.h"
+#include "pqtransaction.h"
 
 #include <QDateTime>
 #include <QList>
@@ -471,11 +472,13 @@ void TxDetailDialog::onInputsClicked()
 void appendOutput(QGridLayout* layoutGrid, int gridPosition, QString labelRes, CAmount nValue, int nDisplayUnit)
 {
     QLabel *label_address = new QLabel(labelRes);
+    label_address->setToolTip(labelRes);
+    label_address->setTextInteractionFlags(Qt::TextSelectableByMouse);
     QLabel *label_value = new QLabel(BitcoinUnits::formatWithUnit(nDisplayUnit, nValue, false, BitcoinUnits::separatorAlways));
     label_value->setAlignment(Qt::AlignCenter | Qt::AlignRight);
     setCssProperty({label_address, label_value}, "text-body2-dialog");
     layoutGrid->addWidget(label_address, gridPosition, 0);
-    layoutGrid->addWidget(label_value, gridPosition, 0);
+    layoutGrid->addWidget(label_value, gridPosition, 1);
 }
 
 void TxDetailDialog::onOutputsClicked()
@@ -486,7 +489,7 @@ void TxDetailDialog::onOutputsClicked()
         ui->outputsScrollArea->setVisible(true);
         if (!outputsLoaded) {
             outputsLoaded = true;
-            QGridLayout* layoutGrid = new QGridLayout(this);
+            QGridLayout* layoutGrid = new QGridLayout();
             layoutGrid->setContentsMargins(0,0,12,0);
             ui->container_outputs_base->setLayout(layoutGrid);
 
@@ -512,9 +515,13 @@ void TxDetailDialog::onOutputsClicked()
                 for (const CTxOut& out : walletTx->tx->vout) {
                     QString labelRes;
                     CTxDestination dest;
+                    pq::KeyID pqId;
                     bool isCsAddress = out.scriptPubKey.IsPayToColdStaking();
                     bool isExchange = out.scriptPubKey.IsPayToExchangeAddress();
-                    if (ExtractDestination(out.scriptPubKey, dest, isCsAddress)) {
+                    if (pq::ExtractID(out.scriptPubKey, pqId)) {
+                        const QString address = QString::fromStdString(pq::EncodeAddress(pqId, Params().NetworkIDString()));
+                        labelRes = address.left(16) + "..." + address.right(16);
+                    } else if (ExtractDestination(out.scriptPubKey, dest, isCsAddress)) {
                         std::string address = EncodeDestination(dest, isCsAddress, isExchange);
                         labelRes = QString::fromStdString(address);
                         labelRes = labelRes.left(16) + "..." + labelRes.right(16);

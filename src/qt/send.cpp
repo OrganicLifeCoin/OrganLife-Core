@@ -21,6 +21,7 @@
 #include "optionbutton.h"
 #include "optionsmodel.h"
 #include "pqwalletui.h"
+#include "pqtransaction.h"
 #include "qt/walletmodel.h"
 #include "qtutils.h"
 #include "sapling/address.h"
@@ -119,6 +120,12 @@ SendWidget::SendWidget(OrganicLifeGUI* parent) :
     ui->containerHeader->setAttribute(Qt::WA_StyledBackground, true);
     setCssProperty(ui->containerHeader, "screen-header-band");
     ui->containerHeader->setMinimumHeight(96);
+    ui->horizontalLayout_2->setContentsMargins(28, 24, 28, 24);
+    ui->horizontalLayout_2->setSpacing(24);
+    ui->containerHeader->setProperty("designRole", "page-heading");
+    ui->horizontalLayout_3->setContentsMargins(0, 0, 0, 12);
+    ui->right->setMinimumWidth(280);
+    ui->right->setMaximumWidth(340);
 
     int recipientLabelsIndex = -1;
     for (int i = 0; i < ui->verticalLayout_22->count(); ++i) {
@@ -148,6 +155,9 @@ SendWidget::SendWidget(OrganicLifeGUI* parent) :
         ui->verticalLayout_22->setStretch(i, 0);
     }
     ui->verticalLayout_22->setStretch(ui->verticalLayout_22->indexOf(recipientFormCard), 1);
+    ui->scrollArea->setMinimumHeight(160);
+    recipientFormCard->setMaximumHeight(300);
+    ui->verticalLayout_22->addStretch(1);
 
     ui->scrollArea->setProperty("designRole", QStringLiteral("content-card-body"));
     ui->scrollArea->setAttribute(Qt::WA_StyledBackground, true);
@@ -165,7 +175,9 @@ SendWidget::SendWidget(OrganicLifeGUI* parent) :
     setCssProperty(ui->labelTitle, "screen-header-title");
     ui->labelTitle->setFont(fontLight);
     setCssProperty(ui->labelSubtitle1, "screen-header-subtitle");
+    if (Params().IsTestChain()) ui->labelSubtitle1->setText(tr("Choose a recipient, review the details, and send OLC."));
     ui->labelSubtitle1->setWordWrap(true);
+    ui->labelSubtitle1->setMaximumWidth(QWIDGETSIZE_MAX);
 
     /* Button Group */
     setCssProperty(ui->pushLeft, "btn-check-left");
@@ -197,8 +209,8 @@ SendWidget::SendWidget(OrganicLifeGUI* parent) :
 
     // Uri
     setCssProperty(ui->btnUri, "screen-side-option", true);
-    ui->btnUri->setTitleClassAndText("btn-title-grey", tr("Open URI"));
-    ui->btnUri->setSubTitleClassAndText("text-subtitle", tr("Parse a OrganicLife URI"));
+    ui->btnUri->setTitleClassAndText("btn-title-grey", tr("Open payment request"));
+    ui->btnUri->setSubTitleClassAndText("text-subtitle", tr("Fill in an address and amount from a payment link"));
 
     // Shield coins
     setCssProperty(ui->btnShieldCoins, "screen-side-option", true);
@@ -245,11 +257,12 @@ SendWidget::SendWidget(OrganicLifeGUI* parent) :
     connect(ui->pushButtonAddRecipient, &QPushButton::clicked, this, &SendWidget::onAddEntryClicked);
     connect(ui->pushButtonClear, &QPushButton::clicked, [this](){clearAll(true);});
 
-    coinControlDialog = new CoinControlDialog();
+    coinControlDialog = new CoinControlDialog(window);
 }
 
 void SendWidget::refreshAmounts()
 {
+    if (!walletModel || !walletModel->getOptionsModel()) return;
     CAmount total = 0;
     QMutableListIterator<SendMultiRow*> it(entries);
     while (it.hasNext()) {
@@ -265,9 +278,9 @@ void SendWidget::refreshAmounts()
     CAmount delegatedBalance = 0;
     QString titleTotalRemaining;
     if (Params().IsTestChain()) {
-        interfaces::WalletBalances balances = walletModel->GetWalletBalances();
-        totalAmount = balances.balance - total;
-        titleTotalRemaining = tr("Available remaining");
+        totalAmount = walletModel->getUnlockedBalance(coinControlDialog->coinControl) - total;
+        titleTotalRemaining = coinControlDialog->coinControl->HasSelected()
+            ? tr("Selected coins remaining") : tr("Available remaining");
     } else if (coinControlDialog->coinControl->HasSelected()) {
         // Set remaining balance to the sum of the coinControl selected inputs
         std::vector<OutPointWrapper> coins;
@@ -293,7 +306,7 @@ void SendWidget::refreshAmounts()
         titleTotalRemaining = tr("Unlocked remaining");
     }
 
-    QString type = Params().IsTestChain() ? "PQ" : (isTransparent ? "transparent" : "shielded");
+    QString type = Params().IsTestChain() ? QString() : (isTransparent ? "transparent" : "shielded");
     QString labelAmountRemaining = GUIUtil::formatBalance( totalAmount, nDisplayUnit, false) + " " + type;
     QMetaObject::invokeMethod(this, "updateAmounts", Qt::QueuedConnection,
                               Q_ARG(QString, titleTotalRemaining),
@@ -333,13 +346,14 @@ void SendWidget::loadWalletModel()
         if (pqMode) {
             isTransparent = true;
             ui->pushLeft->setChecked(true);
+            ui->groupBox->hide();
         }
         ui->pushButtonAddRecipient->setVisible(!pqMode);
-        ui->pushButtonFee->setVisible(!pqMode);
-        ui->coinWidget->setVisible(!pqMode);
+        ui->pushButtonFee->show();
+        ui->coinWidget->show();
         ui->labelSubtitle2->setVisible(!pqMode);
-        ui->btnCoinControl->setVisible(!pqMode);
-        ui->btnChangeAddress->setVisible(!pqMode);
+        ui->btnCoinControl->show();
+        ui->btnChangeAddress->show();
         ui->btnShieldCoins->setVisible(false);
         ui->checkBoxDelegations->setVisible(false);
         if (walletModel->getOptionsModel()) {
@@ -366,6 +380,8 @@ void SendWidget::loadWalletModel()
         //connect(walletModel->getOptionsModel(), &OptionsModel::coinControlFeaturesChanged, [this](){});
         //ui->frameCoinControl->setVisible(model->getOptionsModel()->getCoinControlFeatures());
         //coinControlUpdateLabels();
+        connect(walletModel, &WalletModel::balanceChanged, this, [this](){ tryRefreshAmounts(); });
+        tryRefreshAmounts();
     }
 }
 
@@ -373,6 +389,16 @@ void SendWidget::clearWalletModel()
 {
     cleanupNewPQKeys();
     pqBackupDirectory.clear();
+    if (coinControlDialog) {
+        coinControlDialog->reject();
+        coinControlDialog->setModel(nullptr);
+        coinControlDialog->coinControl->SetNull();
+    }
+    if (customFeeDialog) {
+        customFeeDialog->reject();
+        delete customFeeDialog;
+        customFeeDialog = nullptr;
+    }
     for (SendMultiRow* entry : entries) {
         if (entry) entry->clearWalletModel();
     }
@@ -423,6 +449,7 @@ void SendWidget::resetChangeAddress()
     if (coinControlDialog) {
         coinControlDialog->coinControl->destShieldChange = boost::none;
         coinControlDialog->coinControl->destChange = CNoDestination();
+        coinControlDialog->coinControl->destPQChange.clear();
     }
     ui->btnChangeAddress->setActive(false);
 }
@@ -875,8 +902,27 @@ bool SendWidget::cleanupNewPQKeys()
 
 void SendWidget::onChangeAddressClicked()
 {
+    if (!walletModel) return;
+    QPointer<WalletModel> operationWallet(walletModel);
     showHideOp(true);
     SendChangeAddressDialog* dialog = new SendChangeAddressDialog(window, walletModel, isTransparent);
+    if (Params().IsTestChain()) {
+        dialog->setAddress(QString::fromStdString(coinControlDialog->coinControl->destPQChange));
+        if (openDialogWithOpaqueBackgroundY(dialog, window, 3, 5) && operationWallet && walletModel == operationWallet) {
+            const QString address = dialog->getAddress();
+            pq::KeyID id;
+            const bool owned = address.isEmpty() ||
+                (pq::DecodeAddress(address.toStdString(), Params().NetworkIDString(), id) &&
+                 operationWallet->getWallet()->IsPQMine(CTxOut(0, pq::GetScript(id))));
+            if ((owned || ask(tr("External change address"), tr("This address is not in your wallet. Send the remaining coins there?"))) &&
+                operationWallet && walletModel == operationWallet) {
+                coinControlDialog->coinControl->destPQChange = address.toStdString();
+                ui->btnChangeAddress->setActive(!address.isEmpty());
+            }
+        }
+        dialog->deleteLater();
+        return;
+    }
     if (IsValidDestination(coinControlDialog->coinControl->destChange)) {
         dialog->setAddress(QString::fromStdString(EncodeDestination(coinControlDialog->coinControl->destChange)));
     } else if (coinControlDialog->coinControl->destShieldChange) {
@@ -964,13 +1010,15 @@ void SendWidget::onChangeCustomFeeClicked()
 
 void SendWidget::onCoinControlClicked()
 {
+    if (!walletModel) return;
     if (walletModel->getBalance() > 0) {
         // future: move coin control initialization and refresh to a worker thread.
         if (!coinControlDialog->hasModel()) coinControlDialog->setModel(walletModel);
         coinControlDialog->setSelectionType(isTransparent);
-        coinControlDialog->refreshDialog();
         setCoinControlPayAmounts();
+        coinControlDialog->refreshDialog();
         coinControlDialog->exec();
+        if (!walletModel) return;
         ui->btnCoinControl->setActive(coinControlDialog->coinControl->HasSelected());
         tryRefreshAmounts();
     } else {
@@ -1047,7 +1095,8 @@ void SendWidget::setCoinControlPayAmounts()
     QMutableListIterator<SendMultiRow*> it(entries);
     while (it.hasNext()) {
         const auto& entry = it.next();
-        coinControlDialog->addPayAmount(entry->getAmountValue(), entry->getValue().isShieldedAddr);
+        const auto recipient = entry->getValue();
+        coinControlDialog->addPayAmount(recipient.amount, recipient.isShieldedAddr, recipient.fSubtractFee);
     }
 }
 

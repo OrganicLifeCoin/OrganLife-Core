@@ -116,9 +116,6 @@ public:
     void loadChart();
     void setTransactionsOnly(bool transactionsOnly);
 
-    void run(int type) override;
-    void onError(QString error, int type) override;
-
 public Q_SLOTS:
     void walletSynced(bool isSync);
     /**
@@ -155,6 +152,7 @@ private Q_SLOTS:
 
 private:
     friend class GovernanceDialogTests;
+    friend class PQWidgetTests;
 
     Ui::DashboardWidget *ui{nullptr};
     FurAbstractListItemDelegate* txViewDelegate{nullptr};
@@ -208,7 +206,7 @@ private:
 
 #ifdef USE_QTCHARTS
 
-    int64_t lastRefreshTime{0};
+    QTimer* chartRefreshTimer{nullptr};
     std::atomic<bool> isLoading;
 
     // Chart

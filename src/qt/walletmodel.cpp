@@ -12,6 +12,8 @@
 #include "masternode-payments.h"
 #include "net.h"
 #include "pqaddress.h"
+#include "pqtransaction.h"
+#include "coincontrol.h"
 #include "sapling/key_io_sapling.h"
 #include "sapling/sapling_operation.h"
 #include "sapling/transaction_builder.h"
@@ -235,7 +237,10 @@ CAmount WalletModel::getBalance(const CCoinControl* coinControl, bool fIncludeDe
 {
     if (Params().IsTestChain()) {
         CAmount balance = 0;
-        for (const COutput& out : wallet->GetPQUnspent(!fUnlockedOnly)) balance += out.Value();
+        for (const COutput& out : wallet->GetPQUnspent(!fUnlockedOnly)) {
+            if (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected(COutPoint(out.tx->GetHash(), out.i)))
+                balance += out.Value();
+        }
         return balance;
     }
     if (coinControl) {
@@ -568,7 +573,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
         CAmount fee = 0;
         std::string reason;
         if (!wallet->CreatePQTransaction(recipient.address.toStdString(), recipient.amount,
-                                         transaction->getTransaction(), fee, reason)) {
+                                         transaction->getTransaction(), fee, reason, coinControl, recipient.fSubtractFee)) {
             if (reason == "Insufficient eligible confirmed funds") return AmountExceedsBalance;
             Q_EMIT message(tr("Send Coins"), tr("Transaction creation failed!\n%1")
                     .arg(QString::fromStdString(reason)), CClientUIInterface::MSG_ERROR);
@@ -1254,6 +1259,16 @@ void WalletModel::listAvailableNotes(std::map<ListCoinsKey, std::vector<ListCoin
 // AvailableCoins + LockedCoins grouped by wallet address (put change in one group with wallet address)
 void WalletModel::listCoins(std::map<ListCoinsKey, std::vector<ListCoinsValue>>& mapCoins) const
 {
+    if (Params().IsTestChain()) {
+        LOCK2(cs_main, wallet->cs_wallet);
+        for (const auto& out : wallet->GetPQUnspent(true)) {
+            pq::KeyID id;
+            if (!pq::ExtractID(out.tx->tx->vout[out.i].scriptPubKey, id)) continue;
+            const ListCoinsKey key{QString::fromStdString(pq::EncodeAddress(id, Params().NetworkIDString())), false, nullopt};
+            mapCoins[key].emplace_back(out.tx->GetHash(), out.i, out.Value(), out.tx->GetTxTime(), out.nDepth);
+        }
+        return;
+    }
     for (const auto& it: wallet->ListCoins()) {
         const std::pair<CTxDestination, Optional<CTxDestination>>& addresses = it.first;
         const std::vector<COutput>& coins = it.second;

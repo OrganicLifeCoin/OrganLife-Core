@@ -40,6 +40,8 @@ GovernanceWidget::GovernanceWidget(OrganicLifeGUI* parent) :
         ui(new Ui::governancewidget)
 {
     ui->setupUi(this);
+    ui->horizontalLayout_1->setContentsMargins(28, 24, 28, 24);
+    ui->horizontalLayout_1->setSpacing(24);
     this->setStyleSheet(parent->styleSheet());
 
     ui->left->setAttribute(Qt::WA_StyledBackground, true);

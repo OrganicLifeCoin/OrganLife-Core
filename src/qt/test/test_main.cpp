@@ -49,6 +49,13 @@ int main(int argc, char *argv[])
     // QApplication:: in the tests
     QApplication app(argc, argv);
     app.setApplicationName("OrganicLife-test");
+    qRegisterMetaType<CAmount>("CAmount");
+
+    // Allow focused wallet regressions and visual previews without running unrelated suites.
+    if (qEnvironmentVariable("OLC_QT_TEST_SUITE") == QStringLiteral("pq")) {
+        PQWidgetTests tests;
+        return QTest::qExec(&tests, argc, argv);
+    }
 
     URITests test1;
     if (QTest::qExec(&test1) != 0)

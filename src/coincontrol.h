@@ -36,6 +36,7 @@ public:
     // TODO: upgrade those two fields to a single CWDestination?
     Optional<libzcash::SaplingPaymentAddress> destShieldChange = boost::none;
     CTxDestination destChange = CNoDestination();
+    std::string destPQChange;
     //! If false, allows unselected inputs, but requires all selected inputs be used
     bool fAllowOtherInputs;
     //! Includes watch only addresses which are solvable
@@ -55,6 +56,7 @@ public:
     void SetNull()
     {
         destChange = CNoDestination();
+        destPQChange.clear();
         setSelected.clear();
         fAllowOtherInputs = false;
         fAllowWatchOnly = false;

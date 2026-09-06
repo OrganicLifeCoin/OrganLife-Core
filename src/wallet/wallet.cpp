@@ -2268,6 +2268,13 @@ CAmount CWallet::GetColdStakingBalance() const
 
 CAmount CWallet::GetStakingBalance(const bool fIncludeColdStaking) const
 {
+    if (Params().IsTestChain()) {
+        CAmount total = 0;
+        for (const auto& coin : GetPQUnspent()) {
+            if (coin.nDepth >= Params().GetConsensus().nStakeMinDepth) total += coin.Value();
+        }
+        return total;
+    }
     return std::max(CAmount(0), loopTxsBalance(
             [fIncludeColdStaking](const uint256& id, const CWalletTx& pcoin, CAmount& nTotal) {
         if (pcoin.IsTrusted() && pcoin.GetDepthInMainChain() >= Params().GetConsensus().nStakeMinDepth) {

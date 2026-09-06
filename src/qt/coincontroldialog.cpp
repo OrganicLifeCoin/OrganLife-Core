@@ -14,6 +14,7 @@
 #include "guiutil.h"
 #include "optionsmodel.h"
 #include "policy/policy.h"
+#include "pqtransaction.h"
 #include "txmempool.h"
 #include "wallet/fees.h"
 #include "wallet/wallet.h"
@@ -203,7 +204,15 @@ CoinControlDialog::~CoinControlDialog()
 
 void CoinControlDialog::setModel(WalletModel* _model)
 {
+    if (model) disconnect(model, nullptr, this, nullptr);
     this->model = _model;
+    if (!model) {
+        ui->treeWidget->clear();
+        coinControl->SetNull();
+        reject();
+        return;
+    }
+    connect(model, &QObject::destroyed, this, &QDialog::reject);
 
     if (model && model->getOptionsModel() && model->getAddressTableModel()) {
         updateView();
@@ -211,6 +220,8 @@ void CoinControlDialog::setModel(WalletModel* _model)
         updateLabels();
     }
 }
+
+bool CoinControlDialog::hasModel() const { return !model.isNull(); }
 
 // (un)select all
 void CoinControlDialog::buttonSelectAllClicked()
@@ -505,6 +516,42 @@ TotalAmounts CoinControlDialog::getTotals() const
     std::vector<OutPointWrapper> vCoinControl;
     coinControl->ListSelected(vCoinControl);
 
+    if (Params().IsTestChain()) {
+        CMutableTransaction estimate;
+        estimate.nVersion = CTransaction::SAPLING;
+        estimate.nType = CTransaction::PQ;
+        estimate.sapData = nullopt;
+        pq::Payload payload;
+        for (const auto& out : vCoinControl) {
+            estimate.vin.emplace_back(out.outPoint.hash, out.outPoint.n);
+            payload.authorizations.emplace_back();
+            t.nAmount += out.value;
+        }
+        t.nQuantity = vCoinControl.size();
+        for (const auto& amount : payAmounts) {
+            t.nPayAmount += amount.first;
+            if (amount.first > 0) {
+                const CTxOut output(amount.first, pq::GetScript(pq::KeyID{}));
+                estimate.vout.push_back(output);
+                t.fDust |= IsDust(output, dustRelayFee);
+            }
+        }
+        if (t.nQuantity) {
+            // One recipient plus change, with full ML-DSA authorization sizes.
+            if (estimate.vout.empty()) estimate.vout.emplace_back(0, pq::GetScript(pq::KeyID{}));
+            estimate.vout.emplace_back(0, pq::GetScript(pq::KeyID{}));
+            estimate.extraPayload = pq::EncodePayload(payload);
+            t.nBytes = GetSerializeSize(estimate, PROTOCOL_VERSION);
+            t.nPayFee = GetMinimumFee(t.nBytes, nTxConfirmTarget, mempool);
+            if (coinControl->fOverrideFeeRate)
+                t.nPayFee = std::max(GetRequiredFee(t.nBytes), coinControl->nFeeRate.GetFee(t.nBytes));
+            t.nPayFee = std::max(t.nPayFee, coinControl->nMinimumTotalFee);
+            t.nAfterFee = std::max<CAmount>(0, t.nAmount - t.nPayFee);
+            t.nChange = t.nAmount - t.nPayAmount - (subtractFeeFromAmount ? 0 : t.nPayFee);
+        }
+        return t;
+    }
+
     for (const OutPointWrapper& out : vCoinControl) {
         // Quantity
         t.nQuantity++;
@@ -588,11 +635,12 @@ void CoinControlDialog::updateLabels()
     if (!model)
         return;
 
-    ui->labelTitle->setText(fSelectTransparent ?
+    ui->labelTitle->setText(Params().IsTestChain() ? tr("Coin Control · select up to two coins") : fSelectTransparent ?
             "Select OrganicLife Outputs to Spend" :
             "Select Shielded OrganicLife to Spend");
 
     const TotalAmounts& t = getTotals();
+    ui->pushButtonOk->setEnabled(!Params().IsTestChain() || t.nQuantity <= pq::MAX_INPUTS);
 
     // update SelectAll button state
     // if inputs selected > inputs unselected, set checked (label "Unselect All")
@@ -852,11 +900,13 @@ void CoinControlDialog::inform(const QString& text)
 void CoinControlDialog::clearPayAmounts()
 {
     payAmounts.clear();
+    subtractFeeFromAmount = false;
 }
 
-void CoinControlDialog::addPayAmount(const CAmount& amount, bool isShieldedRecipient)
+void CoinControlDialog::addPayAmount(const CAmount& amount, bool isShieldedRecipient, bool subtractFee)
 {
     payAmounts.emplace_back(amount, isShieldedRecipient);
+    subtractFeeFromAmount |= subtractFee;
 }
 
 void CoinControlDialog::updatePushButtonSelectAll(bool checked)

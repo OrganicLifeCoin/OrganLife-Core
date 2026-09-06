@@ -45,6 +45,7 @@
 #include <QGraphicsDropShadowEffect>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QListWidget>
 #include <QProgressBar>
 #include <QPushButton>
@@ -829,7 +830,7 @@ void GovernanceDialogTests::topBarHoverAnimationsUseSmoothCubicEasing()
 void GovernanceDialogTests::topBarReceiveDialogUsesOpaqueBackgroundHelper()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString sourcePath = appDir.absoluteFilePath("../../../../src/qt/topbar.cpp");
+const QString sourcePath = resolveQtSourceFile("topbar.cpp");
     QFile sourceFile(sourcePath);
     QVERIFY2(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to read topbar.cpp");
 
@@ -1636,7 +1637,9 @@ void GovernanceDialogTests::voteDialogHeaderDragMovesDialogButBodyDragDoesNot()
 
     const QPoint beforeHeaderDrag = dialog.pos();
     QTest::mousePress(header, Qt::LeftButton, Qt::NoModifier, QPoint(24, std::max(2, header->height() / 2)));
-    QTest::mouseMove(header, QPoint(120, std::max(2, header->height() / 2)), 25);
+    const QPoint movePos(120, std::max(2, header->height() / 2));
+    QMouseEvent headerMove(QEvent::MouseMove, movePos, header->mapToGlobal(movePos), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(header, &headerMove);
     QTest::mouseRelease(header, Qt::LeftButton, Qt::NoModifier, QPoint(120, std::max(2, header->height() / 2)));
     QCoreApplication::processEvents();
     QVERIFY(dialog.pos() != beforeHeaderDrag);
@@ -1649,7 +1652,8 @@ void GovernanceDialogTests::voteDialogHeaderDragMovesDialogButBodyDragDoesNot()
         return;
     }
     QTest::mousePress(viewport, Qt::LeftButton, Qt::NoModifier, QPoint(20, 20));
-    QTest::mouseMove(viewport, QPoint(120, 20), 25);
+    QMouseEvent bodyMove(QEvent::MouseMove, QPoint(120, 20), viewport->mapToGlobal(QPoint(120, 20)), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(viewport, &bodyMove);
     QTest::mouseRelease(viewport, Qt::LeftButton, Qt::NoModifier, QPoint(120, 20));
     QCoreApplication::processEvents();
     QCOMPARE(dialog.pos(), beforeBodyDrag);
@@ -1774,8 +1778,8 @@ void GovernanceDialogTests::containerDialogCssRadiusIs16InBothThemes()
         return re.match(css).hasMatch();
     };
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
     QVERIFY(cssHas16(":/css/default") || cssHas16(lightSource));
     QVERIFY(cssHas16(":/css/default-dark") || cssHas16(darkSource));
@@ -1799,7 +1803,7 @@ void GovernanceDialogTests::containerDialogsEnableTranslucentBackgroundForRounde
 void GovernanceDialogTests::allDialogsUseContainerDialogBaseClass()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString qtSourceDir = appDir.absoluteFilePath("../../../../src/qt");
+    const QString qtSourceDir = QFileInfo(resolveQtSourceFile("containerdialog.h")).absolutePath();
 
     const auto readSource = [](const QString& path) {
         QFile file(path);
@@ -1828,7 +1832,7 @@ void GovernanceDialogTests::allDialogsUseContainerDialogBaseClass()
 void GovernanceDialogTests::containerDialogsUseSharedDraggableHeaderChrome()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString qtSourceDir = appDir.absoluteFilePath("../../../../src/qt");
+    const QString qtSourceDir = QFileInfo(resolveQtSourceFile("containerdialog.h")).absolutePath();
 
     const auto readSource = [](const QString& path) {
         QFile file(path);
@@ -1876,7 +1880,7 @@ void GovernanceDialogTests::containerDialogsUseSharedDraggableHeaderChrome()
 void GovernanceDialogTests::dialogIconClassesResolveToExistingQrcAliases()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString qtSourceDir = appDir.absoluteFilePath("../../../../src/qt");
+    const QString qtSourceDir = QFileInfo(resolveQtSourceFile("containerdialog.h")).absolutePath();
 
     const auto readSource = [](const QString& path) {
         QFile file(path);
@@ -2044,7 +2048,7 @@ void GovernanceDialogTests::unlockWalletDialogWatchToggleIsFullyVisible()
 void GovernanceDialogTests::roundedContainerDialogsUsePopAnimationCurve()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString qtUtilsSource = appDir.absoluteFilePath("../../../../src/qt/qtutils.cpp");
+    const QString qtUtilsSource = resolveQtSourceFile("qtutils.cpp");
     QFile f(qtUtilsSource);
     QVERIFY2(f.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(QString("Unable to read %1").arg(qtUtilsSource)));
     const QString source = QString::fromUtf8(f.readAll());
@@ -2342,7 +2346,7 @@ void GovernanceDialogTests::roundedContainerDialogsAnimateCloseAsReverseWholeDia
 void GovernanceDialogTests::opaqueBackgroundDialogOpenDoesNotAnimateSlideUp()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString qtUtilsSource = appDir.absoluteFilePath("../../../../src/qt/qtutils.cpp");
+    const QString qtUtilsSource = resolveQtSourceFile("qtutils.cpp");
     QFile f(qtUtilsSource);
     QVERIFY2(f.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(QString("Unable to read %1").arg(qtUtilsSource)));
     const QString source = QString::fromUtf8(f.readAll());
@@ -2768,13 +2772,13 @@ void GovernanceDialogTests::voteDialogCentersOnParentWindowWithoutParentClamping
                                 .arg(parentGlobal.center().y())));
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString sourcePath = appDir.absoluteFilePath("../../../../src/qt/votedialog.cpp");
+    const QString sourcePath = resolveQtSourceFile("votedialog.cpp");
     QFile sourceFile(sourcePath);
     QVERIFY(sourceFile.open(QIODevice::ReadOnly | QIODevice::Text));
     const QString source = QString::fromUtf8(sourceFile.readAll());
     const int showEventStart = source.indexOf(QStringLiteral("void VoteDialog::showEvent("));
     QVERIFY(showEventStart >= 0);
-    const int showEventEnd = source.indexOf(QStringLiteral("void VoteDialog::onMnSelectionClicked"), showEventStart);
+    const int showEventEnd = source.indexOf(QStringLiteral("void VoteDialog::onCheckBoxClicked"), showEventStart);
     QVERIFY(showEventEnd > showEventStart);
     const QString showEventSlice = source.mid(showEventStart, showEventEnd - showEventStart);
     QVERIFY(!showEventSlice.contains("kViewportMargin"));
@@ -2902,8 +2906,8 @@ void GovernanceDialogTests::voteDialogModeSwitchUsesButtonLikeToggles()
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
     QVERIFY(cssHasButtonLikeVoteModeToggle(lightSource));
     QVERIFY(cssHasButtonLikeVoteModeToggle(darkSource));
@@ -3035,8 +3039,8 @@ void GovernanceDialogTests::voteDialogModernBodyCssExistsInBothThemes()
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
     QVERIFY(cssHasModernVoteBodyStyles(lightSource));
     QVERIFY(cssHasModernVoteBodyStyles(darkSource));
@@ -3056,11 +3060,11 @@ void GovernanceDialogTests::voteDialogHeaderUsesOrganicLifeAccentToneInBothTheme
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
-    QVERIFY(cssHasAccentHeader(lightSource, "#F2D4B8"));
-    QVERIFY(cssHasAccentHeader(darkSource, "#85a653"));
+    QVERIFY(cssHasAccentHeader(lightSource, "#F6F9F4"));
+    QVERIFY(cssHasAccentHeader(darkSource, "#172720"));
 }
 
 void GovernanceDialogTests::voteDialogCloseButtonUsesThemeAwareIconClass()
@@ -3095,8 +3099,8 @@ void GovernanceDialogTests::voteDialogCloseButtonUsesThemeAwareIconClass()
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
     QVERIFY(cssHasCloseIcon(lightSource, "://ic-close"));
     QVERIFY(cssHasCloseIcon(darkSource, "://ic-close-white"));
@@ -3109,7 +3113,7 @@ void GovernanceDialogTests::voteDialogHeaderTitleUsesThemeAwareReadableColor()
         if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return false;
         const QString css = QString::fromUtf8(f.readAll());
         const QRegularExpression re(
-            QString(R"(QWidget#voteDialogHeader\s+QLabel\[cssClass=\"vote-dialog-title\"\]\s*\{[^\}]*color\s*:\s*%1\s*;[^\}]*font-size\s*:\s*24px\s*;)")
+QString(R"(QWidget#voteDialogHeader\s+QLabel\[cssClass=\"vote-dialog-title\"\]\s*\{[^\}]*color\s*:\s*%1\s*;[^\}]*font-size\s*:\s*21px\s*;)")
                 .arg(QRegularExpression::escape(expectedColor)),
             QRegularExpression::DotMatchesEverythingOption
         );
@@ -3117,11 +3121,11 @@ void GovernanceDialogTests::voteDialogHeaderTitleUsesThemeAwareReadableColor()
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
-    QVERIFY(cssHasTitleSpec(lightSource, "#2d3020"));
-    QVERIFY(cssHasTitleSpec(darkSource, "#FFFFFF"));
+    QVERIFY(cssHasTitleSpec(lightSource, "#1D2921"));
+    QVERIFY(cssHasTitleSpec(darkSource, "#EDF3EC"));
 }
 
 void GovernanceDialogTests::containerDialogHeaderTitleUsesReadableDarkThemeColor()
@@ -3138,14 +3142,14 @@ void GovernanceDialogTests::containerDialogHeaderTitleUsesReadableDarkThemeColor
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
-    QVERIFY(cssHasContainerHeaderTitleSpec(darkSource, "#FFFFFF"));
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
+    QVERIFY(cssHasContainerHeaderTitleSpec(darkSource, "#EDF3EC"));
 }
 
 void GovernanceDialogTests::voteDialogHeaderTitleCssClassIsForceUpdatedAtRuntime()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString sourcePath = appDir.absoluteFilePath("../../../../src/qt/votedialog.cpp");
+    const QString sourcePath = resolveQtSourceFile("votedialog.cpp");
     QFile f(sourcePath);
     QVERIFY2(f.open(QIODevice::ReadOnly | QIODevice::Text), "Unable to open votedialog.cpp");
     const QString source = QString::fromUtf8(f.readAll());
@@ -3171,8 +3175,8 @@ void GovernanceDialogTests::voteDialogHeaderUsesScopedThemeAwareSelectors()
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
     QVERIFY(cssHasScopedCloseButton(lightSource, "://ic-close"));
     QVERIFY(cssHasScopedCloseButton(darkSource, "://ic-close-white"));
@@ -3192,8 +3196,8 @@ void GovernanceDialogTests::voteDialogBodyHasScopedSquareTopCornersInCss()
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
     QVERIFY(cssHasScopedBodyCorners(lightSource));
     QVERIFY(cssHasScopedBodyCorners(darkSource));
@@ -3202,7 +3206,7 @@ void GovernanceDialogTests::voteDialogBodyHasScopedSquareTopCornersInCss()
 void GovernanceDialogTests::voteDialogBodyClassSwitchForcesStyleRefresh()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString sourcePath = appDir.absoluteFilePath("../../../../src/qt/votedialog.cpp");
+    const QString sourcePath = resolveQtSourceFile("votedialog.cpp");
     QFile file(sourcePath);
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
     if (!file.isOpen()) {
@@ -3218,7 +3222,7 @@ void GovernanceDialogTests::voteDialogBodyClassSwitchForcesStyleRefresh()
 void GovernanceDialogTests::voteDialogBodyWidgetsForceStyleRefreshAfterClassAssignment()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString sourcePath = appDir.absoluteFilePath("../../../../src/qt/votedialog.cpp");
+    const QString sourcePath = resolveQtSourceFile("votedialog.cpp");
     QFile file(sourcePath);
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
     if (!file.isOpen()) {
@@ -3244,7 +3248,7 @@ void GovernanceDialogTests::voteDialogBodyWidgetsForceStyleRefreshAfterClassAssi
 void GovernanceDialogTests::voteDialogBodyDoesNotUseLegacyContainerDialogClass()
 {
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString sourcePath = appDir.absoluteFilePath("../../../../src/qt/votedialog.cpp");
+    const QString sourcePath = resolveQtSourceFile("votedialog.cpp");
     QFile file(sourcePath);
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
     if (!file.isOpen()) {
@@ -3271,8 +3275,8 @@ void GovernanceDialogTests::voteDialogVoteModeCardUsesSquareTopCornersInCss()
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
     QVERIFY(cssHasSquareTopModeCard(lightSource));
     QVERIFY(cssHasSquareTopModeCard(darkSource));
@@ -3302,8 +3306,8 @@ void GovernanceDialogTests::voteDialogModernSelectorsOverrideLateGenericDialogRu
     };
 
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QString lightSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_light.css");
-    const QString darkSource = appDir.absoluteFilePath("../../../../src/qt/res/css/style_dark.css");
+    const QString lightSource = resolveQtSourceFile("res/css/style_light.css");
+    const QString darkSource = resolveQtSourceFile("res/css/style_dark.css");
 
     QVERIFY2(hasLateScopedVoteOverrides(lightSource),
              "Light theme must define scoped vote overrides after generic QDialog/QRadioButton rules");
@@ -4990,16 +4994,18 @@ void GovernanceDialogTests::transactionsNavigationShowsFocusedActivityView()
     QVERIFY(topCards->isVisible());
 }
 
-void GovernanceDialogTests::dashboardChartFilterIncludesGeneratedRegtestRewards()
+void GovernanceDialogTests::dashboardChartFilterExcludesPremine()
 {
     QFile file(resolveQtSourceFile(QStringLiteral("dashboardwidget.cpp")));
     QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
     const QString source = QString::fromUtf8(file.readAll());
     const QRegularExpression chartFilter(
-        R"(stakesFilter->setTypeFilter\([^;]*TransactionRecord::Generated[^;]*\);)",
+        R"(stakesFilter->setTypeFilter\([^;]*TransactionRecord::StakeMint[^;]*\);)",
         QRegularExpression::DotMatchesEverythingOption);
-    QVERIFY2(chartFilter.match(source).hasMatch(),
-             "Generated coinbase rewards must reach the chart filter on regtest and v6 reward chains");
+    const auto filter = chartFilter.match(source);
+    QVERIFY(filter.hasMatch());
+    QVERIFY2(!filter.captured().contains("TransactionRecord::Generated"),
+             "The premine is not a staking reward");
 }
 
 void GovernanceDialogTests::dashboardWidgetThemesDefineRoundedScrollBarChrome()
@@ -5652,7 +5658,8 @@ void GovernanceDialogTests::txDetailDialogUsesSharedDraggableHeaderChrome()
     const QPoint pressPos(std::max(8, header->width() / 4), std::max(8, header->height() / 2));
     const QPoint movePos(std::min(header->width() - 8, pressPos.x() + 70), pressPos.y());
     QTest::mousePress(header, Qt::LeftButton, Qt::NoModifier, pressPos);
-    QTest::mouseMove(header, movePos, 20);
+    QMouseEvent headerMove(QEvent::MouseMove, movePos, header->mapToGlobal(movePos), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(header, &headerMove);
     QTest::mouseRelease(header, Qt::LeftButton, Qt::NoModifier, movePos);
     QCoreApplication::processEvents();
     QVERIFY2(detailDialog.pos() != beforeDrag, "Dragging header should move TxDetailDialog");
@@ -5814,8 +5821,8 @@ void GovernanceDialogTests::sendScreenUsesAlignedOuterGrid()
 
     QCOMPARE(header->mapTo(&widget, QPoint(0, 0)).y(),
              firstSideAction->mapTo(&widget, QPoint(0, 0)).y());
-    QCOMPARE(outerLayout->contentsMargins(), QMargins(16, 16, 16, 16));
-    QCOMPARE(outerLayout->spacing(), 12);
+    QCOMPARE(outerLayout->contentsMargins(), QMargins(28, 24, 28, 24));
+    QCOMPARE(outerLayout->spacing(), 24);
 }
 
 void GovernanceDialogTests::sendWidgetRecoveryRulesForFailedBroadcast()

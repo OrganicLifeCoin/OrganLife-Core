@@ -11,5 +11,6 @@ private Q_SLOTS:
     void actualWalletUnloadQuiescesModel();
     void standardReceiveUsesPQAddressAndBackup();
     void standardSendUsesPQBackupAndHistory();
+    void chartPeriodsExistBeforeFirstReward();
 };
 #endif

@@ -16,6 +16,7 @@
 
 class OrganicLifeGUI;
 class SendCoinsRecipient;
+class QStringListModel;
 
 namespace Ui {
 class ReceiveWidget;
@@ -34,6 +35,7 @@ public:
     ~ReceiveWidget();
 
     void loadWalletModel() override;
+    void clearWalletModel() override;
 
 public Q_SLOTS:
     void onRequestClicked();
@@ -78,6 +80,9 @@ private:
     // Whether the main section is presenting a shielded address or a regular one
     bool shieldedMode{false};
     QString pqBackupDirectory;
+    QStringListModel* pqAddresses{nullptr};
+    QPointer<QDialog> activeRequestDialog;
+    void refreshPQAddresses();
 
 };
 

@@ -28,6 +28,15 @@ DefaultDialog::DefaultDialog(QWidget *parent) :
 
     ui->btnCancel->setProperty("cssClass", "btn-dialog-cancel");
     ui->btnSave->setProperty("cssClass", "btn-primary");
+    ui->verticalLayout_2->setContentsMargins(24, 12, 24, 24);
+    ui->verticalSpacer_2->changeSize(0, 8, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui->verticalSpacer_3->changeSize(0, 24, QSizePolicy::Minimum, QSizePolicy::Fixed);
+    ui->labelMessage->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    ui->btnCancel->setFocusPolicy(Qt::StrongFocus);
+    ui->btnSave->setFocusPolicy(Qt::StrongFocus);
+    ui->btnCancel->setText(tr("Cancel"));
+    setMinimumWidth(480);
+    resize(500, 260);
 
     connect(ui->btnEsc, &QPushButton::clicked, this, &DefaultDialog::close);
     connect(ui->btnCancel, &QPushButton::clicked, this, &DefaultDialog::close);

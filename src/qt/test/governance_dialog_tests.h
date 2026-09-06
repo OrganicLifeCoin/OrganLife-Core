@@ -141,7 +141,7 @@ private Q_SLOTS:
     void dashboardChartShowsValuesOnlyOnHover();
     void dashboardTransactionsHeaderUsesCompactContract();
     void transactionsNavigationShowsFocusedActivityView();
-    void dashboardChartFilterIncludesGeneratedRegtestRewards();
+    void dashboardChartFilterExcludesPremine();
     void dashboardWidgetUsesPremiumDashboardClasses();
     void dashboardWidgetThemesDefineRoundedScrollBarChrome();
     void dashboardWidgetPreservesTransactionAnimationHooks();

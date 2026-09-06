@@ -7,6 +7,8 @@
 #include "ui_sendchangeaddressdialog.h"
 
 #include "qtutils.h"
+#include "chainparams.h"
+#include "walletmodel.h"
 
 SendChangeAddressDialog::SendChangeAddressDialog(QWidget* parent, WalletModel* model, bool isTransparent) : FocusedDialog(parent),
                                                                                                             walletModel(model),
@@ -19,6 +21,7 @@ SendChangeAddressDialog::SendChangeAddressDialog(QWidget* parent, WalletModel* m
         throw std::runtime_error(strprintf("%s: No wallet model set", __func__));
     }
     ui->setupUi(this);
+    connect(model, &QObject::destroyed, this, &QDialog::reject);
     applyParentOrAppStyleSheet(parent);
 
     // Text
@@ -50,8 +53,14 @@ CWDestination SendChangeAddressDialog::getDestination() const
     return dest;
 }
 
+QString SendChangeAddressDialog::getAddress() const
+{
+    return ui->lineEditAddress->text().trimmed();
+}
+
 void SendChangeAddressDialog::showEvent(QShowEvent *event)
 {
+    FocusedDialog::showEvent(event);
     if (ui->lineEditAddress) ui->lineEditAddress->setFocus();
 }
 
@@ -60,12 +69,20 @@ void SendChangeAddressDialog::reset()
     if (!ui->lineEditAddress->text().isEmpty()) {
         ui->lineEditAddress->clear();
         ui->btnCancel->setText(tr("CANCEL"));
+        accept();
+        return;
     }
     close();
 }
 
 void SendChangeAddressDialog::accept()
 {
+    if (!walletModel) return;
+    if (Params().IsTestChain()) {
+        if (getAddress().isEmpty() || walletModel->validateAddress(getAddress())) QDialog::accept();
+        else inform(tr("Enter a valid address for this network"));
+        return;
+    }
     if (ui->lineEditAddress->text().isEmpty()) {
         // no custom change address set
         dest = CNoDestination();

@@ -60,6 +60,8 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent, WalletModel
 
     ui->passLabel3->setText("Repeat passphrase");
     ui->passLabel3->setProperty("cssClass", "text-title");
+    for (QLabel* label : {ui->passLabel1, ui->passLabel2, ui->passLabel3, ui->warningLabel})
+        label->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
 
     setCssProperty(ui->passWarningLabel, "text-warning-small");
     ui->passWarningLabel->setVisible(false);
@@ -99,7 +101,7 @@ AskPassphraseDialog::AskPassphraseDialog(Mode mode, QWidget* parent, WalletModel
         ui->layoutEdit2->hide();
         ui->passLabel3->hide();
         ui->passEdit3->hide();
-        title = tr("Unlock wallet\nfor staking");
+        title = tr("Unlock for staking");
         initWatch(ui->layoutEdit);
         break;
     case Mode::Unlock: // Ask passphrase

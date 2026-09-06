@@ -9,6 +9,7 @@
 #include "guiutil.h"
 #include "optionsmodel.h"
 #include "qtutils.h"
+#include "chainparams.h"
 
 #include <QListView>
 
@@ -67,6 +68,7 @@ RequestDialog::RequestDialog(QWidget *parent) :
 void RequestDialog::setWalletModel(WalletModel *model)
 {
     this->walletModel = model;
+    connect(model, &QObject::destroyed, this, &QDialog::reject);
     ui->comboBoxCoin->setText(BitcoinUnits::name(this->walletModel->getOptionsModel()->getDisplayUnit()));
 }
 
@@ -102,7 +104,7 @@ void RequestDialog::accept()
             return;
         }
 
-        info = new SendCoinsRecipient();
+        if (!info) info = new SendCoinsRecipient();
         info->label = labelStr;
         info->amount = value;
         info->message = ui->lineEditDescription->text();
@@ -112,7 +114,14 @@ void RequestDialog::accept()
         QString title;
 
         CallResult<Destination> r;
-        if (this->isPaymentRequest) {
+        if (Params().IsTestChain()) {
+            if (!isPaymentRequest || !walletModel->validateAddress(receiveAddress)) {
+                inform(tr("Select a receiving address first"));
+                return;
+            }
+            info->address = receiveAddress;
+            title = tr("Payment request");
+        } else if (this->isPaymentRequest) {
             r = walletModel->getNewAddress(label);
             title = tr("Request for ") + BitcoinUnits::format(displayUnit, info->amount, false, BitcoinUnits::separatorAlways) + " " + BitcoinUnits::name(displayUnit);
         } else {
@@ -120,13 +129,13 @@ void RequestDialog::accept()
             title = tr("Cold Staking Address Generated");
         }
 
-        if (!r) {
+        if (!Params().IsTestChain() && !r) {
             // TODO: notify user about this error
             close();
             return;
         }
 
-        info->address = QString::fromStdString(r.getObjResult()->ToString());
+        if (!Params().IsTestChain()) info->address = QString::fromStdString(r.getObjResult()->ToString());
         ui->labelTitle->setText(title);
 
         updateQr(info->address);
@@ -157,6 +166,7 @@ void RequestDialog::onCopyUriClicked()
 
 void RequestDialog::showEvent(QShowEvent *event)
 {
+    FocusedDialog::showEvent(event);
     if (ui->lineEditAmount) ui->lineEditAmount->setFocus();
 }
 
@@ -166,8 +176,8 @@ void RequestDialog::updateQr(const QString& str)
     ui->labelQrImg->setText("");
     QString error;
 
-    QColor qrColor("#3A2418");
-    QColor bgColor(Qt::transparent);
+    QColor qrColor("#17251D");
+    QColor bgColor(Qt::white);
     // Use QR code with transparent background - square modules (classic style)
     QPixmap pixmap = encodeToQrModern(uri, error, qrColor, bgColor, 0, 4, 6);
 
@@ -189,5 +199,6 @@ void RequestDialog::inform(const QString& text)
 
 RequestDialog::~RequestDialog()
 {
+    delete info;
     delete ui;
 }

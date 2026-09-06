@@ -3622,86 +3622,37 @@ HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 HH      Dialog
 HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH*/
 
-*[cssClass="container-dialog"] {
-    background-color:#f6f4e8;
+*[cssClass="container-dialog-shell"], *[cssClass="vote-dialog-shell"], *[cssClass="container-dialog"] {
+    background-color: #FFFFFF;
+    border: 1px solid #D4DDD2;
     border-radius: 16px;
+}
+*[cssClass="container-dialog-header"], *[cssClass="vote-dialog-header"] {
+    background-color: #F6F9F4;
     border: none;
+    border-bottom: 1px solid #D4DDD2;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
 }
-
-*[cssClass="container-dialog-shell"] {
-    background-color:#f6f4e8;
-    border:1px solid #c7cfa0;
-    border-radius:16px;
-}
-
-*[cssClass="container-dialog-header"] {
-    background-color:#F2D4B8;
-    border-top-left-radius:16px;
-    border-top-right-radius:16px;
-    border-bottom-left-radius:0px;
-    border-bottom-right-radius:0px;
-    border:none;
-}
-
-*[cssClass="container-dialog-body"] {
-    background-color:#f6f4e8;
-    border-top-left-radius:0px;
-    border-top-right-radius:0px;
-    border-bottom-left-radius:16px;
-    border-bottom-right-radius:16px;
-    border:none;
-}
-
-*[cssClass="vote-dialog-shell"] {
-    background-color:#f6f4e8;
-    border:1px solid #c7cfa0;
-    border-radius:16px;
-}
-
-*[cssClass="vote-dialog-header"] {
-    background-color:#F2D4B8;
-    border-top-left-radius:16px;
-    border-top-right-radius:16px;
-    border-bottom-left-radius:0px;
-    border-bottom-right-radius:0px;
-    border:none;
-}
-
-*[cssClass="vote-dialog-title"] {
-    color:#2d3020;
-    font-size:24px;
-    font-weight:700;
-}
-
-QWidget#voteDialogHeader QLabel[cssClass="vote-dialog-title"] {
-    color:#2d3020;
-    font-size:24px;
-    font-weight:700;
-}
-
-QWidget#voteDialogHeader QPushButton[cssClass="ic-close"] {
-    qproperty-icon: url("://ic-close") off,
-    url("://ic-close") on ;
-    qproperty-iconSize: 20px 20px;
-    background-color: transparent;
-    border:none;
-    padding:0;
-}
-
-*[cssClass="vote-dialog-body"] {
-    background-color:#f6f4e8;
-    border-top-left-radius:0px;
-    border-top-right-radius:0px;
-    border-bottom-left-radius:16px;
-    border-bottom-right-radius:16px;
-    border:none;
-}
-
+*[cssClass="container-dialog-body"], *[cssClass="vote-dialog-body"],
 QFrame#voteDialogShell QFrame[cssClass="vote-dialog-body"] {
-    border-top-left-radius:0px;
-    border-top-right-radius:0px;
-    border-bottom-left-radius:16px;
-    border-bottom-right-radius:16px;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    background-color: #FFFFFF;
+    border: none;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+*[cssClass="vote-dialog-title"], QWidget#voteDialogHeader QLabel[cssClass="vote-dialog-title"] {
+    color: #1D2921;
+    font-size: 21px;
+    font-weight: 600;
+}
+
+QWidget#containerDialogHeader QLabel[cssClass="text-title-dialog"] { color: #1D2921; font-size: 21px; }
+QWidget#voteDialogHeader QPushButton[cssClass="ic-close"] {
+    qproperty-icon: url("://ic-close");
+    qproperty-iconSize: 20px 20px;
 }
 
 *[cssClass="container-popup"] {
@@ -5830,3 +5781,89 @@ QStackedWidget[designRole="content-card"] QPushButton[cssClass="btn-edit-primary
     border-radius: 9px;
     padding: 10px 42px 10px 12px;
 }
+
+/* Wallet pages share the dashboard's typography and restrained surfaces. */
+*[cssClass="screen-main-surface"] QWidget[designRole="page-heading"] {
+    background: transparent;
+    border: none;
+}
+*[cssClass="screen-side-rail"] {
+    background: transparent;
+    border: none;
+}
+QListView[designRole="address-history"] {
+    background: #FFFFFF;
+    border: 1px solid #D4DDD2;
+    border-radius: 12px;
+    padding: 8px;
+    color: #1D2921;
+    font-size: 13px;
+}
+QListView[designRole="address-history"]::item { padding: 16px 8px; border-bottom: 1px solid #D4DDD2; }
+QListView[designRole="address-history"]::item:selected { background: #EAF1E5; color: #4E7F35; }
+*[cssClass="governance-dashboard-shell"], *[cssClass="governance-budget-panel"] {
+    background: #FFFFFF; border: 1px solid #D4DDD2; border-radius: 14px;
+}
+*[cssClass="governance-dashboard-band"], *[cssClass="governance-dashboard-surface"],
+*[cssClass="governance-side-rail"] { background: transparent; border: none; }
+*[cssClass="governance-title"] { color: #1D2921; font-size: 25px; font-weight: 600; }
+*[cssClass="governance-subtitle"], *[cssClass="governance-budget-label"] { color: #657269; font-size: 13px; }
+QDialog[designRole="wallet-dialog"] { color: #1D2921; font-size: 14px; }
+QDialog[designRole="wallet-dialog"] QLabel[cssClass="text-title-dialog"] {
+    color: #1D2921; font-size: 21px; font-weight: 600; padding: 0;
+}
+QDialog[designRole="wallet-dialog"] QLabel[cssClass="text-main-grey"],
+QDialog[designRole="wallet-dialog"] QLabel[cssClass="text-subtitle"] {
+    color: #657269; font-size: 14px;
+}
+QDialog[designRole="wallet-dialog"] QLabel[cssClass="text-body3-dialog"],
+QDialog[designRole="wallet-dialog"] QLabel[cssClass="text-title2-dialog"] { color: #1D2921; font-size: 15px; }
+QDialog[designRole="wallet-dialog"] QLineEdit,
+QDialog[designRole="wallet-dialog"] QTextEdit,
+QDialog[designRole="wallet-dialog"] QComboBox {
+    background: #F7F9F5; color: #1D2921;
+    border: 1px solid #D4DDD2; border-radius: 8px;
+    padding: 8px 12px; font-size: 14px; selection-background-color: #4E7F35;
+}
+QDialog[designRole="wallet-dialog"] QLineEdit:focus,
+QDialog[designRole="wallet-dialog"] QTextEdit:focus { border-color: #4E7F35; }
+QDialog[designRole="wallet-dialog"] QTreeWidget,
+QDialog[designRole="wallet-dialog"] QTableView {
+    background: #FFFFFF; alternate-background-color: #F7F9F5;
+    color: #1D2921; border: 1px solid #D4DDD2; border-radius: 10px;
+    selection-background-color: #EAF1E5; selection-color: #1D2921;
+}
+QDialog[designRole="wallet-dialog"] QHeaderView::section {
+    background: #F6F9F4; color: #657269; border: none; padding: 10px 8px; font-size: 12px;
+}
+QDialog[designRole="wallet-dialog"] QPushButton[cssClass="btn-dialog-cancel"] {
+    color: #1D2921; background: #FFFFFF; border: 1px solid #D4DDD2;
+    border-radius: 9px; font-size: 14px; padding: 8px 16px;
+}
+QDialog[designRole="wallet-dialog"] QPushButton[cssClass="btn-dialog-cancel"]:hover { background: #EAF1E5; }
+QDialog[designRole="wallet-dialog"] QPushButton[cssClass="btn-primary"] {
+    background: #4E7F35; color: #FFFFFF;
+    border: none; border-radius: 9px; font-size: 14px; font-weight: 600; padding: 8px 16px;
+}
+QDialog[designRole="wallet-dialog"] QPushButton:disabled { color: #657269; }
+QDialog[designRole="wallet-dialog"] QPushButton[cssClass="btn-primary"]:disabled { background: #E3EAE0; color: #657269; border-color: #D4DDD2; }
+QDialog[designRole="wallet-dialog"] QLabel[cssClass="text-title"] { color: #1D2921; font-size: 14px; qproperty-alignment: AlignLeft; }
+QDialog[designRole="wallet-dialog"] QPushButton:focus { border: 2px solid #4E7F35; }
+QDialog[designRole="wallet-dialog"] QLineEdit[cssClass="edit-primary-error"] { border-color: #B53B32; }
+QStackedWidget[designRole="content-card"] { background: #FFFFFF; border: 1px solid #D4DDD2; border-radius: 14px; }
+QDialog#CoinControlDialog { background: #F7F9F5; color: #1D2921; }
+QDialog#CoinControlDialog QWidget[cssClass="container-border-purple"] {
+    background: #FFFFFF; border: 1px solid #D4DDD2; border-radius: 8px;
+}
+QDialog#CoinControlDialog QFrame#frameContainer { background: #F7F9F5; border: none; }
+QDialog#CoinControlDialog QLabel[cssClass="text-main-purple"] { color: #1D2921; font-size: 14px; }
+QDialog#CoinControlDialog QTreeWidget { background: #FFFFFF; color: #1D2921; border: 1px solid #D4DDD2; border-radius: 8px; }
+QDialog#CoinControlDialog QTreeWidget::item { padding: 8px 4px; }
+QDialog#CoinControlDialog QTreeWidget::item:selected { background: #EAF1E5; color: #1D2921; }
+QDialog#CoinControlDialog QGroupBox { background: transparent; border: none; }
+QDialog#CoinControlDialog QRadioButton { color: #1D2921; font-size: 14px; }
+QDialog#CoinControlDialog QPushButton[cssClass="btn-check"] {
+    background: #FFFFFF; color: #1D2921; border: 1px solid #D4DDD2; border-radius: 8px; padding: 8px 12px; font-size: 14px;
+}
+QDialog#CoinControlDialog QPushButton[cssClass="btn-check"]:checked { background: #EAF1E5; border-color: #4E7F35; }
+QDialog#CoinControlDialog QPushButton[cssClass="btn-check"]:disabled { color: #657269; }

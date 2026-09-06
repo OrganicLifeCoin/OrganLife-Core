@@ -28,6 +28,7 @@ public:
 
     void setWalletModel(WalletModel *model);
     void setPaymentRequest(bool _isPaymentRequest);
+    void setReceiveAddress(const QString& address) { receiveAddress = address; }
     void showEvent(QShowEvent *event) override;
     int res = -1;
 
@@ -40,7 +41,8 @@ private:
     Ui::RequestDialog *ui{nullptr};
     int pos = 0;
     bool isPaymentRequest = true;
-    WalletModel *walletModel{nullptr};
+    QPointer<WalletModel> walletModel;
+    QString receiveAddress;
     SnackBar *snackBar{nullptr};
     // Cached last address
     SendCoinsRecipient *info{nullptr};

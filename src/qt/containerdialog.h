@@ -48,6 +48,7 @@ public:
         QDialog(parent, flags)
     {
         setDialogOwnsOpenPosition(this, true);
+        setProperty("designRole", "wallet-dialog");
     }
 
 protected:
@@ -193,11 +194,11 @@ protected:
         auto* header = new QWidget(shell);
         header->setObjectName(headerObjectName);
         header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        header->setMinimumHeight(52);
-        header->setMaximumHeight(58);
+        header->setMinimumHeight(64);
+        header->setMaximumHeight(72);
 
         auto* headerLayout = new QHBoxLayout(header);
-        headerLayout->setContentsMargins(18, 10, 14, 10);
+        headerLayout->setContentsMargins(24, 14, 20, 14);
         headerLayout->setSpacing(8);
 
         if (QWidget* titleParent = titleLabel->parentWidget()) {
@@ -212,18 +213,12 @@ protected:
         }
 
         titleLabel->setParent(header);
-        titleLabel->setAlignment(Qt::AlignCenter);
+        titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        titleLabel->setStyleSheet(QString());
+        titleLabel->setMargin(0);
         closeButton->setParent(header);
 
-        const QSize closeRefSize = closeButton->minimumSize().isValid()
-                ? closeButton->minimumSize()
-                : closeButton->sizeHint();
-        auto* leftAnchor = new QWidget(header);
-        leftAnchor->setFixedSize(std::max(20, closeRefSize.width()), std::max(20, closeRefSize.height()));
-        leftAnchor->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-
-        headerLayout->addWidget(leftAnchor, 0, Qt::AlignLeft | Qt::AlignVCenter);
-        headerLayout->addWidget(titleLabel, 1, Qt::AlignCenter);
+        headerLayout->addWidget(titleLabel, 1, Qt::AlignLeft | Qt::AlignVCenter);
         headerLayout->addWidget(closeButton, 0, Qt::AlignRight | Qt::AlignVCenter);
 
         bodyFrame->setParent(shell);

@@ -26,12 +26,13 @@ public:
 
     void setAddress(QString address);
     CWDestination getDestination() const;
+    QString getAddress() const;
 
     void showEvent(QShowEvent* event) override;
 
 private:
     bool isTransparent;
-    WalletModel* walletModel;
+    QPointer<WalletModel> walletModel;
     Ui::SendChangeAddressDialog *ui;
     SnackBar *snackBar = nullptr;
     CWDestination dest;

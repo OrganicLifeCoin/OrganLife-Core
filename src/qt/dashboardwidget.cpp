@@ -41,8 +41,6 @@
 #define DECORATION_SIZE 65
 #define NUM_ITEMS 3
 #define SHOW_EMPTY_CHART_VIEW_THRESHOLD 0
-#define REQUEST_LOAD_TASK 1
-#define CHART_LOAD_MIN_TIME_INTERVAL 15
 
 namespace {
 void ReplaceLineSeriesValues(QLineSeries* lineSeries, const QList<qreal>& values)
@@ -757,6 +755,21 @@ bool hasCharts = false;
 #ifdef USE_QTCHARTS
     hasCharts = true;
     isLoading = false;
+    chartRefreshTimer = new QTimer(this);
+    chartRefreshTimer->setSingleShot(true);
+    chartRefreshTimer->setInterval(250);
+    connect(chartRefreshTimer, &QTimer::timeout, this, [this](){ refreshChart(); });
+    const QDate today = QDate::currentDate();
+    monthFilter = today.month();
+    yearFilter = today.year();
+    const QStringList months = {tr("Jan"), tr("Feb"), tr("Mar"), tr("Apr"), tr("May"), tr("Jun"),
+                                tr("Jul"), tr("Aug"), tr("Sep"), tr("Oct"), tr("Nov"), tr("Dec")};
+    for (int i = 0; i < months.size(); ++i) ui->comboBoxMonths->addItem(months[i], i + 1);
+    ui->comboBoxMonths->setCurrentIndex(monthFilter - 1);
+    ui->comboBoxYears->addItem(QString::number(yearFilter));
+    connect(ui->comboBoxMonths, &QComboBox::currentTextChanged, this, &DashboardWidget::onChartMonthChanged);
+    connect(ui->pushButtonChartArrow, &QPushButton::clicked, this, [this](){ onChartArrowClicked(true); });
+    connect(ui->pushButtonChartRight, &QPushButton::clicked, this, [this](){ onChartArrowClicked(false); });
     setChartShow(YEAR);
     connect(ui->pushButtonYear, &QPushButton::clicked, [this](){setChartShow(YEAR);});
     connect(ui->pushButtonMonth, &QPushButton::clicked, [this](){setChartShow(MONTH);});
@@ -844,6 +857,9 @@ void DashboardWidget::setStakingStatusActive(bool active)
     ApplyStatusState(dashboardStakingBadge,
                      active ? QStringLiteral("active") : QStringLiteral("inactive"),
                      active ? QColor(104, 162, 73, 100) : QColor());
+    ui->labelMessageEmpty->setText(active
+        ? tr("Staking is active. Your rewards will appear here after your first stake.")
+        : tr("Unlock your wallet for staking to start earning rewards. Only this wallet's rewards appear here."));
 }
 
 void DashboardWidget::setBlockHeight(int height)
@@ -908,6 +924,10 @@ void DashboardWidget::loadWalletModel()
         connect(txModel, &TransactionTableModel::rowsInserted, this, &DashboardWidget::processNewTransaction);
 #ifdef USE_QTCHARTS
         onHideChartsChanged(walletModel->getOptionsModel()->isHideCharts());
+        connect(txModel, &QAbstractItemModel::rowsInserted, this, [this](){ tryChartRefresh(); });
+        connect(txModel, &QAbstractItemModel::rowsRemoved, this, [this](){ tryChartRefresh(); });
+        connect(txModel, &QAbstractItemModel::dataChanged, this, [this](){ tryChartRefresh(); });
+        connect(txModel, &QAbstractItemModel::modelReset, this, [this](){ tryChartRefresh(); });
         connect(walletModel->getOptionsModel(), &OptionsModel::hideChartsChanged, this,
                 &DashboardWidget::onHideChartsChanged);
 #endif
@@ -951,7 +971,13 @@ void DashboardWidget::clearWalletModel()
         stakesFilter->setSourceModel(nullptr);
     }
     hasStakes = false;
+    if (chartRefreshTimer) chartRefreshTimer->stop();
     filterUpdateNeeded = false;
+    chartStakeRowsSnapshot.clear();
+    chartHasRenderedData = false;
+    if (stakesLine) stakesLine->clear();
+    if (mnLine) mnLine->clear();
+    showHideEmptyChart(true, false, true);
 #endif
 
     updateTransactionViewState(false, false);
@@ -961,7 +987,6 @@ void DashboardWidget::clearWalletModel()
 void DashboardWidget::onTxArrived(const QString& hash, const bool isCoinStake, const bool isMNReward, const bool isCSAnyType)
 {
     showList();
-    if (!isVisible()) return;
 #ifdef USE_QTCHARTS
     if (isCoinStake || isMNReward) {
         // Update value if this is our first stake/reward
@@ -1161,28 +1186,19 @@ void DashboardWidget::changeTheme(bool lightTheme, QString& theme)
 
 void DashboardWidget::tryChartRefresh()
 {
-    if (!fShowCharts)
-        return;
-    if (hasStakes) {
-        // First check that everything was loaded properly.
-        if (!chart) {
-            loadChart();
-        } else {
-            // Check for min update time to not reload the UI so often if the node is syncing.
-            int64_t now = GetTime();
-            int chartLoadIntervalTime = CHART_LOAD_MIN_TIME_INTERVAL;
-            if (clientModel->inInitialBlockDownload()) chartLoadIntervalTime *= 6; // 90 seconds update
-            if (lastRefreshTime + chartLoadIntervalTime < now) {
-                lastRefreshTime = now;
-                refreshChart();
-            }
-        }
-    }
+    if (!fShowCharts || !walletModel || !stakesFilter) return;
+    hasStakes = stakesFilter->rowCount() > 0;
+    if (!chart) loadChart();
+    else if (!chartRefreshTimer->isActive()) chartRefreshTimer->start();
 }
 
 void DashboardWidget::setChartShow(ChartShowType type)
 {
     this->chartShow = type;
+    filterUpdateNeeded = true;
+    if (periodFilterRow) periodFilterRow->setVisible(type != ALL);
+    ui->comboBoxMonths->setVisible(type == MONTH);
+    ui->comboBoxYears->setVisible(type != ALL);
     if (chartShow == MONTH) {
         ui->containerChartArrow->setVisible(true);
         resolveMonthWindowForFilters();
@@ -1199,27 +1215,11 @@ const QStringList monthsNames = {QObject::tr("Jan"), QObject::tr("Feb"), QObject
 
 void DashboardWidget::loadChart()
 {
-    if (hasStakes) {
-        if (!chart) {
-            showHideEmptyChart(false, false);
-            initChart();
-            QDate currentDate = QDate::currentDate();
-            monthFilter = currentDate.month();
-            yearFilter = currentDate.year();
-            for (int i = 1; i < 13; ++i) ui->comboBoxMonths->addItem(QString(monthsNames[i-1]), QVariant(i));
-            ui->comboBoxMonths->setCurrentIndex(monthFilter - 1);
-            connect(ui->comboBoxMonths, static_cast<void (QComboBox::*)(const QString&)>(&QComboBox::currentTextChanged),
-                this, &DashboardWidget::onChartMonthChanged);
-            connect(ui->pushButtonChartArrow, &QPushButton::clicked, [this](){ onChartArrowClicked(true); });
-            connect(ui->pushButtonChartRight, &QPushButton::clicked, [this](){ onChartArrowClicked(false); });
-            resolveMonthWindowForFilters();
-            updateMonthArrowState();
-        }
-        refreshChart();
-        changeChartColors();
-    } else {
-        showHideEmptyChart(true, false);
-    }
+    if (!walletModel) return;
+    if (!chart) initChart();
+    resolveMonthWindowForFilters();
+    refreshChart();
+    changeChartColors();
 }
 
 void DashboardWidget::showHideEmptyChart(bool showEmpty, bool loading, bool forceView)
@@ -1237,7 +1237,7 @@ void DashboardWidget::showHideEmptyChart(bool showEmpty, bool loading, bool forc
     ui->pushButtonMonth->setEnabled(invLoading);
     ui->pushButtonAll->setEnabled(invLoading);
     ui->pushButtonYear->setEnabled(invLoading);
-    ui->labelEmptyChart->setText(loading ? tr("Loading chart..") : tr("You have no staking rewards"));
+    ui->labelEmptyChart->setText(loading ? tr("Loading rewards…") : tr("No rewards in this period"));
 }
 
 void DashboardWidget::initChart()
@@ -1303,6 +1303,7 @@ void DashboardWidget::initChart()
     chartValueTooltip->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     setCssProperty(chartValueTooltip, "dashboard-chart-tooltip");
     chartValueTooltip->hide();
+    connect(chart, &QChart::plotAreaChanged, this, [this](){ updateChartTimelineGeometry(); });
     QTimer::singleShot(0, this, &DashboardWidget::updateChartTimelineGeometry);
 }
 
@@ -1605,13 +1606,23 @@ void DashboardWidget::onChartMonthChanged(const QString& monthStr)
 
 bool DashboardWidget::refreshChart()
 {
-    if (isLoading) return false;
+    if (isLoading || !walletModel || !chart) return false;
     isLoading = true;
     isChartMin = width() < 1300;
     isChartInitialized = false;
     snapshotChartRows();
     showHideEmptyChart(!chartHasRenderedData, true, true);
-    return execute(REQUEST_LOAD_TASK);
+    // ponytail: linear aggregation over the existing snapshot; move only the
+    // immutable arithmetic off-thread if measured histories exceed a frame budget.
+    // Keep it on the UI thread so wallet
+    // switches and period changes cannot race a worker's result.
+    if (!loadChartData(!isChartMin && chartShow == YEAR)) {
+        isLoading = false;
+        showHideEmptyChart(true, false, true);
+        return false;
+    }
+    onChartRefreshed();
+    return true;
 }
 
 void DashboardWidget::onChartRefreshed()
@@ -1730,8 +1741,10 @@ void DashboardWidget::onChartRefreshed()
     }
 
     // Refresh years filter, first address created is the start
-    int yearStart = GUIUtil::dateTimeFromTimeT(static_cast<qint64>(walletModel->getCreationTime())).date().year();
     int currentYear = QDateTime::currentDateTime().date().year();
+    int yearStart = currentYear;
+    if (walletModel->getCreationTime() > 0)
+        yearStart = std::min(currentYear, GUIUtil::dateTimeFromTimeT(static_cast<qint64>(walletModel->getCreationTime())).date().year());
 
     QString selection;
     if (ui->comboBoxYears->count() > 0) {
@@ -1772,9 +1785,8 @@ std::pair<int, int> DashboardWidget::getChartRange(const QMap<int, std::pair<qin
         case ALL: {
             QList<int> keys = amountsBy.keys();
             if (keys.isEmpty()) {
-                // This should never happen, ALL means from the beginning of time and if this is called then it must have at least one stake..
-                inform(tr("Error loading chart, invalid data"));
-                return std::make_pair(0, 0);
+                const int year = QDate::currentDate().year();
+                return std::make_pair(year, year + 1);
             }
             std::sort(keys.begin(), keys.end());
             return std::make_pair(keys.first(), keys.last() + 1);
@@ -1895,7 +1907,7 @@ void DashboardWidget::onHideChartsChanged(bool fHide)
     if (fShowCharts) {
         if (!stakesFilter) {
             stakesFilter = new TransactionFilterProxy(this);
-            stakesFilter->setDynamicSortFilter(false);
+            stakesFilter->setDynamicSortFilter(true);
             stakesFilter->setSortCaseSensitivity(Qt::CaseInsensitive);
             stakesFilter->setFilterCaseSensitivity(Qt::CaseInsensitive);
             stakesFilter->setTypeFilter(TransactionFilterProxy::TYPE(TransactionRecord::StakeMint) |
@@ -1918,21 +1930,6 @@ void DashboardWidget::onHideChartsChanged(bool fHide)
 }
 
 #endif
-
-void DashboardWidget::run(int type)
-{
-#ifdef USE_QTCHARTS
-    if (type == REQUEST_LOAD_TASK) {
-        bool withMonthNames = !isChartMin && (chartShow == YEAR);
-        if (loadChartData(withMonthNames))
-            QMetaObject::invokeMethod(this, "onChartRefreshed", Qt::QueuedConnection);
-    }
-#endif
-}
-void DashboardWidget::onError(QString error, int type)
-{
-    inform(tr("Error loading chart: %1").arg(error));
-}
 
 void DashboardWidget::processNewTransaction(const QModelIndex& parent, int start, int /*end*/)
 {

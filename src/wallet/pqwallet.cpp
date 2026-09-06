@@ -130,7 +130,8 @@ std::vector<COutput> CWallet::GetPQUnspent(bool include_locked) const
 }
 
 bool CWallet::CreatePQTransaction(const std::string& address, CAmount amount,
-                                  CTransactionRef& tx, CAmount& fee, std::string& reason)
+                                  CTransactionRef& tx, CAmount& fee, std::string& reason,
+                                  const CCoinControl* coin_control, bool subtract_fee)
 {
     pq::KeyID recipient_id;
     if (!pq::DecodeAddress(address, Params().NetworkIDString(), recipient_id)) {
@@ -140,12 +141,13 @@ bool CWallet::CreatePQTransaction(const std::string& address, CAmount amount,
         return false;
     }
     return CreatePQTransaction({CTxOut(amount, pq::GetScript(recipient_id))}, pq::TRANSFER, {},
-                               tx, fee, reason);
+                               tx, fee, reason, coin_control, subtract_fee);
 }
 
 bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mode,
                                   const std::vector<unsigned char>& data,
-                                  CTransactionRef& tx, CAmount& fee, std::string& reason)
+                                  CTransactionRef& tx, CAmount& fee, std::string& reason,
+                                  const CCoinControl* coin_control, bool subtract_fee)
 {
     tx.reset();
     fee = 0;
@@ -160,6 +162,7 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
     if ((mode != pq::TRANSFER && !pq::IsGovernanceMode(mode)) ||
         (pq::IsGovernanceMode(mode) != !data.empty()) || outputs.size() != 1)
         return fail("Invalid PQ transaction mode or outputs");
+    if (subtract_fee && mode != pq::TRANSFER) return fail("Fee subtraction is only available for payments");
     CAmount amount = 0;
     for (const CTxOut& output : outputs) {
         pq::KeyID id;
@@ -179,8 +182,32 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
     payload.data = data;
     pq::KeyID governance_change_id{};
     std::vector<COutput> coins = GetPQUnspent();
-    // ponytail: largest-first selection is bounded to two PQ inputs; no coin-selection framework.
-    std::sort(coins.begin(), coins.end(), [](const COutput& a, const COutput& b) { return a.Value() > b.Value(); });
+    const auto selected = [&](const COutput& out) {
+        return coin_control && coin_control->IsSelected(COutPoint(out.tx->GetHash(), out.i));
+    };
+    const size_t required_inputs = coin_control ? coin_control->QuantitySelected() : 0;
+    if (required_inputs > pq::MAX_INPUTS) return fail("Select at most two coins for this transaction");
+    if (static_cast<size_t>(std::count_if(coins.begin(), coins.end(), selected)) != required_inputs)
+        return fail("A selected coin is spent, locked, immature or no longer confirmed");
+    if (required_inputs && !coin_control->fAllowOtherInputs) {
+        coins.erase(std::remove_if(coins.begin(), coins.end(), [&](const COutput& out) { return !selected(out); }), coins.end());
+    }
+    std::sort(coins.begin(), coins.end(), [&](const COutput& a, const COutput& b) {
+        if (selected(a) != selected(b)) return selected(a);
+        return a.Value() > b.Value();
+    });
+    pq::KeyID custom_change_id{};
+    const bool custom_change = coin_control && !coin_control->destPQChange.empty();
+    if (custom_change && (!pq::DecodeAddress(coin_control->destPQChange, Params().NetworkIDString(), custom_change_id) || mode != pq::TRANSFER))
+        return fail("Invalid PQ change address for this network");
+    const auto required_fee = [&](unsigned int bytes) {
+        CAmount result = GetMinimumFee(bytes, nTxConfirmTarget, mempool);
+        if (coin_control) {
+            if (coin_control->fOverrideFeeRate) result = std::max(GetRequiredFee(bytes), coin_control->nFeeRate.GetFee(bytes));
+            result = std::max(result, coin_control->nMinimumTotalFee);
+        }
+        return result;
+    };
     CAmount selected_value = 0;
     bool built = false;
     reason = "Insufficient eligible confirmed funds";
@@ -200,15 +227,19 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
         payload.authorizations.emplace_back();
         payload.authorizations.back().public_key = m_pq_keys.at(id).public_key;
         tx_new.extraPayload = pq::EncodePayload(payload);
-        const CAmount minimum_fee = GetMinimumFee(GetSerializeSize(tx_new, PROTOCOL_VERSION), nTxConfirmTarget, mempool);
-        if (selected_value >= amount && selected_value - amount >= minimum_fee) {
+        const CAmount minimum_fee = required_fee(GetSerializeSize(tx_new, PROTOCOL_VERSION));
+        if (tx_new.vin.size() >= required_inputs && selected_value >= amount &&
+            (subtract_fee || selected_value - amount >= minimum_fee)) {
             const auto change_script = pq::GetScript(pq::KeyID{});
             tx_new.vout.emplace_back(0, change_script);
-            fee = GetMinimumFee(GetSerializeSize(tx_new, PROTOCOL_VERSION), nTxConfirmTarget, mempool);
-            const CAmount change = selected_value - amount - fee;
+            fee = required_fee(GetSerializeSize(tx_new, PROTOCOL_VERSION));
+            if (fee > maxTxFee) return fail("PQ transaction fee is outside wallet policy");
+            const CAmount change = selected_value - amount - (subtract_fee ? 0 : fee);
+            if (subtract_fee && change > 0 && IsDust(CTxOut(change, change_script), dustRelayFee))
+                return fail("Fee subtraction would leave dust change; adjust the amount or selected coins");
             if (change > 0 && !IsDust(CTxOut(change, change_script), dustRelayFee)) {
-                pq::KeyID change_id = governance_change_id;
-                if (!pq::IsGovernanceMode(mode)) {
+                pq::KeyID change_id = custom_change ? custom_change_id : governance_change_id;
+                if (!custom_change && !pq::IsGovernanceMode(mode)) {
                     std::string change_address;
                     if (!GeneratePQAddress(change_address) ||
                         !pq::DecodeAddress(change_address, Params().NetworkIDString(), change_id))
@@ -217,7 +248,12 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
                 tx_new.vout.back() = CTxOut(change, pq::GetScript(change_id));
             } else {
                 tx_new.vout.pop_back();
-                fee = selected_value - amount;
+                fee = subtract_fee ? required_fee(GetSerializeSize(tx_new, PROTOCOL_VERSION)) : selected_value - amount;
+            }
+            if (subtract_fee) {
+                if (amount <= fee) return fail("The amount does not cover the transaction fee");
+                tx_new.vout.front().nValue = amount - fee;
+                if (IsDust(tx_new.vout.front(), dustRelayFee)) return fail("The amount after subtracting the fee is too small");
             }
             built = true;
             break;
@@ -263,7 +299,7 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
     if (output_value > input_value) return fail("PQ inputs do not cover outputs");
     fee = input_value - output_value;
     const auto size = GetSerializeSize(finalized, PROTOCOL_VERSION);
-    if (fee > maxTxFee || fee < GetMinimumFee(size, nTxConfirmTarget, mempool) || fee < minRelayTxFee.GetFee(size))
+    if (fee > maxTxFee || fee < required_fee(size) || fee < minRelayTxFee.GetFee(size))
         return fail("PQ transaction fee is outside wallet policy");
     tx = MakeTransactionRef(std::move(tx_new));
     reason.clear();

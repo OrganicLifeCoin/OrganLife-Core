@@ -230,7 +230,7 @@ SendCoinsRecipient SendMultiRow::getValue()
     recipient.amount = getAmountValue();
     if (Params().IsTestChain()) {
         recipient.isShieldedAddr = false;
-        recipient.fSubtractFee = false;
+        recipient.fSubtractFee = getSubtractFeeFromAmount();
     } else {
         auto dest = Standard::DecodeDestination(recipient.address.toStdString());
         recipient.isShieldedAddr = boost::get<libzcash::SaplingPaymentAddress>(&dest);
@@ -243,7 +243,7 @@ void SendMultiRow::setPQMode(bool enabled)
 {
     ui->labelSubtitleDescription->setVisible(!enabled);
     ui->lineEditDescription->setVisible(!enabled);
-    ui->checkboxSubtractFeeFromAmount->setVisible(!enabled);
+    ui->checkboxSubtractFeeFromAmount->setVisible(true);
     ui->btnAddMemo->setVisible(!enabled);
     btnContact->setVisible(!enabled);
     if (enabled) recipient.message.clear();
