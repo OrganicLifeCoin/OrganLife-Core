@@ -64,6 +64,19 @@ reindex restores the proposal, lock, vote, and payout state from the chain.
 
 ## Current safety boundary
 
+PQ masternode registry block validation is opt-in on disposable regtest nodes
+only (`-nuparams=pq_masternodes:HEIGHT`). The height must be positive and PQ
+payments must already be active at that height. It is disabled by default,
+and cannot activate on public testnet or mainnet. Registration/update/revocation
+and collateral-spend state is validated and undone with blocks. Startup checks
+the stored activation height and registry tip; changing or disabling an indexed
+activation requires an explicit rebuild.
+
+This does not yet provide a usable masternode: registration transaction relay,
+wallet collateral protection, operator RPC/Qt flows, service verification,
+rewards and quorum finality remain unavailable. Do not use this opt-in mode with
+a value-bearing wallet.
+
 The testnet has a fresh genesis and network magic. Mainnet startup is refused.
 Sapling parameters and tier-two services are not initialized, and their RPC
 surfaces are absent. This remains test software until the complete local suite,
@@ -87,6 +100,8 @@ python3 test/functional/feature_pq_only.py
 python3 test/functional/feature_pq_pos.py
 python3 test/functional/feature_pq_governance.py
 python3 test/functional/feature_pq_startup.py
+python3 test/functional/feature_pq_registry.py
+python3 test/functional/feature_pq_pos.py --pq-registry
 ```
 
 The functional tests use disposable local nodes and verify backup/restore,

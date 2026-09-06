@@ -23,6 +23,7 @@
 #include "consensus/tx_verify.h"
 #include "consensus/validation.h"
 #include "evo/evodb.h"
+#include "evo/pqmasternode.h"
 #include "evo/governancevoteindex.h"
 #include "evo/specialtx_validation.h"
 #include "flatfile.h"
@@ -402,6 +403,10 @@ static bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState &state, 
         return error("%s : transaction checks for %s failed with %s", __func__, tx.GetHash().ToString(), FormatStateMessage(state));
 
     int nextBlockHeight = chainHeight + 1;
+    // Registry block qualification precedes mempool conflict/reorg support.
+    if (tx.nType == CTransaction::PQ && tx.extraPayload && tx.extraPayload->size() >= 2 &&
+        (*tx.extraPayload)[1] == pq::MASTERNODE)
+        return state.DoS(0, false, REJECT_NONSTANDARD, "pq-masternode-relay-disabled");
     // Check transaction contextually against consensus rules at block height
     if (!ContextualCheckTransaction(_tx, state, params, nextBlockHeight, false /* isMined */, IsInitialBlockDownload())) {
         return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
@@ -1406,6 +1411,14 @@ DisconnectResult DisconnectBlock(CBlock& block, const CBlockIndex* pindex, CCoin
         return DISCONNECT_FAILED;
     }
 
+    if (pq::MasternodesActive(Params(), pindex->nHeight)) {
+        std::string reason;
+        if (!pqmn::Index(*evoDb, Params()).DisconnectBlock(block, *pindex, view,
+                Params().GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight, reason)) {
+            error("DisconnectBlock: %s", reason);
+            return DISCONNECT_FAILED;
+        }
+    }
     if (!UndoSpecialTxsInBlock(block, pindex)) {
         return DISCONNECT_FAILED;
     }
@@ -1609,6 +1622,16 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     // Sapling
     SaplingMerkleTree sapling_tree;
     assert(view.GetSaplingAnchorAt(view.GetBestAnchor(), sapling_tree));
+
+    // The registry needs the parent's pre-spend view. Its temporary updates are
+    // owned by the caller's EvoDB transaction, including validation-only rollback.
+    // All ordinary input, maturity, issuance and governance checks still follow.
+    if (pq::MasternodesActive(Params(), pindex->nHeight)) {
+        std::string reason;
+        if (!pqmn::Index(*evoDb, Params()).ConnectBlock(block, *pindex, view,
+                consensus.vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight, reason))
+            return state.DoS(100, false, REJECT_INVALID, reason);
+    }
 
     std::vector<PrecomputedTransactionData> precomTxData;
     precomTxData.reserve(block.vtx.size()); // Required so that pointers to individual precomTxData don't get invalidated
@@ -3464,6 +3487,8 @@ bool TestBlockValidity(CValidationState& state, const CBlock& block, CBlockIndex
     }
     CCoinsViewCache viewNew(pcoinsTip.get());
     CBlockIndex indexDummy(block);
+    const uint256 blockHash = block.GetHash();
+    indexDummy.phashBlock = &blockHash;
     indexDummy.pprev = pindexPrev;
     indexDummy.nHeight = pindexPrev->nHeight + 1;
 
@@ -3822,15 +3847,23 @@ bool ReplayBlocks(const CChainParams& params, CCoinsView* view, bool& requiresRe
         requiresReindex = true;
         return error("ReplayBlocks: %s; restart with -reindex", reason);
     };
+    const auto registryMatches = [&](const CBlockIndex* tip) {
+        try {
+            return pqmn::Index(*evoDb, params).MatchesChainTip(tip);
+        } catch (const std::exception&) {
+            return false; // Unreadable markers require the same explicit rebuild.
+        }
+    };
     const std::vector<uint256> hashHeads = view->GetHeadBlocks();
     if (hashHeads.empty()) {
         const uint256 best = view->GetBestBlock();
+        const CBlockIndex* tip = best.IsNull() ? nullptr : LookupBlockIndex(best);
+        if (!best.IsNull() && !tip) return requireReindex("Unknown chainstate tip");
+        if (!registryMatches(tip)) return requireReindex("PQ registry tip or activation does not match chainstate");
         if (best.IsNull()) {
             if (evoDb->Exists(EVODB_BEST_BLOCK)) return requireReindex("Empty chainstate with an existing EvoDB tip");
             return true; // Cold start or explicitly rebuilt databases.
         }
-        const CBlockIndex* tip = LookupBlockIndex(best);
-        if (!tip) return requireReindex("Unknown chainstate tip");
         if ((pq::PaymentsActive(params, tip->nHeight) ||
              params.GetConsensus().NetworkUpgradeActive(tip->nHeight, Consensus::UPGRADE_V6_0)) &&
             !evoDb->VerifyBestBlock(best)) return requireReindex("Chainstate and EvoDB tips do not match");
@@ -3861,8 +3894,9 @@ bool ReplayBlocks(const CChainParams& params, CCoinsView* view, bool& requiresRe
 
     // Coin batch replay is idempotent; PQ index updates are not. Do not apply them
     // against a partially flushed UTXO view, including rollback from an active branch.
+    // Existing registry markers also forbid replay if local activation settings moved later.
     if (pq::PaymentsActive(params, pindexNew->nHeight) ||
-        (pindexOld && pq::PaymentsActive(params, pindexOld->nHeight)))
+        (pindexOld && pq::PaymentsActive(params, pindexOld->nHeight)) || !registryMatches(nullptr))
         return requireReindex("PQ chainstate update is incomplete");
 
     CCoinsViewCache cache(view);

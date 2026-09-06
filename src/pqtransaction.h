@@ -42,6 +42,8 @@ bool DecodePayload(const CTransaction& tx, Payload& payload);
 bool CheckStructure(const CTransaction& tx, const CChainParams& params, std::string& reason);
 // Pass the actual block height, or the candidate next-block height for mempool/wallet use.
 bool PaymentsActive(const CChainParams& params, int height);
+// Local registry qualification only; public networks remain disabled.
+bool MasternodesActive(const CChainParams& params, int height);
 bool CheckContext(const CTransaction& tx, const CChainParams& params, int height, std::string& reason);
 // prevouts are complete spent outputs, in input order, from the trusted UTXO view.
 std::vector<unsigned char> SignatureMessage(const CTransaction& tx, const std::vector<CTxOut>& prevouts,

@@ -77,7 +77,9 @@ BASE_SCRIPTS= [
     'feature_pq_only.py',
     'feature_pq_governance.py',
     'feature_pq_startup.py',
+    'feature_pq_registry.py',
     'feature_pq_pos.py',
+    'feature_pq_pos.py --pq-registry',
     'rpc_scantxoutset.py',
     'feature_logging.py',                       # ~ 195 sec
     'wallet_multiwallet.py',                    # ~ 190 sec

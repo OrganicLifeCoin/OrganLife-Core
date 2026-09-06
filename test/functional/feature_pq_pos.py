@@ -12,6 +12,16 @@ from test_framework.util import assert_equal, set_node_times, wait_until
 
 
 class PQPoSTest(PivxTestFramework):
+    def add_options(self, parser):
+        parser.add_option("--pq-registry", action="store_true", default=False,
+                          help="Also exercise the opt-in regtest registry during staking and reorgs")
+
+    def setup_network(self):
+        if self.options.pq_registry:
+            for args in self.extra_args:
+                args.append("-nuparams=pq_masternodes:1")
+        super().setup_network()
+
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 2

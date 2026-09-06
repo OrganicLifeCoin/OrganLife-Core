@@ -716,7 +716,9 @@ static bool CheckSpecialTxBasic(const CTransaction& tx, CValidationState& state)
     }
 
     // Size limits
-    if (tx.extraPayload->size() > MAX_SPECIALTX_EXTRAPAYLOAD) {
+    const size_t payloadLimit = tx.nType == CTransaction::PQ && tx.extraPayload->size() >= 2 &&
+        (*tx.extraPayload)[1] == pq::MASTERNODE ? pq::MAX_MASTERNODE_TX_SIZE : MAX_SPECIALTX_EXTRAPAYLOAD;
+    if (tx.extraPayload->size() > payloadLimit) {
         return state.DoS(100, error("%s: Special tx payload oversize (%d)", __func__, tx.extraPayload->size()),
                          REJECT_INVALID, "bad-txns-payload-oversize");
     }

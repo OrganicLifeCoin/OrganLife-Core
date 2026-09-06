@@ -50,7 +50,7 @@ Span<const unsigned char> Context(Role role);
 std::vector<unsigned char> SigningMessage(const CTransaction& tx, const std::vector<CTxOut>& prevouts,
                                          const uint256& genesis);
 
-// Unconnected registry component. No runtime instance or activation is installed.
+// Registry runtime is opt-in regtest only; service/rewards/finality are not installed.
 // Caller holds cs_main, owns the CEvoDB transaction and supplies the pre-spend view.
 // Caller also validates ordinary transaction values/issuance, maturity and locktime.
 class Index {
@@ -64,6 +64,8 @@ public:
     bool Get(const uint256& id, Record& record) const;
     bool FindCollateral(const COutPoint& collateral, uint256& id) const;
     std::vector<std::pair<uint256, Record>> List() const;
+    // Read-only startup check, including activation changes and inactive chains.
+    bool MatchesChainTip(const CBlockIndex* tip) const;
     // Failure writes nothing. Exceptions require caller to roll back its transaction.
     bool Apply(const CTransaction& tx, const CCoinsViewCache& view, uint32_t height, std::string& reason);
     // Missing undo or a changed after-state fails closed. Undo in reverse transaction order.

@@ -114,12 +114,18 @@ bool PaymentsActive(const CChainParams& params, int height)
         params.GetConsensus().NetworkUpgradeActive(height, Consensus::UPGRADE_PQ);
 }
 
+bool MasternodesActive(const CChainParams& params, int height)
+{
+    const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
+    return params.IsRegTestNet() && first > 0 && height >= first && PaymentsActive(params, first);
+}
+
 bool CheckContext(const CTransaction& tx, const CChainParams& params, int height, std::string& reason)
 {
     reason.clear();
-    // Reserved for the isolated registry component. No network/height activates it yet.
     if (tx.nType == CTransaction::PQ && tx.extraPayload && tx.extraPayload->size() >= 2 &&
-        (*tx.extraPayload)[1] == MASTERNODE) return Fail(reason, "bad-pq-masternode-not-active");
+        (*tx.extraPayload)[1] == MASTERNODE && !MasternodesActive(params, height))
+        return Fail(reason, "bad-pq-masternode-not-active");
     // The pre-launch genesis coinbase is fixed by the network identity and is
     // never spendable. It predates PQ activation even on always-active regtest.
     if (height == 0 && tx.IsCoinBase()) return true;
@@ -139,7 +145,7 @@ bool CheckContext(const CTransaction& tx, const CChainParams& params, int height
         Payload payload;
         if (!DecodePayload(tx, payload) ||
             (tx.IsCoinStake() ? payload.mode != STAKE :
-             (payload.mode != TRANSFER && !IsGovernanceMode(payload.mode))))
+             (payload.mode != TRANSFER && !IsGovernanceMode(payload.mode) && payload.mode != MASTERNODE)))
             return Fail(reason, tx.IsCoinStake() ? "bad-pq-only-stake" : "bad-pq-only-transaction");
     }
     return true;

@@ -8,16 +8,17 @@
 #include <netbase.h>
 #include <validation.h>
 #include <txdb.h>
+#include <blockassembler.h>
 #include <boost/test/unit_test.hpp>
 
 namespace {
-struct MNSetup : BasicTestingSetup {
+template<typename Base> struct MNSetupT : Base {
     std::array<mldsa44::Key, 9> keys;
     CCoinsView base;
     CCoinsViewCache view{&base};
     uint32_t nextInput{1};
     const COutPoint collateral{uint256S("aa"), 0};
-    MNSetup() : BasicTestingSetup(CBaseChainParams::REGTEST) {
+    MNSetupT() : Base(CBaseChainParams::REGTEST) {
         for (size_t i = 0; i < keys.size(); ++i) {
             std::array<unsigned char, mldsa44::SEED_SIZE> seed{};
             seed[0] = i + 20; // Public deterministic test material only.
@@ -46,17 +47,18 @@ struct MNSetup : BasicTestingSetup {
         tx.extraPayload = pq::EncodePayload(payload);
     }
     CMutableTransaction Transaction(pqmn::Payload op, size_t operatorKey = 1, bool internal = false,
-                                    size_t ownerKey = 0, size_t collateralKey = 2) {
+                                    size_t ownerKey = 0, size_t collateralKey = 2, COutPoint feeInput = {}) {
         CMutableTransaction tx;
         tx.nVersion = 3; tx.nType = CTransaction::PQ; tx.sapData = nullopt;
-        tx.vin.emplace_back(COutPoint(uint256S("bb"), nextInput++));
+        tx.vin.emplace_back(feeInput.IsNull() ? COutPoint(uint256S("bb"), nextInput++) : feeInput);
         const auto amount = Params().GetConsensus().nMNCollateralAmt;
-        view.AddCoin(tx.vin[0].prevout, Coin(CTxOut(amount + 10 * COIN, pq::GetScript(ID(3))), 1, false, false), false);
+        if (feeInput.IsNull()) view.AddCoin(tx.vin[0].prevout, Coin(CTxOut(amount + 10 * COIN, pq::GetScript(ID(3))), 1, false, false), false);
+        const CAmount available = view.AccessCoin(tx.vin[0].prevout).out.nValue;
         if (internal) {
             op.collateral = COutPoint(uint256(), 0);
             tx.vout.emplace_back(amount, pq::GetScript(ID(2)));
-            tx.vout.emplace_back(9 * COIN, pq::GetScript(ID(3)));
-        } else tx.vout.emplace_back(amount + 9 * COIN, pq::GetScript(ID(3)));
+            tx.vout.emplace_back(available - amount - COIN, pq::GetScript(ID(3)));
+        } else tx.vout.emplace_back(available - COIN, pq::GetScript(ID(3)));
         pq::Payload payload; payload.mode = pq::MASTERNODE; payload.authorizations.resize(1);
         payload.authorizations[0].public_key = keys[3].GetPublicKey();
         payload.data = pqmn::Encode(op); BOOST_REQUIRE(!payload.data.empty());
@@ -75,6 +77,7 @@ struct MNSetup : BasicTestingSetup {
         return tx;
     }
 };
+using MNSetup = MNSetupT<BasicTestingSetup>;
 
 struct RegistryBlock {
     CBlock block;
@@ -95,7 +98,7 @@ struct RegistryBlock {
 
 BOOST_FIXTURE_TEST_SUITE(pqmasternode_tests, MNSetup)
 
-BOOST_AUTO_TEST_CASE(reserved_envelope_parses_but_never_activates)
+BOOST_AUTO_TEST_CASE(reserved_envelope_parses_but_is_disabled_by_default)
 {
     pq::Payload payload; payload.mode = pq::MASTERNODE; payload.authorizations.resize(1); payload.data = {1};
     BOOST_CHECK(!pq::EncodePayload(payload).empty());
@@ -108,6 +111,28 @@ BOOST_AUTO_TEST_CASE(reserved_envelope_parses_but_never_activates)
             BOOST_CHECK(!pq::CheckContext(tx, *params, height, reason));
     }
     BOOST_CHECK_EQUAL(pq::GetSigOpCost(tx), 4 * pq::SIGOP_COST);
+}
+
+BOOST_AUTO_TEST_CASE(registry_context_requires_explicit_regtest_activation_after_payments)
+{
+    const auto tx = Transaction(Registration()); std::string reason;
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 20);
+    BOOST_CHECK(!pq::CheckContext(tx, Params(), 19, reason));
+    BOOST_CHECK(pq::CheckContext(tx, Params(), 20, reason));
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 21);
+    BOOST_CHECK(!pq::CheckContext(tx, Params(), 21, reason)); // Invalid activation ordering.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 20);
+    BOOST_CHECK(pq::CheckContext(tx, Params(), 20, reason));
+    for (int invalid : {-1, 0}) {
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, invalid);
+        BOOST_CHECK(!pq::CheckContext(tx, Params(), 20, reason));
+    }
+    for (const std::string network : {"main", "test"}) {
+        auto params = CreateChainParams(network);
+        params->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 20);
+        BOOST_CHECK(!pq::MasternodesActive(*params, 20));
+        BOOST_CHECK(!pq::CheckContext(tx, *params, 20, reason));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(register_external_internal_collateral_and_undo)
@@ -785,6 +810,15 @@ BOOST_AUTO_TEST_CASE(startup_replay_checks_clean_coin_and_evo_tips)
     bool requiresReindex{true};
     BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); // Fresh/rebuilt databases.
     BOOST_CHECK(!requiresReindex);
+    for (char kind : {'a', 'b'}) {
+        const auto key = std::make_pair(std::string("pqmn1") + kind, Params().GetConsensus().hashGenesisBlock);
+        BOOST_REQUIRE(evoDb->GetRawDB().Write(key, std::string("x")));
+        for (int attempt = 0; attempt < 2; ++attempt) {
+            BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
+            BOOST_CHECK(evoDb->GetRawDB().Exists(key));
+        }
+        BOOST_REQUIRE(evoDb->GetRawDB().Erase(key));
+    }
     {
         auto transaction = evoDb->BeginTransaction(); evoDb->WriteBestBlock(firstHash);
         BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); // Empty coins cannot conceal an old index.
@@ -810,6 +844,21 @@ BOOST_AUTO_TEST_CASE(startup_replay_checks_clean_coin_and_evo_tips)
     BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
     coins.SetBestBlock(uint256S("abcd")); BOOST_REQUIRE(coins.Flush());
     BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); // Unknown coin tip.
+    coins.SetBestBlock(secondHash); BOOST_REQUIRE(coins.Flush());
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 2);
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); // Missing active registry.
+    BOOST_CHECK(requiresReindex);
+    const auto activation = std::make_pair(std::string("pqmn1a"), Params().GetConsensus().hashGenesisBlock);
+    const auto marker = std::make_pair(std::string("pqmn1b"), Params().GetConsensus().hashGenesisBlock);
+    evoDb->Write(activation, 2); evoDb->Write(marker, secondHash);
+    BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(!requiresReindex);
+    evoDb->Write(marker, firstHash);
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
+    evoDb->Write(marker, secondHash);
+    for (int changed : {-1, 0, 1, 3}) {
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, changed);
+        BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(startup_replay_refuses_partial_pq_state_before_writes)
@@ -834,6 +883,17 @@ BOOST_AUTO_TEST_CASE(startup_replay_refuses_partial_pq_state_before_writes)
         BOOST_CHECK(database.GetHeadBlocks() == heads);
         BOOST_CHECK(database.GetBestBlock().IsNull()); BOOST_CHECK(evoDb->VerifyBestBlock(firstHash));
     }
+    // Changing both local activation settings must not make existing registry state replayable.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 100);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 100);
+    const std::vector<uint256> heads{firstHash, firstHash};
+    BOOST_REQUIRE(database.db.Write('H', heads));
+    auto transaction = evoDb->BeginTransaction(); evoDb->WriteBestBlock(firstHash);
+    evoDb->Write(std::make_pair(std::string("pqmn1a"), Params().GetConsensus().hashGenesisBlock), 1);
+    evoDb->Write(std::make_pair(std::string("pqmn1b"), Params().GetConsensus().hashGenesisBlock), firstHash);
+    bool requiresReindex{false};
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
+    BOOST_CHECK(database.GetHeadBlocks() == heads); BOOST_CHECK(database.GetBestBlock().IsNull());
 }
 
 BOOST_AUTO_TEST_CASE(startup_replay_preserves_pre_pq_path_and_checks_v6_tip)
@@ -861,6 +921,100 @@ BOOST_AUTO_TEST_CASE(startup_replay_preserves_pre_pq_path_and_checks_v6_tip)
     BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(!requiresReindex);
     BOOST_CHECK(database.GetHeadBlocks().empty()); BOOST_CHECK(database.GetBestBlock() == hash);
     BOOST_CHECK(evoDb->VerifyBestBlock(hash));
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(pqmn_runtime_tests, MNSetupT<TestingSetup>)
+
+BOOST_AUTO_TEST_CASE(real_block_registration_validation_rollback_and_reorg)
+{
+    const auto candidate = [&](const std::vector<CTransactionRef>& transactions, CAmount fees = 0) {
+        auto blockTemplate = BlockAssembler(Params(), false).CreateNewBlock(pq::GetScript(ID(3)), nullptr, false, nullptr, true);
+        BOOST_REQUIRE(blockTemplate);
+        auto block = std::make_shared<CBlock>(blockTemplate->block);
+        auto reward = CMutableTransaction(*block->vtx[0]); reward.vout[0].nValue += fees;
+        block->vtx[0] = MakeTransactionRef(reward);
+        block->vtx.insert(block->vtx.end(), transactions.begin(), transactions.end());
+        BOOST_REQUIRE(SolveBlock(block, WITH_LOCK(cs_main, return chainActive.Height() + 1)));
+        return block;
+    };
+    COutPoint funding;
+    for (int height = 1; height <= 101; ++height) {
+        auto block = candidate({}); BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+        BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return chainActive.Height()), height);
+        if (height == 1) funding = COutPoint(block->vtx[0]->GetHash(), 0);
+    }
+    WAIT_LOCK(cs_main, chainLock);
+    const auto parent = chainActive.Tip()->GetBlockHash();
+    view.AddCoin(funding, Coin(pcoinsTip->AccessCoin(funding)), false);
+    const auto reg = MakeTransactionRef(Transaction(Registration(), 1, true, 0, 2, funding));
+    const COutPoint change(reg->GetHash(), 1);
+    view.AddCoin(change, Coin(reg->vout[1], 102, false, false), false);
+    pqmn::Payload update; update.action = pqmn::Action::UPDATE; update.registration = reg->GetHash();
+    update.sequence = 1; update.operatorKey = keys[1].GetPublicKey(); update.payout = ID(5);
+    const auto updated = MakeTransactionRef(Transaction(update, 1, false, 0, 2, change));
+    auto block = candidate({reg, updated}, 2 * COIN);
+    CValidationState inactive;
+    BOOST_CHECK(!TestBlockValidity(inactive, *block, chainActive.Tip()));
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 102);
+    pqmn::Index registry(*evoDb, Params()); pqmn::Record record;
+    auto invalidReward = std::make_shared<CBlock>(*block);
+    auto reward = CMutableTransaction(*invalidReward->vtx[0]); ++reward.vout[0].nValue;
+    invalidReward->vtx[0] = MakeTransactionRef(reward);
+    BOOST_REQUIRE(SolveBlock(invalidReward, 102));
+    CValidationState badReward;
+    BOOST_CHECK(!TestBlockValidity(badReward, *invalidReward, chainActive.Tip()));
+    BOOST_CHECK_EQUAL(badReward.GetRejectReason(), "bad-blk-amount");
+    BOOST_CHECK(!registry.Get(reg->GetHash(), record)); BOOST_CHECK(evoDb->VerifyBestBlock(parent));
+    auto invalidRole = CMutableTransaction(*reg); pq::Payload envelope; pqmn::Payload operation;
+    BOOST_REQUIRE(pq::DecodePayload(invalidRole, envelope)); BOOST_REQUIRE(pqmn::Decode(envelope.data, operation));
+    operation.ownerSignature[0] ^= 1; envelope.data = pqmn::Encode(operation); FeeSign(invalidRole, envelope);
+    auto invalidBlock = candidate({MakeTransactionRef(invalidRole)}, COIN);
+    CValidationState badRole;
+    BOOST_CHECK(!TestBlockValidity(badRole, *invalidBlock, chainActive.Tip()));
+    BOOST_CHECK_EQUAL(badRole.GetRejectReason(), "bad-pqmn-registration-signature");
+    BOOST_CHECK(!registry.Get(invalidRole.GetHash(), record));
+    CValidationState state;
+    BOOST_REQUIRE_MESSAGE(TestBlockValidity(state, *block, chainActive.Tip()), state.GetRejectReason());
+    BOOST_CHECK(!registry.Get(reg->GetHash(), record)); // Validation-only rolls back.
+    BOOST_CHECK(evoDb->VerifyBestBlock(parent)); BOOST_CHECK(pcoinsTip->HaveCoin(funding));
+    CValidationState poolState;
+    BOOST_CHECK(!AcceptToMemoryPool(mempool, poolState, reg, false, nullptr));
+    BOOST_CHECK_EQUAL(poolState.GetRejectReason(), "pq-masternode-relay-disabled");
+    { REVERSE_LOCK(chainLock); BOOST_REQUIRE(ProcessNewBlock(block, nullptr)); }
+    BOOST_REQUIRE_EQUAL(chainActive.Tip()->GetBlockHash(), block->GetHash());
+    BOOST_REQUIRE(registry.Get(reg->GetHash(), record));
+    BOOST_CHECK(record.collateral == COutPoint(reg->GetHash(), 0));
+    BOOST_CHECK_EQUAL(record.sequence, 1U); BOOST_CHECK(record.payout == ID(5));
+    BOOST_CHECK(!pcoinsTip->HaveCoin(funding));
+    FlushStateToDisk();
+    BOOST_REQUIRE(registry.Get(reg->GetHash(), record));
+    BOOST_CHECK(CVerifyDB().VerifyDB(pcoinsTip.get(), 4, 2));
+    BOOST_REQUIRE(registry.Get(reg->GetHash(), record)); // VerifyDB rolls back too.
+    CValidationState undo;
+    BOOST_REQUIRE(InvalidateBlock(undo, Params(), chainActive.Tip()));
+    BOOST_CHECK_EQUAL(chainActive.Tip()->GetBlockHash(), parent);
+    BOOST_CHECK(!registry.Get(reg->GetHash(), record)); BOOST_CHECK(pcoinsTip->HaveCoin(funding));
+    CValidationState reconnect;
+    BOOST_REQUIRE(ReconsiderBlock(reconnect, LookupBlockIndex(block->GetHash())));
+    { REVERSE_LOCK(chainLock); BOOST_REQUIRE(ActivateBestChain(reconnect)); }
+    BOOST_CHECK_EQUAL(chainActive.Tip()->GetBlockHash(), block->GetHash());
+    BOOST_REQUIRE(registry.Get(reg->GetHash(), record));
+    // A deliberately mined collateral spend removes the registration; undo restores it.
+    CMutableTransaction spend; spend.nVersion = 3; spend.nType = CTransaction::PQ; spend.sapData = nullopt;
+    spend.vin.emplace_back(record.collateral);
+    spend.vout.emplace_back(reg->vout[0].nValue - COIN, pq::GetScript(ID(3)));
+    view.AddCoin(record.collateral, Coin(reg->vout[0], 102, false, false), false);
+    pq::Payload transfer; transfer.authorizations.resize(1); transfer.authorizations[0].public_key = keys[2].GetPublicKey();
+    FeeSign(spend, transfer, 2);
+    auto spentBlock = candidate({MakeTransactionRef(spend)}, COIN);
+    { REVERSE_LOCK(chainLock); BOOST_REQUIRE(ProcessNewBlock(spentBlock, nullptr)); }
+    BOOST_CHECK_EQUAL(chainActive.Tip()->GetBlockHash(), spentBlock->GetHash());
+    BOOST_CHECK(!registry.Get(reg->GetHash(), record));
+    CValidationState restore;
+    BOOST_REQUIRE(InvalidateBlock(restore, Params(), chainActive.Tip()));
+    BOOST_REQUIRE(registry.Get(reg->GetHash(), record)); BOOST_CHECK_EQUAL(record.sequence, 1U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

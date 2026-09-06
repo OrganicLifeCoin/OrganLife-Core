@@ -74,6 +74,10 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
                 /*.strName =*/ "pq_payments",
                 /*.strInfo =*/ "Experimental ML-DSA-44 payments",
         },
+        {
+                /*.strName =*/ "pq_masternodes",
+                /*.strInfo =*/ "Experimental PQ registry (regtest only; no service or finality)",
+        },
 };
 
 UpgradeState NetworkUpgradeState(
