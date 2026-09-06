@@ -97,6 +97,16 @@ commit, broadcast, export keys or take backups. Operator provisioning and the
 backup-before-publication RPC/Qt workflows still need integration; this is not
 an unattended remote operator signing interface.
 
+An isolated encrypted operator-record API now uses a separate storage KDF and
+authenticated-data domain, version 2, and an explicit nonzero genesis binding.
+It cannot be relabeled as a version-1 spending-wallet record. The existing
+wallet record format and encryption remain unchanged. Provisioning must use a
+fresh operator seed, an independent random 32-byte wrapping key, and trusted
+network/genesis. This does not implement protected files, wrapping-key custody,
+distribution, wallet
+import, or rollback-safe finality signing. Never distribute a controller wallet
+master key to an operator host.
+
 This does not yet provide a usable masternode: operator RPC/Qt flows, service
 verification, rewards and quorum finality remain unavailable. Public P2P and
 cross-platform qualification remain pending. Do not use this opt-in mode with a

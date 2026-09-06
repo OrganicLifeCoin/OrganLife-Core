@@ -31,6 +31,130 @@ const pqwallet::SecureBytes MASTER(32, 42); // Public test material only.
 
 BOOST_AUTO_TEST_SUITE(pqkey_tests)
 
+BOOST_AUTO_TEST_CASE(operator_storage_is_separate_from_wallet_and_chain_bound)
+{
+    const uint256 genesis = uint256S("1234"); // Public test chain identity, not a live network.
+    for (const std::string network : {"regtest", "test"}) {
+        pqwallet::Record record, second, wallet;
+        BOOST_REQUIRE(pqwallet::EncryptOperatorSeed(TestSeed(), MASTER, network, genesis, record));
+        BOOST_REQUIRE(pqwallet::EncryptOperatorSeed(TestSeed(), MASTER, network, genesis, second));
+        BOOST_CHECK_EQUAL(record.version, 2);
+        BOOST_CHECK(record.nonce != second.nonce);
+        BOOST_CHECK(record.encrypted_seed != second.encrypted_seed);
+        CDataStream bytes(SER_DISK, 0); bytes << record;
+        BOOST_CHECK_EQUAL(bytes.size(), 1385U);
+        const auto seed = TestSeed();
+        BOOST_CHECK(std::search(bytes.begin(), bytes.end(), seed.begin(), seed.end()) == bytes.end());
+        pqwallet::Record restored; bytes >> restored;
+        mldsa44::Key key;
+        BOOST_REQUIRE(pqwallet::DecryptOperatorKey(MASTER, restored, network, genesis, key));
+        BOOST_CHECK(key.GetPublicKey() == record.public_key);
+        BOOST_CHECK(!pqwallet::DecryptKey(MASTER, record, network, key));
+        BOOST_CHECK(!key.IsValid());
+        record.version = 1; // Relabeling cannot turn an operator record into spending material.
+        BOOST_CHECK(!pqwallet::DecryptKey(MASTER, record, network, key));
+        BOOST_CHECK(!key.IsValid()); record.version = 2;
+        BOOST_REQUIRE(pqwallet::EncryptSeed(TestSeed(), MASTER, network, wallet));
+        BOOST_CHECK(!pqwallet::DecryptOperatorKey(MASTER, wallet, network, genesis, key));
+        wallet.version = 2;
+        BOOST_CHECK(!pqwallet::DecryptOperatorKey(MASTER, wallet, network, genesis, key));
+        BOOST_CHECK(!key.IsValid());
+        for (const auto& other : {uint256(), uint256S("1235")}) {
+            BOOST_REQUIRE(key.Generate());
+            BOOST_CHECK(!pqwallet::DecryptOperatorKey(MASTER, record, network, other, key));
+            BOOST_CHECK(!key.IsValid());
+        }
+        for (const std::string other : {"test", "regtest", "main", "", "unknown"}) {
+            if (other == network) continue;
+            BOOST_REQUIRE(key.Generate());
+            BOOST_CHECK(!pqwallet::DecryptOperatorKey(MASTER, record, other, genesis, key));
+            BOOST_CHECK(!key.IsValid());
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(operator_storage_failures_clear_outputs)
+{
+    const uint256 genesis = uint256S("1234");
+    for (const std::string network : {"regtest", "test"}) {
+        pqwallet::Record record;
+        BOOST_REQUIRE(pqwallet::EncryptOperatorSeed(TestSeed(), MASTER, network, genesis, record));
+        mldsa44::Key key;
+        for (int field = 0; field < 4; ++field) {
+            auto bad = record;
+            if (field == 0) bad.version = 1;
+            if (field == 1) bad.public_key.back() ^= 1;
+            if (field == 2) bad.nonce.back() ^= 1;
+            if (field == 3) bad.encrypted_seed.back() ^= 1;
+            BOOST_REQUIRE(key.Generate());
+            BOOST_CHECK(!pqwallet::DecryptOperatorKey(MASTER, bad, network, genesis, key));
+            BOOST_CHECK(!key.IsValid());
+        }
+        auto wrong = MASTER; wrong[0] ^= 1;
+        BOOST_REQUIRE(key.Generate());
+        BOOST_CHECK(!pqwallet::DecryptOperatorKey(wrong, record, network, genesis, key));
+        BOOST_CHECK(!key.IsValid());
+        const auto cleared = [](const pqwallet::Record& rejected) {
+            BOOST_CHECK_EQUAL(rejected.version, 0);
+            BOOST_CHECK(rejected.public_key == mldsa44::PublicKey{});
+            BOOST_CHECK(rejected.nonce == decltype(rejected.nonce){});
+            BOOST_CHECK(rejected.encrypted_seed == decltype(rejected.encrypted_seed){});
+        };
+        for (size_t size : {size_t{0}, size_t{31}, size_t{33}}) {
+            BOOST_REQUIRE(key.Generate());
+            BOOST_CHECK(!pqwallet::DecryptOperatorKey(pqwallet::SecureBytes(size), record, network, genesis, key));
+            BOOST_CHECK(!key.IsValid());
+            auto rejected = record;
+            BOOST_CHECK(!pqwallet::EncryptOperatorSeed(pqwallet::SecureBytes(size), MASTER, network, genesis, rejected));
+            cleared(rejected);
+            rejected = record;
+            BOOST_CHECK(!pqwallet::EncryptOperatorSeed(TestSeed(), pqwallet::SecureBytes(size), network, genesis, rejected));
+            cleared(rejected);
+        }
+        for (const std::string other : {"main", "", "unknown", "testnet", "REGTEST"}) {
+            auto rejected = record;
+            BOOST_CHECK(!pqwallet::EncryptOperatorSeed(TestSeed(), MASTER, other, genesis, rejected));
+            cleared(rejected);
+        }
+        auto rejected = record;
+        BOOST_CHECK(!pqwallet::EncryptOperatorSeed(TestSeed(), MASTER, network, uint256(), rejected));
+        cleared(rejected);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(operator_storage_direct_kdf_aead_reference)
+{
+    // Independent construction with literal protocol domains, fixed public test
+    // nonce and raw little-endian genesis bytes. Production uses random nonces.
+    const uint256 genesis = uint256S("1234");
+    for (const std::string network : {"regtest", "test"}) {
+        BOOST_REQUIRE(sodium_init() >= 0);
+        pqwallet::Record record; record.version = 2;
+        boost::algorithm::unhex(std::string(mldsa44_vectors::KEYGEN_PUBLIC_KEY), record.public_key.begin());
+        for (size_t i = 0; i < record.nonce.size(); ++i) record.nonce[i] = i;
+        pqwallet::SecureBytes encryption_key(32);
+        BOOST_REQUIRE_EQUAL(crypto_kdf_derive_from_key(encryption_key.data(), 32, 0, "OLCPQOP1", MASTER.data()), 0);
+        const std::string domain = network == "test" ? "OLC/PQ/ML-DSA-44/testnet/operator-seed/v1" :
+                                                       "OLC/PQ/ML-DSA-44/regtest/operator-seed/v1";
+        std::vector<unsigned char> ad(domain.begin(), domain.end());
+        ad.push_back(2);
+        ad.insert(ad.end(), record.public_key.begin(), record.public_key.end());
+        ad.push_back(0x34); ad.push_back(0x12); ad.insert(ad.end(), 30, 0);
+        for (bool wrong_seed : {false, true}) {
+            auto seed = TestSeed();
+            if (wrong_seed) seed[0] ^= 1;
+            unsigned long long size = 0;
+            BOOST_REQUIRE_EQUAL(crypto_aead_xchacha20poly1305_ietf_encrypt(record.encrypted_seed.data(), &size,
+                seed.data(), seed.size(), ad.data(), ad.size(), nullptr, record.nonce.data(), encryption_key.data()), 0);
+            BOOST_REQUIRE_EQUAL(size, record.encrypted_seed.size());
+            mldsa44::Key key; BOOST_REQUIRE(key.Generate());
+            BOOST_CHECK(pqwallet::DecryptOperatorKey(MASTER, record, network, genesis, key) == !wrong_seed);
+            BOOST_CHECK(key.IsValid() == !wrong_seed);
+            if (!wrong_seed) BOOST_CHECK(key.GetPublicKey() == record.public_key);
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(fixed_address_vector)
 {
     mldsa44::Key key;

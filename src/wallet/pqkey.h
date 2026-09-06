@@ -6,6 +6,7 @@
 
 #include <pqaddress.h>
 #include <serialize.h>
+#include <uint256.h>
 #include <string>
 
 namespace pqwallet {
@@ -25,6 +26,14 @@ struct Record {
 // Seeds are independent of the existing HD wallet. No plaintext seed export.
 bool EncryptSeed(const SecureBytes& seed, const SecureBytes& master_key, const std::string& network, Record& record);
 bool DecryptKey(const SecureBytes& master_key, const Record& record, const std::string& network, mldsa44::Key& key);
+
+// Separate operator-only storage domain, bound to a specific chain genesis.
+// Caller supplies an independent random 32-byte wrapping key, never a password
+// or a controller wallet master key for distribution to operator hosts.
+bool EncryptOperatorSeed(const SecureBytes& seed, const SecureBytes& wrapping_key,
+                         const std::string& network, const uint256& genesis, Record& record);
+bool DecryptOperatorKey(const SecureBytes& wrapping_key, const Record& record,
+                        const std::string& network, const uint256& genesis, mldsa44::Key& key);
 } // namespace pqwallet
 
 #endif // ORGANICLIFE_WALLET_PQKEY_H
