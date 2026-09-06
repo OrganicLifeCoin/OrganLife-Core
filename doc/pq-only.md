@@ -86,6 +86,17 @@ payment coin control may select confirmed collateral, but manual locks and
 pending-operation relay conflicts still apply. Protection follows registry undo
 and mempool removal without persistent automatic wallet locks.
 
+The wallet core can construct and validate registration (internal or external
+collateral), owner updates/rotation, service updates and revocation in this
+opt-in mode. Owner and collateral signing use the fully unlocked encrypted
+controller wallet; a separate caller-owned operator signer is required where
+appropriate. Fees use eligible confirmed coins, never the registration's own
+external bond. Change returns to the first fee-input key, without creating a
+new key. Construction checks the confirmed registry but does not reserve inputs,
+commit, broadcast, export keys or take backups. Operator provisioning and the
+backup-before-publication RPC/Qt workflows still need integration; this is not
+an unattended remote operator signing interface.
+
 This does not yet provide a usable masternode: operator RPC/Qt flows, service
 verification, rewards and quorum finality remain unavailable. Public P2P and
 cross-platform qualification remain pending. Do not use this opt-in mode with a

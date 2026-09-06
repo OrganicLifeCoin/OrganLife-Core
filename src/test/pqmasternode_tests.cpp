@@ -1383,6 +1383,162 @@ BOOST_AUTO_TEST_CASE(relay_collateral_property_conflicts_and_removal)
 }
 
 #ifdef ENABLE_WALLET
+BOOST_AUTO_TEST_CASE(wallet_masternode_construction)
+{
+    struct DiskWallet : CWallet {
+        using CWallet::CWallet;
+        ~DiskWallet() { GetDBHandle().Flush(true); }
+    } wallet("pqmn-builder", WalletDatabase::Create(GetDataDir() / "pqmn-builder"));
+    bool firstRun;
+    BOOST_REQUIRE_EQUAL(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+    const SecureString passphrase = "pqmn-builder-test-only";
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    BOOST_REQUIRE(wallet.Unlock(passphrase));
+    for (size_t role : {0U, 2U, 3U}) {
+        std::string address;
+        BOOST_REQUIRE(wallet.GeneratePQAddress(address));
+        BOOST_REQUIRE(wallet.GetPQKey(address, keys[role]));
+    }
+    auto candidate = BlockAssembler(Params(), false).CreateNewBlock(pq::GetScript(ID(3)), nullptr, false, nullptr, true);
+    BOOST_REQUIRE(candidate);
+    auto block = std::make_shared<CBlock>(candidate->block);
+    BOOST_REQUIRE(SolveBlock(block, 1));
+    BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+    LOCK2(cs_main, wallet.cs_wallet);
+    const CAmount amount = Params().GetConsensus().nMNCollateralAmt;
+    CMutableTransaction source;
+    source.vin.emplace_back(uint256S("8765"), 0);
+    source.vout.emplace_back(amount, pq::GetScript(ID(2)));
+    source.vout.emplace_back(amount + 10 * COIN, pq::GetScript(ID(3)));
+    const auto sourceRef = MakeTransactionRef(source);
+    wallet.SetLastBlockProcessed(chainActive.Tip());
+    BOOST_REQUIRE(wallet.AddToWalletIfInvolvingMe(sourceRef,
+        {CWalletTx::Status::CONFIRMED, 1, chainActive[1]->GetBlockHash(), 0}, true));
+    for (uint32_t i = 0; i < 2; ++i)
+        pcoinsTip->AddCoin(COutPoint(sourceRef->GetHash(), i), Coin(source.vout[i], 1, false, false), false);
+    auto op = Registration(); op.collateral = COutPoint(sourceRef->GetHash(), 0);
+    const auto addresses = wallet.GetPQAddresses();
+    const auto walletSize = wallet.mapWallet.size();
+    CTransactionRef tx; CAmount fee = 0; std::string reason;
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(op, &keys[1], tx, fee, reason)); // Inactive.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+    BOOST_REQUIRE_MESSAGE(wallet.CreatePQMasternodeTransaction(op, &keys[1], tx, fee, reason), reason);
+    BOOST_REQUIRE(tx); BOOST_REQUIRE_EQUAL(tx->vin.size(), 1U);
+    BOOST_CHECK(tx->vin[0].prevout == COutPoint(sourceRef->GetHash(), 1));
+    BOOST_REQUIRE_EQUAL(tx->vout.size(), 1U);
+    BOOST_CHECK(tx->vout[0].scriptPubKey == pq::GetScript(ID(3)));
+    BOOST_CHECK_EQUAL(source.vout[1].nValue - tx->GetValueOut(), fee);
+    BOOST_CHECK(fee > 0 && fee <= maxTxFee);
+    pqmn::Index registry(*evoDb, Params()); pqmn::Record checked;
+    auto transaction = evoDb->BeginTransaction();
+    BOOST_REQUIRE_MESSAGE(registry.Check(*tx, *pcoinsTip, 2, checked, reason), reason);
+    BOOST_CHECK(registry.List().empty());
+    BOOST_CHECK(!mempool.exists(tx->GetHash()));
+    BOOST_CHECK_EQUAL(wallet.mapWallet.size(), walletSize);
+    BOOST_CHECK(wallet.GetPQAddresses() == addresses); // No unbacked change key.
+    const auto external = tx;
+    const auto failure = [&](const pqmn::Payload& operation, const mldsa44::Key* signer) {
+        tx = external; fee = COIN; reason.clear();
+        BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(operation, signer, tx, fee, reason));
+        BOOST_CHECK(!tx); BOOST_CHECK_EQUAL(fee, 0); BOOST_CHECK(!reason.empty());
+        BOOST_CHECK(wallet.GetPQAddresses() == addresses);
+        BOOST_CHECK_EQUAL(wallet.mapWallet.size(), walletSize);
+    };
+    failure(op, nullptr);
+    failure(op, &keys[4]);
+    auto invalid = op; invalid.owner = keys[5].GetPublicKey(); failure(invalid, &keys[1]);
+    invalid = op; invalid.collateralKey = keys[5].GetPublicKey(); failure(invalid, &keys[1]);
+    invalid = op; invalid.owner = op.collateralKey; failure(invalid, &keys[1]);
+    invalid = op; invalid.operatorReward = 10001; failure(invalid, &keys[1]);
+    invalid = op; invalid.collateral = COutPoint(uint256S("dead"), 0); failure(invalid, &keys[1]);
+    invalid = op; invalid.action = static_cast<pqmn::Action>(255); failure(invalid, &keys[1]);
+    BOOST_REQUIRE(wallet.Lock()); failure(op, &keys[1]);
+    BOOST_REQUIRE(wallet.Unlock(passphrase));
+    wallet.fWalletUnlockStaking = true; failure(op, &keys[1]); wallet.fWalletUnlockStaking = false;
+    wallet.LockCoin(COutPoint(sourceRef->GetHash(), 1));
+    failure(op, &keys[1]); // Only the registration's own collateral remains available.
+    wallet.UnlockCoin(COutPoint(sourceRef->GetHash(), 1));
+    const auto priorMaxFee = maxTxFee; maxTxFee = 1;
+    failure(op, &keys[1]); maxTxFee = priorMaxFee;
+    auto missingRegistry = std::move(evoDb);
+    failure(op, &keys[1]); evoDb = std::move(missingRegistry);
+    auto internal = op; internal.collateral = COutPoint(uint256(), 0);
+    BOOST_REQUIRE_MESSAGE(wallet.CreatePQMasternodeTransaction(internal, &keys[1], tx, fee, reason), reason);
+    BOOST_REQUIRE_EQUAL(tx->vout.size(), 2U);
+    BOOST_CHECK(tx->vout[0] == CTxOut(amount, pq::GetScript(ID(2))));
+    BOOST_CHECK(tx->vout[1].scriptPubKey == pq::GetScript(ID(3)));
+    BOOST_REQUIRE(registry.Check(*tx, *pcoinsTip, 2, checked, reason));
+    BOOST_CHECK(checked.collateral == COutPoint(tx->GetHash(), 0));
+    internal.collateral.n = 1; failure(internal, &keys[1]);
+    BOOST_CHECK(registry.List().empty());
+    // The ordinary payment entry point must not bypass the dedicated role signer.
+    BOOST_CHECK(!wallet.CreatePQTransaction({source.vout[0]}, pq::MASTERNODE,
+        pqmn::Encode(op), tx, fee, reason));
+    tx = external;
+    BOOST_REQUIRE(registry.Apply(*tx, *pcoinsTip, 2, reason));
+    const auto registration = tx->GetHash();
+    pqmn::Payload update; update.action = pqmn::Action::UPDATE;
+    update.registration = registration; update.sequence = 1;
+    update.operatorKey = keys[1].GetPublicKey(); update.payout = ID(3);
+    BOOST_REQUIRE_MESSAGE(wallet.CreatePQMasternodeTransaction(update, nullptr, tx, fee, reason), reason);
+    BOOST_REQUIRE(registry.Check(*tx, *pcoinsTip, 2, checked, reason));
+    BOOST_CHECK(checked.payout == ID(3));
+    update.operatorKey = keys[4].GetPublicKey();
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(update, nullptr, tx, fee, reason));
+    BOOST_REQUIRE_MESSAGE(wallet.CreatePQMasternodeTransaction(update, &keys[4], tx, fee, reason), reason);
+    BOOST_REQUIRE(registry.Apply(*tx, *pcoinsTip, 2, reason));
+    const auto rotation = tx->GetHash();
+    failure(update, &keys[4]); // Confirmed sequence has advanced.
+    pqmn::Payload service; service.action = pqmn::Action::SERVICE;
+    service.registration = registration; service.sequence = 2;
+    service.service = op.service; service.operatorPayout = ID(4);
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(service, &keys[1], tx, fee, reason));
+    BOOST_REQUIRE_MESSAGE(wallet.CreatePQMasternodeTransaction(service, &keys[4], tx, fee, reason), reason);
+    BOOST_REQUIRE(registry.Apply(*tx, *pcoinsTip, 2, reason));
+    const auto configured = tx->GetHash();
+    pqmn::Payload revoke; revoke.action = pqmn::Action::REVOKE;
+    revoke.registration = registration; revoke.sequence = 3;
+    BOOST_REQUIRE_MESSAGE(wallet.CreatePQMasternodeTransaction(revoke, &keys[4], tx, fee, reason), reason);
+    BOOST_REQUIRE(registry.Check(*tx, *pcoinsTip, 2, checked, reason));
+    BOOST_CHECK(checked.revoked);
+    BOOST_CHECK(wallet.GetPQAddresses() == addresses);
+    BOOST_CHECK_EQUAL(wallet.mapWallet.size(), walletSize);
+    BOOST_CHECK_EQUAL(mempool.size(), 0U);
+    CTransactionRef payment;
+    CCoinControl paymentControl;
+    paymentControl.destPQChange = pq::EncodeAddress(ID(3), Params().NetworkIDString());
+    BOOST_REQUIRE(wallet.CreatePQTransaction(paymentControl.destPQChange, COIN, payment, fee, reason, &paymentControl));
+    CValidationState state;
+    BOOST_REQUIRE_MESSAGE(AcceptToMemoryPool(mempool, state, payment, false, nullptr), state.GetRejectReason());
+    failure(revoke, &keys[4]); // Pending spend of the only free fee input.
+    mempool.clear();
+    BOOST_REQUIRE(registry.Undo(configured, reason));
+    BOOST_REQUIRE(registry.Undo(rotation, reason));
+    BOOST_REQUIRE(registry.Undo(registration, reason));
+    // Two confirmed inputs are required to create the internal bond. No fresh key.
+    CMutableTransaction split;
+    split.vin.emplace_back(uint256S("8766"), 0);
+    split.vout.assign(2, CTxOut(amount / 2 + COIN, pq::GetScript(ID(3))));
+    const auto splitRef = MakeTransactionRef(split);
+    BOOST_REQUIRE(wallet.AddToWalletIfInvolvingMe(splitRef,
+        {CWalletTx::Status::CONFIRMED, 1, chainActive[1]->GetBlockHash(), 0}, true));
+    for (uint32_t i = 0; i < 2; ++i) {
+        pcoinsTip->AddCoin(COutPoint(splitRef->GetHash(), i), Coin(split.vout[i], 1, false, false), false);
+        wallet.LockCoin(COutPoint(sourceRef->GetHash(), i));
+    }
+    internal.collateral.n = 0;
+    BOOST_REQUIRE_MESSAGE(wallet.CreatePQMasternodeTransaction(internal, &keys[1], tx, fee, reason), reason);
+    BOOST_REQUIRE_EQUAL(tx->vin.size(), 2U);
+    BOOST_REQUIRE_EQUAL(tx->vout.size(), 2U);
+    BOOST_REQUIRE(registry.Check(*tx, *pcoinsTip, 2, checked, reason));
+    BOOST_CHECK_EQUAL(splitRef->GetValueOut() - tx->GetValueOut(), fee);
+    BOOST_CHECK(fee > 0 && fee <= maxTxFee);
+    BOOST_CHECK(wallet.GetPQAddresses() == addresses);
+    wallet.LockCoin(COutPoint(splitRef->GetHash(), 1));
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(internal, &keys[1], tx, fee, reason));
+    BOOST_CHECK(!tx); BOOST_CHECK_EQUAL(fee, 0);
+}
+
 BOOST_AUTO_TEST_CASE(wallet_collateral_selection_staking_and_undo)
 {
     struct DiskWallet : CWallet {

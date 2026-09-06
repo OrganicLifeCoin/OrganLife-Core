@@ -571,6 +571,7 @@ public:
 
 
 class WalletRescanReserver; //forward declarations for ScanForWalletTransactions/RescanFromTime
+namespace pqmn { struct Payload; }
 
 /**
  * A CWallet is an extension of a keystore, which also maintains a set of transactions and balances,
@@ -590,6 +591,10 @@ private:
     bool fDecryptionThoroughlyChecked{false};
 
     std::map<pq::KeyID, pqwallet::Record> m_pq_keys GUARDED_BY(cs_KeyStore);
+    bool CreatePQTransactionInternal(const std::vector<CTxOut>& outputs, uint8_t mode,
+        const std::vector<unsigned char>& data, CTransactionRef& tx, CAmount& fee, std::string& reason,
+        const CCoinControl* coin_control, bool subtract_fee,
+        const pqmn::Payload* operation, const mldsa44::Key* operator_key);
 
     //! Key manager //
     std::unique_ptr<ScriptPubKeyMan> m_spk_man = std::make_unique<ScriptPubKeyMan>(this);
@@ -735,6 +740,10 @@ public:
                              const std::vector<unsigned char>& data,
                              CTransactionRef& tx, CAmount& fee, std::string& reason,
                              const CCoinControl* coin_control = nullptr, bool subtract_fee = false);
+    // Construction only: no key export, persistence, backup or relay. The caller
+    // owns the operator-only signer; owner/collateral keys stay in this wallet.
+    bool CreatePQMasternodeTransaction(const pqmn::Payload& operation, const mldsa44::Key* operator_key,
+                                      CTransactionRef& tx, CAmount& fee, std::string& reason);
 
     //! Get spkm
     ScriptPubKeyMan* GetScriptPubKeyMan() const;

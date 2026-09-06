@@ -156,10 +156,58 @@ bool CWallet::CreatePQTransaction(const std::string& address, CAmount amount,
                                tx, fee, reason, coin_control, subtract_fee);
 }
 
+bool CWallet::CreatePQMasternodeTransaction(const pqmn::Payload& operation, const mldsa44::Key* operator_key,
+                                          CTransactionRef& tx, CAmount& fee, std::string& reason)
+{
+    tx.reset(); fee = 0; reason.clear();
+    LOCK2(cs_main, cs_wallet);
+    if (!pq::MasternodesActive(Params(), chainActive.Height() + 1) || !evoDb) {
+        reason = "PQ masternodes are not active on this network";
+        return false;
+    }
+    pqmn::Payload op;
+    if (!pqmn::Decode(pqmn::Encode(operation), op)) {
+        reason = "Invalid PQ masternode operation";
+        return false;
+    }
+    op.ownerSignature = {}; op.operatorSignature = {}; op.collateralSignature = {};
+    std::vector<CTxOut> outputs;
+    if (op.action == pqmn::Action::REGISTER && op.collateral.hash.IsNull()) {
+        const auto id = pq::GetID(op.collateralKey, Params().NetworkIDString());
+        if (op.collateral.n != 0 || !id) {
+            reason = "Internal PQ collateral must use output zero";
+            return false;
+        }
+        outputs.emplace_back(Params().GetConsensus().nMNCollateralAmt, pq::GetScript(*id));
+    }
+    try {
+        CTransactionRef prepared;
+        pqmn::Record checked;
+        if (CreatePQTransactionInternal(outputs, pq::MASTERNODE, pqmn::Encode(op), prepared, fee, reason,
+                                        nullptr, false, &op, operator_key) &&
+            pqmn::Index(*evoDb, Params()).Check(*prepared, *pcoinsTip, chainActive.Height() + 1, checked, reason)) {
+            tx = std::move(prepared);
+            return true;
+        }
+    } catch (const std::exception&) {
+        reason = "PQ masternode wallet or registry is unavailable";
+    }
+    fee = 0;
+    return false;
+}
+
 bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mode,
                                   const std::vector<unsigned char>& data,
                                   CTransactionRef& tx, CAmount& fee, std::string& reason,
                                   const CCoinControl* coin_control, bool subtract_fee)
+{
+    return CreatePQTransactionInternal(outputs, mode, data, tx, fee, reason, coin_control, subtract_fee, nullptr, nullptr);
+}
+
+bool CWallet::CreatePQTransactionInternal(const std::vector<CTxOut>& outputs, uint8_t mode,
+    const std::vector<unsigned char>& data, CTransactionRef& tx, CAmount& fee, std::string& reason,
+    const CCoinControl* coin_control, bool subtract_fee,
+    const pqmn::Payload* operation, const mldsa44::Key* operator_key)
 {
     tx.reset();
     fee = 0;
@@ -171,8 +219,10 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
     if (!PQPaymentsActive()) return fail("PQ payments are not active on this network");
     if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
         return fail("PQ payments require an encrypted, fully unlocked wallet");
-    if ((mode != pq::TRANSFER && !pq::IsGovernanceMode(mode)) ||
-        (pq::IsGovernanceMode(mode) != !data.empty()) || outputs.size() != 1)
+    const bool masternode = mode == pq::MASTERNODE && operation;
+    if (masternode ? (data.empty() || outputs.size() > 1) :
+        ((mode != pq::TRANSFER && !pq::IsGovernanceMode(mode)) ||
+         (pq::IsGovernanceMode(mode) != !data.empty()) || outputs.size() != 1))
         return fail("Invalid PQ transaction mode or outputs");
     if (subtract_fee && mode != pq::TRANSFER) return fail("Fee subtraction is only available for payments");
     CAmount amount = 0;
@@ -225,6 +275,8 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
     reason = "Insufficient eligible confirmed funds";
     for (const auto& candidate : coins) {
         const COutPoint outpoint(candidate.tx->GetHash(), candidate.i);
+        // An external registration's bond is not indexed yet, but cannot fund its own fee.
+        if (masternode && operation->action == pqmn::Action::REGISTER && outpoint == operation->collateral) continue;
         if (IsLockedCoin(outpoint.hash, outpoint.n) || IsSpent(outpoint) || mempool.isSpent(outpoint)) continue;
         const auto& chain_coin = pcoinsTip->AccessCoin(outpoint);
         if (chain_coin.IsSpent() || chain_coin.out != candidate.tx->tx->vout[candidate.i]) continue;
@@ -251,7 +303,7 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
                 return fail("Fee subtraction would leave dust change; adjust the amount or selected coins");
             if (change > 0 && !IsDust(CTxOut(change, change_script), dustRelayFee)) {
                 pq::KeyID change_id = custom_change ? custom_change_id : governance_change_id;
-                if (!custom_change && !pq::IsGovernanceMode(mode)) {
+                if (!custom_change && !pq::IsGovernanceMode(mode) && !masternode) {
                     std::string change_address;
                     if (!GeneratePQAddress(change_address) ||
                         !pq::DecodeAddress(change_address, Params().NetworkIDString(), change_id))
@@ -285,6 +337,36 @@ bool CWallet::CreatePQTransaction(const std::vector<CTxOut>& outputs, uint8_t mo
             return fail("PQ input amount out of range");
         input_value += coin.out.nValue;
         prevouts.push_back(coin.out);
+    }
+    if (masternode) {
+        pqmn::Payload op = *operation;
+        pqmn::Record original;
+        if (op.action != pqmn::Action::REGISTER && !pqmn::Index(*evoDb, Params()).Get(op.registration, original))
+            return fail("Unknown PQ masternode registration");
+        const auto message = pqmn::SigningMessage(tx_new, prevouts, consensus.hashGenesisBlock);
+        const auto sign = [&](const mldsa44::Key& key, pqmn::Role role, pqmn::Signature& output) {
+            std::vector<unsigned char> signature;
+            if (message.empty() || !key.Sign(message, pqmn::Context(role), signature) || signature.size() != output.size()) return false;
+            std::copy(signature.begin(), signature.end(), output.begin());
+            return true;
+        };
+        const auto wallet_sign = [&](const mldsa44::PublicKey& public_key, pqmn::Role role, pqmn::Signature& output) {
+            const auto id = pq::GetID(public_key, Params().NetworkIDString());
+            mldsa44::Key key;
+            return id && GetPQKey(*id, key, false) && key.GetPublicKey() == public_key && sign(key, role, output);
+        };
+        if ((op.action == pqmn::Action::REGISTER || op.action == pqmn::Action::UPDATE) &&
+            !wallet_sign(op.action == pqmn::Action::REGISTER ? op.owner : original.owner, pqmn::Role::OWNER, op.ownerSignature))
+            return fail("PQ masternode owner key is unavailable in this wallet");
+        if (op.action == pqmn::Action::REGISTER && !wallet_sign(op.collateralKey, pqmn::Role::COLLATERAL, op.collateralSignature))
+            return fail("PQ masternode collateral key is unavailable in this wallet");
+        if (op.action != pqmn::Action::UPDATE || op.operatorKey != original.operatorKey) {
+            const auto& expected = (op.action == pqmn::Action::REGISTER || op.action == pqmn::Action::UPDATE) ? op.operatorKey : original.operatorKey;
+            if (!operator_key || operator_key->GetPublicKey() != expected || !sign(*operator_key, pqmn::Role::OPERATOR, op.operatorSignature))
+                return fail("PQ masternode operator signer is unavailable or does not match");
+        }
+        payload.data = pqmn::Encode(op);
+        tx_new.extraPayload = pq::EncodePayload(payload);
     }
     const CTransaction signing_tx(tx_new);
     for (size_t i = 0; i < tx_new.vin.size(); ++i) {
