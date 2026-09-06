@@ -8,6 +8,8 @@
 #include <pqtransaction.h>
 
 class CCoinsViewCache;
+class CBlock;
+class CBlockIndex;
 namespace pqmn {
 enum class Action : uint8_t { REGISTER = 1, UPDATE = 2, SERVICE = 3, REVOKE = 4 };
 enum class Role { OWNER, OPERATOR, COLLATERAL };
@@ -66,6 +68,15 @@ public:
     bool Apply(const CTransaction& tx, const CCoinsViewCache& view, uint32_t height, std::string& reason);
     // Missing undo or a changed after-state fails closed. Undo in reverse transaction order.
     bool Undo(const uint256& transaction, std::string& reason);
+    // Isolated block lifecycle: caller validates ordinary block/transaction consensus,
+    // supplies a trusted first active height, and owns the outer database transaction.
+    // Every failure/exception requires rollback. The pre-spend view is never flushed.
+    // Caller advances EVODB_BEST_BLOCK in that transaction and the corresponding UTXO cache.
+    // This is not an atomic disk commit across the two databases.
+    bool ConnectBlock(const CBlock& block, const CBlockIndex& index, CCoinsViewCache& view,
+                      int firstHeight, std::string& reason);
+    bool DisconnectBlock(const CBlock& block, const CBlockIndex& index, const CCoinsViewCache& view,
+                         int firstHeight, std::string& reason);
 };
 } // namespace pqmn
 #endif

@@ -60,6 +60,12 @@ struct UndoData {
         for (auto& change : changes) ::Unserialize(s, change);
     }
 };
+bool BlockContext(const CBlock& block, const CBlockIndex& index, int firstHeight) {
+    return firstHeight > 0 && index.nHeight >= firstHeight && index.phashBlock && index.pprev &&
+           index.pprev->phashBlock && index.pprev->nHeight == index.nHeight - 1 &&
+           block.hashPrevBlock == index.pprev->GetBlockHash() && block.GetHash() == index.GetBlockHash() &&
+           !block.vtx.empty() && block.vtx[0] && block.vtx[0]->IsCoinBase();
+}
 }
 
 bool Record::MatureAt(uint32_t height, uint32_t confirmations) const {
@@ -328,6 +334,60 @@ bool Index::Apply(const CTransaction& tx, const CCoinsViewCache& view, uint32_t 
         Put(id, replacement);
     }
     db.Write(std::make_pair(Prefix('u'), txid), undo);
+    return true;
+}
+
+bool Index::ConnectBlock(const CBlock& block, const CBlockIndex& index, CCoinsViewCache& view,
+                         int firstHeight, std::string& reason)
+{
+    AssertLockHeld(cs_main);
+    reason.clear();
+    if (!params.IsTestChain() || !BlockContext(block, index, firstHeight)) return Fail(reason, "bad-pqmn-block-context");
+    if (!view.GetHeadBlocks().empty() || view.GetBestBlock() != block.hashPrevBlock || !db.VerifyBestBlock(block.hashPrevBlock))
+        return Fail(reason, "bad-pqmn-chain-tip");
+    uint256 best;
+    const bool exists = ReadChecked(db, Prefix('b'), best);
+    if (index.nHeight == firstHeight) {
+        if (exists) return Fail(reason, "bad-pqmn-registry-tip");
+        LOCK(db.cs);
+        auto it = db.GetCurTransaction().NewIteratorUniquePtr();
+        for (char kind : {'c', 'k', 'r', 's', 'u'}) {
+            CDataStream prefix(SER_DISK, 0); prefix << Prefix(kind);
+            it->Seek(Prefix(kind));
+            if (!it->Valid()) continue;
+            const auto key = it->GetKey();
+            if (key.size() >= prefix.size() && std::equal(prefix.begin(), prefix.end(), key.begin()))
+                return Fail(reason, "bad-pqmn-registry-not-empty");
+        }
+    } else if (!exists || best != block.hashPrevBlock) return Fail(reason, "bad-pqmn-registry-tip");
+
+    // Never flush: later transactions see earlier spends/outputs without mutating the caller's view.
+    CCoinsViewCache inputs(&view);
+    for (const auto& tx : block.vtx) {
+        if (!tx) return Fail(reason, "bad-pqmn-block-transaction");
+        if (!tx->IsCoinBase() && !Apply(*tx, inputs, index.nHeight, reason)) return false;
+        UpdateCoins(*tx, inputs, index.nHeight);
+    }
+    db.Write(Prefix('b'), index.GetBlockHash());
+    return true;
+}
+
+bool Index::DisconnectBlock(const CBlock& block, const CBlockIndex& index, const CCoinsViewCache& view,
+                            int firstHeight, std::string& reason)
+{
+    AssertLockHeld(cs_main);
+    reason.clear();
+    if (!params.IsTestChain() || !BlockContext(block, index, firstHeight)) return Fail(reason, "bad-pqmn-block-context");
+    uint256 best;
+    if (!view.GetHeadBlocks().empty() || view.GetBestBlock() != index.GetBlockHash() || !db.VerifyBestBlock(index.GetBlockHash()))
+        return Fail(reason, "bad-pqmn-chain-tip");
+    if (!ReadChecked(db, Prefix('b'), best) || best != index.GetBlockHash()) return Fail(reason, "bad-pqmn-registry-tip");
+    for (auto it = block.vtx.rbegin(); it != block.vtx.rend(); ++it) {
+        if (!*it) return Fail(reason, "bad-pqmn-block-transaction");
+        if (!(*it)->IsCoinBase() && !Undo((*it)->GetHash(), reason)) return false;
+    }
+    if (index.nHeight == firstHeight) db.Erase(Prefix('b'));
+    else db.Write(Prefix('b'), block.hashPrevBlock);
     return true;
 }
 

@@ -4,8 +4,10 @@
 #include <evo/pqmasternode.h>
 #include <chainparams.h>
 #include <coins.h>
+#include <consensus/merkle.h>
 #include <netbase.h>
 #include <validation.h>
+#include <txdb.h>
 #include <boost/test/unit_test.hpp>
 
 namespace {
@@ -71,6 +73,22 @@ struct MNSetup : BasicTestingSetup {
         if (op.action == pqmn::Action::REGISTER) sign(collateralKey, pqmn::Role::COLLATERAL, op.collateralSignature);
         payload.data = pqmn::Encode(op); FeeSign(tx, payload);
         return tx;
+    }
+};
+
+struct RegistryBlock {
+    CBlock block;
+    uint256 hash;
+    CBlockIndex index;
+    RegistryBlock(const CBlockIndex& parent, const std::vector<CTransactionRef>& transactions) {
+        block.hashPrevBlock = parent.GetBlockHash(); block.nTime = parent.nTime + 1;
+        CMutableTransaction coinbase; coinbase.vin.resize(1); coinbase.vout.emplace_back(0, pq::GetScript(pq::KeyID{}));
+        coinbase.vin[0].scriptSig = CScript() << (parent.nHeight + 1);
+        block.vtx.push_back(MakeTransactionRef(coinbase));
+        block.vtx.insert(block.vtx.end(), transactions.begin(), transactions.end());
+        block.hashMerkleRoot = BlockMerkleRoot(block); hash = block.GetHash();
+        index = CBlockIndex(block); index.phashBlock = &hash;
+        index.pprev = const_cast<CBlockIndex*>(&parent); index.nHeight = parent.nHeight + 1;
     }
 };
 }
@@ -464,6 +482,294 @@ BOOST_AUTO_TEST_CASE(declared_data_length_is_bounded_before_allocation)
         BOOST_CHECK(!pq::DecodePayload(tx, decoded));
         BOOST_CHECK(decoded.data.empty());
     }
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_orders_updates_and_rolls_back_validation)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto setup = evoDb->BeginTransaction(); setup->Commit();
+    const auto reg = MakeTransactionRef(Transaction(Registration()));
+    pqmn::Payload op; op.action = pqmn::Action::UPDATE; op.registration = reg->GetHash(); op.sequence = 1;
+    op.operatorKey = keys[4].GetPublicKey(); op.payout = ID(5);
+    RegistryBlock block(parent, {reg, MakeTransactionRef(Transaction(op, 4))});
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    {
+        auto transaction = evoDb->BeginTransaction();
+        BOOST_REQUIRE_MESSAGE(index.ConnectBlock(block.block, block.index, view, 20, reason), reason);
+        pqmn::Record record; BOOST_REQUIRE(index.Get(reg->GetHash(), record));
+        BOOST_CHECK_EQUAL(record.sequence, 1U); BOOST_CHECK(record.operatorKey == keys[4].GetPublicKey());
+        BOOST_CHECK(view.HaveCoin(reg->vin[0].prevout)); // Disposable overlay did not spend caller's coins.
+        BOOST_CHECK(view.GetBestBlock() == parentHash); BOOST_CHECK(evoDb->VerifyBestBlock(parentHash));
+    }
+    BOOST_CHECK(index.List().empty());
+    auto transaction = evoDb->BeginTransaction();
+    BOOST_REQUIRE_MESSAGE(index.ConnectBlock(block.block, block.index, view, 20, reason), reason);
+    evoDb->WriteBestBlock(block.hash); transaction->Commit();
+    transaction = evoDb->BeginTransaction();
+    view.SetBestBlock(block.hash);
+    BOOST_REQUIRE_MESSAGE(index.DisconnectBlock(block.block, block.index, view, 20, reason), reason);
+    BOOST_CHECK(index.List().empty());
+    evoDb->WriteBestBlock(parentHash); view.SetBestBlock(parentHash); transaction->Commit();
+    transaction = evoDb->BeginTransaction();
+    BOOST_REQUIRE(index.ConnectBlock(block.block, block.index, view, 20, reason));
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_rejects_late_invalid_update_without_committed_state)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto setup = evoDb->BeginTransaction(); setup->Commit();
+    const auto reg = MakeTransactionRef(Transaction(Registration()));
+    pqmn::Payload op; op.action = pqmn::Action::UPDATE; op.registration = reg->GetHash(); op.sequence = 2;
+    op.operatorKey = keys[4].GetPublicKey(); op.payout = ID(5);
+    RegistryBlock invalid(parent, {reg, MakeTransactionRef(Transaction(op, 4))});
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    {
+        auto transaction = evoDb->BeginTransaction();
+        BOOST_CHECK(!index.ConnectBlock(invalid.block, invalid.index, view, 20, reason));
+        BOOST_CHECK_EQUAL(reason, "bad-pqmn-sequence");
+    }
+    BOOST_CHECK(index.List().empty());
+    RegistryBlock valid(parent, {reg}); auto transaction = evoDb->BeginTransaction();
+    BOOST_REQUIRE_MESSAGE(index.ConnectBlock(valid.block, valid.index, view, 20, reason), reason);
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_rejects_stale_or_missing_tips)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto setup = evoDb->BeginTransaction(); setup->Commit();
+    RegistryBlock first(parent, {}); RegistryBlock second(first.index, {});
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    auto transaction = evoDb->BeginTransaction();
+    BOOST_REQUIRE(index.ConnectBlock(first.block, first.index, view, 20, reason));
+    BOOST_CHECK(!index.ConnectBlock(first.block, first.index, view, 20, reason));
+    BOOST_CHECK(!index.ConnectBlock(second.block, second.index, view, 20, reason));
+    view.SetBestBlock(first.hash); // Coins ahead of EvoDB after interrupted flush.
+    BOOST_CHECK(!index.ConnectBlock(second.block, second.index, view, 20, reason));
+    evoDb->WriteBestBlock(first.hash);
+    BOOST_REQUIRE(index.ConnectBlock(second.block, second.index, view, 20, reason));
+    evoDb->WriteBestBlock(second.hash);
+    view.SetBestBlock(second.hash);
+    BOOST_CHECK(!index.DisconnectBlock(first.block, first.index, view, 20, reason));
+    BOOST_REQUIRE(index.DisconnectBlock(second.block, second.index, view, 20, reason));
+    evoDb->WriteBestBlock(first.hash);
+    view.SetBestBlock(first.hash);
+    BOOST_REQUIRE(index.DisconnectBlock(first.block, first.index, view, 20, reason));
+    // A missing registry cannot be silently initialized above activation.
+    BOOST_CHECK(!index.ConnectBlock(second.block, second.index, view, 20, reason));
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_sees_same_block_collateral_and_spend_order)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto setup = evoDb->BeginTransaction(); setup->Commit();
+    auto funding = Transaction(Registration());
+    funding.vout[0] = CTxOut(Params().GetConsensus().nMNCollateralAmt, pq::GetScript(ID(2)));
+    pq::Payload fee; fee.authorizations.resize(1); fee.authorizations[0].public_key = keys[3].GetPublicKey();
+    FeeSign(funding, fee); const auto funded = MakeTransactionRef(funding);
+    auto op = Registration(); op.collateral = COutPoint(funded->GetHash(), 0);
+    const auto reg = MakeTransactionRef(Transaction(op));
+    CMutableTransaction spend; spend.nVersion = 3; spend.nType = CTransaction::PQ; spend.sapData = nullopt;
+    spend.vin.emplace_back(op.collateral); spend.vout.emplace_back(funding.vout[0].nValue - COIN, pq::GetScript(ID(3)));
+    fee.authorizations[0].public_key = keys[2].GetPublicKey();
+    std::vector<unsigned char> signature;
+    BOOST_REQUIRE(keys[2].Sign(pq::SignatureMessage(spend, {funding.vout[0]}, fee, Params().GetConsensus().hashGenesisBlock, 0),
+                              *pq::SignatureContext(Params().NetworkIDString()), signature));
+    std::copy(signature.begin(), signature.end(), fee.authorizations[0].signature.begin());
+    spend.extraPayload = pq::EncodePayload(fee); const auto spent = MakeTransactionRef(spend);
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    for (const auto& transactions : std::vector<std::vector<CTransactionRef>>{{reg, funded}, {funded, spent, reg}, {funded, funded}}) {
+        RegistryBlock invalid(parent, transactions); auto transaction = evoDb->BeginTransaction();
+        BOOST_CHECK(!index.ConnectBlock(invalid.block, invalid.index, view, 20, reason));
+    }
+    BOOST_CHECK(index.List().empty());
+    RegistryBlock valid(parent, {funded, reg, spent}); auto transaction = evoDb->BeginTransaction();
+    BOOST_REQUIRE_MESSAGE(index.ConnectBlock(valid.block, valid.index, view, 20, reason), reason);
+    BOOST_CHECK(index.List().empty()); BOOST_CHECK(!view.HaveCoin(op.collateral));
+    evoDb->WriteBestBlock(valid.hash); transaction->Commit();
+    transaction = evoDb->BeginTransaction();
+    view.SetBestBlock(valid.hash);
+    BOOST_REQUIRE_MESSAGE(index.DisconnectBlock(valid.block, valid.index, view, 20, reason), reason);
+    BOOST_CHECK(index.List().empty());
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_disk_flush_windows_require_matching_tips)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    const auto reg = MakeTransactionRef(Transaction(Registration()));
+    RegistryBlock first(parent, {reg}); RegistryBlock second(first.index, {});
+    for (int flushed = 0; flushed < 3; ++flushed) {
+        SetDataDir("pqmn-flush-window-" + std::to_string(flushed));
+        {
+            CEvoDB database(1 << 20, false, true);
+            CCoinsViewDB coinDatabase(1 << 20, false, true); CCoinsViewCache coins(&coinDatabase);
+            coins.AddCoin(collateral, Coin(view.AccessCoin(collateral)), false);
+            coins.AddCoin(reg->vin[0].prevout, Coin(view.AccessCoin(reg->vin[0].prevout)), false);
+            coins.SetBestBlock(parentHash); BOOST_REQUIRE(coins.Flush());
+            auto transaction = database.BeginTransaction(); database.WriteBestBlock(parentHash);
+            transaction->Commit(); BOOST_REQUIRE(database.CommitRootTransaction());
+            transaction = database.BeginTransaction(); pqmn::Index index(database, Params()); std::string reason;
+            BOOST_REQUIRE(index.ConnectBlock(first.block, first.index, coins, 20, reason));
+            for (const auto& tx : first.block.vtx) UpdateCoins(*tx, coins, first.index.nHeight);
+            coins.SetBestBlock(first.hash); database.WriteBestBlock(first.hash); transaction->Commit();
+            // Controlled persistence windows, not a process-kill/power-loss simulation.
+            if (flushed >= 1) BOOST_REQUIRE(coins.Flush());
+            if (flushed >= 2) BOOST_REQUIRE(database.CommitRootTransaction());
+        }
+        {
+            CEvoDB database(1 << 20, false, false);
+            CCoinsViewDB coinDatabase(1 << 20, false, false); CCoinsViewCache coins(&coinDatabase);
+            pqmn::Index index(database, Params()); std::string reason; pqmn::Record record;
+            BOOST_CHECK_EQUAL(index.Get(reg->GetHash(), record), flushed == 2);
+            BOOST_CHECK(coinDatabase.GetHeadBlocks().empty());
+            auto transaction = database.BeginTransaction();
+            const RegistryBlock& next = flushed == 0 ? first : second;
+            BOOST_CHECK_EQUAL(index.ConnectBlock(next.block, next.index, coins, 20, reason), flushed != 1);
+            if (flushed == 1) BOOST_CHECK_EQUAL(reason, "bad-pqmn-chain-tip");
+            if (flushed == 2) {
+                database.WriteBestBlock(second.hash);
+                coins.SetBestBlock(second.hash);
+                BOOST_REQUIRE(index.DisconnectBlock(second.block, second.index, coins, 20, reason));
+                database.WriteBestBlock(first.hash);
+                coins.SetBestBlock(first.hash);
+                BOOST_REQUIRE(index.DisconnectBlock(first.block, first.index, coins, 20, reason));
+                BOOST_CHECK(index.List().empty());
+            }
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_rejects_preexisting_or_corrupt_registry_state)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto setup = evoDb->BeginTransaction(); setup->Commit();
+    RegistryBlock first(parent, {}); RegistryBlock second(first.index, {});
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    for (char kind : {'c', 'k', 'r', 's', 'u'}) {
+        auto transaction = evoDb->BeginTransaction();
+        evoDb->Write(std::make_pair(std::make_pair(std::string("pqmn1") + kind, Params().GetConsensus().hashGenesisBlock), uint256()), uint256());
+        BOOST_CHECK(!index.ConnectBlock(first.block, first.index, view, 20, reason));
+        BOOST_CHECK_EQUAL(reason, "bad-pqmn-registry-not-empty");
+    }
+    auto transaction = evoDb->BeginTransaction();
+    BOOST_REQUIRE(index.ConnectBlock(first.block, first.index, view, 20, reason));
+    view.SetBestBlock(first.hash); evoDb->WriteBestBlock(first.hash);
+    const auto marker = std::make_pair(std::string("pqmn1b"), Params().GetConsensus().hashGenesisBlock);
+    evoDb->Write(marker, std::string("broken"));
+    BOOST_CHECK_THROW(index.ConnectBlock(second.block, second.index, view, 20, reason), std::runtime_error);
+    BOOST_CHECK_THROW(index.DisconnectBlock(first.block, first.index, view, 20, reason), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_disconnect_requires_matching_coin_tip)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto transaction = evoDb->BeginTransaction();
+    RegistryBlock block(parent, {}); pqmn::Index index(*evoDb, Params()); std::string reason;
+    BOOST_REQUIRE(index.ConnectBlock(block.block, block.index, view, 20, reason));
+    evoDb->WriteBestBlock(block.hash); // Registry ahead of coins.
+    BOOST_CHECK(!index.DisconnectBlock(block.block, block.index, view, 20, reason));
+    BOOST_CHECK_EQUAL(reason, "bad-pqmn-chain-tip");
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_rejects_persisted_coin_transition_heads)
+{
+    LOCK(cs_main); SetDataDir("pqmn-interrupted-heads");
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    RegistryBlock block(parent, {});
+    struct CoinDB : CCoinsViewDB { using CCoinsViewDB::CCoinsViewDB; using CCoinsViewDB::db; };
+    {
+        CoinDB database(1 << 20, false, true);
+        // Persist the transition metadata written by the first partial coin batch.
+        // This is a crafted on-disk fixture, not a crash-injected BatchWrite run.
+        BOOST_REQUIRE(database.db.Write('H', std::vector<uint256>{block.hash, parentHash}));
+    }
+    CoinDB database(1 << 20, false, false); CCoinsViewCache coins(&database);
+    BOOST_REQUIRE_EQUAL(coins.GetHeadBlocks().size(), 2U);
+    coins.SetBestBlock(parentHash); // A cached tip must not hide an unfinished flush.
+    evoDb->WriteBestBlock(parentHash); auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    BOOST_CHECK(!index.ConnectBlock(block.block, block.index, coins, 20, reason));
+    BOOST_CHECK_EQUAL(reason, "bad-pqmn-chain-tip");
+    // Build consistent registry state using a separate clean view, then check disconnect too.
+    transaction->Rollback(); transaction = evoDb->BeginTransaction();
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    BOOST_REQUIRE(index.ConnectBlock(block.block, block.index, view, 20, reason));
+    evoDb->WriteBestBlock(block.hash); coins.SetBestBlock(block.hash);
+    BOOST_CHECK(!index.DisconnectBlock(block.block, block.index, coins, 20, reason));
+    BOOST_CHECK_EQUAL(reason, "bad-pqmn-chain-tip");
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_rejects_wrong_network_height_and_block_identity)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto transaction = evoDb->BeginTransaction();
+    RegistryBlock block(parent, {}); pqmn::Index index(*evoDb, Params()); std::string reason;
+    for (int firstHeight : {-1, 0, 21})
+        BOOST_CHECK(!index.ConnectBlock(block.block, block.index, view, firstHeight, reason));
+    auto main = CreateChainParams(CBaseChainParams::MAIN); pqmn::Index mainIndex(*evoDb, *main);
+    BOOST_CHECK(!mainIndex.ConnectBlock(block.block, block.index, view, 20, reason));
+    for (int mutation = 0; mutation < 4; ++mutation) {
+        CBlockIndex invalid = block.index;
+        if (mutation == 0) invalid.phashBlock = nullptr;
+        if (mutation == 1) invalid.pprev = nullptr;
+        if (mutation == 2) ++invalid.nHeight;
+        if (mutation == 3) invalid.phashBlock = &parentHash;
+        BOOST_CHECK(!index.ConnectBlock(block.block, invalid, view, 20, reason));
+        BOOST_CHECK(!index.DisconnectBlock(block.block, invalid, view, 20, reason));
+    }
+    CBlock invalid = block.block; invalid.hashPrevBlock = uint256S("ffff");
+    BOOST_CHECK(!index.ConnectBlock(invalid, block.index, view, 20, reason));
+    BOOST_REQUIRE(index.ConnectBlock(block.block, block.index, view, 20, reason));
+}
+
+BOOST_AUTO_TEST_CASE(block_lifecycle_failed_disconnect_rolls_back_earlier_undo)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto transaction = evoDb->BeginTransaction();
+    const auto reg = MakeTransactionRef(Transaction(Registration()));
+    pqmn::Payload op; op.action = pqmn::Action::UPDATE; op.registration = reg->GetHash(); op.sequence = 1;
+    op.operatorKey = keys[4].GetPublicKey(); op.payout = ID(5);
+    RegistryBlock block(parent, {reg, MakeTransactionRef(Transaction(op, 4))});
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    BOOST_REQUIRE(index.ConnectBlock(block.block, block.index, view, 20, reason));
+    evoDb->WriteBestBlock(block.hash); view.SetBestBlock(block.hash);
+    evoDb->Erase(std::make_pair(std::make_pair(std::string("pqmn1u"), Params().GetConsensus().hashGenesisBlock), reg->GetHash()));
+    transaction->Commit();
+    transaction = evoDb->BeginTransaction();
+    BOOST_CHECK(!index.DisconnectBlock(block.block, block.index, view, 20, reason));
+    BOOST_CHECK_EQUAL(reason, "bad-pqmn-missing-undo");
+    transaction->Rollback();
+    pqmn::Record record; BOOST_REQUIRE(index.Get(reg->GetHash(), record));
+    BOOST_CHECK_EQUAL(record.sequence, 1U); BOOST_CHECK(record.operatorKey == keys[4].GetPublicKey());
+    uint256 marker;
+    BOOST_REQUIRE(evoDb->Read(std::make_pair(std::string("pqmn1b"), Params().GetConsensus().hashGenesisBlock), marker));
+    BOOST_CHECK(marker == block.hash); BOOST_CHECK(evoDb->VerifyBestBlock(block.hash));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
