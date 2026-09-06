@@ -157,6 +157,7 @@ std::vector<unsigned char> SigningMessage(const CTransaction& tx, const std::vec
 std::pair<std::string, uint256> Index::Prefix(char kind) const {
     return {std::string("pqmn1") + kind, params.GetConsensus().hashGenesisBlock};
 }
+const uint256& Index::Genesis() const { return params.GetConsensus().hashGenesisBlock; }
 bool Index::Get(const uint256& id, Record& out) const {
     AssertLockHeld(cs_main);
     return ReadChecked(db, std::make_pair(Prefix('r'), id), out);

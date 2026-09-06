@@ -91,6 +91,21 @@ verification, rewards and quorum finality remain unavailable. Public P2P and
 cross-platform qualification remain pending. Do not use this opt-in mode with a
 value-bearing wallet.
 
+The isolated operator-authentication component signs a fixed, versioned proof
+with the registered ML-DSA operator key. It binds genesis, registration, operator
+key, both connection challenges and signer direction using a separate signature
+context. Its connection-owned session allows one attempt, rejects malformed or
+ineligible identities, and rechecks the current registry before returning an
+authenticated identity. Rotation, revocation, removal or loss of maturity clears
+that identity permanently. It writes no registry state.
+
+This component has no network handler or connection privileges yet. Transport
+must supply fresh local random challenges, a current confirmed registry, network
+and maturity policy, and enforce handshake ordering, deadlines and global peer
+resource limits. It proves key control, not encryption, endpoint ownership,
+service or committee membership. A transparent intermediary can forward the
+handshake; this is not a channel-binding mechanism for secrets or finality.
+
 The testnet has a fresh genesis and network magic. Mainnet startup is refused.
 Sapling parameters and tier-two services are not initialized, and their RPC
 surfaces are absent. This remains test software until the complete local suite,

@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 #include <test/test_organiclife.h>
 #include <evo/pqmasternode.h>
+#include <evo/pqmnauth.h>
 #include <chainparams.h>
 #include <coins.h>
 #include <consensus/merkle.h>
@@ -33,6 +34,17 @@ template<typename Base> struct MNSetupT : Base {
         view.AddCoin(collateral, Coin(CTxOut(Params().GetConsensus().nMNCollateralAmt, pq::GetScript(ID(2))), 1, false, false), false);
     }
     pq::KeyID ID(size_t key) { return *pq::GetID(keys[key].GetPublicKey(), Params().NetworkIDString()); }
+    pqmnauth::Transcript AuthTranscript() {
+        return {Params().GetConsensus().hashGenesisBlock, uint256S("11"), uint256S("22"), true};
+    }
+    pqmnauth::Proof AuthProof(const pqmnauth::Transcript& transcript, const uint256& id, size_t signer = 1) {
+        pqmnauth::Proof proof; proof.registration = id;
+        std::vector<unsigned char> signature;
+        BOOST_REQUIRE(keys[signer].Sign(pqmnauth::Message(transcript, id, keys[signer].GetPublicKey()),
+                                       pqmnauth::Context(), signature));
+        std::copy(signature.begin(), signature.end(), proof.signature.begin());
+        return proof;
+    }
     pqmn::Payload Registration() {
         pqmn::Payload op;
         op.collateral = collateral;
@@ -103,6 +115,246 @@ struct RegistryBlock {
 }
 
 BOOST_FIXTURE_TEST_SUITE(pqmasternode_tests, MNSetup)
+
+BOOST_AUTO_TEST_CASE(operator_authentication_roundtrip_and_budget)
+{
+    LOCK(cs_main); auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    const CTransaction reg(Transaction(Registration()));
+    BOOST_REQUIRE(index.Apply(reg, view, 20, reason));
+    pqmnauth::Transcript transcript{Params().GetConsensus().hashGenesisBlock, uint256S("11"), uint256S("22"), true};
+    const auto message = pqmnauth::Message(transcript, reg.GetHash(), keys[1].GetPublicKey());
+    BOOST_CHECK_EQUAL(message.size(), 1 + 4 * 32 + mldsa44::PUBLIC_KEY_SIZE + 1);
+    BOOST_CHECK(pqmnauth::Context().size() != 0);
+    pqmnauth::Proof proof; proof.registration = reg.GetHash();
+    std::vector<unsigned char> signature;
+    BOOST_REQUIRE(keys[1].Sign(message, pqmnauth::Context(), signature));
+    std::copy(signature.begin(), signature.end(), proof.signature.begin());
+    const auto bytes = pqmnauth::Encode(proof);
+    BOOST_CHECK_EQUAL(bytes.size(), pqmnauth::PROOF_SIZE);
+    pqmnauth::Proof decoded;
+    BOOST_CHECK(pqmnauth::Decode(bytes, decoded));
+    BOOST_CHECK(decoded.registration == reg.GetHash());
+    BOOST_CHECK(decoded.signature == proof.signature);
+    pqmnauth::Session session(transcript);
+    BOOST_CHECK(session.Current(index, 34, 15, reason).IsNull());
+    BOOST_CHECK(session.Authenticate(bytes, index, 34, 15, reason));
+    BOOST_CHECK(reason.empty());
+    BOOST_CHECK(session.Current(index, 34, 15, reason) == reg.GetHash());
+    BOOST_CHECK(!session.Authenticate(bytes, index, 34, 15, reason));
+    BOOST_CHECK(session.Current(index, 34, 15, reason).IsNull());
+    pqmn::Record record;
+    BOOST_REQUIRE(index.Get(reg.GetHash(), record));
+    BOOST_CHECK_EQUAL(record.sequence, 0U);
+    BOOST_REQUIRE(index.Undo(reg.GetHash(), reason)); // Authentication created no undo/state.
+    BOOST_CHECK(index.List().empty());
+}
+
+BOOST_AUTO_TEST_CASE(operator_authentication_canonical_wire_and_transcript)
+{
+    auto transcript = AuthTranscript(); transcript.genesis = uint256S("33");
+    const auto id = uint256S("44");
+    const auto proof = AuthProof(transcript, id);
+    const auto bytes = pqmnauth::Encode(proof);
+    BOOST_REQUIRE_EQUAL(bytes.size(), pqmnauth::PROOF_SIZE);
+    std::vector<unsigned char> expected(pqmnauth::PROOF_SIZE, 0);
+    expected[0] = 1; expected[1] = 0x44;
+    std::copy(proof.signature.begin(), proof.signature.end(), expected.begin() + 33);
+    BOOST_CHECK(bytes == expected);
+    expected.assign(1 + 4 * 32 + mldsa44::PUBLIC_KEY_SIZE + 1, 0);
+    expected[0] = 1; expected[1] = 0x33; expected[33] = 0x44;
+    std::copy(keys[1].GetPublicKey().begin(), keys[1].GetPublicKey().end(), expected.begin() + 65);
+    expected[65 + mldsa44::PUBLIC_KEY_SIZE] = 0x11;
+    expected[97 + mldsa44::PUBLIC_KEY_SIZE] = 0x22;
+    expected.back() = 1;
+    BOOST_CHECK(pqmnauth::Message(transcript, id, keys[1].GetPublicKey()) == expected);
+    for (size_t size = 0; size < bytes.size(); ++size) {
+        auto decoded = proof;
+        BOOST_CHECK(!pqmnauth::Decode({bytes.data(), size}, decoded));
+        BOOST_CHECK(decoded.registration.IsNull());
+        BOOST_CHECK(decoded.signature == pqmn::Signature{});
+    }
+    for (int mutation = 0; mutation < 4; ++mutation) {
+        auto bad = bytes;
+        if (mutation == 0) bad.push_back(0);
+        if (mutation == 1) bad[0] = 2;
+        if (mutation == 2) std::fill(bad.begin() + 1, bad.begin() + 33, 0);
+        if (mutation == 3) bad.resize(100000, 0);
+        auto decoded = proof;
+        BOOST_CHECK(!pqmnauth::Decode(bad, decoded));
+        BOOST_CHECK(decoded.registration.IsNull());
+        BOOST_CHECK(decoded.signature == pqmn::Signature{});
+    }
+    auto decoded = proof;
+    BOOST_CHECK(!pqmnauth::Decode({static_cast<const unsigned char*>(nullptr), pqmnauth::PROOF_SIZE}, decoded));
+    BOOST_CHECK(decoded.registration.IsNull());
+    BOOST_CHECK(pqmnauth::Encode(pqmnauth::Proof{}).empty());
+    for (int mutation = 0; mutation < 6; ++mutation) {
+        auto bad = transcript; auto key = keys[1].GetPublicKey(); auto registration = id;
+        if (mutation == 0) bad.genesis.SetNull();
+        if (mutation == 1) bad.initiatorChallenge.SetNull();
+        if (mutation == 2) bad.responderChallenge.SetNull();
+        if (mutation == 3) bad.responderChallenge = bad.initiatorChallenge;
+        if (mutation == 4) registration.SetNull();
+        if (mutation == 5) key.fill(0);
+        BOOST_CHECK(pqmnauth::Message(bad, registration, key).empty());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(operator_authentication_rejects_replay_reflection_and_role_substitution)
+{
+    LOCK(cs_main); auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    const CTransaction reg(Transaction(Registration())); BOOST_REQUIRE(index.Apply(reg, view, 20, reason));
+    const auto transcript = AuthTranscript();
+    const auto proof = AuthProof(transcript, reg.GetHash());
+    for (int mutation = 0; mutation < 9; ++mutation) {
+        auto other = transcript; auto bad = proof;
+        if (mutation == 0) other.genesis = uint256S("88");
+        if (mutation == 1) other.initiatorChallenge = uint256S("88");
+        if (mutation == 2) other.responderChallenge = uint256S("88");
+        if (mutation == 3) other.signerIsInitiator = false;
+        if (mutation == 4) std::swap(other.initiatorChallenge, other.responderChallenge);
+        if (mutation == 5) bad.registration = uint256S("99");
+        if (mutation == 6) bad.signature[0] ^= 1;
+        if (mutation == 7) bad = AuthProof(transcript, reg.GetHash(), 0); // Owner is not operator.
+        if (mutation == 8) bad = AuthProof(transcript, reg.GetHash(), 2); // Nor is collateral key.
+        pqmnauth::Session session(other);
+        BOOST_CHECK(!session.Authenticate(pqmnauth::Encode(bad), index, 34, 15, reason));
+        BOOST_CHECK(!reason.empty());
+        BOOST_CHECK(session.Current(index, 34, 15, reason).IsNull());
+        BOOST_CHECK(!session.Authenticate(pqmnauth::Encode(proof), index, 34, 15, reason));
+    }
+    for (auto role : {pqmn::Role::OWNER, pqmn::Role::OPERATOR, pqmn::Role::COLLATERAL}) {
+        auto bad = proof; std::vector<unsigned char> signature;
+        BOOST_REQUIRE(keys[1].Sign(pqmnauth::Message(transcript, reg.GetHash(), keys[1].GetPublicKey()), pqmn::Context(role), signature));
+        std::copy(signature.begin(), signature.end(), bad.signature.begin());
+        pqmnauth::Session session(transcript);
+        BOOST_CHECK(!session.Authenticate(pqmnauth::Encode(bad), index, 34, 15, reason));
+    }
+    // The reverse direction is allowed, but requires its own signature.
+    auto reverse = transcript; reverse.signerIsInitiator = false;
+    pqmnauth::Session session(reverse);
+    BOOST_CHECK(session.Authenticate(pqmnauth::Encode(AuthProof(reverse, reg.GetHash())), index, 34, 15, reason));
+}
+
+BOOST_AUTO_TEST_CASE(operator_authentication_tracks_registry_lifecycle)
+{
+    LOCK(cs_main); auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    const CTransaction reg(Transaction(Registration())); BOOST_REQUIRE(index.Apply(reg, view, 20, reason));
+    const auto transcript = AuthTranscript(); const auto bytes = pqmnauth::Encode(AuthProof(transcript, reg.GetHash()));
+    for (const auto policy : {std::make_pair(33U, 15U), std::make_pair(19U, 1U), std::make_pair(34U, 0U)}) {
+        pqmnauth::Session session(transcript);
+        BOOST_CHECK(!session.Authenticate(bytes, index, policy.first, policy.second, reason));
+        BOOST_CHECK(session.Current(index, 34, 15, reason).IsNull());
+    }
+    pqmnauth::Session session(transcript);
+    BOOST_REQUIRE(session.Authenticate(bytes, index, 34, 15, reason));
+    pqmn::Payload op; op.action = pqmn::Action::UPDATE; op.registration = reg.GetHash(); op.sequence = 1;
+    op.operatorKey = keys[1].GetPublicKey(); op.payout = ID(5);
+    const CTransaction payout(Transaction(op)); BOOST_REQUIRE(index.Apply(payout, view, 35, reason));
+    BOOST_CHECK(session.Current(index, 35, 15, reason) == reg.GetHash());
+    op.sequence = 2; op.operatorKey = keys[4].GetPublicKey();
+    const CTransaction rotation(Transaction(op, 4)); BOOST_REQUIRE(index.Apply(rotation, view, 36, reason));
+    BOOST_CHECK(session.Current(index, 36, 15, reason).IsNull());
+    pqmnauth::Session retired(transcript);
+    BOOST_CHECK(!retired.Authenticate(bytes, index, 36, 15, reason));
+    pqmnauth::Session rotated(transcript);
+    BOOST_REQUIRE(rotated.Authenticate(pqmnauth::Encode(AuthProof(transcript, reg.GetHash(), 4)), index, 36, 15, reason));
+    op = {}; op.action = pqmn::Action::REVOKE; op.registration = reg.GetHash(); op.sequence = 3;
+    const CTransaction revoke(Transaction(op, 4)); BOOST_REQUIRE(index.Apply(revoke, view, 37, reason));
+    BOOST_CHECK(rotated.Current(index, 37, 15, reason).IsNull());
+    pqmnauth::Session revoked(transcript);
+    BOOST_CHECK(!revoked.Authenticate(pqmnauth::Encode(AuthProof(transcript, reg.GetHash(), 4)), index, 37, 15, reason));
+    BOOST_REQUIRE(index.Undo(revoke.GetHash(), reason)); BOOST_REQUIRE(index.Undo(rotation.GetHash(), reason));
+    BOOST_CHECK(session.Current(index, 35, 15, reason).IsNull()); // Undo must not revive a cleared session.
+    pqmnauth::Session restored(transcript); BOOST_REQUIRE(restored.Authenticate(bytes, index, 35, 15, reason));
+    BOOST_CHECK(restored.Current(index, 33, 15, reason).IsNull()); // Reorg below maturity.
+    BOOST_CHECK(restored.Current(index, 35, 15, reason).IsNull());
+    pqmnauth::Session spent(transcript); BOOST_REQUIRE(spent.Authenticate(bytes, index, 35, 15, reason));
+    CMutableTransaction spend; spend.nVersion = 3; spend.nType = CTransaction::PQ; spend.sapData = nullopt;
+    spend.vin.emplace_back(collateral); spend.vout.emplace_back(Params().GetConsensus().nMNCollateralAmt - COIN, pq::GetScript(ID(0)));
+    pq::Payload transfer; transfer.authorizations.resize(1); transfer.authorizations[0].public_key = keys[2].GetPublicKey();
+    FeeSign(spend, transfer, 2);
+    BOOST_REQUIRE(index.Apply(spend, view, 36, reason));
+    BOOST_CHECK(spent.Current(index, 36, 15, reason).IsNull());
+    BOOST_REQUIRE(index.Undo(spend.GetHash(), reason));
+    BOOST_CHECK(spent.Current(index, 35, 15, reason).IsNull());
+    BOOST_REQUIRE(index.Undo(payout.GetHash(), reason));
+    BOOST_REQUIRE(index.Undo(reg.GetHash(), reason));
+    pqmnauth::Session missing(transcript);
+    BOOST_CHECK(!missing.Authenticate(bytes, index, 34, 15, reason));
+}
+
+BOOST_AUTO_TEST_CASE(operator_authentication_malformed_attempt_exhausts_budget)
+{
+    LOCK(cs_main); auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    const CTransaction reg(Transaction(Registration())); BOOST_REQUIRE(index.Apply(reg, view, 20, reason));
+    const auto transcript = AuthTranscript(); const auto bytes = pqmnauth::Encode(AuthProof(transcript, reg.GetHash()));
+    pqmnauth::Session malformed(transcript);
+    BOOST_CHECK(!malformed.Authenticate({static_cast<const unsigned char*>(nullptr), pqmnauth::PROOF_SIZE}, index, 34, 15, reason));
+    BOOST_CHECK(!reason.empty());
+    BOOST_CHECK(!malformed.Authenticate(bytes, index, 34, 15, reason));
+    BOOST_CHECK(malformed.Current(index, 34, 15, reason).IsNull());
+    // A new connection with fresh local challenges requires a new proof.
+    auto fresh = transcript; fresh.initiatorChallenge = uint256S("33");
+    pqmnauth::Session reconnect(fresh);
+    BOOST_CHECK(!reconnect.Authenticate(bytes, index, 34, 15, reason));
+    pqmnauth::Session valid(fresh);
+    BOOST_CHECK(valid.Authenticate(pqmnauth::Encode(AuthProof(fresh, reg.GetHash())), index, 34, 15, reason));
+}
+
+BOOST_AUTO_TEST_CASE(operator_authentication_corrupt_storage_fails_closed)
+{
+    LOCK(cs_main); auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    const CTransaction reg(Transaction(Registration())); BOOST_REQUIRE(index.Apply(reg, view, 20, reason));
+    pqmn::Record record; BOOST_REQUIRE(index.Get(reg.GetHash(), record));
+    const auto transcript = AuthTranscript(); const auto bytes = pqmnauth::Encode(AuthProof(transcript, reg.GetHash()));
+    // Real serialized storage, not a wrong C++ type in the typed transaction cache.
+    CEvoDB database(1 << 20, true, true); pqmn::Index isolated(database, Params());
+    const auto key = std::make_pair(std::make_pair(std::string("pqmn1r"), transcript.genesis), reg.GetHash());
+    BOOST_REQUIRE(database.GetRawDB().Write(key, record));
+    pqmnauth::Session current(transcript);
+    BOOST_REQUIRE(current.Authenticate(bytes, isolated, 34, 15, reason));
+    BOOST_REQUIRE(database.GetRawDB().Write(key, std::string("broken")));
+    pqmnauth::Session corrupt(transcript);
+    bool accepted = true;
+    BOOST_CHECK_NO_THROW(accepted = corrupt.Authenticate(bytes, isolated, 34, 15, reason));
+    BOOST_CHECK(!accepted); BOOST_CHECK_EQUAL(reason, "pq-auth-registry-unavailable");
+    uint256 identity = reg.GetHash();
+    BOOST_CHECK_NO_THROW(identity = current.Current(isolated, 34, 15, reason));
+    BOOST_CHECK(identity.IsNull()); BOOST_CHECK_EQUAL(reason, "pq-auth-registry-unavailable");
+    BOOST_REQUIRE(database.GetRawDB().Write(key, record));
+    BOOST_CHECK(!corrupt.Authenticate(bytes, isolated, 34, 15, reason));
+    BOOST_CHECK(current.Current(isolated, 34, 15, reason).IsNull());
+}
+
+BOOST_AUTO_TEST_CASE(operator_authentication_requires_registry_network)
+{
+    LOCK(cs_main); auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    const CTransaction reg(Transaction(Registration())); BOOST_REQUIRE(index.Apply(reg, view, 20, reason));
+    const auto transcript = AuthTranscript();
+    auto wrongNetwork = transcript; wrongNetwork.genesis = uint256S("99");
+    pqmnauth::Session wrong(wrongNetwork);
+    // A valid signature on a wrong-network transcript must not authorize this registry.
+    BOOST_CHECK(!wrong.Authenticate(pqmnauth::Encode(AuthProof(wrongNetwork, reg.GetHash())), index, 34, 15, reason));
+    BOOST_CHECK_EQUAL(reason, "pq-auth-wrong-network");
+    pqmnauth::Session current(transcript);
+    BOOST_REQUIRE(current.Authenticate(pqmnauth::Encode(AuthProof(transcript, reg.GetHash())), index, 34, 15, reason));
+    // Even a copied record under another chain namespace cannot preserve identity.
+    auto otherParams = CreateChainParams(CBaseChainParams::TESTNET);
+    pqmn::Index other(*evoDb, *otherParams);
+    pqmn::Record record; BOOST_REQUIRE(index.Get(reg.GetHash(), record));
+    const auto key = std::make_pair(std::make_pair(std::string("pqmn1r"), otherParams->GetConsensus().hashGenesisBlock), reg.GetHash());
+    evoDb->Write(key, record);
+    BOOST_CHECK(current.Current(other, 34, 15, reason).IsNull());
+    BOOST_CHECK_EQUAL(reason, "pq-auth-wrong-network");
+    BOOST_CHECK(current.Current(index, 34, 15, reason).IsNull());
+}
 
 BOOST_AUTO_TEST_CASE(read_only_validation_preserves_outer_transaction)
 {

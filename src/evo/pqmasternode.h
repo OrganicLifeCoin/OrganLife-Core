@@ -63,6 +63,7 @@ class Index {
                  std::string& reason, Record* checked);
 public:
     Index(CEvoDB& database, const CChainParams& chainParams) : db(database), params(chainParams) {}
+    const uint256& Genesis() const;
     bool Get(const uint256& id, Record& record) const;
     bool FindCollateral(const COutPoint& collateral, uint256& id) const;
     std::vector<std::pair<uint256, Record>> List() const;

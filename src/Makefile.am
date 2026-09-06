@@ -198,6 +198,7 @@ BITCOIN_CORE_H = \
   evo/evonotificationinterface.h \
   evo/governancevoteindex.h \
   evo/pqmasternode.h \
+  evo/pqmnauth.h \
   evo/governancevotetx.h \
   evo/providertx.h \
   evo/specialtx_validation.h \
@@ -380,6 +381,7 @@ libbitcoin_server_a_SOURCES = \
   evo/evonotificationinterface.cpp \
   evo/governancevoteindex.cpp \
   evo/pqmasternode.cpp \
+  evo/pqmnauth.cpp \
   evo/governancevotetx.cpp \
   evo/mnauth.cpp \
   evo/providertx.cpp \

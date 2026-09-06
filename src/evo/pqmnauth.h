@@ -1,0 +1,45 @@
+// Copyright (c) 2026 The OrganicLife Coin developers
+// Distributed under the MIT software license, see the accompanying file COPYING.
+#ifndef ORGANICLIFE_EVO_PQMNAUTH_H
+#define ORGANICLIFE_EVO_PQMNAUTH_H
+
+#include <evo/pqmasternode.h>
+
+// Authentication boundary only: no network handler, connection privilege or finality.
+namespace pqmnauth {
+constexpr size_t PROOF_SIZE = 1 + 32 + mldsa44::SIGNATURE_SIZE;
+struct Transcript {
+    uint256 genesis, initiatorChallenge, responderChallenge;
+    bool signerIsInitiator{false};
+};
+struct Proof {
+    uint256 registration;
+    pqmn::Signature signature{};
+};
+Span<const unsigned char> Context();
+std::vector<unsigned char> Message(const Transcript& transcript, const uint256& registration,
+                                   const mldsa44::PublicKey& operatorKey);
+std::vector<unsigned char> Encode(const Proof& proof);
+bool Decode(Span<const unsigned char> bytes, Proof& proof);
+
+// Caller owns one instance per connection and serializes all access. Challenges
+// come from the local handshake, never the proof; generate fresh random values.
+// Caller holds cs_main and supplies the current confirmed registry and policy.
+// Key control is NOT encrypted/channel-bound transport or evidence of service.
+class Session {
+    const Transcript transcript;
+    bool attempted{false};
+    uint256 registration;
+    mldsa44::PublicKey operatorKey{};
+public:
+    explicit Session(const Transcript& transcript) : transcript(transcript) {}
+    Session(const Session&) = delete;
+    Session& operator=(const Session&) = delete;
+    // Even malformed/unknown-identity attempts exhaust the connection's budget.
+    bool Authenticate(Span<const unsigned char> bytes, pqmn::Index& index,
+                      uint32_t height, uint32_t confirmations, std::string& reason);
+    // Recheck before use; invalidation is permanent even if a later reorg restores it.
+    uint256 Current(pqmn::Index& index, uint32_t height, uint32_t confirmations, std::string& reason);
+};
+}
+#endif
