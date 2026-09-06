@@ -8,9 +8,11 @@
 namespace pq {
 namespace {
 bool Fail(std::string& reason, const char* message) { reason = message; return false; }
+bool HasData(uint8_t mode) { return IsGovernanceMode(mode) || mode == MASTERNODE; }
+size_t DataLimit(uint8_t mode) { return mode == MASTERNODE ? MAX_MASTERNODE_DATA_SIZE : MAX_GOVERNANCE_DATA_SIZE; }
 bool ValidCount(uint8_t mode, size_t count)
 {
-    return ((mode == TRANSFER || IsGovernanceMode(mode)) && count >= 1 && count <= MAX_INPUTS) ||
+    return ((mode == TRANSFER || HasData(mode)) && count >= 1 && count <= MAX_INPUTS) ||
            (mode == STAKE && count == 1);
 }
 }
@@ -38,12 +40,12 @@ bool ExtractID(const CScript& script, KeyID& id)
 std::vector<unsigned char> EncodePayload(const Payload& payload)
 {
     if (!ValidCount(payload.mode, payload.authorizations.size()) ||
-        (IsGovernanceMode(payload.mode) != !payload.data.empty()) ||
-        payload.data.size() > MAX_GOVERNANCE_DATA_SIZE) return {};
+        (HasData(payload.mode) != !payload.data.empty()) ||
+        payload.data.size() > DataLimit(payload.mode)) return {};
     CDataStream bytes(SER_NETWORK, 0);
     bytes << uint8_t{1} << payload.mode << uint8_t(payload.authorizations.size());
     for (const auto& auth : payload.authorizations) bytes << auth.public_key << auth.signature;
-    if (IsGovernanceMode(payload.mode)) bytes << payload.data;
+    if (HasData(payload.mode)) bytes << payload.data;
     return {bytes.begin(), bytes.end()};
 }
 
@@ -54,26 +56,30 @@ bool DecodePayload(const CTransaction& tx, Payload& payload)
     const auto& bytes = *tx.extraPayload;
     if (bytes.size() < 3 || bytes[0] != 1 || !ValidCount(bytes[1], bytes[2])) return false;
     const size_t authorization_size = 3 + AUTH_SIZE * bytes[2];
-    if ((!IsGovernanceMode(bytes[1]) && bytes.size() != authorization_size) ||
-        (IsGovernanceMode(bytes[1]) && (bytes.size() <= authorization_size ||
-         bytes.size() > authorization_size + MAX_GOVERNANCE_DATA_SIZE + 3))) return false;
-    payload.mode = bytes[1];
-    payload.authorizations.resize(bytes[2]);
+    if ((!HasData(bytes[1]) && bytes.size() != authorization_size) ||
+        (HasData(bytes[1]) && (bytes.size() <= authorization_size ||
+         bytes.size() > authorization_size + DataLimit(bytes[1]) + 3))) return false;
+    Payload decoded;
+    decoded.mode = bytes[1];
+    decoded.authorizations.resize(bytes[2]);
     auto it = bytes.begin() + 3;
-    for (auto& auth : payload.authorizations) {
+    for (auto& auth : decoded.authorizations) {
         std::copy_n(it, auth.public_key.size(), auth.public_key.begin()); it += auth.public_key.size();
         std::copy_n(it, auth.signature.size(), auth.signature.begin()); it += auth.signature.size();
     }
-    if (IsGovernanceMode(payload.mode)) {
+    if (HasData(decoded.mode)) {
         try {
             const std::vector<unsigned char> encoded_data(it, bytes.end());
             CDataStream data_stream(encoded_data, SER_NETWORK, 0);
-            data_stream >> payload.data;
-            if (!data_stream.empty() || payload.data.empty() || payload.data.size() > MAX_GOVERNANCE_DATA_SIZE) return false;
+            const uint64_t size = ReadCompactSize(data_stream);
+            if (size == 0 || size > DataLimit(decoded.mode) || size != data_stream.size()) return false;
+            decoded.data.resize(size);
+            data_stream.read(reinterpret_cast<char*>(decoded.data.data()), size);
         } catch (const std::exception&) {
             return false;
         }
     }
+    payload = std::move(decoded);
     return true;
 }
 
@@ -87,7 +93,8 @@ bool CheckStructure(const CTransaction& tx, const CChainParams& params, std::str
     if (tx.IsCoinBase()) return Fail(reason, "bad-pq-generation");
     const bool stake = tx.IsCoinStake();
     if ((payload.mode == STAKE) != stake) return Fail(reason, "bad-pq-mode");
-    if (tx.vin.empty() || tx.vout.empty() || tx.GetTotalSize() > MAX_TX_SIZE) return Fail(reason, "bad-pq-size");
+    const size_t sizeLimit = payload.mode == MASTERNODE ? MAX_MASTERNODE_TX_SIZE : MAX_TX_SIZE;
+    if (tx.vin.empty() || tx.vout.empty() || tx.GetTotalSize() > sizeLimit) return Fail(reason, "bad-pq-size");
     if ((stake && (tx.vin.size() != 1 || tx.vout.size() < 2 || tx.vout.size() > 3 || !tx.vout[0].IsEmpty())) ||
         (!stake && tx.vout.size() > 2)) return Fail(reason, "bad-pq-size");
     if (tx.vin.size() > MAX_INPUTS || payload.authorizations.size() != tx.vin.size())
@@ -110,6 +117,9 @@ bool PaymentsActive(const CChainParams& params, int height)
 bool CheckContext(const CTransaction& tx, const CChainParams& params, int height, std::string& reason)
 {
     reason.clear();
+    // Reserved for the isolated registry component. No network/height activates it yet.
+    if (tx.nType == CTransaction::PQ && tx.extraPayload && tx.extraPayload->size() >= 2 &&
+        (*tx.extraPayload)[1] == MASTERNODE) return Fail(reason, "bad-pq-masternode-not-active");
     // The pre-launch genesis coinbase is fixed by the network identity and is
     // never spendable. It predates PQ activation even on always-active regtest.
     if (height == 0 && tx.IsCoinBase()) return true;
@@ -166,7 +176,7 @@ std::vector<unsigned char> SignatureMessage(const CTransaction& tx, const std::v
                                           const Payload& payload, const uint256& genesis, uint32_t input)
 {
     if (tx.nType != CTransaction::PQ || tx.nVersion != 3 || tx.sapData ||
-        (payload.mode != TRANSFER && payload.mode != STAKE && !IsGovernanceMode(payload.mode)) ||
+        (payload.mode != TRANSFER && payload.mode != STAKE && !HasData(payload.mode)) ||
         tx.vin.empty() || tx.vin.size() > MAX_INPUTS || tx.vout.empty() || tx.vout.size() > 3 ||
         prevouts.size() != tx.vin.size() || payload.authorizations.size() != tx.vin.size() || input >= tx.vin.size()) return {};
     const bool stake = payload.mode == STAKE;
@@ -187,7 +197,7 @@ std::vector<unsigned char> SignatureMessage(const CTransaction& tx, const std::v
     for (const auto& out : tx.vout) bytes << out;
     bytes << tx.nLockTime << uint8_t(payload.authorizations.size());
     for (const auto& auth : payload.authorizations) bytes << auth.public_key;
-    if (IsGovernanceMode(payload.mode)) bytes << payload.data;
+    if (HasData(payload.mode)) bytes << payload.data;
     bytes << input;
     return {bytes.begin(), bytes.end()};
 }
@@ -226,6 +236,6 @@ bool VerifyInputs(const CTransaction& tx, const std::vector<CTxOut>& prevouts,
 unsigned int GetSigOpCost(const CTransaction& tx)
 {
     Payload payload;
-    return DecodePayload(tx, payload) ? SIGOP_COST * payload.authorizations.size() : 0;
+    return DecodePayload(tx, payload) ? SIGOP_COST * (payload.authorizations.size() + (payload.mode == MASTERNODE ? 3 : 0)) : 0;
 }
 }

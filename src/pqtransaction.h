@@ -13,6 +13,10 @@ constexpr uint8_t STAKE = 2;
 constexpr uint8_t GOVERNANCE_PROPOSAL = 3;
 constexpr uint8_t GOVERNANCE_LOCK = 4;
 constexpr uint8_t GOVERNANCE_CAST = 5;
+// Reserved, parsed for isolated registry tests; CheckContext must reject it until activation.
+constexpr uint8_t MASTERNODE = 6;
+constexpr size_t MAX_MASTERNODE_DATA_SIZE = 12000;
+constexpr size_t MAX_MASTERNODE_TX_SIZE = 24000;
 constexpr size_t MAX_INPUTS = 2;
 constexpr size_t MAX_TX_SIZE = 10000;
 constexpr size_t MAX_GOVERNANCE_DATA_SIZE = 8192;
