@@ -3,12 +3,14 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php.
 
 #include <boost/test/unit_test.hpp>
+#include <map>
 
 #include "blockassembler.h"
 #include "chainparams.h"
 #include "consensus/merkle.h"
 #include "consensus/validation.h"
 #include "pow.h"
+#include "pqtransaction.h"
 #include "random.h"
 #include "test/test_organiclife.h"
 #include "util/blockstatecatcher.h"
@@ -23,6 +25,8 @@ BOOST_FIXTURE_TEST_SUITE(validation_block_tests, RegTestingSetup)
 
 struct TestSubscriber : public CValidationInterface {
     uint256 m_expected_tip;
+    unsigned m_connected{0};
+    unsigned m_disconnected{0};
 
     explicit TestSubscriber(uint256 tip) : m_expected_tip(std::move(tip)) {}
 
@@ -37,6 +41,7 @@ struct TestSubscriber : public CValidationInterface {
         BOOST_CHECK_EQUAL(m_expected_tip, pindex->pprev->GetBlockHash());
 
         m_expected_tip = block->GetHash();
+        ++m_connected;
     }
 
     void BlockDisconnected(const std::shared_ptr<const CBlock> &block, const uint256& blockHash, int nBlockHeight, int64_t blockTime)
@@ -44,39 +49,39 @@ struct TestSubscriber : public CValidationInterface {
         BOOST_CHECK_EQUAL(m_expected_tip, block->GetHash());
 
         m_expected_tip = block->hashPrevBlock;
+        ++m_disconnected;
     }
 };
 
-std::shared_ptr<CBlock> Block(const uint256& prev_hash)
+std::shared_ptr<CBlock> Block(CBlockIndex& parent)
 {
-    static int i = 0;
-    static uint64_t time = Params().GenesisBlock().nTime;
-
-    CScript pubKey;
-    pubKey << i++ << OP_TRUE;
-
-    auto ptemplate = BlockAssembler(Params(), false).CreateNewBlock(pubKey);
+    static unsigned sequence = 0;
+    // Branches are assembled before they enter the real block index. Supply
+    // their actual parent context; ProcessNewBlock below performs validation.
+    BOOST_REQUIRE(!Params().GetConsensus().NetworkUpgradeActive(parent.nHeight + 1, Consensus::UPGRADE_V5_0));
+    auto ptemplate = BlockAssembler(Params(), false).CreateNewBlock(
+        pq::GetScript(pq::KeyID{}), nullptr, false, nullptr, true, false, &parent);
     auto pblock = std::make_shared<CBlock>(ptemplate->block);
-    pblock->hashPrevBlock = prev_hash;
-    pblock->nTime = ++time;
+    pblock->nTime = parent.nTime + 1;
+    pblock->nBits = GetNextWorkRequired(&parent, pblock.get());
 
     CMutableTransaction txCoinbase(*pblock->vtx[0]);
-    txCoinbase.vout.resize(1);
+    txCoinbase.vin[0].scriptSig = CScript() << (parent.nHeight + 1) << ++sequence;
     pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
 
     return pblock;
 }
 
 // construct a valid block
-const std::shared_ptr<const CBlock> GoodBlock(const uint256& prev_hash)
+const std::shared_ptr<const CBlock> GoodBlock(CBlockIndex& parent)
 {
-    return FinalizeBlock(Block(prev_hash));
+    return FinalizeBlock(Block(parent));
 }
 
 // construct an invalid block (but with a valid header)
-const std::shared_ptr<const CBlock> BadBlock(const uint256& prev_hash)
+const std::shared_ptr<const CBlock> BadBlock(CBlockIndex& parent)
 {
-    auto pblock = Block(prev_hash);
+    auto pblock = Block(parent);
 
     CMutableTransaction coinbase_spend;
     coinbase_spend.vin.emplace_back(CTxIn(COutPoint(pblock->vtx[0]->GetHash(), 0), CScript(), 0));
@@ -89,22 +94,34 @@ const std::shared_ptr<const CBlock> BadBlock(const uint256& prev_hash)
     return ret;
 }
 
-void BuildChain(const uint256& root, int height, const unsigned int invalid_rate, const unsigned int branch_rate, const unsigned int max_size, std::vector<std::shared_ptr<const CBlock>>& blocks)
+void BuildChain(CBlockIndex& root, int height, const unsigned int invalid_rate, const unsigned int branch_rate, const unsigned int max_size, std::vector<std::shared_ptr<const CBlock>>& blocks)
 {
     if (height <= 0 || blocks.size() >= max_size) return;
 
     bool gen_invalid = GetRand(100) < invalid_rate;
     bool gen_fork = GetRand(100) < branch_rate;
+    const auto extend = [&](const std::shared_ptr<const CBlock>& block) {
+        const uint256 hash = block->GetHash();
+        CBlockIndex parent(block->GetBlockHeader());
+        parent.phashBlock = &hash;
+        parent.pprev = &root;
+        parent.nHeight = root.nHeight + 1;
+        parent.nChainMinted = root.nChainMinted + block->vtx[0]->GetValueOut();
+        parent.BuildSkip();
+        BuildChain(parent, height - 1, invalid_rate, branch_rate, max_size, blocks);
+    };
 
     const std::shared_ptr<const CBlock> pblock = gen_invalid ? BadBlock(root) : GoodBlock(root);
     blocks.emplace_back(pblock);
     if (!gen_invalid) {
-        BuildChain(pblock->GetHash(), height - 1, invalid_rate, branch_rate, max_size, blocks);
+        extend(pblock);
     }
 
     if (gen_fork) {
         blocks.emplace_back(GoodBlock(root));
-        BuildChain(blocks.back()->GetHash(), height - 1, invalid_rate, branch_rate, max_size, blocks);
+        // Keep a stable shared_ptr across recursive vector growth.
+        const auto branch = blocks.back();
+        extend(branch);
     }
 }
 
@@ -112,9 +129,19 @@ BOOST_AUTO_TEST_CASE(processnewblock_signals_ordering)
 {
     // build a large-ish chain that's likely to have some forks
     std::vector<std::shared_ptr<const CBlock>> blocks;
+    CBlockIndex& genesis = *WITH_LOCK(cs_main, return chainActive.Genesis());
     while (blocks.size() < 50) {
         blocks.clear();
-        BuildChain(Params().GenesisBlock().GetHash(), 100, 15, 10, 500, blocks);
+        BuildChain(genesis, 100, 15, 10, 500, blocks);
+    }
+    std::map<uint256, int> heights{{genesis.GetBlockHash(), 0}};
+    int expected_height = 4; // The deterministic reorg below reaches height 4.
+    for (const auto& block : blocks) {
+        const int height = heights.at(block->hashPrevBlock) + 1;
+        if (block->vtx.size() == 1) {
+            BOOST_REQUIRE(heights.emplace(block->GetHash(), height).second);
+            expected_height = std::max(expected_height, height);
+        }
     }
 
     // Connect the genesis block and drain any outstanding events
@@ -125,6 +152,17 @@ BOOST_AUTO_TEST_CASE(processnewblock_signals_ordering)
     const CBlockIndex* initial_tip = WITH_LOCK(cs_main, return chainActive.Tip());
     TestSubscriber sub(initial_tip->GetBlockHash());
     RegisterValidationInterface(&sub);
+
+    // Guarantee a real disconnect/connect sequence before random scheduling;
+    // rejected branch fixtures must not make the ordering test pass vacuously.
+    std::vector<std::shared_ptr<const CBlock>> fork;
+    BuildChain(genesis, 3, 0, 0, 3, fork);
+    BuildChain(genesis, 4, 0, 0, 7, fork);
+    for (const auto& block : fork) BOOST_CHECK(ProcessNewBlock(block, nullptr));
+    SyncWithValidationInterfaceQueue();
+    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height()), 4);
+    BOOST_CHECK_GE(sub.m_connected, 7U);
+    BOOST_CHECK_GE(sub.m_disconnected, 3U);
 
     // create a bunch of threads that repeatedly process a block generated above at random
     // this will create parallelism and randomness inside validation - the ValidationInterface
@@ -163,6 +201,7 @@ BOOST_AUTO_TEST_CASE(processnewblock_signals_ordering)
     UnregisterValidationInterface(&sub);
 
     BOOST_CHECK_EQUAL(sub.m_expected_tip, WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()));
+    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height()), expected_height);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

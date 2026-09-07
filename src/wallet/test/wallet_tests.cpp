@@ -8,6 +8,7 @@
 
 #include "blockassembler.h"
 #include "consensus/merkle.h"
+#include "pqtransaction.h"
 #include "rpc/server.h"
 #include "util/system.h"
 #include "txmempool.h"
@@ -1161,9 +1162,21 @@ BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_FIXTURE_TEST_CASE(testnet_rescan_handles_null_genesis_sapling_root, TestnetSetup)
 {
-    CKey coinbaseKey;
-    coinbaseKey.MakeNewKey(true);
-    const CScript scriptPubKey = GetScriptForRawPubKey(coinbaseKey.GetPubKey());
+    struct RescanWallet : CWallet {
+        using CWallet::CWallet;
+        ~RescanWallet() { GetDBHandle().Flush(true); }
+    } wallet("testnet-rescan", WalletDatabase::Create(GetDataDir() / "testnet-rescan"));
+    bool firstRun;
+    BOOST_REQUIRE_EQUAL(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+    const SecureString passphrase = "public-testnet-rescan-fixture";
+    BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+    BOOST_REQUIRE(wallet.Unlock(passphrase));
+    std::string address;
+    BOOST_REQUIRE(wallet.GeneratePQAddress(address));
+    pq::KeyID id;
+    BOOST_REQUIRE(pq::DecodeAddress(address, Params().NetworkIDString(), id));
+    BOOST_REQUIRE(wallet.Lock());
+    const CScript scriptPubKey = pq::GetScript(id);
 
     std::unique_ptr<CBlockTemplate> blockTemplate = BlockAssembler(
             Params(), false).CreateNewBlock(scriptPubKey);
@@ -1173,17 +1186,25 @@ BOOST_FIXTURE_TEST_CASE(testnet_rescan_handles_null_genesis_sapling_root, Testne
     BOOST_REQUIRE(SolveBlock(block, 1));
     BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
 
-    CWallet wallet("testnet-rescan", WalletDatabase::CreateMock());
-    bool firstRun;
-    BOOST_REQUIRE_EQUAL(wallet.LoadWallet(firstRun), DB_LOAD_OK);
-    {
-        LOCK(wallet.cs_wallet);
-        BOOST_REQUIRE(wallet.AddKeyPubKey(coinbaseKey, coinbaseKey.GetPubKey()));
-    }
+    CBlockIndex* tip = WITH_LOCK(cs_main, return chainActive.Tip());
+    BOOST_REQUIRE_EQUAL(tip->GetBlockHash(), block->GetHash());
+    WITH_LOCK(wallet.cs_wallet, wallet.SetLastBlockProcessed(tip));
+    BOOST_REQUIRE(wallet.mapWallet.empty());
 
     WalletRescanReserver reserver(&wallet);
     BOOST_REQUIRE(reserver.reserve());
     CBlockIndex* genesis = WITH_LOCK(cs_main, return chainActive.Genesis());
     BOOST_REQUIRE(genesis);
+    BOOST_REQUIRE(genesis->hashFinalSaplingRoot.IsNull());
+    BOOST_REQUIRE(Params().GetConsensus().NetworkUpgradeActive(genesis->nHeight, Consensus::UPGRADE_V5_0));
     BOOST_CHECK_EQUAL(nullptr, wallet.ScanForWalletTransactions(genesis, nullptr, reserver));
+    LOCK(wallet.cs_wallet);
+    const auto* recovered = wallet.GetWalletTx(block->vtx[0]->GetHash());
+    BOOST_REQUIRE(recovered);
+    BOOST_CHECK_EQUAL(recovered->GetDepthInMainChain(), 1);
+    BOOST_CHECK(recovered->IsInMainChainImmature());
+    BOOST_REQUIRE_EQUAL(recovered->tx->vout.size(), 1U);
+    BOOST_CHECK(wallet.IsPQMine(recovered->tx->vout[0]));
+    BOOST_CHECK_EQUAL(recovered->tx->vout[0].nValue, block->vtx[0]->GetValueOut());
+    BOOST_CHECK(wallet.IsLocked());
 }
