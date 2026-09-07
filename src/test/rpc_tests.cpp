@@ -4,10 +4,17 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#ifdef HAVE_CONFIG_H
+#include "config/pivx-config.h"
+#endif
+
 #include "rpc/server.h"
 #include "rpc/client.h"
-
-#include "key_io.h"
+#include "rpc/register.h"
+#include "rpc/protocol.h"
+#ifdef ENABLE_WALLET
+#include "wallet/rpcwallet.h"
+#endif
 
 #include "netbase.h"
 #include "util/system.h"
@@ -76,14 +83,6 @@ BOOST_AUTO_TEST_CASE(rpc_rawparams)
     BOOST_CHECK_THROW(CallRPC("getrawtransaction not_hex"), std::runtime_error);
     BOOST_CHECK_THROW(CallRPC("getrawtransaction a3b807410df0b60fcb9736768df5823938b2f838694939ba45f3c0a1bff150ed not_int"), std::runtime_error);
 
-    BOOST_CHECK_THROW(CallRPC("createrawtransaction"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("createrawtransaction null null"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("createrawtransaction not_array"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("createrawtransaction [] []"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("createrawtransaction {} {}"), std::runtime_error);
-    BOOST_CHECK_NO_THROW(CallRPC("createrawtransaction [] {}"));
-    BOOST_CHECK_THROW(CallRPC("createrawtransaction [] {} extra"), std::runtime_error);
-
     BOOST_CHECK_THROW(CallRPC("decoderawtransaction"), std::runtime_error);
     BOOST_CHECK_THROW(CallRPC("decoderawtransaction null"), std::runtime_error);
     BOOST_CHECK_THROW(CallRPC("decoderawtransaction DEADBEEF"), std::runtime_error);
@@ -92,14 +91,6 @@ BOOST_AUTO_TEST_CASE(rpc_rawparams)
     BOOST_CHECK_EQUAL(find_value(r.get_obj(), "version").get_int(), 1);
     BOOST_CHECK_EQUAL(find_value(r.get_obj(), "locktime").get_int(), 0);
     BOOST_CHECK_THROW(r = CallRPC(std::string("decoderawtransaction ")+rawtx+" extra"), std::runtime_error);
-
-    BOOST_CHECK_THROW(CallRPC("signrawtransaction"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("signrawtransaction null"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("signrawtransaction ff00"), std::runtime_error);
-    BOOST_CHECK_NO_THROW(CallRPC(std::string("signrawtransaction ")+rawtx));
-    BOOST_CHECK_NO_THROW(CallRPC(std::string("signrawtransaction ")+rawtx+" null null NONE|ANYONECANPAY"));
-    BOOST_CHECK_NO_THROW(CallRPC(std::string("signrawtransaction ")+rawtx+" [] [] NONE|ANYONECANPAY"));
-    BOOST_CHECK_THROW(CallRPC(std::string("signrawtransaction ")+rawtx+" null null badenum"), std::runtime_error);
 
     // Only check failure cases for sendrawtransaction, there's no network to send to...
     BOOST_CHECK_THROW(CallRPC("sendrawtransaction"), std::runtime_error);
@@ -130,46 +121,28 @@ BOOST_AUTO_TEST_CASE(rpc_togglenetwork)
     BOOST_CHECK_EQUAL(netState, true);
 }
 
-BOOST_AUTO_TEST_CASE(rpc_rawsign)
+BOOST_AUTO_TEST_CASE(rpc_dispatch_uses_its_own_table)
 {
-    UniValue r;
-
-    // Create a fake 2-of-2 P2SH multisig prevout.
-    auto NewKey = [] {
-        CKey key;
-        key.MakeNewKey(true);
-        return key;
-    };
-    CKey key1 = NewKey();
-    CKey key2 = NewKey();
-    const CScript redeemScript = CScript() << 2 << ToByteVector(key1.GetPubKey()) << ToByteVector(key2.GetPubKey()) << 2 << OP_CHECKMULTISIG;
-    const CScript scriptPubKey = GetScriptForDestination(CScriptID(redeemScript));
-
-    UniValue prevouts(UniValue::VARR);
-    UniValue prevout(UniValue::VOBJ);
-    prevout.pushKV("txid", GetRandHash().ToString());
-    prevout.pushKV("vout", 1);
-    prevout.pushKV("scriptPubKey", HexStr(MakeUCharSpan(scriptPubKey)));
-    prevout.pushKV("redeemScript", HexStr(MakeUCharSpan(redeemScript)));
-    prevouts.push_back(prevout);
-
-    CKey destKey = NewKey();
-    UniValue outputs(UniValue::VOBJ);
-    outputs.pushKV(EncodeDestination(destKey.GetPubKey().GetID()), 1);
-
-    r = CallRPC(std::string("createrawtransaction ") + prevouts.write() + " " + outputs.write());
-    std::string notsigned = r.get_str();
-
-    const std::string privkey1 = KeyIO::EncodeSecret(key1);
-    const std::string privkey2 = KeyIO::EncodeSecret(key2);
-    UniValue privkeys(UniValue::VARR);
-    privkeys.push_back(privkey1);
-    privkeys.push_back(privkey2);
-
-    r = CallRPC(std::string("signrawtransaction ") + notsigned + " " + prevouts.write() + " []");
-    BOOST_CHECK(find_value(r.get_obj(), "complete").get_bool() == false);
-    r = CallRPC(std::string("signrawtransaction ") + notsigned + " " + prevouts.write() + " " + privkeys.write());
-    BOOST_CHECK(find_value(r.get_obj(), "complete").get_bool() == true);
+    BOOST_CHECK_NO_THROW(CallRPC("getnetworkinfo"));
+    CRPCTable first, second, empty;
+    const CRPCCommand one{"test", "test_local_dispatch", [](const JSONRPCRequest&) { return UniValue(1); }, true, {}};
+    const CRPCCommand two{"test", "test_local_dispatch", [](const JSONRPCRequest&) { return UniValue(2); }, true, {}};
+    BOOST_REQUIRE(first.appendCommand(one.name, &one));
+    BOOST_REQUIRE(second.appendCommand(two.name, &two));
+    BOOST_CHECK(tableRPC[one.name] == nullptr);
+    JSONRPCRequest request;
+    request.strMethod = one.name;
+    request.params = UniValue(UniValue::VARR);
+    UniValue result;
+    BOOST_REQUIRE_NO_THROW(result = first.execute(request));
+    BOOST_CHECK_EQUAL(result.get_int(), 1);
+    BOOST_REQUIRE_NO_THROW(result = second.execute(request));
+    BOOST_CHECK_EQUAL(result.get_int(), 2);
+    for (const auto* table : {&empty, &tableRPC})
+        BOOST_CHECK_EXCEPTION(table->execute(request), UniValue, [&](const UniValue& error) {
+            return find_value(error, "code").get_int() == RPC_METHOD_NOT_FOUND &&
+                   find_value(error, "message").get_str() == "Method not found: test_local_dispatch";
+        });
 }
 
 BOOST_AUTO_TEST_CASE(rpc_format_monetary_values)
@@ -359,4 +332,44 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     BOOST_CHECK_EQUAL(adr.get_str(), "2001:4d48:ac57:400:cacf:e9ff:fe1d:9c63/128");
 }
 
+BOOST_AUTO_TEST_SUITE_END()
+
+namespace {
+void CheckRemovedRawRPCs()
+{
+    // Use the real registration paths in a fresh table, not a stale global table
+    // or broad exception checks that could mistake argument errors for denial.
+    BOOST_CHECK_NO_THROW(CallRPC("getnetworkinfo")); // Finish shared RPC warmup.
+    CRPCTable commands;
+    RegisterAllCoreRPCCommands(commands);
+#ifdef ENABLE_WALLET
+    RegisterWalletRPCCommands(commands);
+#endif
+    for (const char* method : {"getrawtransaction", "decoderawtransaction", "sendrawtransaction"})
+        BOOST_CHECK(commands[method] != nullptr);
+    for (const char* method : {"createrawtransaction", "signrawtransaction",
+                               "signrawtransactionwithkey", "signrawtransactionwithwallet"}) {
+        BOOST_TEST_CONTEXT(Params().NetworkIDString() << ": " << method) {
+            BOOST_CHECK(commands[method] == nullptr);
+            BOOST_CHECK(tableRPC[method] == nullptr);
+            for (const char* arguments : {"[]", "[[],{}]", "[null,null]", "[\"01000000000000000000\"]",
+                                          "[\"ff00\",[],[],\"NONE|ANYONECANPAY\"]",
+                                          "{\"hexstring\":\"ff00\"}", "{\"inputs\":[],\"outputs\":{}}"}) {
+                JSONRPCRequest request;
+                request.strMethod = method;
+                BOOST_REQUIRE(request.params.read(arguments));
+                BOOST_CHECK_EXCEPTION(commands.execute(request), UniValue, [&](const UniValue& error) {
+                    return find_value(error, "code").get_int() == RPC_METHOD_NOT_FOUND &&
+                           find_value(error, "message").get_str() == std::string("Method not found: ") + method;
+                });
+            }
+        }
+    }
+}
+} // namespace
+
+BOOST_AUTO_TEST_SUITE(rpc_pq_denial_tests)
+BOOST_FIXTURE_TEST_CASE(main_removed_signers, TestingSetup) { CheckRemovedRawRPCs(); }
+BOOST_FIXTURE_TEST_CASE(testnet_removed_signers, TestnetSetup) { CheckRemovedRawRPCs(); }
+BOOST_FIXTURE_TEST_CASE(regtest_removed_signers, RegTestingSetup) { CheckRemovedRawRPCs(); }
 BOOST_AUTO_TEST_SUITE_END()
