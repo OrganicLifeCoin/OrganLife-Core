@@ -10,6 +10,7 @@
 
 // Certificate primitive only. Not a finality protocol or an activation switch.
 namespace pqquorum {
+constexpr size_t MIN_MEMBERS = 4;
 constexpr size_t MAX_MEMBERS = 400;
 // Version + purpose + four uint256 fields + height/round + signature count.
 constexpr size_t HEADER_SIZE = 1 + 1 + 4 * 32 + 2 * 4 + 2;

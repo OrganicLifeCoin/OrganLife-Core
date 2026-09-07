@@ -43,7 +43,7 @@ bool CanonicalSigners(const std::vector<Signature>& signatures)
 
 size_t Threshold(size_t members)
 {
-    return members < 3 || members > MAX_MEMBERS ? 0 : (2 * members) / 3 + 1;
+    return members < MIN_MEMBERS || members > MAX_MEMBERS ? 0 : (2 * members) / 3 + 1;
 }
 
 uint256 Commitment(const std::vector<Member>& members)

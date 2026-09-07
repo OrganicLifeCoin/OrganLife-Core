@@ -48,7 +48,7 @@ BOOST_FIXTURE_TEST_SUITE(pqquorum_tests, QuorumFixture)
 BOOST_AUTO_TEST_CASE(strict_quorum_and_roundtrip)
 {
     BOOST_CHECK_EQUAL(pqquorum::Threshold(4), 3U);
-    BOOST_CHECK_EQUAL(pqquorum::Threshold(3), 3U);
+    BOOST_CHECK_EQUAL(pqquorum::Threshold(3), 0U);
     BOOST_CHECK_EQUAL(pqquorum::Threshold(50), 34U);
     BOOST_CHECK_EQUAL(pqquorum::Threshold(400), 267U);
     BOOST_CHECK_EQUAL(pqquorum::Threshold(0), 0U);
@@ -67,6 +67,20 @@ BOOST_AUTO_TEST_CASE(strict_quorum_and_roundtrip)
     BOOST_CHECK(pqquorum::Verify(decoded, statement, members, reason));
     BOOST_CHECK(!pqquorum::Verify(certificate(2), statement, members, reason));
     BOOST_CHECK(pqquorum::Verify(certificate(4), statement, members, reason));
+}
+
+BOOST_AUTO_TEST_CASE(three_operators_cannot_bootstrap_a_committee)
+{
+    // Even unanimous signatures cannot lower the network's minimum membership.
+    members.resize(3);
+    statement.committee = pqquorum::Commitment(members);
+    BOOST_CHECK(statement.committee.IsNull());
+    // A peer can still supply a nonnull purported committee commitment.
+    if (statement.committee.IsNull()) statement.committee = uint256S("44");
+    const auto cert = certificate(3);
+    std::string reason;
+    BOOST_CHECK(!pqquorum::Verify(cert, statement, members, reason));
+    BOOST_CHECK(!reason.empty());
 }
 
 BOOST_AUTO_TEST_CASE(rejects_signer_substitution_duplicates_and_order)
