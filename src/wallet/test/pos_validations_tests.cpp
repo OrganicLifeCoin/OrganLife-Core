@@ -22,6 +22,7 @@
 #include "validation.h"
 #include "wallet/wallet.h"
 
+#include <algorithm>
 #include <boost/test/unit_test.hpp>
 
 bool CheckForCoins(CWallet* pwallet, std::vector<CStakeableOutput>* availableCoins, bool lastResult);
@@ -243,12 +244,11 @@ COutPoint GetOutpointWithAmount(const CTransaction& tx, CAmount outpointValue)
 
 static bool IsSpentOnFork(const COutput& coin, std::initializer_list<std::shared_ptr<CBlock>> forkchain = {})
 {
+    const COutPoint outpoint(coin.tx->GetHash(), coin.i);
     for (const auto& block : forkchain) {
-        const auto& usedOutput = block->vtx[1]->vin.at(0).prevout;
-        if (coin.tx->GetHash() == usedOutput.hash && coin.i == (int)usedOutput.n) {
-            // spent on fork
-            return true;
-        }
+        for (const auto& tx : block->vtx)
+            for (const auto& input : tx->vin)
+                if (input.prevout == outpoint) return true;
     }
     return false;
 }
@@ -264,10 +264,18 @@ std::shared_ptr<CBlock> CreateBlockInternal(CWallet* pwalletMain, const std::vec
     // used when selecting tx inputs in CreateAndCommitTx)
     // Also, as the wallet is not prepared to follow several chains at the same time,
     // need to manually remove from the stakeable utxo set every already used
-    // coinstake inputs on the previous blocks of the parallel chain so they
+    // transaction inputs on the previous blocks of the parallel chain so they
     // are not used again.
     for (auto it = availableCoins.begin(); it != availableCoins.end() ;) {
-        if (it->nDepth <= 120 || IsSpentOnFork(*it, forkchain)) {
+        // These synthetic transactions need not enter the mempool. Reserve their
+        // inputs explicitly so the coinstake cannot spend them in the same block.
+        const COutPoint outpoint(it->tx->GetHash(), it->i);
+        const bool spentInBlock = std::any_of(txns.begin(), txns.end(), [&](const CMutableTransaction& tx) {
+            return std::any_of(tx.vin.begin(), tx.vin.end(), [&](const CTxIn& input) {
+                return input.prevout == outpoint;
+            });
+        });
+        if (it->nDepth <= 120 || IsSpentOnFork(*it, forkchain) || spentInBlock) {
             it = availableCoins.erase(it);
         } else {
             it++;
@@ -304,6 +312,19 @@ static COutput GetUnspentCoin(CWallet* pwallet, std::initializer_list<std::share
         }
     }
     throw std::runtime_error("Unspent coin not found");
+}
+
+BOOST_FIXTURE_TEST_CASE(stake_fixture_excludes_ordinary_fork_spends, TestPoSChainSetup)
+{
+    const auto coins = pwalletMain->GetPQUnspent();
+    BOOST_REQUIRE(!coins.empty());
+    const auto& coin = coins.front();
+    CMutableTransaction other, spend;
+    other.vin.emplace_back(COutPoint());
+    spend.vin.emplace_back(coin.tx->GetHash(), coin.i);
+    auto block = std::make_shared<CBlock>();
+    block->vtx = {MakeTransactionRef(other), MakeTransactionRef(other), MakeTransactionRef(spend)};
+    BOOST_CHECK(IsSpentOnFork(coin, {block}));
 }
 
 BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
