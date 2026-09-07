@@ -49,6 +49,13 @@ bool EncryptOperatorRecovery(const SecureBytes& seed, const SecureBytes& master_
                              const std::string& network, const uint256& genesis, Record& record);
 bool DecryptOperatorRecovery(const SecureBytes& master_key, const Record& record,
                              const std::string& network, const uint256& genesis, mldsa44::Key& key);
+// Rewrap only a backed controller operator record for the expected identity.
+// The caller supplies a fresh independent random wrapping key and delivers it
+// through protected host custody. No plaintext seed or wallet master is output.
+// Failure clears output, except aliased input/output is rejected unchanged.
+bool RewrapOperatorRecovery(const OperatorRecovery& recovery, const pq::KeyID& expected,
+                            const SecureBytes& master_key, const SecureBytes& wrapping_key,
+                            const std::string& network, const uint256& genesis, Record& record);
 // Read-only Linux/macOS credential delivery, not provisioning or operator authority.
 // Caller supplies a trusted absolute credential directory and chain identity.
 // Other platforms fail closed; no environment/config fallback or secret logging.

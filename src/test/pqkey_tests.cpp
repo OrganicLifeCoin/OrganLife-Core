@@ -43,6 +43,80 @@ const pqwallet::SecureBytes MASTER(32, 42); // Public test material only.
 
 BOOST_AUTO_TEST_SUITE(pqkey_tests)
 
+BOOST_AUTO_TEST_CASE(backed_operator_rewrap_preserves_identity_not_controller_custody)
+{
+    const uint256 genesis = uint256S("1234");
+    const pqwallet::SecureBytes wrapping(32, 77);
+    for (const std::string network : {"regtest", "test"}) {
+        pqwallet::OperatorRecovery recovery;
+        BOOST_REQUIRE(pqwallet::EncryptOperatorRecovery(TestSeed(), MASTER, network, genesis, recovery.record));
+        const auto id = pq::GetID(recovery.record.public_key, network);
+        BOOST_REQUIRE(id);
+        pqwallet::Record deployed;
+        BOOST_CHECK(!pqwallet::RewrapOperatorRecovery(recovery, *id, MASTER, wrapping, network, genesis, deployed));
+        recovery.backed = 1;
+        CDataStream original(SER_DISK, 0);
+        original << recovery;
+        BOOST_REQUIRE(pqwallet::RewrapOperatorRecovery(recovery, *id, MASTER, wrapping, network, genesis, deployed));
+        BOOST_CHECK_EQUAL(deployed.version, 2);
+        BOOST_CHECK(deployed.public_key == recovery.record.public_key);
+        mldsa44::Key key;
+        BOOST_REQUIRE(pqwallet::DecryptOperatorKey(wrapping, deployed, network, genesis, key));
+        std::vector<unsigned char> signature;
+        const std::vector<unsigned char> message{1, 2, 3};
+        BOOST_REQUIRE(key.Sign(message, {}, signature));
+        BOOST_CHECK(mldsa44::Verify(recovery.record.public_key, message, {}, signature));
+        BOOST_CHECK(!pqwallet::DecryptOperatorKey(MASTER, deployed, network, genesis, key));
+        BOOST_CHECK(!pqwallet::DecryptKey(wrapping, deployed, network, key));
+        BOOST_CHECK(!pqwallet::DecryptOperatorRecovery(wrapping, deployed, network, genesis, key));
+        BOOST_CHECK(!pqwallet::DecryptOperatorRecovery(wrapping, recovery.record, network, genesis, key));
+        pqwallet::Record again;
+        BOOST_REQUIRE(pqwallet::RewrapOperatorRecovery(recovery, *id, MASTER, wrapping, network, genesis, again));
+        BOOST_CHECK(again.nonce != deployed.nonce);
+        BOOST_REQUIRE(pqwallet::DecryptOperatorRecovery(MASTER, recovery.record, network, genesis, key));
+        CDataStream unchanged(SER_DISK, 0);
+        unchanged << recovery;
+        BOOST_CHECK(unchanged.str() == original.str());
+        auto aliased = recovery;
+        BOOST_CHECK(!pqwallet::RewrapOperatorRecovery(aliased, *id, MASTER, wrapping, network, genesis, aliased.record));
+        CDataStream retained(SER_DISK, 0);
+        retained << aliased;
+        BOOST_CHECK(retained.str() == original.str());
+
+        const auto reject = [&](pqwallet::OperatorRecovery candidate, pq::KeyID expected,
+                                pqwallet::SecureBytes master, pqwallet::SecureBytes wrap,
+                                std::string net, uint256 chain) {
+            auto output = deployed;
+            BOOST_CHECK(!pqwallet::RewrapOperatorRecovery(candidate, expected, master, wrap, net, chain, output));
+            CDataStream actual(SER_DISK, 0), empty(SER_DISK, 0);
+            actual << output; empty << pqwallet::Record{};
+            BOOST_CHECK(actual.str() == empty.str());
+        };
+        for (uint8_t backed : {0, 2}) {
+            auto candidate = recovery; candidate.backed = backed;
+            reject(candidate, *id, MASTER, wrapping, network, genesis);
+        }
+        auto wrong_id = *id; wrong_id[0] ^= 1;
+        reject(recovery, wrong_id, MASTER, wrapping, network, genesis);
+        reject(recovery, *id, MASTER, wrapping, "main", genesis);
+        reject(recovery, *id, MASTER, wrapping, network == "test" ? "regtest" : "test", genesis);
+        reject(recovery, *id, MASTER, wrapping, network, uint256{});
+        reject(recovery, *id, MASTER, wrapping, network, uint256S("1235"));
+        reject(recovery, *id, wrapping, wrapping, network, genesis);
+        reject(recovery, *id, pqwallet::SecureBytes(32, 18), wrapping, network, genesis);
+        reject(recovery, *id, MASTER, MASTER, network, genesis);
+        reject(recovery, *id, MASTER, pqwallet::SecureBytes(31, 77), network, genesis);
+        for (int field = 0; field < 4; ++field) {
+            auto candidate = recovery;
+            if (field == 0) candidate.record.version = 2;
+            if (field == 1) candidate.record.public_key[0] ^= 1;
+            if (field == 2) candidate.record.nonce[0] ^= 1;
+            if (field == 3) candidate.record.encrypted_seed[0] ^= 1;
+            reject(candidate, *id, MASTER, wrapping, network, genesis);
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(operator_recovery_is_not_spending_or_deployment_storage)
 {
     const uint256 genesis = uint256S("1234");

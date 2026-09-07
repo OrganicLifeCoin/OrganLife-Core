@@ -153,9 +153,10 @@ bool Encrypt(const SecureBytes& seed, const SecureBytes& master_key, const std::
 }
 
 bool Decrypt(const SecureBytes& master_key, const Record& record, const std::string& network,
-             const uint256* genesis, mldsa44::Key& key, uint8_t version)
+             const uint256* genesis, mldsa44::Key& key, uint8_t version, SecureBytes* rewrap_seed = nullptr)
 {
     key.Clear();
+    if (rewrap_seed) rewrap_seed->clear();
     SecureBytes encryption_key;
     if (record.version != version || !StorageKey(master_key, encryption_key, version)) return false;
     SecureBytes seed(mldsa44::SEED_SIZE);
@@ -169,6 +170,7 @@ bool Decrypt(const SecureBytes& master_key, const Record& record, const std::str
         key.Clear();
         return false;
     }
+    if (rewrap_seed) *rewrap_seed = std::move(seed);
     return true;
 }
 } // namespace
@@ -241,5 +243,21 @@ bool DecryptOperatorRecovery(const SecureBytes& master_key, const Record& record
                              const std::string& network, const uint256& genesis, mldsa44::Key& key)
 {
     return Decrypt(master_key, record, network, &genesis, key, 3);
+}
+
+bool RewrapOperatorRecovery(const OperatorRecovery& recovery, const pq::KeyID& expected,
+                            const SecureBytes& master_key, const SecureBytes& wrapping_key,
+                            const std::string& network, const uint256& genesis, Record& record)
+{
+    if (&record == &recovery.record) return false;
+    record = {};
+    if (recovery.backed != 1 || master_key.size() != 32 || wrapping_key.size() != 32 ||
+        sodium_memcmp(master_key.data(), wrapping_key.data(), 32) == 0) return false;
+    const auto id = pq::GetID(recovery.record.public_key, network);
+    if (!id || *id != expected) return false;
+    mldsa44::Key key;
+    SecureBytes seed;
+    if (!Decrypt(master_key, recovery.record, network, &genesis, key, 3, &seed)) return false;
+    return EncryptOperatorSeed(seed, wrapping_key, network, genesis, record);
 }
 } // namespace pqwallet
