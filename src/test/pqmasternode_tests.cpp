@@ -1190,8 +1190,14 @@ BOOST_AUTO_TEST_CASE(startup_replay_checks_clean_coin_and_evo_tips)
     BOOST_CHECK(requiresReindex);
     const auto activation = std::make_pair(std::string("pqmn1a"), Params().GetConsensus().hashGenesisBlock);
     const auto marker = std::make_pair(std::string("pqmn1b"), Params().GetConsensus().hashGenesisBlock);
+    const auto schema = std::make_pair(std::string("pqmn1v"), Params().GetConsensus().hashGenesisBlock);
     evoDb->Write(activation, 2); evoDb->Write(marker, secondHash);
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex); // Schema is mandatory.
+    evoDb->Write(schema, uint8_t{2});
     BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(!requiresReindex);
+    evoDb->Write(schema, uint8_t{3});
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
+    evoDb->Write(schema, uint8_t{2});
     evoDb->Write(marker, firstHash);
     BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
     evoDb->Write(marker, secondHash);
@@ -1911,6 +1917,130 @@ BOOST_AUTO_TEST_CASE(real_block_registration_validation_rollback_and_reorg)
     BOOST_CHECK(!registry.Get(reg->GetHash(), record));
     BOOST_CHECK(mempool.exists(reg->GetHash())); // The registration itself can be relayed again.
     BOOST_CHECK(mempool.IsPQMNCollateral(COutPoint(reg->GetHash(), 0)));
+}
+
+BOOST_AUTO_TEST_CASE(pq_reward_queue_selects_oldest_configured_mature_record)
+{
+    LOCK(cs_main);
+    auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params());
+    const auto make_record = [&](unsigned int n, uint32_t lastPaid) {
+        pqmn::Record record;
+        record.collateral = COutPoint(uint256S("aa"), n);
+        record.owner = keys[0].GetPublicKey();
+        record.operatorKey = keys[1].GetPublicKey();
+        record.collateralKey = ID(2);
+        record.payout = ID(n);
+        BOOST_REQUIRE(Lookup((std::string("127.0.0.1:") + std::to_string(52000 + n)).c_str(), record.service, 0, false));
+        record.registeredHeight = 1;
+        record.collateralHeight = 1;
+        record.lastPaidHeight = lastPaid;
+        return record;
+    };
+    const std::array<uint256, 4> registrations{uint256S("01"), uint256S("02"), uint256S("03"), uint256S("04")};
+    for (size_t n = 0; n < registrations.size(); ++n)
+        evoDb->Write(std::make_pair(std::make_pair(std::string("pqmn1r"), Params().GetConsensus().hashGenesisBlock), registrations[n]),
+                     make_record(n, n == 0 ? 0 : 10));
+
+    uint256 registration;
+    pqmn::Record winner;
+    BOOST_REQUIRE(index.GetPayee(20, registration, winner));
+    BOOST_CHECK(registration == registrations[0]);
+    BOOST_CHECK(winner.payout == ID(0));
+
+    winner.revivedHeight = 30;
+    evoDb->Write(std::make_pair(std::make_pair(std::string("pqmn1r"), Params().GetConsensus().hashGenesisBlock), registrations[0]), winner);
+    BOOST_REQUIRE(index.GetPayee(20, registration, winner));
+    BOOST_CHECK(registration == registrations[1]);
+
+    winner.service = {};
+    evoDb->Write(std::make_pair(std::make_pair(std::string("pqmn1r"), Params().GetConsensus().hashGenesisBlock), registrations[0]), winner);
+    BOOST_REQUIRE(index.GetPayee(20, registration, winner));
+    BOOST_CHECK(registration == registrations[1]);
+    winner = make_record(2, 10);
+    winner.revoked = true;
+    evoDb->Write(std::make_pair(std::make_pair(std::string("pqmn1r"), Params().GetConsensus().hashGenesisBlock), registrations[2]), winner);
+    winner = make_record(3, 10);
+    winner.registeredHeight = 21;
+    evoDb->Write(std::make_pair(std::make_pair(std::string("pqmn1r"), Params().GetConsensus().hashGenesisBlock), registrations[3]), winner);
+    BOOST_REQUIRE(index.GetPayee(20, registration, winner));
+    BOOST_CHECK(registration == registrations[1]);
+}
+
+BOOST_AUTO_TEST_CASE(pq_reward_connect_disconnect_restores_queue_state_and_requires_undo)
+{
+    LOCK(cs_main);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto setup = evoDb->BeginTransaction(); setup->Commit();
+    const auto reg = MakeTransactionRef(Transaction(Registration()));
+    RegistryBlock first(parent, {reg});
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    {
+        auto tx = evoDb->BeginTransaction();
+        BOOST_REQUIRE(index.ConnectBlock(first.block, first.index, view, 20, reason));
+        evoDb->WriteBestBlock(first.hash); tx->Commit();
+    }
+    view.SetBestBlock(first.hash);
+    RegistryBlock paid(first.index, {});
+    {
+        auto tx = evoDb->BeginTransaction();
+        BOOST_REQUIRE(index.ConnectBlock(paid.block, paid.index, view, 20, reason, COIN));
+        pqmn::Record record; BOOST_REQUIRE(index.Get(reg->GetHash(), record));
+        BOOST_CHECK_EQUAL(record.lastPaidHeight, 21U);
+        evoDb->WriteBestBlock(paid.hash); tx->Commit();
+    }
+    view.SetBestBlock(paid.hash);
+    {
+        auto tx = evoDb->BeginTransaction();
+        BOOST_REQUIRE(index.DisconnectBlock(paid.block, paid.index, view, 20, reason));
+        pqmn::Record record; BOOST_REQUIRE(index.Get(reg->GetHash(), record));
+        BOOST_CHECK_EQUAL(record.lastPaidHeight, 0U);
+        tx->Rollback();
+    }
+    evoDb->WriteBestBlock(paid.hash);
+    view.SetBestBlock(paid.hash);
+    auto missing = evoDb->BeginTransaction();
+    evoDb->Erase(std::make_pair(std::make_pair(std::string("pqmn1w"), Params().GetConsensus().hashGenesisBlock), paid.hash));
+    BOOST_CHECK(!index.DisconnectBlock(paid.block, paid.index, view, 20, reason));
+    missing->Rollback();
+}
+
+BOOST_AUTO_TEST_CASE(pq_reward_queue_rejects_corrupt_payout_fields)
+{
+    LOCK(cs_main);
+    auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params());
+    const uint256 registration = uint256S("99");
+    const auto key = std::make_pair(std::make_pair(std::string("pqmn1r"), Params().GetConsensus().hashGenesisBlock), registration);
+    const auto valid = [&] {
+        pqmn::Record record;
+        record.collateral = COutPoint(uint256S("bb"), 0);
+        record.owner = keys[0].GetPublicKey(); record.operatorKey = keys[1].GetPublicKey();
+        record.collateralKey = ID(2); record.payout = ID(0); record.operatorReward = 0;
+        record.registeredHeight = 1; record.collateralHeight = 1;
+        BOOST_REQUIRE(Lookup("127.0.0.1:53000", record.service, 0, false));
+        return record;
+    };
+    for (int mutation = 0; mutation < 4; ++mutation) {
+        auto record = valid();
+        if (mutation == 0) record.payout = {};
+        if (mutation == 1) record.operatorReward = 10001;
+        if (mutation == 2) { record.operatorReward = 1; record.operatorPayout = {}; }
+        if (mutation == 3) { record.operatorReward = 0; record.operatorPayout = ID(1); }
+        evoDb->Write(key, record);
+        uint256 selected; pqmn::Record selectedRecord;
+        BOOST_CHECK_THROW(index.GetPayee(20, selected, selectedRecord), std::runtime_error);
+        evoDb->Erase(key);
+    }
+    auto inactive = valid();
+    inactive.payout = ID(1); inactive.operatorReward = 1; inactive.operatorPayout = {};
+    inactive.service = {}; evoDb->Write(key, inactive);
+    uint256 selected; pqmn::Record selectedRecord;
+    BOOST_CHECK(!index.GetPayee(20, selected, selectedRecord));
+    inactive.revoked = true; evoDb->Write(key, inactive);
+    BOOST_CHECK(!index.GetPayee(20, selected, selectedRecord));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

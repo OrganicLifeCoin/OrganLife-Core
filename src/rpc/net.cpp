@@ -71,6 +71,8 @@ UniValue listpqmasternodes(const JSONRPCRequest& request)
             item.pushKV("sequence", std::to_string(record.sequence));
             item.pushKV("registered_height", static_cast<uint64_t>(record.registeredHeight));
             item.pushKV("collateral_height", static_cast<uint64_t>(record.collateralHeight));
+            item.pushKV("last_paid_height", static_cast<uint64_t>(record.lastPaidHeight));
+            item.pushKV("revived_height", static_cast<uint64_t>(record.revivedHeight));
             item.pushKV("revoked", record.revoked);
             result.push_back(item);
         }

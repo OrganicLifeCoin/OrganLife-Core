@@ -21,6 +21,11 @@ bool IsBlockValueValid(int nHeight, CAmount& nExpectedValue, CAmount nMinted, CA
                        CAmount nChainMinted = 0, CAmount nRecycledFees = 0);
 void FillBlockPayee(CMutableTransaction& txCoinbase, CMutableTransaction& txCoinstake, const CBlockIndex* pindexPrev, bool fProofOfStake);
 bool CanBuildRequiredMasternodePayment(const CBlockIndex* pindexPrev);
+// PQ parent-state payment. False means unavailable/corrupt state, not no payee.
+bool GetPQMasternodePayment(const CBlockIndex* pindexPrev, std::vector<CTxOut>& outputs);
+// Called before signing: move the single winning share out of the producer subsidy.
+bool FillPQMasternodePayment(CMutableTransaction& coinbase, CMutableTransaction* coinstake,
+                            const CBlockIndex* pindexPrev);
 
 /**
  * Check coinbase output value for blocks after v6.0 enforcement.

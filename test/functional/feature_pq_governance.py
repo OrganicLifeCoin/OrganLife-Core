@@ -4,6 +4,7 @@
 """Exercise PQ proposals, coin-vote locks, votes, persistence, and payouts."""
 
 from pathlib import Path
+from decimal import Decimal
 import time
 
 from test_framework.authproxy import JSONRPCException
@@ -13,6 +14,14 @@ from test_framework.util import assert_equal, set_node_times, wait_until
 
 
 class PQGovernanceTest(PivxTestFramework):
+    def add_options(self, parser):
+        parser.add_option("--pq-masternode", action="store_true", default=False)
+
+    def setup_network(self):
+        if self.options.pq_masternode:
+            self.extra_args[0].append("-nuparams=pq_masternodes:1")
+        super().setup_network()
+
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 1
@@ -59,6 +68,16 @@ class PQGovernanceTest(PivxTestFramework):
         payment_address = self.pq_address(node, "proposal-payment")
 
         self.mine(mining_address, 101)
+        if self.options.pq_masternode:
+            root = Path(node.datadir)
+            node.sendpqmasternode("register", {
+                "collateral_address": self.pq_address(node, "mn-bond"),
+                "owner_address": self.pq_address(node, "mn-owner"),
+                "operator_publickey": node.createpqoperator(str(root / "mn-operator.dat"))["publickey"],
+                "payout_address": payment_address,
+                "operator_reward": 1000, "operator_payout_address": mining_address,
+                "service": "[::1]:20100"}, str(root / "mn-registration.dat"))
+            self.mine(mining_address)
         start = node.getnextsuperblock()
         proposal = node.createpqproposal(
             "pq-test", "https://example.invalid/pq-test", 1, start, payment_address, 10)
@@ -95,6 +114,12 @@ class PQGovernanceTest(PivxTestFramework):
                     if out["value"] == 10 and
                     out["scriptPubKey"]["hex"] == self.pq_script(payment_address)]
         assert_equal(len(matching), 1)
+        if self.options.pq_masternode:
+            reward = node.getblock(payout_block, 2)["tx"][0]["vout"]
+            assert_equal([out["value"] for out in reward], [Decimal("5.4"), Decimal("0.6")])
+            assert_equal([out["scriptPubKey"]["hex"] for out in reward],
+                         [self.pq_script(payment_address), self.pq_script(mining_address)])
+            assert_equal(node.listpqmasternodes()[0]["last_paid_height"], start)
 
         node.invalidateblock(payout_block)
         assert_equal(node.getblockcount(), start - 1)
@@ -107,6 +132,8 @@ class PQGovernanceTest(PivxTestFramework):
             node = self.nodes[0]
             assert_equal(node.getbestblockhash(), payout_block)
             assert_equal(node.getgovvotestatus(proposal["proposal_hash"])["coin_yes"], 5)
+            if self.options.pq_masternode:
+                assert_equal(node.listpqmasternodes()[0]["last_paid_height"], start)
 
 
 if __name__ == "__main__":

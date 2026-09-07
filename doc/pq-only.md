@@ -215,10 +215,36 @@ before confirmation does not submit a transaction. Registry refresh invalidates
 row selections, and stale sequence checks remain enforced by the shared core.
 The information dialog shows public data only, never private operator material.
 
-This does not yet provide a usable masternode: service verification, rewards
-and quorum finality remain unavailable. Public P2P and
-cross-platform qualification remain pending. Do not use this opt-in mode with a
-value-bearing wallet.
+Opt-in regtest blocks now enforce one whole masternode share per block, selected
+from the parent registry. The nominal share is 6 OLC, funded from the existing
+block subsidy, not additional issuance. The existing subsidy cap still applies.
+An explicitly configured operator commission divides only the winning node's
+share; zero commission sends the whole share to its controller payout address.
+The queue selects the lowest effective last-paid/revival height, falling back to
+registration height, with registration hash as the deterministic tie break.
+Four stable eligible registrations therefore rotate A/B/C/D/A. Revoked,
+unconfigured or immature registrations are excluded. Restoring an empty service
+endpoint sets the revival height; an ordinary endpoint edit does not reset it.
+`listpqmasternodes` exposes `last_paid_height` and `revived_height`.
+
+PoW places the share after the miner's output. PoS places it in coinbase and
+subtracts it from the stake return before signing. Governance remains separately
+funded and validated, even when its recipient matches a masternode payout.
+Missing, incorrect or noncanonical payouts fail block validation. Payment queue
+changes and their undo are persisted with the registry, including same-block
+registration updates and collateral spends.
+
+This changes the opt-in registry record/schema to version 2 and changes its
+block payment rules. Old active-regtest databases are rejected; reindex alone
+cannot make a formerly valid unpaid block history satisfy the new rules. Use a
+separate clean regtest data directory. Do not delete wallets to upgrade. Public
+testnet/mainnet activation remains unchanged.
+
+This still does not provide fully operational masternodes: a configured endpoint
+is not evidence of online service, and offline nodes are not yet automatically
+excluded. Quorum service enforcement and finality runtime remain unavailable.
+Public-network and cross-platform qualification remain pending. Do not use this
+opt-in mode with a value-bearing wallet.
 
 The isolated operator-authentication component signs a fixed, versioned proof
 with the registered ML-DSA operator key. It binds genesis, registration, operator

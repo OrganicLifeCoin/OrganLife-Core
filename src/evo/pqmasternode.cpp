@@ -8,9 +8,11 @@
 #include <algorithm>
 #include <limits>
 #include <set>
+#include <tuple>
 
 namespace pqmn {
 namespace {
+constexpr uint8_t PQMN_SCHEMA_VERSION = 2;
 bool Fail(std::string& reason, const char* error) { reason = error; return false; }
 template<typename T> bool Zero(const T& value) {
     return std::all_of(value.begin(), value.end(), [](unsigned char c) { return c == 0; });
@@ -214,6 +216,40 @@ void Index::Put(const uint256& id, const Record& record) {
     if (record.service != CService()) db.Write(std::make_pair(Prefix('s'), record.service), id);
 }
 
+Optional<std::pair<uint256, Record>> Index::FindPayee(uint32_t height) const
+{
+    Optional<std::pair<uint256, Record>> winner;
+    for (const auto& item : List()) {
+        const auto& record = item.second;
+        if (record.revoked || record.service == CService()) continue;
+        if (Zero(record.payout) || record.operatorReward > 10000 ||
+            (record.operatorReward != 0 && Zero(record.operatorPayout)) ||
+            (record.operatorReward == 0 && !Zero(record.operatorPayout)))
+            throw std::runtime_error("Corrupt PQ masternode payout fields");
+        if (!record.MatureAt(height, params.GetConsensus().MasternodeCollateralMinConf())) continue;
+        const auto effective = std::max(record.lastPaidHeight, record.revivedHeight);
+        const auto age = effective != 0 ? effective : record.registeredHeight;
+        const auto winnerEffective = std::max(winner ? winner->second.lastPaidHeight : 0U,
+                                               winner ? winner->second.revivedHeight : 0U);
+        const auto winnerAge = winnerEffective != 0 ? winnerEffective : (winner ? winner->second.registeredHeight : 0U);
+        if (!winner || std::make_tuple(age, item.first) < std::make_tuple(winnerAge, winner->first))
+            winner = item;
+    }
+    return winner;
+}
+
+bool Index::GetPayee(uint32_t height, uint256& registration, Record& record) const
+{
+    AssertLockHeld(cs_main);
+    registration.SetNull();
+    record = {};
+    const auto winner = FindPayee(height);
+    if (!winner) return false;
+    registration = winner->first;
+    record = winner->second;
+    return true;
+}
+
 bool Index::Apply(const CTransaction& tx, const CCoinsViewCache& view, uint32_t height, std::string& reason)
 {
     return Process(tx, view, height, reason, nullptr);
@@ -317,6 +353,7 @@ bool Index::Process(const CTransaction& tx, const CCoinsViewCache& view, uint32_
                     (original.operatorReward != 0 && Zero(op.operatorPayout))) return Fail(reason, "bad-pqmn-service");
                 if (!verify(original.operatorKey, Role::OPERATOR, op.operatorSignature)) return Fail(reason, "bad-pqmn-operator-signature");
                 replacement.service = op.service; replacement.operatorPayout = op.operatorPayout;
+                if (original.service == CService()) replacement.revivedHeight = height;
                 break;
             case Action::REVOKE:
                 if (original.revoked || !verify(original.operatorKey, Role::OPERATOR, op.operatorSignature)) return Fail(reason, "bad-pqmn-revoke");
@@ -361,16 +398,19 @@ bool Index::MatchesChainTip(const CBlockIndex* tip) const
     uint256 best; int first{0};
     const bool hasTip = ReadChecked(db, Prefix('b'), best);
     const bool hasActivation = ReadChecked(db, Prefix('a'), first);
-    if (!tip || !pq::MasternodesActive(params, tip->nHeight)) return !hasTip && !hasActivation;
-    return hasTip && hasActivation && best == tip->GetBlockHash() &&
+    uint8_t schema{0};
+    const bool hasSchema = ReadChecked(db, Prefix('v'), schema);
+    if (!tip || !pq::MasternodesActive(params, tip->nHeight)) return !hasTip && !hasActivation && !hasSchema;
+    return hasTip && hasActivation && hasSchema && schema == PQMN_SCHEMA_VERSION && best == tip->GetBlockHash() &&
         first == params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
 }
 
 bool Index::ConnectBlock(const CBlock& block, const CBlockIndex& index, CCoinsViewCache& view,
-                         int firstHeight, std::string& reason)
+                         int firstHeight, std::string& reason, CAmount reward)
 {
     AssertLockHeld(cs_main);
     reason.clear();
+    if (reward < 0) return Fail(reason, "bad-pqmn-negative-reward");
     if (!params.IsTestChain() || !BlockContext(block, index, firstHeight)) return Fail(reason, "bad-pqmn-block-context");
     if (!view.GetHeadBlocks().empty() || view.GetBestBlock() != block.hashPrevBlock || !db.VerifyBestBlock(block.hashPrevBlock))
         return Fail(reason, "bad-pqmn-chain-tip");
@@ -381,7 +421,7 @@ bool Index::ConnectBlock(const CBlock& block, const CBlockIndex& index, CCoinsVi
         if (exists || hasActivation) return Fail(reason, "bad-pqmn-registry-tip");
         LOCK(db.cs);
         auto it = db.GetCurTransaction().NewIteratorUniquePtr();
-        for (char kind : {'c', 'k', 'r', 's', 'u'}) {
+        for (char kind : {'c', 'k', 'r', 's', 'u', 'v', 'w'}) {
             CDataStream prefix(SER_DISK, 0); prefix << Prefix(kind);
             it->Seek(Prefix(kind));
             if (!it->Valid()) continue;
@@ -391,7 +431,28 @@ bool Index::ConnectBlock(const CBlock& block, const CBlockIndex& index, CCoinsVi
         }
     } else if (!exists || best != block.hashPrevBlock || !hasActivation || first != firstHeight)
         return Fail(reason, "bad-pqmn-registry-tip");
+    if (index.nHeight != firstHeight) {
+        uint8_t schema{0};
+        if (!ReadChecked(db, Prefix('v'), schema) || schema != PQMN_SCHEMA_VERSION)
+            return Fail(reason, "bad-pqmn-schema");
+    }
 
+    // Select and advance from the parent state before same-block updates/spends.
+    // The saved pre-state is restored after transaction undos on disconnect.
+    Previous rewardMarker;
+    if (reward > 0) {
+        const auto winner = FindPayee(index.nHeight);
+        if (winner) {
+            Record paid = winner->second;
+            paid.lastPaidHeight = index.nHeight;
+            const Previous before{winner->first, SerializeHash(paid), true, winner->second};
+            Erase(winner->first, winner->second);
+            Put(winner->first, paid);
+            rewardMarker = before;
+        }
+    }
+    db.Write(std::make_pair(Prefix('w'), index.GetBlockHash()), rewardMarker);
+    if (index.nHeight == firstHeight) db.Write(Prefix('v'), PQMN_SCHEMA_VERSION);
     // Never flush: later transactions see earlier spends/outputs without mutating the caller's view.
     CCoinsViewCache inputs(&view);
     for (const auto& tx : block.vtx) {
@@ -415,9 +476,26 @@ bool Index::DisconnectBlock(const CBlock& block, const CBlockIndex& index, const
         return Fail(reason, "bad-pqmn-chain-tip");
     if (!ReadChecked(db, Prefix('b'), best) || best != index.GetBlockHash() ||
         !ReadChecked(db, Prefix('a'), first) || first != firstHeight) return Fail(reason, "bad-pqmn-registry-tip");
+    uint8_t schema{0};
+    if (!ReadChecked(db, Prefix('v'), schema) || schema != PQMN_SCHEMA_VERSION)
+        return Fail(reason, "bad-pqmn-schema");
     for (auto it = block.vtx.rbegin(); it != block.vtx.rend(); ++it) {
         if (!*it) return Fail(reason, "bad-pqmn-block-transaction");
         if (!(*it)->IsCoinBase() && !Undo((*it)->GetHash(), reason)) return false;
+    }
+    Previous rewardUndo;
+    const auto rewardKey = std::make_pair(Prefix('w'), index.GetBlockHash());
+    if (!ReadChecked(db, rewardKey, rewardUndo)) return Fail(reason, "bad-pqmn-missing-reward-undo");
+    {
+        if (rewardUndo.existed) {
+            Record current;
+            if (!Get(rewardUndo.id, current) || SerializeHash(current) != rewardUndo.after)
+                return Fail(reason, "bad-pqmn-reward-undo-order");
+            Erase(rewardUndo.id, current);
+            Put(rewardUndo.id, rewardUndo.record);
+        }
+        db.Erase(rewardKey);
+        if (index.nHeight == firstHeight) db.Erase(Prefix('v'));
     }
     if (index.nHeight == firstHeight) { db.Erase(Prefix('b')); db.Erase(Prefix('a')); }
     else db.Write(Prefix('b'), block.hashPrevBlock);

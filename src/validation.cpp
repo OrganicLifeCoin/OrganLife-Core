@@ -1550,7 +1550,8 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     const bool isV6UpgradeEnforced = consensus.NetworkUpgradeActive(pindex->nHeight, Consensus::UPGRADE_V6_0);
 
     // Coinbase output should be empty if proof-of-stake block (before v6 enforcement)
-    if (!isV6UpgradeEnforced && isPoSBlock && (block.vtx[0]->vout.size() != 1 || !block.vtx[0]->vout[0].IsEmpty()))
+    if (!isV6UpgradeEnforced && !pq::MasternodesActive(Params(), pindex->nHeight) && isPoSBlock &&
+        (block.vtx[0]->vout.size() != 1 || !block.vtx[0]->vout[0].IsEmpty()))
         return state.DoS(100, false, REJECT_INVALID, "bad-cb-pos", false, "coinbase output not empty for proof-of-stake block");
 
     if (pindex->pprev) {
@@ -1627,10 +1628,23 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     // The registry needs the parent's pre-spend view. Its temporary updates are
     // owned by the caller's EvoDB transaction, including validation-only rollback.
     // All ordinary input, maturity, issuance and governance checks still follow.
+    std::vector<CTxOut> pqMasternodePayments;
     if (pq::MasternodesActive(Params(), pindex->nHeight)) {
+        if (!GetPQMasternodePayment(pindex->pprev, pqMasternodePayments))
+            return state.Error("PQ masternode payment state unavailable");
+        const auto& outputs = block.vtx[0]->vout;
+        const size_t offset = isPoSBlock ? 0 : 1;
+        if (outputs.size() < offset + pqMasternodePayments.size() ||
+            !std::equal(pqMasternodePayments.begin(), pqMasternodePayments.end(), outputs.begin() + offset))
+            return state.DoS(100, false, REJECT_INVALID, "bad-pqmn-payee");
+        if (isPoSBlock && (pqMasternodePayments.empty() ?
+                (outputs.size() != 1 || !outputs[0].IsEmpty()) : outputs != pqMasternodePayments))
+            return state.DoS(100, false, REJECT_INVALID, "bad-pqmn-payee");
+        CAmount paid{0};
+        for (const auto& output : pqMasternodePayments) paid += output.nValue;
         std::string reason;
         if (!pqmn::Index(*evoDb, Params()).ConnectBlock(block, *pindex, view,
-                consensus.vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight, reason))
+                consensus.vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight, reason, paid))
             return state.DoS(100, false, REJECT_INVALID, reason);
     }
 
@@ -1757,6 +1771,9 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
                                     __func__, FormatMoney(nMint), FormatMoney(nExpectedMint)),
                          REJECT_INVALID, "bad-blk-amount");
     }
+    if (pq::MasternodesActive(Params(), pindex->nHeight) && !isPoSBlock &&
+        block.vtx[0]->vout.size() != 1 + pqMasternodePayments.size() + (nBudgetAmt > 0 ? 1 : 0))
+        return state.DoS(100, false, REJECT_INVALID, "bad-pqmn-payee");
     if (nBudgetAmt > 0) {
         CScript expectedPayee;
         CAmount expectedAmount{0};
@@ -1764,7 +1781,8 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         const CTransaction& paymentTx = isPoSBlock ? *block.vtx[1] : *block.vtx[0];
         if (!g_budgetman.GetPQPayment(pindex->nHeight, expectedPayee, expectedAmount, proposalHash) ||
             expectedAmount != nBudgetAmt ||
-            std::none_of(paymentTx.vout.begin(), paymentTx.vout.end(),
+            std::none_of(paymentTx.vout.begin() + (!isPoSBlock && pq::MasternodesActive(Params(), pindex->nHeight) ?
+                                                   1 + pqMasternodePayments.size() : 0), paymentTx.vout.end(),
                          [&](const CTxOut& out) {
                              return out.nValue == expectedAmount && out.scriptPubKey == expectedPayee;
                          }))

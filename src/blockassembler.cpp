@@ -163,8 +163,10 @@ bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet
     }
     // Stake found
 
-    // PoS rewards are paid only by the PQ coinstake.
+    // Move the winning MN share to coinbase before signing the PQ coinstake.
     CMutableTransaction txCoinbase = NewCoinbase(pindexPrev->nHeight + 1);
+    if (!FillPQMasternodePayment(txCoinbase, &txCoinStake, pindexPrev))
+        return error("Unable to determine PQ masternode payment");
     CScript governancePayee;
     CAmount governanceAmount{0};
     uint256 governanceProposal;
@@ -196,6 +198,8 @@ CMutableTransaction CreateCoinbaseTx(const CScript& scriptPubKeyIn, CBlockIndex*
     CMutableTransaction txCoinbase = NewCoinbase(nHeight, &scriptPubKeyIn);
 
     txCoinbase.vout[0].nValue = GetBlockValue(nHeight, pindexPrev->nChainMinted);
+    if (!FillPQMasternodePayment(txCoinbase, nullptr, pindexPrev))
+        throw std::runtime_error("Unable to determine PQ masternode payment");
     CScript governancePayee;
     CAmount governanceAmount{0};
     uint256 governanceProposal;

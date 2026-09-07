@@ -9,6 +9,7 @@
 #include "budget/budgetmanager.h"
 #include "chainparams.h"
 #include "evo/deterministicmns.h"
+#include "evo/pqmasternode.h"
 #include "pqtransaction.h"
 #include "spork.h"
 #include "tiertwo/tiertwo_sync_state.h"
@@ -19,6 +20,54 @@
 
 /** Object for who's going to get paid on which blocks */
 CMasternodePayments masternodePayments;
+
+bool GetPQMasternodePayment(const CBlockIndex* previous, std::vector<CTxOut>& outputs)
+{
+    outputs.clear();
+    if (!previous) return false;
+    LOCK(cs_main);
+    const int height = previous->nHeight + 1;
+    if (!pq::MasternodesActive(Params(), height)) return true;
+    if (!evoDb) return false;
+    try {
+        pqmn::Index index(*evoDb, Params());
+        if (!index.MatchesChainTip(previous)) return false;
+        const CAmount reward = GetMasternodePayment(height, GetBlockValue(height, previous->nChainMinted));
+        if (reward <= 0) return true;
+        uint256 id;
+        pqmn::Record payee;
+        if (!index.GetPayee(height, id, payee)) return true;
+        const CAmount commission = reward * payee.operatorReward / 10000;
+        if (reward > commission) outputs.emplace_back(reward - commission, pq::GetScript(payee.payout));
+        if (commission > 0) outputs.emplace_back(commission, pq::GetScript(payee.operatorPayout));
+        return true;
+    } catch (const std::exception&) {
+        outputs.clear();
+        return false;
+    }
+}
+
+bool FillPQMasternodePayment(CMutableTransaction& coinbase, CMutableTransaction* coinstake,
+                            const CBlockIndex* previous)
+{
+    std::vector<CTxOut> outputs;
+    if (!GetPQMasternodePayment(previous, outputs)) return false;
+    if (outputs.empty()) return true;
+    CAmount total{0};
+    for (const auto& output : outputs) total += output.nValue;
+    if (coinstake) {
+        // The PQ wallet constructs exactly one stake-return output before governance.
+        if (coinstake->vout.size() != 2 || !coinstake->vout[0].IsEmpty() || coinstake->vout[1].nValue < total)
+            return false;
+        coinstake->vout[1].nValue -= total;
+        coinbase.vout = std::move(outputs);
+    } else {
+        if (coinbase.vout.empty() || coinbase.vout[0].nValue < total) return false;
+        coinbase.vout[0].nValue -= total;
+        coinbase.vout.insert(coinbase.vout.begin() + 1, outputs.begin(), outputs.end());
+    }
+    return true;
+}
 
 namespace {
 CAmount GetGovernanceCapacity(int nHeight, CAmount nChainMinted, CAmount nBaseIssuance)
