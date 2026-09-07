@@ -79,6 +79,7 @@ BASE_SCRIPTS= [
     'feature_pq_startup.py',
     'feature_pq_registry.py',
     'feature_pq_operator.py',
+    'feature_pq_cache.py',
     'feature_pq_pos.py',
     'feature_pq_pos.py --pq-registry',
     'rpc_scantxoutset.py',

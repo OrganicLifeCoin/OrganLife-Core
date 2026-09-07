@@ -61,7 +61,18 @@ don't have test cases for.
 - Set the `self.setup_clean_chain` variable in `set_test_params()` to control whether
   or not to use the cached data directories. The cached data directories
   contain a 200-block pre-mined blockchain and wallets for four nodes. Each node
-  has 25 mature blocks (25x50=1250 BTC) in its wallet.
+  has 25 mature reward outputs in its wallet; use the actual regtest subsidy,
+  not historical Bitcoin balance constants. The `pq-pow-v1` cache contains
+  encrypted PQ wallets, locked on restart. Tests needing spending access must
+  explicitly unlock with the public test-only passphrase
+  `public-pq-cache-passphrase` and use the PQ RPCs. Mining keys have an encrypted
+  backup before receiving rewards. Never fund these fixtures outside regtest.
+  Classical cache directories are not reused. Build the cache once using
+  `create_cache.py` before launching parallel consumers (the runner does this
+  unless `--skipcache` is requested); concurrent cold-cache builders are not
+  supported. `feature_pq_cache.py` checks cached ownership, locked-wallet state,
+  mature rewards and a real payment. This fixture migration does not port legacy
+  test bodies that still call removed RPCs or assume unencrypted wallets.
 - When calling RPCs with lots of arguments, consider using named keyword
   arguments instead of positional arguments to make the intent of the call
   clear to readers.

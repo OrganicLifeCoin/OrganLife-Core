@@ -479,7 +479,8 @@ class PivxTestFramework():
         block time, keeping deterministic test behavior while avoiding
         "block appears to be from the future" startup failures.
         """
-        self.mocktime = 1770000000
+        # Fixed regtest fixture: update this and the cache version if genesis changes.
+        self.mocktime = 1785700000
 
     def disable_mocktime(self):
         self.mocktime = 0
@@ -539,7 +540,7 @@ class PivxTestFramework():
             node_0_datadir = os.path.join(get_datadir_path(cachedir, 0), "regtest")
             for i in range(from_num, MAX_NODES):
                 node_i_datadir = os.path.join(get_datadir_path(cachedir, i), "regtest")
-                for subdir in ["blocks", "chainstate", "evodb", "sporks"]:
+                for subdir in ["blocks", "chainstate", "evodb"]:
                     copy_and_overwrite(os.path.join(node_0_datadir, subdir),
                                     os.path.join(node_i_datadir, subdir))
                 initialize_datadir(cachedir, i)  # Overwrite port/rpcport in pivx.conf
@@ -552,8 +553,6 @@ class PivxTestFramework():
             return (not os.path.exists(os.path.join(get_datadir_path(cachedir, 0), ".incomplete")))
 
         def clean_cache_subdir(cachedir):
-            os.remove(os.path.join(get_datadir_path(cachedir, 0), ".incomplete"))
-
             def cache_path(n, *paths):
                 return os.path.join(get_datadir_path(cachedir, n), "regtest", *paths)
 
@@ -561,25 +560,7 @@ class PivxTestFramework():
                 for entry in os.listdir(cache_path(i)):
                     if entry not in ['wallet.dat', 'chainstate', 'blocks', 'sporks', 'evodb', 'backups', "wallets", "llmq"]:
                         os.remove(cache_path(i, entry))
-
-        def clean_cache_dir():
-            if os.path.isdir(self.options.cachedir):
-                # migrate old cache dir
-                if cachedir_valid(self.options.cachedir):
-                    powcachedir = os.path.join(self.options.cachedir, "pow")
-                    self.log.info("Found old cachedir. Migrating to %s" % str(powcachedir))
-                    copy_cachedir(self.options.cachedir, powcachedir)
-                # remove everything except pow subdir
-                for entry in os.listdir(self.options.cachedir):
-                    if entry != 'pow':
-                        entry_path = os.path.join(self.options.cachedir, entry)
-                        if os.path.isfile(entry_path):
-                            os.remove(entry_path)
-                        elif os.path.isdir(entry_path):
-                            shutil.rmtree(entry_path)
-            # no cachedir found
-            else:
-                os.makedirs(self.options.cachedir)
+            os.remove(os.path.join(get_datadir_path(cachedir, 0), ".incomplete"))
 
         def start_nodes_from_dir(ddir, num_nodes=MAX_NODES):
             self.log.info("Starting %d nodes..." % num_nodes)
@@ -590,7 +571,8 @@ class PivxTestFramework():
                     # (removed at the end during clean_cache_subdir)
                     open(os.path.join(datadir, ".incomplete"), 'a', encoding="utf8").close()
                 args = [os.getenv("BITCOIND", "organiclifed"), "-spendzeroconfchange=1", "-server", "-keypool=1",
-                        "-datadir=" + datadir, "-conf=pivx.conf", "-discover=0"]
+                        "-datadir=" + datadir, "-conf=pivx.conf", "-discover=0", "-dnsseed=0",
+                        "-connect=0", "-staking=0", "-createwalletbackups=0"]
                 self.nodes.append(
                     TestNode(i, ddir, extra_conf=["bind=127.0.0.1"], extra_args=[], rpchost=None, timewait=self.rpc_timewait, binary=None, stderr=None,
                              mocktime=self.mocktime, coverage_dir=None))
@@ -627,16 +609,27 @@ class PivxTestFramework():
             create_cachedir(powcachedir)
             self.log.info("Creating 'PoW-chain': 200 blocks")
             start_nodes_from_dir(powcachedir, 4)
+            addresses = []
+            for node in self.nodes:
+                # Public test-only passphrase. Cached wallets remain encrypted
+                # and locked on restart; consumers must explicitly unlock them.
+                node.encryptwallet("public-pq-cache-passphrase")
+                node.walletpassphrase("public-pq-cache-passphrase", 0)
+                backup = os.path.join(node.datadir, "pq-cache-backup.dat")
+                addresses.append(node.getnewpqaddress(backup)["address"])
+                assert os.path.isfile(backup)
 
             # Mine the blocks
             self.log.info("Mining 200 blocks")
+            original_mocktime = self.mocktime
             self.enable_mocktime()
             block_time = self.mocktime - (331 * 60)
+            assert block_time > self.nodes[0].getblock(self.nodes[0].getblockhash(0))["time"]
             for i in range(2):
                 for peer in range(4):
                     for j in range(25):
                         set_node_times(self.nodes, block_time)
-                        self.nodes[peer].generate(1)
+                        self.nodes[peer].generatetoaddress(1, addresses[peer])
                         block_time += 60
                     # Must sync before next peer starts generating blocks
                     self.sync_blocks()
@@ -645,13 +638,14 @@ class PivxTestFramework():
             self.log.info("Stopping nodes")
             stop_and_clean_cache_dir(powcachedir)
             self.log.info("---> pow cache created")
-            self.disable_mocktime()
+            self.mocktime = original_mocktime
 
 
         assert self.num_nodes <= MAX_NODES
 
-        clean_cache_dir()
-        powcachedir = os.path.join(self.options.cachedir, "pow")
+        # Do not reuse classical-wallet caches or remove unrelated sibling data.
+        os.makedirs(self.options.cachedir, exist_ok=True)
+        powcachedir = os.path.join(self.options.cachedir, "pq-pow-v1")
         is_powcache_valid = cachedir_valid(powcachedir)
 
         if not is_powcache_valid:
