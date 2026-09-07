@@ -5,7 +5,9 @@
 
 #include "chainparams.h"
 #include "pqtransaction.h"
+#ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
+#endif
 
 #include <algorithm>
 
@@ -37,12 +39,16 @@ bool SignBlockWithPQKey(CBlock& block, const mldsa44::Key& key)
 
 bool SignBlock(CBlock& block, const CWallet& wallet)
 {
+#ifdef ENABLE_WALLET
     if (!block.IsProofOfStake() || block.vtx.size() < 2 || block.vtx[1]->vout.size() < 2 ||
         block.vtx[1]->vout.size() > 3) return false;
     pq::KeyID id;
     mldsa44::Key key;
     return pq::ExtractID(block.vtx[1]->vout[1].scriptPubKey, id) &&
            wallet.GetPQKey(id, key, true) && SignBlockWithPQKey(block, key);
+#else
+    return false;
+#endif
 }
 
 bool CheckBlockSignature(const CBlock& block)

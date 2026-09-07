@@ -12,6 +12,11 @@
 #include <blockassembler.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
+#include <type_traits>
+#include <wallet/pqkey.h>
+#if defined(__linux__) || defined(__APPLE__)
+#include <sys/stat.h>
+#endif
 #ifdef ENABLE_WALLET
 #include <wallet/wallet.h>
 #include <interfaces/wallet.h>
@@ -115,6 +120,53 @@ struct RegistryBlock {
 }
 
 BOOST_FIXTURE_TEST_SUITE(pqmasternode_tests, MNSetup)
+
+#if defined(__linux__) || defined(__APPLE__)
+BOOST_AUTO_TEST_CASE(local_operator_loads_pending_identity_without_registry_authority)
+{
+    static_assert(!std::is_copy_constructible<pqmnauth::LocalOperator>::value, "Operator secrets must not be copied");
+    static_assert(!std::is_copy_assignable<pqmnauth::LocalOperator>::value, "Operator secrets must not be assigned");
+    const auto directory = SetDataDir("pq-operator");
+    BOOST_REQUIRE_EQUAL(chmod(directory.c_str(), 0700), 0);
+    pqwallet::SecureBytes seed(32, 0), wrapping(32, 42); seed[0] = 21;
+    pqwallet::Record record; std::string reason;
+    BOOST_REQUIRE(pqwallet::EncryptOperatorSeed(seed, wrapping, "regtest", Params().GetConsensus().hashGenesisBlock, record));
+    CDataStream bytes(SER_DISK, 0); bytes << record;
+    const auto write = [&](const char* name, const char* data, size_t size) {
+        const auto path = directory / name;
+        fsbridge::ofstream file(path, std::ios::binary);
+        file.write(data, size); file.close(); BOOST_REQUIRE(file.good());
+        BOOST_REQUIRE_EQUAL(chmod(path.c_str(), 0400), 0);
+    };
+    write("olc-pq-operator-record", bytes.data(), bytes.size());
+    write("olc-pq-operator-key", reinterpret_cast<const char*>(wrapping.data()), wrapping.size());
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+    const auto id = uint256S("1234");
+    auto loaded = pqmnauth::LocalOperator::Load(directory, Params(), id, reason);
+    BOOST_REQUIRE_MESSAGE(loaded != nullptr, reason);
+    BOOST_CHECK(loaded->Registration() == id);
+    BOOST_CHECK(loaded->PublicKey() == keys[1].GetPublicKey());
+    BOOST_CHECK(reason.empty());
+    BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory, Params(), uint256(), reason));
+    BOOST_CHECK_EQUAL(reason, "PQ operator registration must be nonzero");
+    for (const auto& network : {CBaseChainParams::MAIN, CBaseChainParams::TESTNET}) {
+        const auto params = CreateChainParams(network);
+        BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory, *params, id, reason));
+        BOOST_CHECK_EQUAL(reason, "PQ operator credentials require regtest PQ masternode activation");
+    }
+    for (const int height : {0, -1}) {
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, height);
+        BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory, Params(), id, reason));
+        BOOST_CHECK_EQUAL(reason, "PQ operator credentials require regtest PQ masternode activation");
+    }
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+    BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory / "missing", Params(), id, reason));
+    BOOST_CHECK_EQUAL(reason, "Could not load private PQ operator credentials");
+    // A failed independent load does not alter the existing immutable identity.
+    BOOST_CHECK(loaded->Registration() == id);
+    BOOST_CHECK(loaded->PublicKey() == keys[1].GetPublicKey());
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(operator_authentication_roundtrip_and_budget)
 {

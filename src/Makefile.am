@@ -367,6 +367,9 @@ libbitcoin_server_a_SOURCES = \
   addrman.cpp \
   bloom.cpp \
   blocksignature.cpp \
+  kernel.cpp \
+  legacy/stakemodifier.cpp \
+  stakeinput.cpp \
   bls/bls_ies.cpp \
   bls/bls_worker.cpp \
   bls/bls_wrapper.cpp \
@@ -457,8 +460,6 @@ libbitcoin_wallet_a_SOURCES = \
   interfaces/wallet.cpp \
   addressbook.cpp \
   crypter.cpp \
-  legacy/stakemodifier.cpp \
-  kernel.cpp \
   wallet/db.cpp \
   wallet/fees.cpp \
   wallet/init.cpp \
@@ -466,14 +467,12 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/rpcwallet.cpp \
   wallet/hdchain.cpp \
   wallet/pqkey.h \
-  wallet/pqkey.cpp \
   wallet/pqwallet.cpp \
   wallet/scriptpubkeyman.cpp \
   destination_io.cpp \
   wallet/wallet.cpp \
   wallet/walletdb.cpp \
   wallet/walletutil.cpp \
-  stakeinput.cpp \
   $(BITCOIN_CORE_H) \
   $(LIBSAPLING_H)
 
@@ -598,6 +597,7 @@ libbitcoin_util_a_SOURCES = \
   compat/glibcxx_sanity.cpp \
   compat/strnlen.cpp \
   fs.cpp \
+  wallet/pqkey.cpp \
   interfaces/handler.cpp \
   logging.cpp \
   random.cpp \

@@ -8,6 +8,8 @@
 #include "rpc/server.h"
 
 #include "clientversion.h"
+#include "evo/pqmnauth.h"
+#include "init.h"
 #include "net.h"
 #include "netbase.h"
 #include "net_processing.h"
@@ -23,6 +25,22 @@
 
 #include <univalue.h>
 
+
+UniValue getpqoperatorinfo(const JSONRPCRequest& request)
+{
+    if (request.fHelp || !request.params.empty())
+        throw std::runtime_error("getpqoperatorinfo\nReturns pending local operator credential identity only, not registration validity, authentication, service or finality readiness.\n"
+                                 "Result: configured (boolean), registration (hex, if configured), publickey (ML-DSA-44 hex, if configured). No secrets are returned.\n");
+    LOCK(cs_main);
+    UniValue result(UniValue::VOBJ);
+    const auto* pending = GetPQOperator();
+    result.pushKV("configured", pending != nullptr);
+    if (pending) {
+        result.pushKV("registration", pending->Registration().GetHex());
+        result.pushKV("publickey", HexStr(pending->PublicKey()));
+    }
+    return result;
+}
 
 UniValue getconnectioncount(const JSONRPCRequest& request)
 {
@@ -762,6 +780,7 @@ static const CRPCCommand commands[] =
     { "network",            "getconnectioncount",     &getconnectioncount,     true,  {} },
     { "network",            "getnettotals",           &getnettotals,           true,  {} },
     { "network",            "getnetworkinfo",         &getnetworkinfo,         true,  {} },
+    { "network",            "getpqoperatorinfo",       &getpqoperatorinfo,       true,  {} },
     { "network",            "getnodeaddresses",       &getnodeaddresses,       true,  {"count"} },
     { "network",            "getpeerinfo",            &getpeerinfo,            true,  {} },
     { "network",            "getforkguardstatus",     &getforkguardstatus,     true,  {} },

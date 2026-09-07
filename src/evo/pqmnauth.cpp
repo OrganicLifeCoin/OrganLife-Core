@@ -3,9 +3,23 @@
 #include <evo/pqmnauth.h>
 #include <streams.h>
 #include <validation.h>
+#include <wallet/pqkey.h>
 #include <algorithm>
 
 namespace pqmnauth {
+std::unique_ptr<LocalOperator> LocalOperator::Load(const fs::path& directory, const CChainParams& params,
+                                                 const uint256& id, std::string& reason)
+{
+    reason = "PQ operator credentials require regtest PQ masternode activation";
+    const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
+    if (!pq::MasternodesActive(params, first)) return nullptr;
+    if (id.IsNull()) { reason = "PQ operator registration must be nonzero"; return nullptr; }
+    auto result = std::unique_ptr<LocalOperator>(new LocalOperator(id));
+    if (!pqwallet::LoadOperatorCredentials(directory, params.NetworkIDString(),
+                                         params.GetConsensus().hashGenesisBlock, result->key, reason)) return nullptr;
+    return result;
+}
+
 namespace {
 bool Fail(std::string& reason, const char* error) { reason = error; return false; }
 bool ReadOperator(pqmn::Index& index, const uint256& id, uint32_t height,

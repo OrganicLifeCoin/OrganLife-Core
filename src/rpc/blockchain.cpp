@@ -1281,6 +1281,7 @@ UniValue invalidateblock(const JSONRPCRequest& request)
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
 
         CBlockIndex* pblockindex = mapBlockIndex[hash];
+#ifdef ENABLE_WALLET
         // For each wallet in your wallet list
         std::string errString = "";
         for (auto* pwallet : vpwallets) {
@@ -1291,6 +1292,7 @@ UniValue invalidateblock(const JSONRPCRequest& request)
                 }
             }
         }
+#endif
         InvalidateBlock(state, Params(), pblockindex);
     }
 

@@ -121,6 +121,9 @@ static UniValue voteFinalBudget(const uint256& budgetHash,
 // Deterministic masternodes
 static mnKeyList getDMNVotingKeys(CWallet* const pwallet, const Optional<std::string>& mnAliasFilter, UniValue& resultsObj, int& failed)
 {
+#ifndef ENABLE_WALLET
+    throw std::runtime_error("Wallet support is disabled.");
+#else
     if (!pwallet) {
         throw std::runtime_error( "Wallet (with voting key) not found.");
     }
@@ -159,6 +162,7 @@ static mnKeyList getDMNVotingKeys(CWallet* const pwallet, const Optional<std::st
     });
 
     return mnKeys;
+#endif
 }
 
 static mnKeyList getDMNKeysForActiveMasternode(UniValue& resultsObj)

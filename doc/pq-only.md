@@ -107,6 +107,27 @@ distribution, wallet
 import, or rollback-safe finality signing. Never distribute a controller wallet
 master key to an operator host.
 
+For isolated regtest testing, a daemon can load pending operator credentials
+using paired `-pqoperatorcredentials=/absolute/private/directory` and
+`-pqoperatorid=REGISTRATION_TXID` options, each specified exactly once. The ID
+must be nonzero and exactly 64 hexadecimal characters. PQ masternode activation
+must be configured, and wallet-enabled builds require `-disablewallet` to keep
+controller spending keys separate. The directory supplies fixed files
+`olc-pq-operator-record` (1385 bytes) and `olc-pq-operator-key` (32 bytes).
+The read-only loader rejects unsafe ownership, permissions, ACLs, links and
+invalid encrypted records; directory ancestors and the service identity must
+be trusted. Linux supports owner-private files or the narrowly validated
+systemd credential ACL; macOS supports owner-private files without extended
+ACLs. Other platforms fail closed.
+
+Credentials load before RPC workers and are destroyed after worker shutdown,
+including failed startup. `getpqoperatorinfo` returns only configured status
+and the public registration/key identity. Unknown or unconfirmed registrations
+can still sync: loaded credentials do not imply registry validity, signing
+authority, authentication, service eligibility or finality readiness. No signing
+or private-key export interface is provided. Provisioning, encrypted persistent
+wrapping-key custody and backup/recovery remain separate unfinished work.
+
 This does not yet provide a usable masternode: operator RPC/Qt flows, service
 verification, rewards and quorum finality remain unavailable. Public P2P and
 cross-platform qualification remain pending. Do not use this opt-in mode with a
@@ -151,6 +172,7 @@ python3 test/functional/feature_pq_pos.py
 python3 test/functional/feature_pq_governance.py
 python3 test/functional/feature_pq_startup.py
 python3 test/functional/feature_pq_registry.py
+python3 test/functional/feature_pq_operator.py
 python3 test/functional/feature_pq_pos.py --pq-registry
 ```
 

@@ -182,6 +182,9 @@ void CBudgetManager::CheckOrphanVotes()
 
 uint256 CBudgetManager::SubmitFinalBudget()
 {
+#ifndef ENABLE_WALLET
+    return UINT256_ZERO;
+#else
     static int nSubmittedHeight = 0; // height at which final budget was submitted last time
     int nCurrentHeight = GetBestHeight();
 
@@ -279,6 +282,7 @@ uint256 CBudgetManager::SubmitFinalBudget()
     nSubmittedHeight = nCurrentHeight;
     LogPrint(BCLog::MNBUDGET,"%s: Done! %s\n", __func__, budgetHash.ToString());
     return budgetHash;
+#endif
 }
 
 void CBudgetManager::SetBudgetProposalsStr(CFinalizedBudget& finalizedBudget) const

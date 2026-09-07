@@ -354,6 +354,9 @@ set(SERVER_SOURCES
         ./src/addrman.cpp
         ./src/bloom.cpp
         ./src/blocksignature.cpp
+        ./src/kernel.cpp
+        ./src/legacy/stakemodifier.cpp
+        ./src/stakeinput.cpp
         ./src/chain.cpp
         ./src/checkpoints.cpp
         ./src/consensus/tx_verify.cpp
@@ -435,19 +438,15 @@ set(WALLET_SOURCES
         ./src/addressbook.cpp
         ./src/crypter.cpp
         ./src/wallet/hdchain.cpp
-        ./src/wallet/pqkey.cpp
         ./src/wallet/pqwallet.cpp
         ./src/wallet/rpcdump.cpp
         ./src/wallet/fees.cpp
         ./src/wallet/init.cpp
         ./src/wallet/scriptpubkeyman.cpp
         ./src/wallet/rpcwallet.cpp
-        ./src/kernel.cpp
-        ./src/legacy/stakemodifier.cpp
         ./src/wallet/wallet.cpp
         ./src/wallet/walletdb.cpp
         ./src/wallet/walletutil.cpp
-        ./src/stakeinput.cpp
         )
 add_library(WALLET_A STATIC ${BitcoinHeaders} ${WALLET_SOURCES})
 target_include_directories(WALLET_A PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -597,6 +596,7 @@ set(UTIL_SOURCES
         ./src/chainparamsbase.cpp
         ./src/clientversion.cpp
         ./src/fs.cpp
+        ./src/wallet/pqkey.cpp
         ./src/logging.cpp
         ./src/random.cpp
         ./src/randomenv.cpp

@@ -6,6 +6,10 @@
 #ifndef PIVX_WALLET_RPCWALLET_H
 #define PIVX_WALLET_RPCWALLET_H
 
+#if defined(HAVE_CONFIG_H)
+#include <config/pivx-config.h>
+#endif
+
 #include <string>
 
 class CRPCTable;
@@ -20,7 +24,11 @@ void RegisterWalletRPCCommands(CRPCTable &tableRPC);
  * @param[in] request JSONRPCRequest that wishes to access a wallet
  * @return nullptr if no wallet should be used, or a pointer to the CWallet
  */
+#ifdef ENABLE_WALLET
 CWallet* GetWalletForJSONRPCRequest(const JSONRPCRequest& request);
+#else
+inline CWallet* GetWalletForJSONRPCRequest(const JSONRPCRequest&) { return nullptr; }
+#endif
 
 std::string HelpRequiringPassphrase(CWallet* const pwallet);
 bool EnsureWalletIsAvailable(CWallet* const pwallet, bool avoidException);

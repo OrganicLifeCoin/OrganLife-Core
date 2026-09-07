@@ -22,6 +22,7 @@
 #include "consensus/upgrades.h"
 #include "evo/evodb.h"
 #include "evo/governancevoteindex.h"
+#include "evo/pqmnauth.h"
 #include "fs.h"
 #include "httpserver.h"
 #include "httprpc.h"
@@ -87,6 +88,13 @@ static const bool DEFAULT_STOPAFTERBLOCKIMPORT = false;
 
 std::unique_ptr<CConnman> g_connman;
 std::unique_ptr<PeerLogicValidation> peerLogic;
+static std::unique_ptr<pqmnauth::LocalOperator> pqOperator;
+
+const pqmnauth::LocalOperator* GetPQOperator()
+{
+    AssertLockHeld(cs_main);
+    return pqOperator.get();
+}
 
 #if ENABLE_ZMQ
 static CZMQNotificationInterface* pzmqNotificationInterface = nullptr;
@@ -302,6 +310,7 @@ void Shutdown()
     // destruct and reset all to nullptr.
     g_connman.reset();
     peerLogic.reset();
+    { LOCK(cs_main); pqOperator.reset(); }
 
     if (::mempool.IsLoaded() && gArgs.GetBoolArg("-persistmempool", DEFAULT_PERSIST_MEMPOOL)) {
         DumpMempool(::mempool);
@@ -537,6 +546,8 @@ std::string HelpMessage(HelpMessageMode mode)
 
     strUsage += HelpMessageGroup("Debugging/Testing options:");
     strUsage += HelpMessageOpt("-uacomment=<cmt>", "Append comment to the user agent string");
+    strUsage += HelpMessageOpt("-pqoperatorcredentials=<dir>", "Load pending operator credentials from a private absolute directory (regtest PQ masternodes only; requires -disablewallet and -pqoperatorid). Does not enable masternode service or finality.");
+    strUsage += HelpMessageOpt("-pqoperatorid=<txid>", "Registration identity for pending PQ operator credentials (64 hexadecimal characters, nonzero)");
     if (showDebug) {
         strUsage += HelpMessageOpt("-checkblockindex", strprintf("Do a full consistency check for mapBlockIndex, setBlockIndexCandidates, chainActive and mapBlocksUnlinked occasionally. Also sets -checkmempool (default: %u)", defaultChainParams->DefaultConsistencyChecks()));
         strUsage += HelpMessageOpt("-checkmempool=<n>", strprintf("Run checks every <n> transactions (default: %u)", defaultChainParams->DefaultConsistencyChecks()));
@@ -1223,6 +1234,22 @@ bool AppInitMain()
                   "from a different location. It will be unable to locate the current data files. There could " /* Continued */
                   "also be data loss if OrganicLife is started while in a temporary directory.\n",
             gArgs.GetArg("-datadir", ""), fs::current_path().string());
+    }
+
+    assert(!pqOperator);
+    if (gArgs.IsArgSet("-pqoperatorcredentials") || gArgs.IsArgSet("-pqoperatorid")) {
+        if (gArgs.GetArgs("-pqoperatorcredentials").size() != 1 || gArgs.GetArgs("-pqoperatorid").size() != 1)
+            return UIError(_("Specify -pqoperatorcredentials and -pqoperatorid exactly once each."));
+        const std::string id = gArgs.GetArg("-pqoperatorid", "");
+        if (id.size() != 64 || !IsHex(id) || uint256S(id).IsNull())
+            return UIError(_("PQ operator registration must be 64 hexadecimal characters and nonzero."));
+#ifdef ENABLE_WALLET
+        if (!gArgs.GetBoolArg("-disablewallet", false))
+            return UIError(_("PQ operator credentials require -disablewallet; use a separate controller wallet."));
+#endif
+        std::string reason;
+        pqOperator = pqmnauth::LocalOperator::Load(gArgs.GetArg("-pqoperatorcredentials", ""), Params(), uint256S(id), reason);
+        if (!pqOperator) return UIError(reason);
     }
 
     InitSignatureCache();

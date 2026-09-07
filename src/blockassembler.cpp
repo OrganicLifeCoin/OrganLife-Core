@@ -14,6 +14,7 @@
 #include "chainparams.h"
 #include "consensus/consensus.h"
 #include "consensus/merkle.h"
+#include "consensus/tx_verify.h"
 #include "consensus/upgrades.h"
 #include "evo/governancevotetx.h"
 #include "consensus/validation.h"
@@ -117,6 +118,7 @@ static CMutableTransaction NewCoinbase(const int nHeight, const CScript* pScript
 bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet,
                        std::vector<CStakeableOutput>* availableCoins, bool stopPoSOnNewBlock)
 {
+#ifdef ENABLE_WALLET
     boost::this_thread::interruption_point();
 
     assert(pindexPrev);
@@ -180,6 +182,9 @@ bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet
     pblock->vtx.emplace_back(MakeTransactionRef(txCoinStake));
     pblock->nTime = nTxNewTime;
     return true;
+#else
+    return false;
+#endif
 }
 
 CMutableTransaction CreateCoinbaseTx(const CScript& scriptPubKeyIn, CBlockIndex* pindexPrev)

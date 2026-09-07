@@ -11,6 +11,9 @@
 
 class CScheduler;
 class CWallet;
+namespace pqmnauth { class LocalOperator; }
+// Caller holds cs_main throughout access. Pending credentials confer no authority.
+const pqmnauth::LocalOperator* GetPQOperator();
 
 namespace boost
 {

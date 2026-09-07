@@ -4,9 +4,24 @@
 #define ORGANICLIFE_EVO_PQMNAUTH_H
 
 #include <evo/pqmasternode.h>
+#include <fs.h>
+#include <memory>
 
 // Authentication boundary only: no network handler, connection privilege or finality.
 namespace pqmnauth {
+// Pending node-owned credentials only. Loading is not registry readiness or
+// service authority; no key export or signing interface is exposed here.
+class LocalOperator {
+    const uint256 registration;
+    mldsa44::Key key;
+    explicit LocalOperator(const uint256& id) : registration(id) {}
+public:
+    static std::unique_ptr<LocalOperator> Load(const fs::path& directory, const CChainParams& params,
+                                              const uint256& id, std::string& reason);
+    const uint256& Registration() const { return registration; }
+    const mldsa44::PublicKey& PublicKey() const { return key.GetPublicKey(); }
+};
+
 constexpr size_t PROOF_SIZE = 1 + 32 + mldsa44::SIGNATURE_SIZE;
 struct Transcript {
     uint256 genesis, initiatorChallenge, responderChallenge;

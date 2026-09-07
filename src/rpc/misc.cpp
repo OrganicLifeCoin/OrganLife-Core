@@ -20,8 +20,8 @@
 #include "timedata.h"
 #include "tiertwo/tiertwo_sync_state.h"
 #include "util/system.h"
-#ifdef ENABLE_WALLET
 #include "wallet/rpcwallet.h"
+#ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #endif
 #include "warnings.h"

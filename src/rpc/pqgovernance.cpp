@@ -15,8 +15,10 @@
 #include "rpc/server.h"
 #include "utilmoneystr.h"
 #include "validation.h"
+#ifdef ENABLE_WALLET
 #include "wallet/rpcwallet.h"
 #include "wallet/wallet.h"
+#endif
 
 #include <algorithm>
 #include <limits>
@@ -29,6 +31,7 @@ void EnsureTestChain()
         throw JSONRPCError(RPC_MISC_ERROR, "PQ governance is available only on testnet and regtest");
 }
 
+#ifdef ENABLE_WALLET
 CWallet* GetUnlockedWallet(const JSONRPCRequest& request)
 {
     CWallet* wallet = GetWalletForJSONRPCRequest(request);
@@ -273,6 +276,8 @@ UniValue listgovlocks(const JSONRPCRequest& request)
     return response;
 }
 
+#endif
+
 UniValue getgovvotestatus(const JSONRPCRequest& request)
 {
     EnsureTestChain();
@@ -332,10 +337,12 @@ UniValue getbudgetinfo(const JSONRPCRequest& request)
 void RegisterPQGovernanceRPCCommands(CRPCTable& table)
 {
     static const CRPCCommand commands[] = {
+#ifdef ENABLE_WALLET
         {"governance", "createpqproposal", &createpqproposal, true, {"name", "url", "payments", "start", "pq_address", "amount"}},
         {"governance", "creategovvotelock", &creategovvotelock, true, {"proposal_hash", "amount", "unlock_height"}},
         {"governance", "castgovvote", &castgovvote, true, {"proposal_hash", "vote", "lock_refs"}},
         {"governance", "listgovlocks", &listgovlocks, true, {"proposal_hash"}},
+#endif
         {"governance", "getgovvotestatus", &getgovvotestatus, true, {"proposal_hash"}},
         {"governance", "getnextsuperblock", &getnextsuperblock, true, {}},
         {"governance", "getbudgetinfo", &getbudgetinfo, true, {"name"}},
