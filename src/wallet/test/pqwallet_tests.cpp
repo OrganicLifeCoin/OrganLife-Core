@@ -297,6 +297,60 @@ BOOST_AUTO_TEST_CASE(rpc_address_creation_requires_a_successful_backup)
     BOOST_CHECK(addresses.end() != std::find(addresses.begin(), addresses.end(), created["address"].get_str()));
 }
 
+BOOST_AUTO_TEST_CASE(encrypted_snapshots_are_exclusive_and_restorable)
+{
+    const auto destination = GetDataDir() / "pq-exclusive.dat";
+    BOOST_CHECK(!m_wallet.BackupWallet(destination.string(), true));
+    BOOST_CHECK(!fs::exists(destination));
+    EncryptTestWallet(m_wallet);
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
+    std::string address;
+    BOOST_REQUIRE(m_wallet.GeneratePQAddress(address));
+    // Exercise multiple copy/readback chunks, not just a small wallet file.
+    BOOST_REQUIRE(WalletBatch(m_wallet.GetDBHandle()).WriteName(address, std::string(200000, 'x')));
+    BOOST_REQUIRE(m_wallet.BackupWallet(destination.string(), true));
+    const auto read = [](const fs::path& path) {
+        fsbridge::ifstream file(path, std::ios::binary);
+        return std::string(std::istreambuf_iterator<char>(file), {});
+    };
+    const auto saved = read(destination);
+    BOOST_REQUIRE_GT(saved.size(), 200000U);
+    BOOST_CHECK(!m_wallet.BackupWallet(destination.string(), true));
+    BOOST_CHECK(read(destination) == saved);
+    BOOST_CHECK(!m_wallet.BackupWallet(GetDataDir().string(), true));
+    BOOST_CHECK(!m_wallet.BackupWallet(destination.string() + std::string("\0ignored", 8), true));
+#ifndef WIN32
+    const auto alias = GetDataDir() / "pq-snapshot-alias.dat";
+    fs::create_symlink(destination, alias);
+    BOOST_CHECK(!m_wallet.BackupWallet(alias.string(), true));
+    BOOST_CHECK(read(destination) == saved);
+    const auto dangling = GetDataDir() / "pq-snapshot-dangling.dat";
+    const auto victim = GetDataDir() / "pq-snapshot-victim.dat";
+    fs::create_symlink(victim, dangling);
+    BOOST_CHECK(!m_wallet.BackupWallet(dangling.string(), true));
+    BOOST_CHECK(!fs::exists(victim));
+    BOOST_CHECK((fs::status(destination).permissions() & fs::perms(0777)) == fs::owner_read + fs::owner_write);
+#endif
+    const auto contested = GetDataDir() / "pq-snapshot-contested.dat";
+    auto one = std::async(std::launch::async, [&] { return m_wallet.BackupWallet(contested.string(), true); });
+    auto two = std::async(std::launch::async, [&] { return m_wallet.BackupWallet(contested.string(), true); });
+    const bool first = one.get(), second = two.get();
+    BOOST_CHECK(first != second);
+    BOOST_CHECK(read(contested) == saved);
+    m_wallet.GetDBHandle().Flush(true);
+    DiskWallet restored("pq-exclusive", WalletDatabase::Create(destination));
+    bool first_run;
+    BOOST_REQUIRE_EQUAL(restored.LoadWallet(first_run), DB_LOAD_OK);
+    BOOST_CHECK(restored.IsLocked());
+    BOOST_REQUIRE(restored.Unlock(PASSPHRASE));
+    mldsa44::Key key;
+    BOOST_REQUIRE(restored.GetPQKey(address, key));
+    std::vector<unsigned char> signature;
+    const std::vector<unsigned char> message{1, 2, 3};
+    BOOST_REQUIRE(key.Sign(message, {}, signature));
+    BOOST_CHECK(mldsa44::Verify(key.GetPublicKey(), message, {}, signature));
+}
+
 BOOST_AUTO_TEST_CASE(payment_rpc_activation_and_unlock_gates)
 {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);

@@ -571,7 +571,7 @@ UniValue getnewpqaddress(const JSONRPCRequest& request)
         throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup destination must be a new file");
     std::string address;
     if (!pwallet->GeneratePQAddress(address)) throw JSONRPCError(RPC_WALLET_ERROR, "Could not create and persist experimental PQ key");
-    if (!pwallet->BackupWallet(backup.string())) {
+    if (!pwallet->BackupWallet(backup.string(), true)) {
         if (!pwallet->ErasePQAddress(address))
             throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup and unused-key cleanup failed; back up the wallet before using any listed PQ address");
         throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup failed; the new address was not returned");
@@ -672,7 +672,7 @@ static UniValue SendPQPayment(const JSONRPCRequest& request)
             throw JSONRPCError(RPC_WALLET_ERROR, "PQ payment preparation and unused-key cleanup failed; back up the wallet before using any listed PQ address");
         throw JSONRPCError(RPC_WALLET_ERROR, reason);
     }
-    if (!pwallet->BackupWallet(backup.string())) {
+    if (!pwallet->BackupWallet(backup.string(), true)) {
         if (!cleanup_new_pq_keys())
             throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup and unused-key cleanup failed; back up the wallet before using any listed PQ address");
         throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup failed; the payment was not relayed");

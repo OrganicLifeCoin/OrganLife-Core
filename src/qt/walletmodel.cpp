@@ -877,10 +877,10 @@ bool WalletModel::changePassphrase(const SecureString& oldPass, const SecureStri
     return retval;
 }
 
-bool WalletModel::backupWallet(const QString& filename)
+bool WalletModel::backupWallet(const QString& filename, bool exclusive)
 {
     // Attempt regular backup
-    if (!wallet->BackupWallet(filename.toLocal8Bit().data())) {
+    if (!wallet->BackupWallet(filename.toLocal8Bit().data(), exclusive)) {
         return error("ERROR: Failed to backup wallet!");
     }
 

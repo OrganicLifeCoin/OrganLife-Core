@@ -1256,7 +1256,10 @@ public:
     /**
      * Creates a wallet backup in strDest path
      */
-    bool BackupWallet(const std::string& strDest);
+    // Exclusive snapshots require encryption and a new file in a trusted
+    // directory. Success includes readback verification and file flushing.
+    // On failure a new incomplete file may remain; use a new path when retrying.
+    bool BackupWallet(const std::string& strDest, bool exclusive = false);
 
     /**
      * Blocks until the wallet state is up-to-date to /at least/ the current

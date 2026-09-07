@@ -4428,8 +4428,12 @@ void CWallet::postInitProcess(CScheduler& scheduler)
     }
 }
 
-bool CWallet::BackupWallet(const std::string& strDest)
+bool CWallet::BackupWallet(const std::string& strDest, bool exclusive)
 {
+    if (exclusive) {
+        LOCK(cs_wallet);
+        return IsCrypted() && database->Backup(strDest, true);
+    }
     return database->Backup(strDest);
 }
 

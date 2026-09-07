@@ -24,6 +24,19 @@ text private-key export, WIF, BIP32 seed, classical address, multisig, message
 signing, shielded payment, or delegation. The familiar Qt Send screen is a PQ
 frontend and accepts one recipient per transaction.
 
+Automatic PQ snapshots require an encrypted wallet and a new file in a trusted
+backup directory. They exclusively create the destination, flush it and compare
+its contents with the checkpointed wallet before reporting success; POSIX also
+flushes the parent directory. Existing files (including destination links) are
+not overwritten. A failed attempt may leave an incomplete new file: do not use
+it for recovery, and choose a new filename when retrying. The ordinary manual
+`backupwallet` command retains its existing overwrite behavior. Filesystem or
+hardware failure can still defeat recovery; these checks are not power-loss
+certification or a substitute for an independently stored, tested backup.
+Wallet metadata is not all encrypted. Choose a private backup directory when
+metadata confidentiality matters; inherited Windows/macOS ACLs remain the
+directory owner's policy, not an owner-only access guarantee from this API.
+
 Addresses use canonical Bech32m with witness version 1, a 32-byte network-bound
 public-key commitment, and the HRP `olcpqregtest` or `olcpqtest`. Legacy Bech32
 checksums are rejected.

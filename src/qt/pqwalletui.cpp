@@ -49,5 +49,5 @@ bool PQWalletUI::backupSnapshot(WalletModel* model, QString& directory)
     const QString filename = QDir(directory).filePath("olc-pq-" +
         QString::fromStdString(Params().NetworkIDString()) + "-" +
         QUuid::createUuid().toString(QUuid::WithoutBraces) + ".dat");
-    return model->backupWallet(filename);
+    return model->backupWallet(filename, true);
 }

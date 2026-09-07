@@ -247,7 +247,7 @@ public:
     // Is wallet unlocked for staking only?
     bool isStakingOnlyUnlocked();
     // Wallet backup
-    bool backupWallet(const QString& filename);
+    bool backupWallet(const QString& filename, bool exclusive = false);
 
     // RAI object for unlocking wallet, returned by requestUnlock()
     class UnlockContext

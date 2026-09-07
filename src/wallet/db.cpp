@@ -14,15 +14,87 @@
 #include "utilstrencodings.h"
 
 #include <stdint.h>
-
-#ifndef WIN32
+#include <array>
+#include <memory>
+#include <fcntl.h>
 #include <sys/stat.h>
+
+#ifdef WIN32
+#include <io.h>
+#else
+#include <unistd.h>
 #endif
 
 #include <boost/thread.hpp>
 
 
 namespace {
+
+// The caller holds cs_db after checkpointing the source. Destination parents
+// must be trusted. A failed snapshot may leave an incomplete NEW file; never
+// count it as a backup or replace an older snapshot on retry.
+bool CopyWalletSnapshot(const fs::path& source, const fs::path& destination)
+{
+    if (destination.empty() || destination.string().find('\0') != std::string::npos ||
+        destination.filename().empty()) return false;
+    using File = std::unique_ptr<FILE, decltype(&fclose)>;
+    File input(fsbridge::fopen(source, "rb"), fclose);
+    if (!input) return false;
+#ifdef WIN32
+    const HANDLE handle = CreateFileW(destination.wstring().c_str(), GENERIC_READ | GENERIC_WRITE,
+        0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) return false;
+    BY_HANDLE_FILE_INFORMATION info;
+    if (GetFileType(handle) != FILE_TYPE_DISK || !GetFileInformationByHandle(handle, &info) ||
+        (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))) {
+        CloseHandle(handle);
+        return false;
+    }
+    const int fd = _open_osfhandle(reinterpret_cast<intptr_t>(handle), _O_RDWR | _O_BINARY | _O_NOINHERIT);
+    if (fd < 0) { CloseHandle(handle); return false; }
+    File output(_fdopen(fd, "w+b"), fclose);
+    if (!output) { _close(fd); return false; }
+#else
+    struct Directory {
+        int fd;
+        ~Directory() { if (fd >= 0) close(fd); }
+    } parent{open((destination.has_parent_path() ? destination.parent_path() : fs::path(".")).c_str(),
+                   O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+    if (parent.fd < 0) return false;
+    const int fd = openat(parent.fd, destination.filename().c_str(),
+                         O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd < 0) return false;
+    File output(fdopen(fd, "w+b"), fclose);
+    if (!output) { close(fd); return false; }
+#endif
+    std::array<unsigned char, 65536> original{}, copied{};
+    size_t count;
+    while ((count = fread(original.data(), 1, original.size(), input.get())) != 0) {
+        if (fwrite(original.data(), 1, count, output.get()) != count) return false;
+    }
+    if (ferror(input.get())) return false;
+#if !defined(WIN32) && !defined(__APPLE__)
+    // FileCommit deliberately ignores EINVAL on some POSIX filesystems. An
+    // exclusive recovery snapshot must not accept an unsupported file flush.
+    if (fflush(output.get()) != 0 || fsync(fd) != 0) return false;
+#else
+    if (!FileCommit(output.get())) return false; // F_FULLFSYNC / FlushFileBuffers
+#endif
+    if (fseek(input.get(), 0, SEEK_SET) != 0 || fseek(output.get(), 0, SEEK_SET) != 0) return false;
+    // Compare the completed snapshot with the still-checkpointed source, in
+    // bounded memory. Never reopen the output path (it may have been replaced).
+    while ((count = fread(original.data(), 1, original.size(), input.get())) != 0) {
+        if (fread(copied.data(), 1, count, output.get()) != count ||
+            !std::equal(original.begin(), original.begin() + count, copied.begin())) return false;
+    }
+    if (ferror(input.get()) || fgetc(output.get()) != EOF || ferror(output.get())) return false;
+#ifndef WIN32
+    // FileCommit flushes contents; persist the new directory entry as well.
+    // Unlike ordinary backups, unsupported directory flushing fails closed.
+    if (fsync(parent.fd) != 0) return false;
+#endif
+    return fclose(output.release()) == 0;
+}
 
 //! Make sure database has a unique fileid within the environment. If it
 //! doesn't, throw an error. BDB caches do not work properly when more than one
@@ -777,7 +849,7 @@ bool BerkeleyDatabase::Rewrite(const char* pszSkip)
     return BerkeleyBatch::Rewrite(*this, pszSkip);
 }
 
-bool BerkeleyDatabase::Backup(const std::string& strDest)
+bool BerkeleyDatabase::Backup(const std::string& strDest, bool exclusive)
 {
     if (IsDummy()) {
         return false;
@@ -796,6 +868,13 @@ bool BerkeleyDatabase::Backup(const std::string& strDest)
                 // Copy wallet file
                 fs::path pathSrc = env->Directory() / strFile;
                 fs::path pathDest(strDest);
+                if (exclusive) {
+                    try {
+                        return CopyWalletSnapshot(pathSrc, pathDest);
+                    } catch (const std::exception&) {
+                        return false;
+                    }
+                }
                 if (fs::is_directory(pathDest))
                     pathDest /= strFile;
 
