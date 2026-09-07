@@ -1531,6 +1531,19 @@ static int64_t nTimeTotal = 0;
 /** Apply the effects of this block (with given index) on the UTXO set represented by coins.
  *  Validity checks that depend on the UTXO set are also done; ConnectBlock()
  *  can fail if those validity checks fail (among other reasons). */
+namespace {
+// Ancestor lookup that is safe for the fake candidate index used by
+// TestBlockValidity (which carries no pskip shortcuts).
+const CBlockIndex* FinalityAncestor(const CBlockIndex* block, uint32_t height)
+{
+    if (!block || block->nHeight < int(height)) return nullptr;
+    if (block->pskip) return block->GetAncestor(int(height));
+    const CBlockIndex* walk = block;
+    while (walk && walk->nHeight > int(height)) walk = walk->pprev;
+    return walk && walk->nHeight == int(height) ? walk : nullptr;
+}
+} // namespace
+
 static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& view, bool fJustCheck = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
@@ -1643,7 +1656,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         if (GetPQAnchorStore()) {
             pqanchor::Record anchorTip;
             if (GetPQAnchorStore()->Tip(anchorTip)) {
-                const CBlockIndex* ancestor = pindex->GetAncestor(int(anchorTip.height));
+                const CBlockIndex* ancestor = FinalityAncestor(pindex, anchorTip.height);
                 if (!ancestor || ancestor->GetBlockHash() != anchorTip.blockHash)
                     return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-ancestry");
             }
@@ -1699,7 +1712,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
             std::vector<pqquorum::Member> committee;
             if (!pqAnchors.CommitteeAt(parent.height, committee))
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-committee");
-            const CBlockIndex* finalized = pindex->GetAncestor(int(parent.height) + 1);
+            const CBlockIndex* finalized = FinalityAncestor(pindex, uint32_t(parent.height) + 1);
             if (!finalized)
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-ancestry");
             pqquorum::Statement expected;
@@ -1723,9 +1736,8 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
             // Durable, non-rollbackable enforcement source; fsynced before use.
             if (GetPQAnchorStore()) {
                 pqanchor::Record durable;
-                durable.height = certificate.statement.height;
-                durable.blockHash = finalized->GetBlockHash();
-                durable.committee = parent.committee;
+                if (!pqAnchors.TipAnchor(durable))
+                    return state.Error("PQ finalized anchor state unavailable");
                 if (!GetPQAnchorStore()->Write(durable, certificate, reason))
                     return state.DoS(100, false, REJECT_INVALID, reason);
             }

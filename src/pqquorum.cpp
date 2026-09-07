@@ -55,21 +55,26 @@ RoundState::RoundState(const uint256& genesis, const uint256& anchor, uint32_t h
 std::unique_ptr<RoundState> RoundState::Restore(const uint256& genesis, const uint256& anchor,
                                                 uint32_t height, const std::vector<Member>& snapshot,
                                                 uint32_t round, const uint256& locked, uint32_t lockRound,
-                                                const uint256& prevote, const uint256& precommit,
+                                                const std::optional<uint256>& prevote,
+                                                const std::optional<uint256>& precommit,
                                                 std::string& reason)
 {
     reason.clear();
+    if (lockRound > round) {
+        reason = "bad-pq-restore-lock-round";
+        return nullptr;
+    }
     try {
         std::unique_ptr<RoundState> state(new RoundState(genesis, anchor, height, snapshot));
         state->current.round = round;
         state->locked = locked;
         state->lockRound = lockRound;
-        if (!prevote.IsNull()) {
-            state->prevote = prevote;
+        if (prevote) {
+            state->prevote = *prevote;
             state->prevoted = true;
         }
-        if (!precommit.IsNull()) {
-            state->precommit = precommit;
+        if (precommit) {
+            state->precommit = *precommit;
             state->precommitted = true;
         }
         return state;
@@ -226,6 +231,22 @@ bool Decode(Span<const unsigned char> bytes, Certificate& certificate)
     }
     if (!stream.empty() || !CanonicalSigners(decoded.signatures)) return false;
     certificate = std::move(decoded);
+    return true;
+}
+
+bool VerifySignature(const Statement& expected, uint16_t member,
+                     const std::array<unsigned char, mldsa44::SIGNATURE_SIZE>& signature,
+                     const std::vector<Member>& members, std::string& reason)
+{
+    reason.clear();
+    const auto fail = [&](const char* message) { reason = message; return false; };
+    if (!Threshold(members.size())) return fail("bad-pq-quorum-signers");
+    if (!ValidStatement(expected) || expected.committee != Commitment(members))
+        return fail("bad-pq-quorum-committee");
+    if (member >= members.size()) return fail("bad-pq-quorum-member");
+    const auto message = Message(expected);
+    if (!mldsa44::Verify(members[member].operator_key, message, Context(), signature))
+        return fail("bad-pq-quorum-signature");
     return true;
 }
 

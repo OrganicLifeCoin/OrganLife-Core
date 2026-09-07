@@ -15,6 +15,8 @@
 #include "netbase.h"
 #include "net_processing.h"
 #include "optional.h"
+#include "pqanchors.h"
+#include "pqfinality.h"
 #include "protocol.h"
 #include "sync.h"
 #include "timedata.h"
@@ -24,14 +26,60 @@
 #include "validation.h"
 #include "warnings.h"
 
+#include <algorithm>
+#include <map>
+
 #include <univalue.h>
 
+
+UniValue getpqfinalityinfo(const JSONRPCRequest& request)
+{
+    if (request.fHelp || !request.params.empty())
+        throw std::runtime_error("getpqfinalityinfo\n"
+            "Report the local PQ finality runtime state. A merely configured bootstrap or node is never\n"
+            "reported as operational: \"validated\" is false until the pinned checkpoint verifies against\n"
+            "the active chain, and \"voting\" reflects actual journaled participation.\n"
+            "Result:\n"
+            "  configured       (boolean) pinned bootstrap checkpoint present (regtest only today)\n"
+            "  validated        (boolean) checkpoint verified against the active chain\n"
+            "  anchor_height    (numeric) highest locally finalized height\n"
+            "  anchor_hash      (string)  block hash finalized at anchor_height\n"
+            "  committee_size   (numeric) committee size at the anchor\n"
+            "  voting_height    (numeric) next height the runtime votes on\n"
+            "  voting_round     (numeric) highest journaled round at voting_height\n"
+            "  locked           (boolean) this identity holds a journaled lock at voting_height\n"
+            "  locked_value     (string)  locked block hash, if locked\n"
+            "  member           (boolean) the local operator is in the voting committee\n");
+    if (!Params().IsRegTestNet())
+        throw JSONRPCError(RPC_MISC_ERROR, "PQ finality is not active on this network");
+    bool configured, validated, hasLock, isMember;
+    uint32_t anchorHeight, committeeSize, votingHeight, votingRound;
+    uint256 anchorHash, lockedValue;
+    pqfinality::Manager::Get().GetStatus(configured, validated, anchorHeight, anchorHash, committeeSize,
+                                         votingHeight, votingRound, hasLock, lockedValue, isMember);
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("configured", configured);
+    result.pushKV("validated", validated);
+    result.pushKV("anchor_height", uint64_t(anchorHeight));
+    result.pushKV("anchor_hash", anchorHash.GetHex());
+    result.pushKV("committee_size", uint64_t(committeeSize));
+    result.pushKV("voting_height", uint64_t(votingHeight));
+    result.pushKV("voting_round", uint64_t(votingRound));
+    result.pushKV("locked", hasLock);
+    result.pushKV("locked_value", lockedValue.GetHex());
+    result.pushKV("member", isMember);
+    return result;
+}
 
 UniValue getpqoperatorinfo(const JSONRPCRequest& request)
 {
     if (request.fHelp || !request.params.empty())
-        throw std::runtime_error("getpqoperatorinfo\nReturns pending local operator credential identity only, not registration validity, authentication, service or finality readiness.\n"
-                                 "Result: configured (boolean), registration (hex, if configured), publickey (ML-DSA-44 hex, if configured). No secrets are returned.\n");
+        throw std::runtime_error("getpqoperatorinfo\nReturns the local operator credential identity and, when the\n"
+                                 "finality runtime runs, its journaled voting state. Credential presence is pending status,\n"
+                                 "never service readiness, authentication or finality authority. No secrets are returned.\n"
+                                 "Result: configured (boolean), registration (hex), publickey (ML-DSA-44 hex),\n"
+                                 "journal_finalized_height (numeric, when finality runs), journal_voted_height (numeric),\n"
+                                 "journal_locked (boolean).");
     LOCK(cs_main);
     UniValue result(UniValue::VOBJ);
     const auto* pending = GetPQOperator();
@@ -39,6 +87,21 @@ UniValue getpqoperatorinfo(const JSONRPCRequest& request)
     if (pending) {
         result.pushKV("registration", pending->Registration().GetHex());
         result.pushKV("publickey", HexStr(pending->PublicKey()));
+    }
+    if (pqfinality::Manager::Get().Started() && pending) {
+        // Narrowly typed journal introspection only; no key material.
+        LOCK(cs_main);
+        // Journal state is exposed through the finality status aggregate.
+        bool configured, validated, hasLock, isMember;
+        uint32_t anchorHeight, committeeSize, votingHeight, votingRound;
+        uint256 anchorHash, lockedValue;
+        pqfinality::Manager::Get().GetStatus(configured, validated, anchorHeight, anchorHash,
+                                             committeeSize, votingHeight, votingRound, hasLock,
+                                             lockedValue, isMember);
+        result.pushKV("journal_finalized_height", uint64_t(anchorHeight));
+        result.pushKV("journal_voted_height", uint64_t(votingHeight));
+        result.pushKV("journal_voting_round", uint64_t(votingRound));
+        result.pushKV("journal_locked", hasLock);
     }
     return result;
 }
@@ -55,6 +118,26 @@ UniValue listpqmasternodes(const JSONRPCRequest& request)
     try {
         pqmn::Index index(*evoDb, Params());
         if (!index.MatchesChainTip(chainActive.Tip())) throw std::runtime_error("stale registry");
+        // Service evidence over the consensus window (deterministic, from
+        // in-block certificates; absent certificates keep everyone eligible).
+        const int height = chainActive.Height();
+        const uint32_t window = uint32_t(Params().GetConsensus().nPQServiceWindow);
+        std::vector<uint256> signers;
+        bool anyCert = false;
+        pqanchor::SignersInWindow(*evoDb, Params(), uint32_t(height), window, signers, anyCert);
+        // Latest certificate signature height per registration (bounded scan).
+        std::map<uint256, uint32_t> lastCert;
+        if (anyCert) {
+            pqanchor::ChainState chainState(*evoDb, Params());
+            const int lowest = std::max(1, height - int(window) + 1);
+            for (int h = height; h >= lowest; --h) {
+                pqanchor::Record anchor;
+                if (!chainState.GetAnchor(uint32_t(h), anchor)) continue;
+                for (const auto& signer : anchor.signers) {
+                    if (!lastCert.count(signer)) lastCert[signer] = uint32_t(h);
+                }
+            }
+        }
         for (const auto& entry : index.List()) {
             const auto& record = entry.second;
             UniValue item(UniValue::VOBJ);
@@ -74,6 +157,15 @@ UniValue listpqmasternodes(const JSONRPCRequest& request)
             item.pushKV("last_paid_height", static_cast<uint64_t>(record.lastPaidHeight));
             item.pushKV("revived_height", static_cast<uint64_t>(record.revivedHeight));
             item.pushKV("revoked", record.revoked);
+            // Finality-derived eligibility; absent certificates (stall) keep
+            // every registered node eligible.
+            const bool inGrace = record.registeredHeight != 0 &&
+                uint32_t(height) - record.registeredHeight <= window;
+            const bool signedRecent = std::find(signers.begin(), signers.end(), entry.first) != signers.end();
+            item.pushKV("eligible", !anyCert || inGrace || signedRecent);
+            const auto cert = lastCert.find(entry.first);
+            item.pushKV("last_cert_height", cert == lastCert.end() ? NullUniValue :
+                        UniValue(uint64_t(cert->second)));
             result.push_back(item);
         }
     } catch (const std::exception&) {
@@ -822,6 +914,7 @@ static const CRPCCommand commands[] =
     { "network",            "getnettotals",           &getnettotals,           true,  {} },
     { "network",            "getnetworkinfo",         &getnetworkinfo,         true,  {} },
     { "network",            "getpqoperatorinfo",       &getpqoperatorinfo,       true,  {} },
+    { "network",            "getpqfinalityinfo",       &getpqfinalityinfo,       true,  {} },
     { "network",            "listpqmasternodes",       &listpqmasternodes,       true,  {} },
     { "network",            "getnodeaddresses",       &getnodeaddresses,       true,  {"count"} },
     { "network",            "getpeerinfo",            &getpeerinfo,            true,  {} },

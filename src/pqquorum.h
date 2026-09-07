@@ -7,6 +7,8 @@
 #include <serialize.h>
 #include <uint256.h>
 #include <cstdint>
+#include <memory>
+#include <optional>
 #include <string>
 
 // Certificate and single-height decision logic, not an activated finality runtime.
@@ -55,6 +57,11 @@ bool Decode(Span<const unsigned char> bytes, Certificate& certificate);
 // Success proves endorsements only, not that the statement is safe to finalize.
 bool Verify(const Certificate& certificate, const Statement& expected,
             const std::vector<Member>& members, std::string& reason);
+// Verifies ONE member's signature over the exact statement against a trusted
+// committee snapshot (runtime vote path; never a quorum).
+bool VerifySignature(const Statement& expected, uint16_t member,
+                     const std::array<unsigned char, mldsa44::SIGNATURE_SIZE>& signature,
+                     const std::vector<Member>& members, std::string& reason);
 
 // Single-height decision logic only. No signing, persistence, network handler,
 // block validation or fork-choice authority. Serialize access; a runtime must
@@ -72,12 +79,13 @@ public:
     RoundState(const uint256& genesis, const uint256& anchor, uint32_t height,
                const std::vector<Member>& members);
     // Restores journal-replayed state for a used key: a runtime must never
-    // recreate fresh state for a key that already voted. A non-null prevote or
-    // precommit marks that step decided at the restored round.
+    // recreate fresh state for a key that already voted. An engaged optional
+    // marks a decided step, including a zero hash (an explicitly cast nil vote).
     static std::unique_ptr<RoundState> Restore(const uint256& genesis, const uint256& anchor,
                                                uint32_t height, const std::vector<Member>& members,
                                                uint32_t round, const uint256& locked, uint32_t lockRound,
-                                               const uint256& prevote, const uint256& precommit,
+                                               const std::optional<uint256>& prevote,
+                                               const std::optional<uint256>& precommit,
                                                std::string& reason);
     RoundState(const RoundState&) = delete;
     RoundState& operator=(const RoundState&) = delete;

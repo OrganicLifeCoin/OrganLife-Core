@@ -17,9 +17,10 @@
 namespace pqfinality {
 namespace {
 constexpr uint8_t PROPOSAL_VERSION = 1;
-constexpr size_t PROPOSAL_HEADER_SIZE = 1 + 2 + 4 + 4 + 4 + 32 + 2;
+constexpr size_t PROPOSAL_HEADER_SIZE = 1 + 2 + 4 + 4 + 32 + 4;
 constexpr size_t MAX_PROPOSAL_SIZE =
     PROPOSAL_HEADER_SIZE + pqquorum::MAX_CERTIFICATE_SIZE + mldsa44::SIGNATURE_SIZE;
+} // namespace
 
 std::vector<unsigned char> EncodeProposal(const Proposal& proposal)
 {
@@ -27,7 +28,8 @@ std::vector<unsigned char> EncodeProposal(const Proposal& proposal)
     stream << PROPOSAL_VERSION << proposal.member << proposal.round << proposal.polcRound <<
         proposal.blockHash;
     const auto polc = pqquorum::Encode(proposal.polc);
-    stream << static_cast<uint16_t>(polc.size());
+    if (!proposal.polc.signatures.empty() && polc.empty()) return {};
+    stream << static_cast<uint32_t>(polc.size());
     if (!polc.empty()) stream.write(reinterpret_cast<const char*>(polc.data()), polc.size());
     stream << proposal.signature;
     return {stream.begin(), stream.end()};
@@ -43,22 +45,27 @@ bool DecodeProposal(Span<const unsigned char> bytes, Proposal& proposal)
         const char* begin = reinterpret_cast<const char*>(bytes.data());
         CDataStream stream(begin, begin + bytes.size(), SER_NETWORK, 0);
         uint8_t version;
-        uint16_t polcSize;
-        stream >> version >> proposal.member >> proposal.round >> proposal.polcRound >>
-            proposal.blockHash >> polcSize;
-        if (version != PROPOSAL_VERSION || polcSize > uint16_t(pqquorum::MAX_CERTIFICATE_SIZE)) return false;
+        uint32_t polcSize;
+        Proposal decoded;
+        stream >> version >> decoded.member >> decoded.round >> decoded.polcRound >>
+            decoded.blockHash >> polcSize;
+        if (version != PROPOSAL_VERSION || polcSize > pqquorum::MAX_CERTIFICATE_SIZE ||
+            stream.size() != size_t(polcSize) + mldsa44::SIGNATURE_SIZE) return false;
         if (polcSize) {
             std::vector<unsigned char> polc(polcSize);
             stream.read(reinterpret_cast<char*>(polc.data()), polc.size());
-            if (!pqquorum::Decode(polc, proposal.polc)) return false;
+            if (!pqquorum::Decode(polc, decoded.polc)) return false;
         }
-        stream >> proposal.signature;
-        return stream.empty();
+        stream >> decoded.signature;
+        if (!stream.empty()) return false;
+        proposal = std::move(decoded);
+        return true;
     } catch (const std::ios_base::failure&) {
         return false;
     }
 }
 
+namespace {
 uint256 MessageKey(const std::string& command, const std::vector<unsigned char>& bytes)
 {
     CHashWriter hash(SER_GETHASH, 0);
@@ -80,12 +87,14 @@ void Manager::GetStatus(bool& configured, bool& validatedOut, uint32_t& anchorHe
     configured = pqanchor::GetBootstrap() != nullptr;
     validatedOut = false;
     anchorHeight = 0;
+    anchorHash.SetNull();
     committeeSize = 0;
     votingHeight = 0;
     votingRound = 0;
     hasLock = false;
+    lockedValue.SetNull();
     isMember = false;
-    LOCK(cs);
+    LOCK2(cs_main, cs);
     if (!started || !validated) return;
     validatedOut = true;
     {
@@ -161,7 +170,6 @@ void Manager::Stop()
     localOperator = nullptr;
     validated = false;
     inbox.clear();
-    pending.clear();
     relayed.clear();
     started = false;
 }
@@ -252,12 +260,13 @@ bool Manager::PendingCertificate(pqquorum::Certificate& out)
     AssertLockHeld(cs_main);
     if (!started) return false;
     pqanchor::ChainState state(*evoDb, Params());
-    const uint32_t mirror = state.TipHeight();
-    LOCK(cs);
-    while (!pending.empty() && pending.front().first <= mirror) pending.pop_front();
-    if (pending.empty() || pending.front().first != mirror + 1) return false;
-    out = pending.front().second;
-    return true;
+    const auto* bootstrap = pqanchor::GetBootstrap();
+    if (!bootstrap) return false;
+    const uint32_t mirror = std::max(state.TipHeight(), bootstrap->height);
+    // The durable store is also the publication queue. Reopening a node must
+    // not lose a committed certificate that has not reached a carrier block.
+    auto* store = GetPQAnchorStore();
+    return store && store->ReadCertificate(mirror + 1, out);
 }
 
 void Manager::RelayToPeers(const std::string& command, const std::vector<unsigned char>& bytes) const
@@ -288,10 +297,32 @@ void Manager::BroadcastNovel(const std::string& command, const std::vector<unsig
 bool Manager::VerifyVote(const pqquorum::Certificate& certificate, const Height& height,
                          std::string& reason) const
 {
-    pqquorum::Statement expected = certificate.statement;
-    expected.anchor = height.anchor;
-    expected.committee = pqquorum::Commitment(height.committee);
-    return pqquorum::Verify(certificate, expected, height.committee, reason);
+    pqquorum::Statement context;
+    context.genesis = Params().GetConsensus().hashGenesisBlock;
+    context.anchor = height.anchor;
+    context.committee = pqquorum::Commitment(height.committee);
+    context.height = height.height;
+    return pqfinality::VerifyVote(certificate, context, height.committee, reason);
+}
+
+bool VerifyVote(const pqquorum::Certificate& certificate, const pqquorum::Statement& context,
+                const std::vector<pqquorum::Member>& committee, std::string& reason)
+{
+    reason.clear();
+    if (certificate.signatures.size() != 1) {
+        reason = "bad-pq-vote-single-signature";
+        return false;
+    }
+    const auto& statement = certificate.statement;
+    if (statement.genesis != context.genesis || statement.anchor != context.anchor ||
+        statement.committee != context.committee || statement.height != context.height ||
+        (statement.purpose != pqquorum::Purpose::PREVOTE &&
+         statement.purpose != pqquorum::Purpose::PRECOMMIT)) {
+        reason = "bad-pq-vote-context";
+        return false;
+    }
+    return pqquorum::VerifySignature(statement, certificate.signatures[0].member,
+                                     certificate.signatures[0].bytes, committee, reason);
 }
 
 bool Manager::VerifyProposal(const Proposal& proposal, const Height& height, std::string& reason) const
@@ -426,13 +457,19 @@ bool Manager::RecordCommitment(Height& height, const pqquorum::Certificate& cert
     expected.round = cert.statement.round;
     expected.value = height.localBlock;
     if (!pqquorum::Verify(cert, expected, height.committee, reason)) return false;
-    const uint256 anchorID = pqanchor::ID(height.height, height.localBlock, parentCommittee);
+    std::vector<pqquorum::Member> nextCommittee;
+    if (!state.CommitteeAt(height.height, nextCommittee)) {
+        reason = "pq-finality-commit-next-committee-unavailable";
+        return false;
+    }
+    const uint256 nextCommitment = pqquorum::Commitment(nextCommittee);
+    const uint256 anchorID = pqanchor::ID(height.height, height.localBlock, nextCommitment);
     if (journal && !journal->RecordFinalized(height.height, height.localBlock, anchorID, reason)) {
         // Already finalized (duplicate/replay) is success for this height.
         uint32_t finalizedHeight{0};
         uint256 value, recordedAnchor;
         if (!(journal->GetFinalized(finalizedHeight, value, recordedAnchor) &&
-              finalizedHeight >= height.height && value == height.localBlock))
+              finalizedHeight == height.height && value == height.localBlock && recordedAnchor == anchorID))
             return false;
         reason.clear();
     }
@@ -440,17 +477,13 @@ bool Manager::RecordCommitment(Height& height, const pqquorum::Certificate& cert
         pqanchor::Record durable;
         durable.height = height.height;
         durable.blockHash = height.localBlock;
-        durable.committee = parentCommittee;
+        durable.committee = nextCommitment;
         std::vector<uint256> signers;
         for (const auto& signature : cert.signatures)
             if (signature.member < height.committee.size())
                 signers.push_back(height.committee[signature.member].registration);
         durable.signers = std::move(signers);
         if (!store->Write(durable, cert, reason)) return false;
-    }
-    {
-        LOCK(cs);
-        pending.emplace_back(height.height, cert);
     }
     const auto bytes = pqquorum::Encode(cert);
     if (!bytes.empty()) RelayToPeers(NetMsgType::PQCMT, bytes);
@@ -468,14 +501,15 @@ void Manager::Run()
         } catch (const std::exception& e) {
             LogPrintf("pqfinality: driver error: %s\n", e.what());
         }
-        if (interrupt.sleep_for(std::chrono::milliseconds(std::max<int64_t>(sleepMs, 10)))) break;
+        if (!interrupt.sleep_for(std::chrono::milliseconds(std::max<int64_t>(sleepMs, 10)))) break;
     }
 }
 
 int64_t Manager::TimeoutFor(uint32_t round, int64_t base) const
 {
+    // base is in seconds; -pqfinalitytimeoutscale rescales the unit (1000 = 1s).
     const int64_t scale = std::max<int64_t>(gArgs.GetArg("-pqfinalitytimeoutscale", 1000), 1);
-    return base * (int64_t(round) + 1) * scale / 1000;
+    return base * (int64_t(round) + 1) * scale;
 }
 
 void Manager::AdvanceRound(Height& height, uint32_t round, int64_t now)
@@ -770,16 +804,24 @@ int64_t Manager::Process()
                 journal && journal->HighestVoted(working.height, pqquorum::Purpose::PREVOTE, prevoteRound);
             const bool hasPrecommit =
                 journal && journal->HighestVoted(working.height, pqquorum::Purpose::PRECOMMIT, precommitRound);
-            const uint32_t round = std::max(hasPrevote ? prevoteRound : 0, hasPrecommit ? precommitRound : 0);
             uint256 locked;
             uint32_t lockRound = 0;
             const bool hasLock = journal && journal->GetLock(working.height, locked, lockRound);
-            uint256 prevote, precommit;
-            pqjournal::Journal::Signature prevoteSig, precommitSig;
-            if (hasPrevote)
-                journal->GetVote(working.height, round, pqquorum::Purpose::PREVOTE, prevote, prevoteSig);
-            if (hasPrecommit)
-                journal->GetVote(working.height, round, pqquorum::Purpose::PRECOMMIT, precommit, precommitSig);
+            const uint32_t round = std::max({hasPrevote ? prevoteRound : 0,
+                hasPrecommit ? precommitRound : 0, hasLock ? lockRound : 0});
+            std::optional<uint256> prevote, precommit;
+            uint256 value;
+            pqjournal::Journal::Signature signature;
+            if (journal && journal->GetVote(working.height, round, pqquorum::Purpose::PREVOTE, value, signature)) {
+                prevote = value;
+                if (working.selfMember >= 0)
+                    working.votes[{round, pqquorum::Purpose::PREVOTE, uint16_t(working.selfMember)}] = {value, signature};
+            }
+            if (journal && journal->GetVote(working.height, round, pqquorum::Purpose::PRECOMMIT, value, signature)) {
+                precommit = value;
+                if (working.selfMember >= 0)
+                    working.votes[{round, pqquorum::Purpose::PRECOMMIT, uint16_t(working.selfMember)}] = {value, signature};
+            }
             if (round > 0 || hasLock || hasPrevote || hasPrecommit) {
                 working.round = pqquorum::RoundState::Restore(
                     Params().GetConsensus().hashGenesisBlock, working.anchor, working.height,
@@ -857,4 +899,3 @@ int64_t Manager::Process()
     }
 }
 } // namespace pqfinality
-
