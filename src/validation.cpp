@@ -15,12 +15,14 @@
 #include "blocksignature.h"
 #include "budget/budgetmanager.h"
 #include "chainparams.h"
+#include "pqanchors.h"
 #include "pqtransaction.h"
 #include "checkpoints.h"
 #include "checkqueue.h"
 #include "consensus/consensus.h"
 #include "consensus/merkle.h"
 #include "consensus/tx_verify.h"
+#include "init.h"
 #include "consensus/validation.h"
 #include "evo/evodb.h"
 #include "evo/pqmasternode.h"
@@ -1419,6 +1421,12 @@ DisconnectResult DisconnectBlock(CBlock& block, const CBlockIndex* pindex, CCoin
             error("DisconnectBlock: %s", reason);
             return DISCONNECT_FAILED;
         }
+        // Undo the committee snapshots and anchor records this block created.
+        // The durable pqanchors/ store is intentionally NOT rolled back.
+        if (!pqanchor::ChainState(*evoDb, Params()).UndoBlock(pindex->nHeight, reason)) {
+            error("DisconnectBlock: %s", reason);
+            return DISCONNECT_FAILED;
+        }
     }
     if (!UndoSpecialTxsInBlock(block, pindex)) {
         return DISCONNECT_FAILED;
@@ -1630,6 +1638,16 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     // All ordinary input, maturity, issuance and governance checks still follow.
     std::vector<CTxOut> pqMasternodePayments;
     if (pq::MasternodesActive(Params(), pindex->nHeight)) {
+        // Finality enforcement: refuse any block whose ancestry conflicts with a
+        // locally validated finalized anchor. No-op while no anchors exist.
+        if (GetPQAnchorStore()) {
+            pqanchor::Record anchorTip;
+            if (GetPQAnchorStore()->Tip(anchorTip)) {
+                const CBlockIndex* ancestor = pindex->GetAncestor(int(anchorTip.height));
+                if (!ancestor || ancestor->GetBlockHash() != anchorTip.blockHash)
+                    return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-ancestry");
+            }
+        }
         if (!GetPQMasternodePayment(pindex->pprev, pqMasternodePayments))
             return state.Error("PQ masternode payment state unavailable");
         const auto& outputs = block.vtx[0]->vout;
@@ -1646,6 +1664,61 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         if (!pqmn::Index(*evoDb, Params()).ConnectBlock(block, *pindex, view,
                 consensus.vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight, reason, paid))
             return state.DoS(100, false, REJECT_INVALID, reason);
+        // Finality chain state: capture committee snapshots and validate the
+        // in-block FINALITY certificate, if any. An absent certificate is
+        // always valid; finality stalling never invalidates PoS production.
+        pqanchor::ChainState pqAnchors(*evoDb, Params());
+        if (!pqAnchors.CaptureCommittee(pqmn::Index(*evoDb, Params()), pindex->nHeight, reason))
+            return state.DoS(100, false, REJECT_INVALID, reason);
+        if (pq::IsFinality(*block.vtx[0])) {
+            if (!pqanchor::GetBootstrap())
+                return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-inactive");
+            pq::Payload payload;
+            if (!pq::DecodePayload(*block.vtx[0], payload) || payload.mode != pq::FINALITY)
+                return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-payload");
+            pqquorum::Certificate certificate;
+            if (!pqquorum::Decode(payload.data, certificate))
+                return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-certificate");
+            pqanchor::Record parent;
+            if (!pqAnchors.TipAnchor(parent))
+                return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-no-anchor");
+            // No skipping: the certificate finalizes exactly the parent anchor + 1.
+            if (certificate.statement.height != parent.height + 1)
+                return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-height");
+            std::vector<pqquorum::Member> committee;
+            if (!pqAnchors.CommitteeAt(parent.height, committee))
+                return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-committee");
+            const CBlockIndex* finalized = pindex->GetAncestor(int(parent.height) + 1);
+            if (!finalized)
+                return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-ancestry");
+            pqquorum::Statement expected;
+            expected.purpose = pqquorum::Purpose::PRECOMMIT;
+            expected.genesis = Params().GetConsensus().hashGenesisBlock;
+            expected.anchor = pqanchor::ID(parent.height, parent.blockHash, parent.committee);
+            expected.committee = parent.committee;
+            expected.height = certificate.statement.height;
+            expected.round = certificate.statement.round;
+            expected.value = finalized->GetBlockHash();
+            if (!pqquorum::Verify(certificate, expected, committee, reason))
+                return state.DoS(100, false, REJECT_INVALID, reason);
+            // Endorsement is for a locally validated ancestor block only.
+            std::vector<uint256> signers;
+            signers.reserve(certificate.signatures.size());
+            for (const auto& signature : certificate.signatures)
+                signers.push_back(committee.at(signature.member).registration);
+            if (!pqAnchors.RecordAnchor(certificate.statement.height, finalized->GetBlockHash(),
+                                        std::move(signers), reason))
+                return state.DoS(100, false, REJECT_INVALID, reason);
+            // Durable, non-rollbackable enforcement source; fsynced before use.
+            if (GetPQAnchorStore()) {
+                pqanchor::Record durable;
+                durable.height = certificate.statement.height;
+                durable.blockHash = finalized->GetBlockHash();
+                durable.committee = parent.committee;
+                if (!GetPQAnchorStore()->Write(durable, certificate, reason))
+                    return state.DoS(100, false, REJECT_INVALID, reason);
+            }
+        }
     }
 
     std::vector<PrecomputedTransactionData> precomTxData;
@@ -2025,6 +2098,15 @@ bool static DisconnectTip(CValidationState& state, const CChainParams& chainpara
     AssertLockHeld(mempool.cs);
     CBlockIndex* pindexDelete = chainActive.Tip();
     assert(pindexDelete);
+    // Finality: refuse to disconnect at or below the highest locally validated
+    // anchor. Reorging below finalized history is never permitted, and the
+    // guard is a no-op while no anchors exist.
+    if (GetPQAnchorStore()) {
+        pqanchor::Record anchorTip;
+        if (GetPQAnchorStore()->Tip(anchorTip) && pindexDelete->nHeight <= int(anchorTip.height))
+            return error("DisconnectTip(): refusing to disconnect at or below the PQ finalized anchor at height %d",
+                         anchorTip.height);
+    }
     // Read block from disk.
     std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
     CBlock& block = *pblock;

@@ -4,6 +4,7 @@
 #include <chainparams.h>
 #include <coins.h>
 #include <hash.h>
+#include <pqanchors.h>
 #include <validation.h>
 #include <algorithm>
 #include <limits>
@@ -219,6 +220,22 @@ void Index::Put(const uint256& id, const Record& record) {
 Optional<std::pair<uint256, Record>> Index::FindPayee(uint32_t height) const
 {
     Optional<std::pair<uint256, Record>> winner;
+    // Service evidence: with a pinned bootstrap and active finality, a node is
+    // payout-eligible when it signed an in-block certificate within the
+    // service window, or is within the window of its registration height, or
+    // when the window holds no certificate at all (stall is not attributed to
+    // individuals). Without finality the previous rules are unchanged.
+    const bool finalityConfigured = pqanchor::GetBootstrap() != nullptr;
+    std::vector<uint256> signers;
+    bool anyCert = false;
+    if (finalityConfigured)
+        pqanchor::SignersInWindow(db, params, height, params.GetConsensus().nPQServiceWindow, signers, anyCert);
+    const auto eligible = [&](const uint256& id, const Record& record) {
+        if (!finalityConfigured || !anyCert) return true;
+        if (record.registeredHeight != 0 && height - record.registeredHeight <= params.GetConsensus().nPQServiceWindow)
+            return true; // bootstrap grace
+        return std::find(signers.begin(), signers.end(), id) != signers.end();
+    };
     for (const auto& item : List()) {
         const auto& record = item.second;
         if (record.revoked || record.service == CService()) continue;
@@ -227,6 +244,7 @@ Optional<std::pair<uint256, Record>> Index::FindPayee(uint32_t height) const
             (record.operatorReward == 0 && !Zero(record.operatorPayout)))
             throw std::runtime_error("Corrupt PQ masternode payout fields");
         if (!record.MatureAt(height, params.GetConsensus().MasternodeCollateralMinConf())) continue;
+        if (!eligible(item.first, record)) continue;
         const auto effective = std::max(record.lastPaidHeight, record.revivedHeight);
         const auto age = effective != 0 ? effective : record.registeredHeight;
         const auto winnerEffective = std::max(winner ? winner->second.lastPaidHeight : 0U,

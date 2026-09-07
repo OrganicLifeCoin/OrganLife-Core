@@ -704,7 +704,10 @@ static bool CheckSpecialTxBasic(const CTransaction& tx, CValidationState& state)
     }
 
     // PQ coinstakes carry their ML-DSA authorization in the special payload.
-    if (tx.IsCoinBase() || (tx.IsCoinStake() && tx.nType != CTransaction::PQ)) {
+    // A PQ coinbase is special only when it carries a FINALITY certificate.
+    const bool pqFinalityCoinbase = tx.IsCoinBase() && tx.nType == CTransaction::PQ &&
+        tx.extraPayload && tx.extraPayload->size() >= 2 && (*tx.extraPayload)[1] == pq::FINALITY;
+    if ((tx.IsCoinBase() && !pqFinalityCoinbase) || (tx.IsCoinStake() && tx.nType != CTransaction::PQ)) {
         return state.DoS(10, error("%s: Special tx is coinbase or coinstake", __func__),
                          REJECT_INVALID, "bad-txns-special-coinbase");
     }
@@ -716,8 +719,10 @@ static bool CheckSpecialTxBasic(const CTransaction& tx, CValidationState& state)
     }
 
     // Size limits
-    const size_t payloadLimit = tx.nType == CTransaction::PQ && tx.extraPayload->size() >= 2 &&
-        (*tx.extraPayload)[1] == pq::MASTERNODE ? pq::MAX_MASTERNODE_TX_SIZE : MAX_SPECIALTX_EXTRAPAYLOAD;
+    const size_t payloadLimit = tx.nType == CTransaction::PQ && tx.extraPayload->size() >= 2 ?
+        ((*tx.extraPayload)[1] == pq::MASTERNODE ? pq::MAX_MASTERNODE_TX_SIZE :
+         (*tx.extraPayload)[1] == pq::FINALITY ? pqquorum::MAX_CERTIFICATE_SIZE + 6 : MAX_SPECIALTX_EXTRAPAYLOAD) :
+        MAX_SPECIALTX_EXTRAPAYLOAD;
     if (tx.extraPayload->size() > payloadLimit) {
         return state.DoS(100, error("%s: Special tx payload oversize (%d)", __func__, tx.extraPayload->size()),
                          REJECT_INVALID, "bad-txns-payload-oversize");

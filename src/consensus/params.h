@@ -186,6 +186,12 @@ struct Params {
     CAmount nBlockSubsidy{0};
     CAmount nMNCollateralAmt;
     int nMNCollateralMinConf;
+    // PQ service-evidence window (blocks): a registration is payout-eligible
+    // when its operator key signed an in-block finality certificate within the
+    // last nPQServiceWindow blocks, or within the window of its registration
+    // height, or when the window contains no certificates at all (committee
+    // stall is never attributed to individuals). Finality inactive: unchanged.
+    int nPQServiceWindow;
     CAmount nMNBlockReward;
     CAmount nNewMNBlockReward;
     int64_t nProposalEstablishmentTime;

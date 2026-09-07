@@ -14,6 +14,9 @@ class CWallet;
 namespace pqmnauth { class LocalOperator; }
 // Caller holds cs_main throughout access. Pending credentials confer no authority.
 const pqmnauth::LocalOperator* GetPQOperator();
+namespace pqanchor { class Store; }
+// Thread-safe durable finalized-anchor store; null until opened. Never reset by reindex.
+pqanchor::Store* GetPQAnchorStore();
 
 namespace boost
 {

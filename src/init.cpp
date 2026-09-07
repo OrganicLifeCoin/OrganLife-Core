@@ -23,6 +23,7 @@
 #include "evo/evodb.h"
 #include "evo/governancevoteindex.h"
 #include "evo/pqmnauth.h"
+#include "pqanchors.h"
 #include "fs.h"
 #include "httpserver.h"
 #include "httprpc.h"
@@ -89,11 +90,17 @@ static const bool DEFAULT_STOPAFTERBLOCKIMPORT = false;
 std::unique_ptr<CConnman> g_connman;
 std::unique_ptr<PeerLogicValidation> peerLogic;
 static std::unique_ptr<pqmnauth::LocalOperator> pqOperator;
+static std::unique_ptr<pqanchor::Store> pqAnchorStore;
 
 const pqmnauth::LocalOperator* GetPQOperator()
 {
     AssertLockHeld(cs_main);
     return pqOperator.get();
+}
+
+pqanchor::Store* GetPQAnchorStore()
+{
+    return pqAnchorStore.get();
 }
 
 #if ENABLE_ZMQ
@@ -311,6 +318,7 @@ void Shutdown()
     g_connman.reset();
     peerLogic.reset();
     { LOCK(cs_main); pqOperator.reset(); }
+    pqAnchorStore.reset(); // after all finality users stopped; never wiped
 
     if (::mempool.IsLoaded() && gArgs.GetBoolArg("-persistmempool", DEFAULT_PERSIST_MEMPOOL)) {
         DumpMempool(::mempool);
@@ -766,6 +774,29 @@ void ThreadImport(const std::vector<fs::path>& vImportFiles)
     if (!ActivateBestChain(state)) {
         LogPrintf("Failed to connect best block\n");
         StartShutdown();
+    }
+
+    // Startup reconciliation: the durable anchor store must be an ancestor of
+    // the active chain. Incompatible local history refuses to start with an
+    // explicit error; finality protection is never silently discarded.
+    {
+        LOCK(cs_main);
+        if (pqAnchorStore) {
+            pqanchor::Record tipRecord;
+            if (pqAnchorStore->Tip(tipRecord)) {
+                const CBlockIndex* ancestor =
+                    chainActive.Tip() ? chainActive.Tip()->GetAncestor(int(tipRecord.height)) : nullptr;
+                if (!ancestor || ancestor->GetBlockHash() != tipRecord.blockHash) {
+                    UIError(strprintf(
+                        _("PQ finalized anchor at height %d (%s) is not an ancestor of the active chain. "
+                          "Finality protection cannot be silently discarded; resolve the local history "
+                          "manually before restarting.\n"),
+                        tipRecord.height, tipRecord.blockHash.ToString()));
+                    StartShutdown();
+                    return;
+                }
+            }
+        }
     }
 
     if (gArgs.GetBoolArg("-persistmempool", DEFAULT_PERSIST_MEMPOOL)) {
@@ -1250,6 +1281,16 @@ bool AppInitMain()
         std::string reason;
         pqOperator = pqmnauth::LocalOperator::Load(gArgs.GetArg("-pqoperatorcredentials", ""), Params(), uint256S(id), reason);
         if (!pqOperator) return UIError(reason);
+    }
+
+    // Durable finalized-anchor store (never reset by reindex) and the pinned
+    // regtest-only bootstrap checkpoint. Failure here fails startup closed.
+    assert(!pqAnchorStore);
+    {
+        std::string reason;
+        pqAnchorStore = pqanchor::Store::Open(GetDataDir(), reason);
+        if (!pqAnchorStore) return UIError(reason);
+        if (!pqanchor::InitBootstrap(Params(), reason)) return UIError(reason);
     }
 
     InitSignatureCache();

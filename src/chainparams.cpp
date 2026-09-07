@@ -228,6 +228,7 @@ public:
         consensus.nMNBlockReward = 0 * COIN;
         consensus.nNewMNBlockReward = 6 * COIN;
         consensus.nMNCollateralMinConf = 15;
+        consensus.nPQServiceWindow = 240;
         consensus.nProposalEstablishmentTime = 60 * 60 * 24;    // must be at least a day old to make it into a budget
         consensus.nStakeMinAge = 60 * 60;
         consensus.nStakeMinDepth = 600;
@@ -367,6 +368,7 @@ public:
         consensus.nMNBlockReward = 0 * COIN;
         consensus.nNewMNBlockReward = 6 * COIN;
         consensus.nMNCollateralMinConf = 15;
+        consensus.nPQServiceWindow = 240;
         consensus.nProposalEstablishmentTime = 60 * 5;  // at least 5 min old to make it into a budget
         // Testnet is tuned for fast iteration and tiny staking networks.
         consensus.nStakeMinAge = 15 * 60;
@@ -499,6 +501,7 @@ public:
         consensus.nMNBlockReward = 0 * COIN;
         consensus.nNewMNBlockReward = 6 * COIN;
         consensus.nMNCollateralMinConf = 1;
+        consensus.nPQServiceWindow = 24;
         consensus.nProposalEstablishmentTime = 60 * 5;  // at least 5 min old to make it into a budget
         consensus.nStakeMinAge = 0;
         consensus.nStakeMinDepth = 20;

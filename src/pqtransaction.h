@@ -4,6 +4,7 @@
 #define ORGANICLIFE_PQTRANSACTION_H
 
 #include <pqaddress.h>
+#include <pqquorum.h>
 #include <primitives/transaction.h>
 
 class CChainParams;
@@ -15,6 +16,9 @@ constexpr uint8_t GOVERNANCE_LOCK = 4;
 constexpr uint8_t GOVERNANCE_CAST = 5;
 // Requires opt-in regtest registry activation; public networks remain disabled.
 constexpr uint8_t MASTERNODE = 6;
+// Finality commit certificate, carried ONLY in a coinbase extraPayload.
+// Absent certificate is always valid; a present one must verify at ConnectBlock.
+constexpr uint8_t FINALITY = 7;
 constexpr size_t MAX_MASTERNODE_DATA_SIZE = 12000;
 constexpr size_t MAX_MASTERNODE_TX_SIZE = 24000;
 constexpr size_t MAX_INPUTS = 2;
@@ -33,6 +37,8 @@ struct Payload {
 };
 
 bool IsGovernanceMode(uint8_t mode);
+// Finality coinbase envelope classification only (no certificate validation).
+bool IsFinality(const CTransaction& tx);
 // Envelope classification only; does not replace structure/context/signature validation.
 bool IsMasternode(const CTransaction& tx);
 

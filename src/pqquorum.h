@@ -4,6 +4,7 @@
 #define ORGANICLIFE_PQQUORUM_H
 
 #include <crypto/mldsa44.h>
+#include <serialize.h>
 #include <uint256.h>
 #include <cstdint>
 #include <string>
@@ -20,6 +21,7 @@ enum class Purpose : uint8_t { PREVOTE = 1, PRECOMMIT = 2, SERVICE = 3, HANDOFF 
 struct Member {
     uint256 registration;
     mldsa44::PublicKey operator_key{};
+    SERIALIZE_METHODS(Member, obj) { READWRITE(obj.registration, obj.operator_key); }
 };
 struct Statement {
     Purpose purpose{Purpose::PREVOTE};

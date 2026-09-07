@@ -13,18 +13,28 @@ bool IsMasternode(const CTransaction& tx)
 }
 namespace {
 bool Fail(std::string& reason, const char* message) { reason = message; return false; }
-bool HasData(uint8_t mode) { return IsGovernanceMode(mode) || mode == MASTERNODE; }
-size_t DataLimit(uint8_t mode) { return mode == MASTERNODE ? MAX_MASTERNODE_DATA_SIZE : MAX_GOVERNANCE_DATA_SIZE; }
+bool HasData(uint8_t mode) { return IsGovernanceMode(mode) || mode == MASTERNODE || mode == FINALITY; }
+size_t DataLimit(uint8_t mode)
+{
+    return mode == MASTERNODE ? MAX_MASTERNODE_DATA_SIZE :
+           mode == FINALITY ? pqquorum::MAX_CERTIFICATE_SIZE : MAX_GOVERNANCE_DATA_SIZE;
+}
 bool ValidCount(uint8_t mode, size_t count)
 {
     return ((mode == TRANSFER || HasData(mode)) && count >= 1 && count <= MAX_INPUTS) ||
-           (mode == STAKE && count == 1);
+           (mode == STAKE && count == 1) || (mode == FINALITY && count == 0);
 }
-}
+} // namespace
 
 bool IsGovernanceMode(uint8_t mode)
 {
     return mode == GOVERNANCE_PROPOSAL || mode == GOVERNANCE_LOCK || mode == GOVERNANCE_CAST;
+}
+
+bool IsFinality(const CTransaction& tx)
+{
+    return tx.nType == CTransaction::PQ && tx.IsCoinBase() && tx.extraPayload &&
+           tx.extraPayload->size() >= 2 && (*tx.extraPayload)[1] == FINALITY;
 }
 
 bool HasMarker(const CScript& script) { return !script.empty() && script[0] == OP_INVALIDOPCODE; }
@@ -95,7 +105,13 @@ bool CheckStructure(const CTransaction& tx, const CChainParams& params, std::str
     if (!params.IsTestChain()) return Fail(reason, "bad-pq-network");
     Payload payload;
     if (tx.nVersion != 3 || tx.sapData || !DecodePayload(tx, payload)) return Fail(reason, "bad-pq-payload");
-    if (tx.IsCoinBase()) return Fail(reason, "bad-pq-generation");
+    // A finality commit certificate is carried ONLY in the coinbase envelope.
+    if (tx.IsCoinBase()) {
+        if (payload.mode != FINALITY || !payload.authorizations.empty())
+            return Fail(reason, "bad-pq-generation");
+        return true;
+    }
+    if (payload.mode == FINALITY) return Fail(reason, "bad-pq-finality-not-coinbase");
     const bool stake = tx.IsCoinStake();
     if ((payload.mode == STAKE) != stake) return Fail(reason, "bad-pq-mode");
     const size_t sizeLimit = payload.mode == MASTERNODE ? MAX_MASTERNODE_TX_SIZE : MAX_TX_SIZE;
