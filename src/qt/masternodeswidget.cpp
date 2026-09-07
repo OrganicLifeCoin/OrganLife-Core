@@ -28,6 +28,7 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QDir>
+#include <QFileDialog>
 #include <QUuid>
 
 #define DECORATION_SIZE 65
@@ -116,7 +117,7 @@ MasterNodesWidget::MasterNodesWidget(OrganicLifeGUI *parent) :
     setCssBtnPrimary(ui->pushButtonStartMissing);
 
     /* Coin control */
-    this->coinControlDialog = new CoinControlDialog();
+    this->coinControlDialog = new CoinControlDialog(this);
 
     /* Options */
     setCssProperty(ui->btnAbout, "screen-side-option", true);
@@ -145,7 +146,8 @@ MasterNodesWidget::MasterNodesWidget(OrganicLifeGUI *parent) :
         onStartAllClicked(REQUEST_START_ALL);
     });
     connect(ui->pushButtonStartMissing, &QPushButton::clicked, [this]() {
-        onStartAllClicked(REQUEST_START_MISSING);
+        if (Params().IsRegTestNet()) onPQOperatorsClicked();
+        else onStartAllClicked(REQUEST_START_MISSING);
     });
     connect(ui->listMn, &QListView::clicked, this, &MasterNodesWidget::onMNClicked);
     connect(ui->btnAbout, &OptionButton::clicked, [this](){window->openFAQ(SettingsFaqWidget::Section::MASTERNODE);});
@@ -155,8 +157,10 @@ MasterNodesWidget::MasterNodesWidget(OrganicLifeGUI *parent) :
         setMNModel(new MNModel(this));
         ui->pushButtonSave->setText(tr("Register masternode"));
         ui->pushButtonSave->setEnabled(false);
-        ui->pushButtonStartMissing->hide();
-        ui->btnCoinControl->hide(); // The shared controller builder currently selects fee inputs.
+        ui->pushButtonStartMissing->setText(tr("Operator keys"));
+        ui->pushButtonStartMissing->setEnabled(false);
+        ui->btnCoinControl->setEnabled(false);
+        ui->btnCoinControl->setSubTitleClassAndText("text-subtitle", tr("Select up to two fee/funding inputs. Existing collateral cannot fund masternode fees."));
         ui->labelEmpty->setText(tr("No confirmed PQ registrations"));
         updateListState();
     }
@@ -165,15 +169,102 @@ MasterNodesWidget::MasterNodesWidget(OrganicLifeGUI *parent) :
 void MasterNodesWidget::loadWalletModel()
 {
     if (Params().IsRegTestNet() && mnModel) {
+        coinControlDialog->setModel(walletModel);
         mnModel->updateMNList();
         updateListState();
     }
+}
+
+void MasterNodesWidget::onPQOperatorsClicked()
+{
+    QPointer<WalletModel> controller = walletModel;
+    if (!Params().IsRegTestNet() || !controller) return;
+    QDialog dialog(this);
+    dialog.setObjectName("pqOperatorsDialog");
+    dialog.setWindowTitle(tr("Operator keys"));
+    auto* form = new QFormLayout(&dialog);
+    form->setSpacing(14);
+    auto* explanation = new QLabel(tr("Recovery keys stay in this encrypted controller wallet. Creating an identity first verifies a wallet backup. Export produces operator-only credentials, never wallet spending keys. Both exported files are secret: transfer them securely and seal them on the operator host."), &dialog);
+    explanation->setWordWrap(true);
+    form->addRow(explanation);
+    QComboBox operators;
+    QLineEdit destination;
+    destination.setObjectName("pqOperatorExportPath");
+    destination.setPlaceholderText(tr("New credential directory inside a private folder"));
+    auto* create = new QPushButton(tr("Create backed operator"), &dialog);
+    auto* exportButton = new QPushButton(tr("Export selected operator"), &dialog);
+    auto* browse = new QPushButton(tr("Choose private folder…"), &dialog);
+    create->setObjectName("createPQOperator");
+    exportButton->setObjectName("exportPQOperator");
+    setCssBtnPrimary(create);
+    setCssBtnPrimary(exportButton);
+    form->addRow(tr("Operator fingerprint"), &operators);
+    form->addRow(create);
+    form->addRow(tr("New credential directory"), &destination);
+    form->addRow(browse);
+    form->addRow(exportButton);
+    const auto refresh = [&] {
+        operators.clear();
+        if (!controller || controller != walletModel) return;
+        for (const auto& key : controller->getWallet()->GetPQOperators()) {
+            const auto id = pq::GetID(key, Params().NetworkIDString());
+            if (id) operators.addItem(QString::fromStdString(HexStr(*id)), QString::fromStdString(HexStr(key)));
+        }
+        exportButton->setEnabled(operators.count() > 0);
+    };
+    refresh();
+    connect(browse, &QPushButton::clicked, &dialog, [&] {
+        const auto parent = QFileDialog::getExistingDirectory(&dialog, tr("Choose a private folder for operator credentials"));
+        if (!parent.isEmpty() && controller && controller == walletModel)
+            destination.setText(QDir(parent).filePath("olc-pq-operator-" + QUuid::createUuid().toString(QUuid::WithoutBraces)));
+    });
+    connect(create, &QPushButton::clicked, &dialog, [&] {
+        if (!controller || controller != walletModel) return;
+        WalletModel::UnlockContext unlock(controller->requestUnlock());
+        if (!unlock.isValid() || !controller || controller != walletModel) return;
+        QString directory;
+        if (!PQWalletUI::ensureBackupDirectory(&dialog, controller, directory) || !controller || controller != walletModel) return;
+        const auto backup = QDir(directory).filePath("olc-pq-operator-" + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".dat");
+        mldsa44::PublicKey key;
+        std::string reason;
+        if (!controller->getWallet()->PreparePQOperator(backup.toStdString(), key, reason)) {
+            warn(tr("Operator keys"), QString::fromStdString(reason)); return;
+        }
+        refresh();
+        operators.setCurrentIndex(operators.findData(QString::fromStdString(HexStr(key))));
+        inform(tr("Operator created. Encrypted recovery backup: %1").arg(backup));
+    });
+    connect(exportButton, &QPushButton::clicked, &dialog, [&] {
+        if (!controller || controller != walletModel) return;
+        const auto path = destination.text().trimmed();
+        const auto bytes = ParseHex(operators.currentData().toString().toStdString());
+        mldsa44::PublicKey key;
+        if (path.isEmpty() || !QDir::isAbsolutePath(path) || bytes.size() != key.size()) {
+            warn(tr("Operator keys"), tr("Select an operator and an absolute path for a new private credential directory.")); return;
+        }
+        std::copy(bytes.begin(), bytes.end(), key.begin());
+        if (!ask(tr("Export operator credentials"), tr("Export operator %1 to %2?\nAnyone with both files can impersonate this operator, but cannot spend controller funds. This does not configure or start a remote node.")
+                .arg(operators.currentText(), path)) || !controller || controller != walletModel) return;
+        WalletModel::UnlockContext unlock(controller->requestUnlock());
+        if (!unlock.isValid() || !controller || controller != walletModel) return;
+        std::string reason;
+        if (!controller->getWallet()->ExportPQOperator(key, path.toStdString(), reason)) {
+            warn(tr("Operator keys"), QString::fromStdString(reason)); return;
+        }
+        inform(tr("Operator-only credentials written to %1. Transfer and protect both files; remote deployment remains separate.").arg(path));
+    });
+    auto* close = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    connect(close, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    form->addRow(close);
+    dialog.resize(740, dialog.sizeHint().height());
+    dialog.exec();
 }
 
 void MasterNodesWidget::pqOperation(int action)
 {
     QPointer<WalletModel> controller = walletModel;
     if (!controller || !mnModel || !mnModel->registryError().isEmpty()) return;
+    const CCoinControl selectedCoins = *coinControlDialog->coinControl;
     pqmn::Payload op;
     op.action = static_cast<pqmn::Action>(action);
     const bool registering = op.action == pqmn::Action::REGISTER;
@@ -281,7 +372,7 @@ void MasterNodesWidget::pqOperation(int action)
     CTransactionRef tx;
     CAmount fee;
     std::string reason;
-    if (!wallet->PreparePQMasternodeTransaction(op, backup.toStdString(), tx, fee, reason)) {
+    if (!wallet->PreparePQMasternodeTransaction(op, backup.toStdString(), tx, fee, reason, &selectedCoins)) {
         warn(tr("Masternode"), QString::fromStdString(reason)); return;
     }
     const auto actionName = registering ? tr("Register") : op.action == pqmn::Action::REVOKE ? tr("Revoke") :
@@ -303,16 +394,24 @@ void MasterNodesWidget::pqOperation(int action)
     if (!ask(tr("Confirm masternode transaction"), summary) || !controller || controller != walletModel) return;
     const auto committed = wallet->CommitTransaction(tx, nullptr, g_connman.get());
     if (committed.status != CWallet::CommitStatus::OK) { warn(tr("Masternode"), QString::fromStdString(committed.ToString())); return; }
+    resetCoinControl();
     inform(tr("Transaction submitted: %1. Wait for confirmation before another change.").arg(QString::fromStdString(committed.hashTx.GetHex())));
 }
 
 void MasterNodesWidget::clearWalletModel()
 {
     PWidget::clearWalletModel();
+    coinControlDialog->setModel(nullptr);
+    resetCoinControl();
     if (auto* dialog = findChild<QDialog*>("pqMasternodeDialog")) dialog->reject();
+    if (auto* dialog = findChild<QDialog*>("pqOperatorsDialog")) dialog->reject();
     if (menu) menu->hide();
     index = QPersistentModelIndex();
-    if (Params().IsRegTestNet()) ui->pushButtonSave->setEnabled(false);
+    if (Params().IsRegTestNet()) {
+        ui->pushButtonSave->setEnabled(false);
+        ui->btnCoinControl->setEnabled(false);
+        ui->pushButtonStartMissing->setEnabled(false);
+    }
 }
 
 void MasterNodesWidget::showEvent(QShowEvent *event)
@@ -365,6 +464,8 @@ void MasterNodesWidget::updateListState()
         ui->labelSubtitle1->setText(error.isEmpty() ?
             tr("Confirmed PQ registry · Local testing only. Registration is not service, reward or finality eligibility.") : error);
         ui->pushButtonSave->setEnabled(walletModel && error.isEmpty());
+        ui->btnCoinControl->setEnabled(walletModel && error.isEmpty());
+        ui->pushButtonStartMissing->setEnabled(walletModel && error.isEmpty());
     }
 }
 
@@ -632,7 +733,8 @@ void MasterNodesWidget::changeTheme(bool isLightTheme, QString& theme)
 
 void MasterNodesWidget::onCoinControlClicked()
 {
-    if (!coinControlDialog->hasModel()) coinControlDialog->setModel(walletModel);
+    if (!walletModel) return;
+    coinControlDialog->setModel(walletModel);
     coinControlDialog->setSelectionType(true);
     coinControlDialog->refreshDialog();
     coinControlDialog->setStyleSheet(GUIUtil::loadStyleSheet());
@@ -643,7 +745,7 @@ void MasterNodesWidget::onCoinControlClicked()
 void MasterNodesWidget::resetCoinControl()
 {
     if (coinControlDialog) coinControlDialog->coinControl->SetNull();
-    mnModel->resetCoinControl();
+    if (mnModel) mnModel->resetCoinControl();
     ui->btnCoinControl->setActive(false);
 }
 

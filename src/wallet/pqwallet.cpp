@@ -279,7 +279,8 @@ bool CWallet::CreatePQTransaction(const std::string& address, CAmount amount,
 }
 
 bool CWallet::PreparePQMasternodeTransaction(const pqmn::Payload& operation, const fs::path& backup,
-                                            CTransactionRef& tx, CAmount& fee, std::string& reason)
+                                            CTransactionRef& tx, CAmount& fee, std::string& reason,
+                                            const CCoinControl* coin_control)
 {
     tx.reset(); fee = 0; reason.clear();
     LOCK2(cs_main, cs_wallet);
@@ -310,7 +311,7 @@ bool CWallet::PreparePQMasternodeTransaction(const pqmn::Payload& operation, con
         }
         CTransactionRef prepared;
         CAmount prepared_fee;
-        if (!CreatePQMasternodeTransaction(operation, &signer, prepared, prepared_fee, reason)) return false;
+        if (!CreatePQMasternodeTransaction(operation, &signer, prepared, prepared_fee, reason, coin_control)) return false;
         if (!BackupWallet(backup.string(), true)) return fail("PQ masternode backup failed; transaction was not relayed");
         tx = std::move(prepared); fee = prepared_fee;
         return true;
@@ -320,7 +321,8 @@ bool CWallet::PreparePQMasternodeTransaction(const pqmn::Payload& operation, con
 }
 
 bool CWallet::CreatePQMasternodeTransaction(const pqmn::Payload& operation, const mldsa44::Key* operator_key,
-                                          CTransactionRef& tx, CAmount& fee, std::string& reason)
+                                          CTransactionRef& tx, CAmount& fee, std::string& reason,
+                                          const CCoinControl* coin_control)
 {
     tx.reset(); fee = 0; reason.clear();
     LOCK2(cs_main, cs_wallet);
@@ -334,6 +336,10 @@ bool CWallet::CreatePQMasternodeTransaction(const pqmn::Payload& operation, cons
         return false;
     }
     op.ownerSignature = {}; op.operatorSignature = {}; op.collateralSignature = {};
+    if (op.action == pqmn::Action::REGISTER && coin_control && coin_control->IsSelected(op.collateral)) {
+        reason = "The registration collateral cannot be selected to fund its own fee";
+        return false;
+    }
     std::vector<CTxOut> outputs;
     if (op.action == pqmn::Action::REGISTER && op.collateral.hash.IsNull()) {
         const auto id = pq::GetID(op.collateralKey, Params().NetworkIDString());
@@ -347,7 +353,7 @@ bool CWallet::CreatePQMasternodeTransaction(const pqmn::Payload& operation, cons
         CTransactionRef prepared;
         pqmn::Record checked;
         if (CreatePQTransactionInternal(outputs, pq::MASTERNODE, pqmn::Encode(op), prepared, fee, reason,
-                                        nullptr, false, &op, operator_key) &&
+                                        coin_control, false, &op, operator_key) &&
             pqmn::Index(*evoDb, Params()).Check(*prepared, *pcoinsTip, chainActive.Height() + 1, checked, reason)) {
             tx = std::move(prepared);
             return true;

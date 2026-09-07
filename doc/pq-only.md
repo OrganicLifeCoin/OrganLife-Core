@@ -195,11 +195,20 @@ The familiar Qt Masternodes page is available on regtest. It reads the current
 confirmed registry (including registrations not controlled by the selected
 wallet), shows immature/registered/revoked state, and offers registration,
 service updates, payout updates/operator rotation and revocation. It uses
-existing wallet addresses and backed operator identities created with
-`createpqoperator`. Registration currently creates a new collateral output with
-zero operator commission; existing bonds, commission and operator provisioning
-remain available through the RPC workflow. Fee inputs are automatically selected;
-masternode coin control and remote start/stop are not yet connected to this page.
+existing wallet addresses and backed operator identities. The Operator keys
+dialog can create an identity after a verified encrypted recovery backup, or
+export a backed identity into a new private credential directory. Its two files
+are operator secrets, not wallet spending keys: securely transfer and seal both
+on the operator host. Existing destinations are never overwritten. Failed
+creation backups leave an unpublished pending identity for the next retry.
+`createpqoperator` and `exportpqoperator` remain available through RPC.
+Registration currently creates a new collateral output with
+zero operator commission; existing bonds and commission
+remain available through the RPC workflow. Coin Control selects up to two funding
+inputs; with no selection the builder chooses automatically. Selected coins must
+remain eligible, and neither an active bond nor the registration's external bond
+can fund masternode fees. Selection clears after successful submission or a wallet
+switch. Remote start/stop is not yet connected to this page.
 Every transaction requires full unlock, a verified encrypted snapshot and a
 fee/action confirmation before submission. Cancellation or a wallet switch
 before confirmation does not submit a transaction. Registry refresh invalidates

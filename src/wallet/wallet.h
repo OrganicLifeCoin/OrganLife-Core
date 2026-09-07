@@ -751,11 +751,13 @@ public:
     // Construction only: no key export, persistence, backup or relay. The caller
     // owns the operator-only signer; owner/collateral keys stay in this wallet.
     bool CreatePQMasternodeTransaction(const pqmn::Payload& operation, const mldsa44::Key* operator_key,
-                                      CTransactionRef& tx, CAmount& fee, std::string& reason);
+                                      CTransactionRef& tx, CAmount& fee, std::string& reason,
+                                      const CCoinControl* coin_control = nullptr);
     // Controller orchestration: backed operator recovery stays private; snapshot
     // completes before returning a transaction eligible for commit/relay.
     bool PreparePQMasternodeTransaction(const pqmn::Payload& operation, const fs::path& backup,
-                                       CTransactionRef& tx, CAmount& fee, std::string& reason);
+                                       CTransactionRef& tx, CAmount& fee, std::string& reason,
+                                       const CCoinControl* coin_control = nullptr);
 
     //! Get spkm
     ScriptPubKeyMan* GetScriptPubKeyMan() const;

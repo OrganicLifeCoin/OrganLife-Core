@@ -1489,6 +1489,36 @@ BOOST_AUTO_TEST_CASE(wallet_masternode_construction)
     BOOST_CHECK_EQUAL(wallet.mapWallet.size(), walletSize);
     BOOST_CHECK(wallet.GetPQAddresses() == addresses); // No unbacked change key.
     const auto external = tx;
+    CCoinControl selection;
+    selection.Select(COutPoint(uint256S("deadbeef"), 0));
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(op, &keys[1], tx, fee, reason, &selection));
+    BOOST_CHECK(!tx);
+    selection.SetNull();
+    selection.Select(op.collateral);
+    selection.fAllowOtherInputs = true;
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(op, &keys[1], tx, fee, reason, &selection));
+    BOOST_CHECK(!tx); // The external bond cannot silently be replaced by a fee input.
+    selection.SetNull();
+    selection.Select(COutPoint(sourceRef->GetHash(), 1));
+    selection.nMinimumTotalFee = COIN;
+    BOOST_REQUIRE_MESSAGE(wallet.CreatePQMasternodeTransaction(op, &keys[1], tx, fee, reason, &selection), reason);
+    BOOST_REQUIRE_EQUAL(tx->vin.size(), 1U);
+    BOOST_CHECK(tx->vin[0].prevout == COutPoint(sourceRef->GetHash(), 1));
+    BOOST_CHECK(fee >= COIN);
+    selection.Select(COutPoint(uint256S("deadbeef"), 0));
+    selection.Select(COutPoint(uint256S("deadbeef"), 1));
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(op, &keys[1], tx, fee, reason, &selection));
+    selection.SetNull();
+    selection.Select(op.collateral);
+    selection.fAllowOtherInputs = true;
+    Coin removed;
+    pcoinsTip->SpendCoin(op.collateral, &removed);
+    BOOST_REQUIRE(!removed.IsSpent());
+    auto selectedInternal = op; selectedInternal.collateral = COutPoint(uint256(), 0);
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(selectedInternal, &keys[1], tx, fee, reason, &selection));
+    BOOST_CHECK(!tx); // A stale selected coin cannot be silently substituted with another coin.
+    pcoinsTip->AddCoin(op.collateral, std::move(removed), false);
+    selection.SetNull();
     const auto failure = [&](const pqmn::Payload& operation, const mldsa44::Key* signer) {
         tx = external; fee = COIN; reason.clear();
         BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(operation, signer, tx, fee, reason));
@@ -1508,6 +1538,11 @@ BOOST_AUTO_TEST_CASE(wallet_masternode_construction)
     BOOST_REQUIRE(wallet.Unlock(passphrase));
     wallet.fWalletUnlockStaking = true; failure(op, &keys[1]); wallet.fWalletUnlockStaking = false;
     wallet.LockCoin(COutPoint(sourceRef->GetHash(), 1));
+    selection.SetNull();
+    selection.Select(COutPoint(sourceRef->GetHash(), 1));
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(op, &keys[1], tx, fee, reason, &selection));
+    BOOST_CHECK(!tx);
+    BOOST_CHECK_EQUAL(reason, "A selected coin is spent, locked, immature or no longer confirmed");
     failure(op, &keys[1]); // Only the registration's own collateral remains available.
     wallet.UnlockCoin(COutPoint(sourceRef->GetHash(), 1));
     const auto priorMaxFee = maxTxFee; maxTxFee = 1;
@@ -1529,6 +1564,12 @@ BOOST_AUTO_TEST_CASE(wallet_masternode_construction)
     tx = external;
     BOOST_REQUIRE(registry.Apply(*tx, *pcoinsTip, 2, reason));
     const auto registration = tx->GetHash();
+    selection.Select(op.collateral);
+    selection.fAllowOtherInputs = true;
+    auto protectedInternal = internal; protectedInternal.collateral.n = 0;
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(protectedInternal, &keys[1], tx, fee, reason, &selection));
+    BOOST_CHECK(!tx); // Explicit selection never allows an active bond to fund a masternode fee.
+    BOOST_CHECK_EQUAL(reason, "A selected coin is spent, locked, immature or no longer confirmed");
     pqmn::Payload update; update.action = pqmn::Action::UPDATE;
     update.registration = registration; update.sequence = 1;
     update.operatorKey = keys[1].GetPublicKey(); update.payout = ID(3);
@@ -1586,6 +1627,14 @@ BOOST_AUTO_TEST_CASE(wallet_masternode_construction)
     BOOST_CHECK_EQUAL(splitRef->GetValueOut() - tx->GetValueOut(), fee);
     BOOST_CHECK(fee > 0 && fee <= maxTxFee);
     BOOST_CHECK(wallet.GetPQAddresses() == addresses);
+    selection.SetNull();
+    selection.Select(COutPoint(splitRef->GetHash(), 0));
+    BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(internal, &keys[1], tx, fee, reason, &selection));
+    BOOST_CHECK(!tx); // One selected half cannot silently spend an unselected half.
+    selection.fAllowOtherInputs = true;
+    BOOST_REQUIRE_MESSAGE(wallet.CreatePQMasternodeTransaction(internal, &keys[1], tx, fee, reason, &selection), reason);
+    BOOST_REQUIRE_EQUAL(tx->vin.size(), 2U);
+    BOOST_CHECK(tx->vin[0].prevout == COutPoint(splitRef->GetHash(), 0));
     wallet.LockCoin(COutPoint(splitRef->GetHash(), 1));
     BOOST_CHECK(!wallet.CreatePQMasternodeTransaction(internal, &keys[1], tx, fee, reason));
     BOOST_CHECK(!tx); BOOST_CHECK_EQUAL(fee, 0);
