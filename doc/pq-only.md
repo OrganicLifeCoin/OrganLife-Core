@@ -159,7 +159,39 @@ wrapping keys. No private export, arbitrary signing, registration broadcast or
 operator service start is exposed by these recovery RPCs. Native provisioning,
 rotation and rollback-safe finality signing still need integration.
 
-This does not yet provide a usable masternode: operator RPC/Qt flows, service
+The controller can now prepare and broadcast registry lifecycle transactions on
+opt-in regtest with `sendpqmasternode action options backup_destination`. The
+third argument is a new encrypted wallet snapshot, completed before commit and
+relay. It uses existing spending/owner keys and backed operator recovery keys;
+no private key is accepted or returned. Change reuses an existing fee-input key.
+
+- `register`: options require `collateral_address`, `owner_address`,
+  `operator_publickey` and `payout_address`. Owner and collateral keys must be
+  distinct wallet-owned keys, separate from the operator. By default the
+  transaction creates the exact network collateral at output zero. Supply both
+  `collateral_txid` and `collateral_vout` to use an existing confirmed bond,
+  which is excluded from fee funding. Optional `service` is a numeric IP:port,
+  including bracketed IPv6. `operator_reward` is 0..10000 basis points; a nonzero
+  commission requires `operator_payout_address`.
+- `update`: requires `registration`, `sequence`, `payout_address` and
+  `operator_publickey`. Reusing the current operator changes the owner payout;
+  a backed replacement operator rotates the key, revives a revoked registration
+  and clears its endpoint/operator payout.
+- `service`: requires `registration`, `sequence` and `service`. Omitting
+  `operator_payout_address` preserves the current payout. After rotation, a
+  commission-bearing operator must supply a new payout.
+- `revoke`: requires `registration` and `sequence`; disables the registration
+  without moving its collateral. Spending collateral removes the registration.
+
+`sequence` is the next unsigned decimal **string**, not a JSON number. All
+updates require confirmed prior state. `listpqmasternodes` works while locked
+or without a wallet and returns the confirmed chain registry, not mempool or
+service status. Inspect it and wallet transaction history before retrying a
+request whose response was lost; do not blindly repeat collateral funding.
+The RPC help contains the full option contract. Ordinary CLI JSON conversion
+is supported for the options object.
+
+This does not yet provide a usable masternode: operator transport/Qt flows, service
 verification, rewards and quorum finality remain unavailable. Public P2P and
 cross-platform qualification remain pending. Do not use this opt-in mode with a
 value-bearing wallet.

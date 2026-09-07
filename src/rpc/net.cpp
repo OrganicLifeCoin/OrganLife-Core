@@ -10,6 +10,7 @@
 #include "clientversion.h"
 #include "evo/pqmnauth.h"
 #include "init.h"
+#include "pqaddress.h"
 #include "net.h"
 #include "netbase.h"
 #include "net_processing.h"
@@ -38,6 +39,43 @@ UniValue getpqoperatorinfo(const JSONRPCRequest& request)
     if (pending) {
         result.pushKV("registration", pending->Registration().GetHex());
         result.pushKV("publickey", HexStr(pending->PublicKey()));
+    }
+    return result;
+}
+
+UniValue listpqmasternodes(const JSONRPCRequest& request)
+{
+    if (request.fHelp || !request.params.empty())
+        throw std::runtime_error("listpqmasternodes\nList the current confirmed opt-in regtest PQ registry.\n"
+            "Works without a wallet. Sequence is a decimal string. Registration does not imply service, rewards or finality.\n");
+    LOCK(cs_main);
+    if (!pq::MasternodesActive(Params(), chainActive.Height() + 1) || !evoDb)
+        throw JSONRPCError(RPC_MISC_ERROR, "PQ masternodes are not active on this network");
+    UniValue result(UniValue::VARR);
+    try {
+        pqmn::Index index(*evoDb, Params());
+        if (!index.MatchesChainTip(chainActive.Tip())) throw std::runtime_error("stale registry");
+        for (const auto& entry : index.List()) {
+            const auto& record = entry.second;
+            UniValue item(UniValue::VOBJ);
+            item.pushKV("registration", entry.first.GetHex());
+            item.pushKV("collateral_txid", record.collateral.hash.GetHex());
+            item.pushKV("collateral_vout", static_cast<uint64_t>(record.collateral.n));
+            item.pushKV("owner_publickey", HexStr(record.owner));
+            item.pushKV("operator_publickey", HexStr(record.operatorKey));
+            item.pushKV("payout_address", pq::EncodeAddress(record.payout, Params().NetworkIDString()));
+            item.pushKV("operator_reward", record.operatorReward);
+            item.pushKV("operator_payout_address", record.operatorPayout == pq::KeyID{} ? "" :
+                        pq::EncodeAddress(record.operatorPayout, Params().NetworkIDString()));
+            item.pushKV("service", record.service == CService() ? "" : record.service.ToString());
+            item.pushKV("sequence", std::to_string(record.sequence));
+            item.pushKV("registered_height", static_cast<uint64_t>(record.registeredHeight));
+            item.pushKV("collateral_height", static_cast<uint64_t>(record.collateralHeight));
+            item.pushKV("revoked", record.revoked);
+            result.push_back(item);
+        }
+    } catch (const std::exception&) {
+        throw JSONRPCError(RPC_DATABASE_ERROR, "PQ masternode registry is unavailable or not current");
     }
     return result;
 }
@@ -781,6 +819,7 @@ static const CRPCCommand commands[] =
     { "network",            "getnettotals",           &getnettotals,           true,  {} },
     { "network",            "getnetworkinfo",         &getnetworkinfo,         true,  {} },
     { "network",            "getpqoperatorinfo",       &getpqoperatorinfo,       true,  {} },
+    { "network",            "listpqmasternodes",       &listpqmasternodes,       true,  {} },
     { "network",            "getnodeaddresses",       &getnodeaddresses,       true,  {"count"} },
     { "network",            "getpeerinfo",            &getpeerinfo,            true,  {} },
     { "network",            "getforkguardstatus",     &getforkguardstatus,     true,  {} },

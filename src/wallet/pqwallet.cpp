@@ -278,6 +278,47 @@ bool CWallet::CreatePQTransaction(const std::string& address, CAmount amount,
                                tx, fee, reason, coin_control, subtract_fee);
 }
 
+bool CWallet::PreparePQMasternodeTransaction(const pqmn::Payload& operation, const fs::path& backup,
+                                            CTransactionRef& tx, CAmount& fee, std::string& reason)
+{
+    tx.reset(); fee = 0; reason.clear();
+    LOCK2(cs_main, cs_wallet);
+    LOCK(cs_KeyStore);
+    const auto fail = [&](const char* message) { reason = message; return false; };
+    const auto& params = Params();
+    if (!pq::MasternodesActive(params, chainActive.Height() + 1) || !evoDb)
+        return fail("PQ masternodes are not active on this network");
+    if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
+        return fail("PQ masternodes require an encrypted, fully unlocked wallet");
+    try {
+        pqmn::Index index(*evoDb, params);
+        if (!index.MatchesChainTip(chainActive.Tip())) return fail("PQ masternode registry is not current");
+        pqmn::Record current;
+        if (operation.action != pqmn::Action::REGISTER && !index.Get(operation.registration, current))
+            return fail("Unknown PQ masternode registration");
+        mldsa44::Key signer;
+        if (operation.action != pqmn::Action::UPDATE || operation.operatorKey != current.operatorKey) {
+            const auto& expected = (operation.action == pqmn::Action::REGISTER || operation.action == pqmn::Action::UPDATE)
+                ? operation.operatorKey : current.operatorKey;
+            const auto id = pq::GetID(expected, params.NetworkIDString());
+            const auto found = id ? m_pq_operator_recovery.find(*id) : m_pq_operator_recovery.end();
+            if (found == m_pq_operator_recovery.end() || found->second.backed != 1 ||
+                found->second.record.public_key != expected ||
+                !pqwallet::DecryptOperatorRecovery(vMasterKey, found->second.record, params.NetworkIDString(),
+                                                    params.GetConsensus().hashGenesisBlock, signer))
+                return fail("Unknown or unbacked PQ operator identity");
+        }
+        CTransactionRef prepared;
+        CAmount prepared_fee;
+        if (!CreatePQMasternodeTransaction(operation, &signer, prepared, prepared_fee, reason)) return false;
+        if (!BackupWallet(backup.string(), true)) return fail("PQ masternode backup failed; transaction was not relayed");
+        tx = std::move(prepared); fee = prepared_fee;
+        return true;
+    } catch (const std::exception&) {
+        return fail("PQ masternode wallet, registry or backup is unavailable");
+    }
+}
+
 bool CWallet::CreatePQMasternodeTransaction(const pqmn::Payload& operation, const mldsa44::Key* operator_key,
                                           CTransactionRef& tx, CAmount& fee, std::string& reason)
 {

@@ -13,10 +13,12 @@
 #include "coincontrol.h"
 #include "core_io.h"
 #include "destination_io.h"
+#include "evo/pqmasternode.h"
 #include "httpserver.h"
 #include "key_io.h"
 #include "messagesigner.h"
 #include "net.h"
+#include "netbase.h"
 #include "policy/feerate.h"
 #include "pqtransaction.h"
 #include "primitives/transaction.h"
@@ -647,6 +649,142 @@ UniValue exportpqoperator(const JSONRPCRequest& request)
     UniValue result(UniValue::VOBJ);
     result.pushKV("publickey", HexStr(public_key));
     result.pushKV("credentials_only", true);
+    return result;
+}
+
+UniValue sendpqmasternode(const JSONRPCRequest& request)
+{
+    CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
+    if (request.fHelp || request.params.size() != 3)
+        throw std::runtime_error("sendpqmasternode \"action\" {options} \"backup_destination\"\n"
+            "Opt-in regtest controller transactions; not operator service/reward/finality activation.\n"
+            "Actions: register, update, service, revoke. Requires encrypted full unlock.\n"
+            "register requires collateral_address, owner_address, operator_publickey, payout_address.\n"
+            "Optional register fields: service (numeric IP:port), operator_reward (0..10000 basis points),\n"
+            "operator_payout_address; collateral_txid and collateral_vout select an existing bond.\n"
+            "Otherwise creates exact collateral at output zero. Owner/collateral keys must be wallet-owned.\n"
+            "Other actions require registration (txid) and sequence (next unsigned decimal STRING).\n"
+            "update requires payout_address and operator_publickey (same key or a backed replacement).\n"
+            "service requires service; omitted operator_payout_address preserves the current payout.\n"
+            "After rotation, reward-bearing operators must set a new operator payout. revoke has no other fields.\n"
+            "Operators must have backed controller recovery records; no private keys are accepted.\n"
+            "Writes a new encrypted wallet snapshot before commit/relay. Returns txid and fee.\n"
+            "If the response is lost, inspect wallet transactions and registry before retrying.\n");
+    RPCTypeCheck(request.params, {UniValue::VSTR, UniValue::VOBJ, UniValue::VSTR});
+    pwallet->BlockUntilSyncedToCurrentChain();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the controller wallet first");
+    EnsureWalletIsUnlocked(pwallet);
+    const auto action = request.params[0].get_str();
+    const auto& options = request.params[1];
+    pqmn::Payload op;
+    std::set<std::string> allowed;
+    if (action == "register") {
+        op.action = pqmn::Action::REGISTER;
+        allowed = {"collateral_address", "owner_address", "operator_publickey", "payout_address", "service",
+                   "operator_reward", "operator_payout_address", "collateral_txid", "collateral_vout"};
+    } else {
+        allowed = {"registration", "sequence"};
+        if (action == "update") {
+            op.action = pqmn::Action::UPDATE;
+            allowed.insert({"payout_address", "operator_publickey"});
+        } else if (action == "service") {
+            op.action = pqmn::Action::SERVICE;
+            allowed.insert({"service", "operator_payout_address"});
+        } else if (action == "revoke") op.action = pqmn::Action::REVOKE;
+        else throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown PQ masternode action");
+    }
+    std::set<std::string> seen;
+    for (const auto& name : options.getKeys())
+        if (!allowed.count(name) || !seen.insert(name).second)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown or duplicate PQ masternode option");
+    const auto text = [&](const char* name) {
+        if (!options.exists(name) || !options[name].isStr())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, std::string("Required string: ") + name);
+        return options[name].get_str();
+    };
+    const auto address = [&](const char* name) {
+        pq::KeyID id;
+        if (!pq::DecodeAddress(text(name), Params().NetworkIDString(), id))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid PQ address for this network");
+        return id;
+    };
+    const auto owned = [&](const char* name) {
+        mldsa44::Key key;
+        if (!pwallet->GetPQKey(address(name), key, false))
+            throw JSONRPCError(RPC_WALLET_ERROR, "PQ owner or collateral key is not in this wallet");
+        return mldsa44::PublicKey(key.GetPublicKey());
+    };
+    const auto hash = [&](const char* name) {
+        const auto value = text(name);
+        if (value.size() != 64 || !IsHex(value) || uint256S(value).IsNull())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid transaction identifier");
+        return uint256S(value);
+    };
+    const auto integer = [&](const char* name, int64_t maximum, const char* message) {
+        int64_t value;
+        if (!options[name].isNum() || !ParseInt64(options[name].getValStr(), &value) || value < 0 || value > maximum)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, message);
+        return value;
+    };
+    if (op.action == pqmn::Action::REGISTER || op.action == pqmn::Action::UPDATE) {
+        const auto value = text("operator_publickey");
+        if (value.size() != 2 * mldsa44::PUBLIC_KEY_SIZE || !IsHex(value))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid PQ operator public key");
+        const auto bytes = ParseHex(value);
+        std::copy(bytes.begin(), bytes.end(), op.operatorKey.begin());
+        op.payout = address("payout_address");
+    }
+    if (op.action == pqmn::Action::REGISTER) {
+        op.owner = owned("owner_address"); op.collateralKey = owned("collateral_address");
+        op.collateral = COutPoint(uint256(), 0);
+        if (options.exists("collateral_txid") != options.exists("collateral_vout"))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Both collateral_txid and collateral_vout are required");
+        if (options.exists("collateral_txid")) {
+            const auto n = integer("collateral_vout", UINT32_MAX, "Invalid collateral index");
+            op.collateral = COutPoint(hash("collateral_txid"), n);
+        }
+        if (options.exists("operator_reward"))
+            op.operatorReward = integer("operator_reward", 10000, "Invalid operator reward");
+    } else {
+        op.registration = hash("registration");
+        const auto value = text("sequence");
+        if (value.empty() || value.size() > 20 || value[0] == '0' ||
+            value.find_first_not_of("0123456789") != std::string::npos ||
+            (value.size() == 20 && value > "18446744073709551615"))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid sequence; use the next unsigned decimal string");
+        op.sequence = std::stoull(value);
+    }
+    if (op.action == pqmn::Action::SERVICE || options.exists("service")) {
+        op.service = LookupNumeric(text("service"));
+        if (!op.service.IsValid() || op.service.GetPort() == 0)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid numeric IP:port service");
+    }
+    if (options.exists("operator_payout_address")) op.operatorPayout = address("operator_payout_address");
+    else if (op.action == pqmn::Action::SERVICE) {
+        if (!pq::MasternodesActive(Params(), chainActive.Height() + 1) || !evoDb)
+            throw JSONRPCError(RPC_WALLET_ERROR, "PQ masternodes are not active on this network");
+        try {
+            pqmn::Index index(*evoDb, Params());
+            pqmn::Record current;
+            if (!index.MatchesChainTip(chainActive.Tip()) || !index.Get(op.registration, current))
+                throw std::runtime_error("unavailable registry record");
+            op.operatorPayout = current.operatorPayout;
+        } catch (const std::exception&) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "PQ masternode registration is unavailable or not current");
+        }
+    }
+    CTransactionRef tx;
+    CAmount fee;
+    std::string reason;
+    if (!pwallet->PreparePQMasternodeTransaction(op, request.params[2].get_str(), tx, fee, reason))
+        throw JSONRPCError(RPC_WALLET_ERROR, reason);
+    const auto committed = pwallet->CommitTransaction(tx, nullptr, g_connman.get());
+    if (committed.status != CWallet::CommitStatus::OK) throw JSONRPCError(RPC_WALLET_ERROR, committed.ToString());
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("txid", committed.hashTx.ToString());
+    result.pushKV("fee", ValueFromAmount(fee));
     return result;
 }
 
@@ -5082,6 +5220,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "createpqoperator",         &createpqoperator,         true,  {"backup_destination"} },
     { "wallet",             "listpqoperators",          &listpqoperators,          true,  {} },
     { "wallet",             "exportpqoperator",         &exportpqoperator,         true,  {"publickey", "credential_directory"} },
+    { "wallet",             "sendpqmasternode",         &sendpqmasternode,         true,  {"action", "options", "backup_destination"} },
     { "wallet",             "listpqaddresses",          &listpqaddresses,          true,  {} },
     { "wallet",             "listpqunspent",             &listpqunspent,             true,  {} },
     { "wallet",             "sendpqtoaddress",           &sendpqtoaddress,           false, {"address", "amount", "backup_destination"} },
@@ -5157,7 +5296,7 @@ void RegisterWalletRPCCommands(CRPCTable &tableRPC)
     }
     static const std::set<std::string> pqOnlyCommands{
         "abandontransaction", "abortrescan", "backupwallet", "encryptwallet",
-        "getnewpqaddress", "createpqoperator", "listpqoperators", "exportpqoperator", "getstakingstatus", "gettransaction", "getwalletinfo",
+        "getnewpqaddress", "createpqoperator", "listpqoperators", "exportpqoperator", "sendpqmasternode", "getstakingstatus", "gettransaction", "getwalletinfo",
         "getbalance", "getunconfirmedbalance",
         "listpqaddresses", "listpqunspent", "listwallets", "rescanblockchain",
         "sendpqtoaddress", "walletlock", "walletpassphrase", "walletpassphrasechange"
