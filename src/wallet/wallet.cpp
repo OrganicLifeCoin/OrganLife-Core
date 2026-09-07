@@ -432,7 +432,7 @@ bool CWallet::Unlock(const CKeyingMaterial& vMasterKeyIn)
         if (!SetCrypted())
             return false;
 
-        bool keyPass = mapCryptedKeys.empty() && m_pq_keys.empty();
+        bool keyPass = mapCryptedKeys.empty() && m_pq_keys.empty() && m_pq_operator_recovery.empty();
         bool keyFail = false;
         CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
         for (; mi != mapCryptedKeys.end(); ++mi) {
@@ -467,6 +467,12 @@ bool CWallet::Unlock(const CKeyingMaterial& vMasterKeyIn)
         for (const auto& entry : m_pq_keys) {
             mldsa44::Key key;
             if (!pqwallet::DecryptKey(vMasterKeyIn, entry.second, Params().NetworkIDString(), key)) return false;
+            keyPass = true;
+        }
+        for (const auto& entry : m_pq_operator_recovery) {
+            mldsa44::Key key;
+            if (!pqwallet::DecryptOperatorRecovery(vMasterKeyIn, entry.second.record,
+                    Params().NetworkIDString(), Params().GetConsensus().hashGenesisBlock, key)) return false;
             keyPass = true;
         }
 

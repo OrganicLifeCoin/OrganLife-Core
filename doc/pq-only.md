@@ -141,6 +141,24 @@ authority, authentication, service eligibility or finality readiness. No signing
 or private-key export interface is provided. Provisioning, encrypted persistent
 wrapping-key custody and backup/recovery remain separate unfinished work.
 
+Controller recovery-key creation is available only with opt-in regtest
+masternodes: `createpqoperator backup_destination` requires an encrypted, fully
+unlocked wallet. It persists one pending independent operator seed, completes
+an exclusive verified wallet snapshot, then marks the recovery key backed before
+returning its public key. `listpqoperators` lists only backed recovery keys,
+including while the wallet is locked; it is not a registration or service-status
+query. A failed backup retains the private pending record, and the next creation
+request retries that record before generating another. The latest key in a
+restored snapshot is pending and needs a new snapshot before republication.
+
+These controller records use a distinct version-3 recovery encryption domain
+and a genesis-bound wallet DB namespace. They are authenticated when unlocking
+and are not added to the wallet's spending keys. They must not be supplied to a server credential
+directory: version-2 deployment records still require independently generated
+wrapping keys. No private export, arbitrary signing, registration broadcast or
+operator service start is exposed by these recovery RPCs. Native provisioning,
+rotation and rollback-safe finality signing still need integration.
+
 This does not yet provide a usable masternode: operator RPC/Qt flows, service
 verification, rewards and quorum finality remain unavailable. Public P2P and
 cross-platform qualification remain pending. Do not use this opt-in mode with a
@@ -186,6 +204,7 @@ python3 test/functional/feature_pq_governance.py
 python3 test/functional/feature_pq_startup.py
 python3 test/functional/feature_pq_registry.py
 python3 test/functional/feature_pq_operator.py
+python3 test/functional/feature_pq_operator_recovery.py
 python3 test/functional/feature_pq_pos.py --pq-registry
 ```
 

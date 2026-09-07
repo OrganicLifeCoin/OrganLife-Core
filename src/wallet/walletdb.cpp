@@ -35,6 +35,7 @@ namespace DBKeys {
     const std::string KEY{"key"};
     const std::string MASTER_KEY{"mkey"};
     const std::string PQ_KEY{"pqkey44"};
+    const std::string PQ_OPERATOR_RECOVERY{"pqoperatorrecovery44"};
     const std::string MINVERSION{"minversion"};
     const std::string NAME{"name"};
     const std::string ORDERPOSNEXT{"orderposnext"};
@@ -203,6 +204,12 @@ bool WalletBatch::ErasePQKey(const pq::KeyID& id)
     return EraseIC(std::make_pair(DBKeys::PQ_KEY, id));
 }
 
+bool WalletBatch::WritePQOperatorRecovery(const uint256& genesis, const pq::KeyID& id,
+                                         const pqwallet::OperatorRecovery& recovery, bool overwrite)
+{
+    return WriteIC(std::make_pair(DBKeys::PQ_OPERATOR_RECOVERY, std::make_pair(genesis, id)), recovery, overwrite);
+}
+
 bool WalletBatch::WriteCScript(const uint160& hash, const CScript& redeemScript)
 {
     return WriteIC(std::make_pair(std::string(DBKeys::CSCRIPT), hash), redeemScript, false);
@@ -347,6 +354,7 @@ public:
     unsigned int nZKeyMeta;
     unsigned int nSapZAddrs;
     bool fIsEncrypted;
+    bool fHasPQKeys{false};
     bool fAnyUnordered;
     int nFileVersion;
     std::vector<uint256> vWalletUpgrade;
@@ -501,6 +509,19 @@ bool ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue, CW
                 return false;
             }
             wss.fIsEncrypted = true;
+            wss.fHasPQKeys = true;
+        } else if (strType == DBKeys::PQ_OPERATOR_RECOVERY) {
+            uint256 genesis;
+            pq::KeyID id;
+            pqwallet::OperatorRecovery recovery;
+            ssKey >> genesis >> id;
+            ssValue >> recovery;
+            if (!ssKey.empty() || !ssValue.empty() || !pwallet->LoadPQOperatorRecovery(genesis, id, recovery)) {
+                strErr = "Error reading wallet database: PQ operator recovery record corrupt or wrong chain";
+                return false;
+            }
+            wss.fIsEncrypted = true;
+            wss.fHasPQKeys = true;
         } else if (strType == DBKeys::KEYMETA) {
             CPubKey vchPubKey;
             ssKey >> vchPubKey;
@@ -649,6 +670,7 @@ bool WalletBatch::IsKeyType(const std::string& strType)
 {
     return (strType == DBKeys::KEY ||
             strType == DBKeys::MASTER_KEY || strType == DBKeys::CRYPTED_KEY || strType == DBKeys::PQ_KEY ||
+            strType == DBKeys::PQ_OPERATOR_RECOVERY ||
             strType == DBKeys::SAP_KEY || strType == DBKeys::SAP_KEY_CRIPTED);
 }
 
@@ -715,7 +737,7 @@ DBErrors WalletBatch::LoadWallet(CWallet* pwallet)
     if (fNoncriticalErrors && result == DB_LOAD_OK)
         result = DB_NONCRITICAL_ERROR;
 
-    if (!pwallet->GetPQAddresses().empty() && !pwallet->HasEncryptionKeys())
+    if (wss.fHasPQKeys && !pwallet->HasEncryptionKeys())
         result = DB_CORRUPT;
 
     // Any wallet corruption at all: skip any rewriting or

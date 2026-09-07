@@ -24,6 +24,14 @@ struct Record {
     }
 };
 
+// Only controller wallet DB state, never server credentials. A snapshot captures
+// backed=0; restoring it requires a fresh snapshot before identity publication.
+struct OperatorRecovery {
+    Record record;
+    uint8_t backed{0};
+    SERIALIZE_METHODS(OperatorRecovery, obj) { READWRITE(obj.record, obj.backed); }
+};
+
 // Seeds are independent of the existing HD wallet. No plaintext seed export.
 bool EncryptSeed(const SecureBytes& seed, const SecureBytes& master_key, const std::string& network, Record& record);
 bool DecryptKey(const SecureBytes& master_key, const Record& record, const std::string& network, mldsa44::Key& key);
@@ -35,6 +43,12 @@ bool EncryptOperatorSeed(const SecureBytes& seed, const SecureBytes& wrapping_ke
                          const std::string& network, const uint256& genesis, Record& record);
 bool DecryptOperatorKey(const SecureBytes& wrapping_key, const Record& record,
                         const std::string& network, const uint256& genesis, mldsa44::Key& key);
+// Controller-local recovery only. Never distribute this record or wallet master
+// as operator credentials; those use the independent version-2 wrapping key.
+bool EncryptOperatorRecovery(const SecureBytes& seed, const SecureBytes& master_key,
+                             const std::string& network, const uint256& genesis, Record& record);
+bool DecryptOperatorRecovery(const SecureBytes& master_key, const Record& record,
+                             const std::string& network, const uint256& genesis, mldsa44::Key& key);
 // Read-only Linux/macOS credential delivery, not provisioning or operator authority.
 // Caller supplies a trusted absolute credential directory and chain identity.
 // Other platforms fail closed; no environment/config fallback or secret logging.

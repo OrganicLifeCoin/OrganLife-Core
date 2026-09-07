@@ -96,24 +96,29 @@ bool ReadCredential(int directory, const char* name, size_t expected, SecureByte
 
 constexpr char KDF_CONTEXT[] = "OLCPQ001";
 constexpr char OPERATOR_KDF_CONTEXT[] = "OLCPQOP1";
+constexpr char RECOVERY_KDF_CONTEXT[] = "OLCPQRC1";
 static_assert(sizeof(KDF_CONTEXT) - 1 == crypto_kdf_CONTEXTBYTES, "PQ KDF context size mismatch");
 static_assert(sizeof(OPERATOR_KDF_CONTEXT) - 1 == crypto_kdf_CONTEXTBYTES, "PQ operator KDF context size mismatch");
+static_assert(sizeof(RECOVERY_KDF_CONTEXT) - 1 == crypto_kdf_CONTEXTBYTES, "PQ recovery KDF context size mismatch");
 static_assert(crypto_aead_xchacha20poly1305_ietf_NPUBBYTES == 24 &&
               mldsa44::SEED_SIZE + crypto_aead_xchacha20poly1305_ietf_ABYTES == 48,
               "PQ encrypted record size mismatch");
 
-bool StorageKey(const SecureBytes& master, SecureBytes& key, bool operator_key)
+bool StorageKey(const SecureBytes& master, SecureBytes& key, uint8_t version)
 {
     if (master.size() != crypto_kdf_KEYBYTES || sodium_init() < 0) return false;
     key.resize(crypto_aead_xchacha20poly1305_ietf_KEYBYTES);
     return crypto_kdf_derive_from_key(key.data(), key.size(), 0,
-                                    operator_key ? OPERATOR_KDF_CONTEXT : KDF_CONTEXT, master.data()) == 0;
+                                    version == 3 ? RECOVERY_KDF_CONTEXT :
+                                    version == 2 ? OPERATOR_KDF_CONTEXT : KDF_CONTEXT, master.data()) == 0;
 }
 
 std::vector<unsigned char> AssociatedData(const Record& record, const std::string& network, const uint256* genesis)
 {
     if (genesis && genesis->IsNull()) return {};
-    const char* domain = genesis ?
+    const char* domain = record.version == 3 ?
+        (network == "regtest" ? "OLC/PQ/ML-DSA-44/regtest/operator-recovery/v1" :
+         network == "test" ? "OLC/PQ/ML-DSA-44/testnet/operator-recovery/v1" : nullptr) : genesis ?
         (network == "regtest" ? "OLC/PQ/ML-DSA-44/regtest/operator-seed/v1" :
          network == "test" ? "OLC/PQ/ML-DSA-44/testnet/operator-seed/v1" : nullptr) :
         (network == "regtest" ? "OLC/PQ/ML-DSA-44/regtest/seed/v1" :
@@ -127,14 +132,14 @@ std::vector<unsigned char> AssociatedData(const Record& record, const std::strin
 }
 
 bool Encrypt(const SecureBytes& seed, const SecureBytes& master_key, const std::string& network,
-             const uint256* genesis, Record& record)
+             const uint256* genesis, Record& record, uint8_t version)
 {
     record = {};
     SecureBytes encryption_key;
     mldsa44::Key key;
-    if (seed.size() != mldsa44::SEED_SIZE || !StorageKey(master_key, encryption_key, genesis != nullptr) || !key.SetSeed(seed)) return false;
+    if (seed.size() != mldsa44::SEED_SIZE || !StorageKey(master_key, encryption_key, version) || !key.SetSeed(seed)) return false;
     Record result;
-    result.version = genesis ? 2 : 1;
+    result.version = version;
     result.public_key = key.GetPublicKey();
     randombytes_buf(result.nonce.data(), result.nonce.size());
     const auto ad = AssociatedData(result, network, genesis);
@@ -148,11 +153,11 @@ bool Encrypt(const SecureBytes& seed, const SecureBytes& master_key, const std::
 }
 
 bool Decrypt(const SecureBytes& master_key, const Record& record, const std::string& network,
-             const uint256* genesis, mldsa44::Key& key)
+             const uint256* genesis, mldsa44::Key& key, uint8_t version)
 {
     key.Clear();
     SecureBytes encryption_key;
-    if (record.version != (genesis ? 2 : 1) || !StorageKey(master_key, encryption_key, genesis != nullptr)) return false;
+    if (record.version != version || !StorageKey(master_key, encryption_key, version)) return false;
     SecureBytes seed(mldsa44::SEED_SIZE);
     const auto ad = AssociatedData(record, network, genesis);
     if (ad.empty()) return false;
@@ -170,24 +175,24 @@ bool Decrypt(const SecureBytes& master_key, const Record& record, const std::str
 
 bool EncryptSeed(const SecureBytes& seed, const SecureBytes& master_key, const std::string& network, Record& record)
 {
-    return Encrypt(seed, master_key, network, nullptr, record);
+    return Encrypt(seed, master_key, network, nullptr, record, 1);
 }
 
 bool DecryptKey(const SecureBytes& master_key, const Record& record, const std::string& network, mldsa44::Key& key)
 {
-    return Decrypt(master_key, record, network, nullptr, key);
+    return Decrypt(master_key, record, network, nullptr, key, 1);
 }
 
 bool EncryptOperatorSeed(const SecureBytes& seed, const SecureBytes& wrapping_key,
                          const std::string& network, const uint256& genesis, Record& record)
 {
-    return Encrypt(seed, wrapping_key, network, &genesis, record);
+    return Encrypt(seed, wrapping_key, network, &genesis, record, 2);
 }
 
 bool DecryptOperatorKey(const SecureBytes& wrapping_key, const Record& record,
                         const std::string& network, const uint256& genesis, mldsa44::Key& key)
 {
-    return Decrypt(wrapping_key, record, network, &genesis, key);
+    return Decrypt(wrapping_key, record, network, &genesis, key, 2);
 }
 
 bool LoadOperatorCredentials(const fs::path& directory, const std::string& network,
@@ -224,5 +229,17 @@ bool LoadOperatorCredentials(const fs::path& directory, const std::string& netwo
     reason = "PQ operator credential loading is not supported on this platform";
 #endif
     return false;
+}
+
+bool EncryptOperatorRecovery(const SecureBytes& seed, const SecureBytes& master_key,
+                             const std::string& network, const uint256& genesis, Record& record)
+{
+    return Encrypt(seed, master_key, network, &genesis, record, 3);
+}
+
+bool DecryptOperatorRecovery(const SecureBytes& master_key, const Record& record,
+                             const std::string& network, const uint256& genesis, mldsa44::Key& key)
+{
+    return Decrypt(master_key, record, network, &genesis, key, 3);
 }
 } // namespace pqwallet

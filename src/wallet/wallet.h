@@ -591,6 +591,7 @@ private:
     bool fDecryptionThoroughlyChecked{false};
 
     std::map<pq::KeyID, pqwallet::Record> m_pq_keys GUARDED_BY(cs_KeyStore);
+    std::map<pq::KeyID, pqwallet::OperatorRecovery> m_pq_operator_recovery GUARDED_BY(cs_KeyStore);
     bool CreatePQTransactionInternal(const std::vector<CTxOut>& outputs, uint8_t mode,
         const std::vector<unsigned char>& data, CTransactionRef& tx, CAmount& fee, std::string& reason,
         const CCoinControl* coin_control, bool subtract_fee,
@@ -725,6 +726,12 @@ public:
     bool GetPQKey(const std::string& address, mldsa44::Key& key) const;
     bool GetPQKey(const pq::KeyID& id, mldsa44::Key& key, bool staking) const;
     bool LoadPQKey(const pq::KeyID& id, const pqwallet::Record& record);
+    // Create or retry a pending, controller-local operator recovery key. Public
+    // identity is returned only after an exclusive encrypted wallet snapshot.
+    bool PreparePQOperator(const fs::path& backup, mldsa44::PublicKey& public_key, std::string& reason);
+    std::vector<mldsa44::PublicKey> GetPQOperators() const;
+    bool LoadPQOperatorRecovery(const uint256& genesis, const pq::KeyID& id,
+                                const pqwallet::OperatorRecovery& recovery);
     static bool PQPaymentsActive();
     bool IsPQMine(const CTxOut& output) const;
     bool InvolvesPQ(const CTransaction& tx) const;
