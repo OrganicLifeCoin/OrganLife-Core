@@ -61,6 +61,30 @@ std::vector<mldsa44::PublicKey> CWallet::GetPQOperators() const
     return result;
 }
 
+bool CWallet::ExportPQOperator(const mldsa44::PublicKey& public_key, const fs::path& directory, std::string& reason)
+{
+    reason.clear();
+    LOCK2(cs_wallet, cs_KeyStore);
+    const auto fail = [&](const char* message) { reason = message; return false; };
+    const auto& params = Params();
+    const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
+    if (!pq::MasternodesActive(params, first)) return fail("PQ operator export requires opt-in regtest masternodes");
+    if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
+        return fail("PQ operator export requires an encrypted, fully unlocked wallet");
+    const auto id = pq::GetID(public_key, params.NetworkIDString());
+    const auto found = id ? m_pq_operator_recovery.find(*id) : m_pq_operator_recovery.end();
+    if (found == m_pq_operator_recovery.end() || found->second.backed != 1 || found->second.record.public_key != public_key)
+        return fail("Unknown or unbacked PQ operator identity");
+    pqwallet::SecureBytes wrapping(32);
+    GetStrongRandBytes(wrapping.data(), wrapping.size());
+    pqwallet::Record record;
+    const auto& genesis = params.GetConsensus().hashGenesisBlock;
+    if (!pqwallet::RewrapOperatorRecovery(found->second, *id, vMasterKey, wrapping,
+                                         params.NetworkIDString(), genesis, record))
+        return fail("Could not prepare PQ operator credentials");
+    return pqwallet::WriteOperatorCredentials(directory, record, wrapping, params.NetworkIDString(), genesis, reason);
+}
+
 bool CWallet::LoadPQOperatorRecovery(const uint256& genesis, const pq::KeyID& id,
                                     const pqwallet::OperatorRecovery& recovery)
 {

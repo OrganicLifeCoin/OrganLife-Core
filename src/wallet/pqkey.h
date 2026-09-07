@@ -61,6 +61,11 @@ bool RewrapOperatorRecovery(const OperatorRecovery& recovery, const pq::KeyID& e
 // Other platforms fail closed; no environment/config fallback or secret logging.
 bool LoadOperatorCredentials(const fs::path& directory, const std::string& network,
                              const uint256& genesis, mldsa44::Key& key, std::string& reason);
+// Atomically publish a new private credential directory inside a trusted private
+// parent. Never overwrite a destination. The pair is operator secret material:
+// transfer through a protected channel and seal both files on the operator host.
+bool WriteOperatorCredentials(const fs::path& directory, const Record& record, const SecureBytes& wrapping_key,
+                              const std::string& network, const uint256& genesis, std::string& reason);
 } // namespace pqwallet
 
 #endif // ORGANICLIFE_WALLET_PQKEY_H

@@ -129,6 +129,42 @@ BOOST_AUTO_TEST_CASE(operator_identity_requires_verified_recovery_snapshot)
     SelectParams(CBaseChainParams::REGTEST);
 }
 
+BOOST_AUTO_TEST_CASE(operator_export_cannot_bypass_controller_authorization)
+{
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+    const auto destination = GetDataDir() / "must-not-exist";
+    mldsa44::PublicKey public_key{};
+    std::string reason;
+    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    BOOST_CHECK(reason.find("fully unlocked") != std::string::npos);
+    BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
+    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    BOOST_CHECK(reason.find("fully unlocked") != std::string::npos);
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
+    BOOST_REQUIRE(m_wallet.PreparePQOperator(GetDataDir() / "export-recovery.dat", public_key, reason));
+    BOOST_REQUIRE(m_wallet.Lock());
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, true));
+    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    BOOST_CHECK(reason.find("fully unlocked") != std::string::npos);
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, false));
+    std::string spending_address;
+    BOOST_REQUIRE(m_wallet.GeneratePQAddress(spending_address));
+    mldsa44::Key spending_key;
+    BOOST_REQUIRE(m_wallet.GetPQKey(spending_address, spending_key));
+    BOOST_CHECK(!m_wallet.ExportPQOperator(spending_key.GetPublicKey(), destination, reason));
+    BOOST_CHECK(reason.find("Unknown or unbacked") != std::string::npos);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    BOOST_CHECK(reason.find("opt-in regtest") != std::string::npos);
+    for (const auto& network : {CBaseChainParams::TESTNET, CBaseChainParams::MAIN}) {
+        SelectParams(network);
+        BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+        BOOST_CHECK(reason.find("opt-in regtest") != std::string::npos);
+    }
+    SelectParams(CBaseChainParams::REGTEST);
+    BOOST_CHECK(!fs::exists(destination));
+}
+
 BOOST_AUTO_TEST_CASE(operator_failed_snapshot_reuses_one_persisted_pending_key)
 {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);

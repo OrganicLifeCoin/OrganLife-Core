@@ -3,6 +3,7 @@
 # Distributed under the MIT software license, see the accompanying file COPYING.
 """Controller recovery keys are backed before exposure, never spending keys."""
 from pathlib import Path
+import stat
 import shutil
 
 from test_framework.test_framework import PivxTestFramework
@@ -12,9 +13,11 @@ from test_framework.util import assert_equal, assert_raises_rpc_error
 class PQOperatorRecoveryTest(PivxTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
-        self.num_nodes = 1
-        self.extra_args = [["-connect=0", "-dnsseed=0", "-discover=0", "-staking=0",
-                            "-createwalletbackups=0", "-nuparams=pq_masternodes:1"]]
+        self.num_nodes = 2
+        wallet_args = ["-connect=0", "-dnsseed=0", "-discover=0", "-staking=0",
+                       "-createwalletbackups=0", "-nuparams=pq_masternodes:1"]
+        self.extra_args = [wallet_args, ["-connect=0", "-dnsseed=0", "-discover=0",
+                                        "-staking=0", "-disablewallet", "-nuparams=pq_masternodes:1"]]
 
     def run_test(self):
         node = self.nodes[0]
@@ -53,6 +56,57 @@ class PQOperatorRecoveryTest(PivxTestFramework):
         assert_raises_rpc_error(-4, "backup failed", node.createpqoperator, str(snapshot))
         assert_equal(snapshot.read_bytes(), original)
         assert_equal(node.listpqoperators(), [first["publickey"]])
+
+        # Export only fully-unlocked, backed operators into a new private
+        # directory.  The wrapping key is credentials-only material; it is
+        # never returned by the RPC and cannot be overwritten in place.
+        export_parent = root / "private-export-parent"
+        export_parent.mkdir(mode=0o700)
+        exported = export_parent / "operator-credentials"
+        node.walletlock()
+        assert_raises_rpc_error(-13, "walletpassphrase", node.exportpqoperator,
+                                first["publickey"], str(exported))
+        node.walletpassphrase(password, 600, True)
+        assert_raises_rpc_error(-13, "walletpassphrase", node.exportpqoperator,
+                                first["publickey"], str(exported))
+        node.walletpassphrase(password, 600)
+        assert_raises_rpc_error(-8, "public key", node.exportpqoperator, "00", str(exported))
+        assert_raises_rpc_error(-4, "operator", node.exportpqoperator,
+                                "00" * 1312, str(export_parent / "unknown"))
+        exported_result = node.exportpqoperator(first["publickey"], str(exported))
+        assert_equal(exported_result, {"publickey": first["publickey"], "credentials_only": True})
+        record_file = exported / "olc-pq-operator-record"
+        key_file = exported / "olc-pq-operator-key"
+        assert_equal(stat.S_IMODE(exported.stat().st_mode), 0o700)
+        assert_equal(stat.S_IMODE(record_file.stat().st_mode), 0o400)
+        assert_equal(stat.S_IMODE(key_file.stat().st_mode), 0o400)
+        record_bytes = record_file.read_bytes()
+        key_bytes = key_file.read_bytes()
+        assert_equal(record_bytes[0], 2)  # credentials use the v2 operator record
+        assert_equal(len(key_bytes), 32)
+        assert_raises_rpc_error(-4, "destination", node.exportpqoperator,
+                                first["publickey"], str(exported))
+        assert_equal(record_file.read_bytes(), record_bytes)
+        assert_equal(key_file.read_bytes(), key_bytes)
+
+        # A walletless node can load the exported pair for an unknown yet
+        # syntactically valid registration.  It remains pending, but its
+        # identity is stable across restart and no wallet APIs are present.
+        node1 = self.nodes[1]
+        registration = "12" * 32
+        self.stop_node(1)
+        operator_args = self.extra_args[1] + ["-pqoperatorcredentials=" + str(exported),
+                                               "-pqoperatorid=" + registration]
+        self.start_node(1, operator_args)
+        assert_equal(node1.getpqoperatorinfo(), {"configured": True,
+                                                  "registration": registration,
+                                                  "publickey": first["publickey"]})
+        assert_raises_rpc_error(-32601, "Method not found", node1.getwalletinfo)
+        self.stop_node(1)
+        self.start_node(1, operator_args)
+        assert_equal(node1.getpqoperatorinfo()["publickey"], first["publickey"])
+        self.stop_node(1)
+
         self.restart_node(0)
         assert_equal(node.listpqoperators(), [first["publickey"]])
         node.walletpassphrase(password, 600)
@@ -68,8 +122,13 @@ class PQOperatorRecoveryTest(PivxTestFramework):
         self.start_node(0, self.extra_args[0] + ["-wallet=operator-restored"])
         assert_equal(node.listpqoperators(), [])
         node.walletpassphrase(password, 600)
+        assert_raises_rpc_error(-4, "operator", node.exportpqoperator,
+                                first["publickey"], str(export_parent / "restored-before-backup"))
         recovered = node.createpqoperator(str(root / "recovered.dat"))
         assert_equal(recovered, first)
+        recovered_export = export_parent / "restored-operator-credentials"
+        assert_equal(node.exportpqoperator(recovered["publickey"], str(recovered_export)),
+                     {"publickey": first["publickey"], "credentials_only": True})
         assert_equal(node.listpqaddresses()["addresses"], [])
         assert_equal(node.getrawmempool(), [])
 

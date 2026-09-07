@@ -192,6 +192,57 @@ BOOST_AUTO_TEST_CASE(operator_recovery_direct_kdf_aead_reference)
 }
 
 #if defined(__linux__) || defined(__APPLE__)
+BOOST_AUTO_TEST_CASE(operator_credentials_exclusive_private_publication)
+{
+    const auto parent = fs::temp_directory_path() / fs::unique_path("olc-publish-%%%%-%%%%-%%%%");
+    struct Cleanup { fs::path path; ~Cleanup() { fs::remove_all(path); } } cleanup{parent};
+    BOOST_REQUIRE(fs::create_directory(parent));
+    BOOST_REQUIRE_EQUAL(chmod(parent.c_str(), 0700), 0);
+    const auto destination = parent / "operator";
+    const uint256 genesis = uint256S("1234");
+    pqwallet::Record record;
+    BOOST_REQUIRE(pqwallet::EncryptOperatorSeed(TestSeed(), MASTER, "regtest", genesis, record));
+    std::string reason;
+    BOOST_REQUIRE_MESSAGE(pqwallet::WriteOperatorCredentials(destination, record, MASTER, "regtest", genesis, reason), reason);
+    BOOST_CHECK(reason.empty());
+    struct stat info;
+    BOOST_REQUIRE_EQUAL(lstat(destination.c_str(), &info), 0);
+    BOOST_CHECK_EQUAL(info.st_mode & 0777, 0700);
+    for (const char* name : {"olc-pq-operator-record", "olc-pq-operator-key"}) {
+        BOOST_REQUIRE_EQUAL(lstat((destination / name).c_str(), &info), 0);
+        BOOST_CHECK_EQUAL(info.st_mode & 0777, 0400);
+        BOOST_CHECK_EQUAL(info.st_uid, geteuid());
+    }
+    mldsa44::Key key;
+    BOOST_REQUIRE(pqwallet::LoadOperatorCredentials(destination, "regtest", genesis, key, reason));
+    BOOST_CHECK(key.GetPublicKey() == record.public_key);
+    BOOST_CHECK(!pqwallet::WriteOperatorCredentials(destination, record, MASTER, "regtest", genesis, reason));
+    BOOST_REQUIRE(pqwallet::LoadOperatorCredentials(destination, "regtest", genesis, key, reason));
+    const auto other = parent / "other";
+    BOOST_CHECK(!pqwallet::WriteOperatorCredentials(other, record, MASTER, "test", genesis, reason));
+    BOOST_CHECK(!fs::exists(other));
+    BOOST_CHECK(!pqwallet::WriteOperatorCredentials(other, record, pqwallet::SecureBytes(32, 43), "regtest", genesis, reason));
+    BOOST_CHECK(!fs::exists(other));
+    BOOST_REQUIRE_EQUAL(chmod(parent.c_str(), 0755), 0);
+    BOOST_CHECK(!pqwallet::WriteOperatorCredentials(other, record, MASTER, "regtest", genesis, reason));
+    BOOST_REQUIRE_EQUAL(chmod(parent.c_str(), 0700), 0);
+    fs::create_directory(other);
+    BOOST_CHECK(!pqwallet::WriteOperatorCredentials(other, record, MASTER, "regtest", genesis, reason));
+    BOOST_CHECK(fs::is_empty(other));
+    fs::remove(other);
+    fs::create_directory_symlink(destination, other);
+    BOOST_CHECK(!pqwallet::WriteOperatorCredentials(other, record, MASTER, "regtest", genesis, reason));
+    BOOST_CHECK(fs::is_symlink(other));
+    fs::remove(other);
+    const auto link = parent / "link";
+    fs::create_directory_symlink(parent, link);
+    BOOST_CHECK(!pqwallet::WriteOperatorCredentials(link / "other", record, MASTER, "regtest", genesis, reason));
+    BOOST_CHECK(!fs::exists(other));
+    BOOST_CHECK(!pqwallet::WriteOperatorCredentials(parent / ".." / "unexpected", record, MASTER, "regtest", genesis, reason));
+    BOOST_CHECK(!pqwallet::WriteOperatorCredentials("relative", record, MASTER, "regtest", genesis, reason));
+    BOOST_CHECK_EQUAL(std::distance(fs::directory_iterator(parent), fs::directory_iterator()), 2);
+}
+
 BOOST_AUTO_TEST_CASE(operator_credentials_load_from_private_files)
 {
     struct TemporaryCredentials {

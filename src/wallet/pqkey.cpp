@@ -6,17 +6,21 @@
 #include <algorithm>
 #include <cstring>
 #include <streams.h>
+#include <utilstrencodings.h>
 #ifndef WIN32
 #include <cerrno>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <cstdio>
 #endif
 #ifdef __linux__
 #include <crypto/common.h>
 #include <linux/posix_acl.h>
 #include <linux/posix_acl_xattr.h>
 #include <sys/xattr.h>
+#include <sys/syscall.h>
+#include <linux/fs.h>
 #elif defined(__APPLE__)
 #include <sys/acl.h>
 #endif
@@ -237,6 +241,83 @@ bool EncryptOperatorRecovery(const SecureBytes& seed, const SecureBytes& master_
                              const std::string& network, const uint256& genesis, Record& record)
 {
     return Encrypt(seed, master_key, network, &genesis, record, 3);
+}
+
+bool WriteOperatorCredentials(const fs::path& directory, const Record& record, const SecureBytes& wrapping_key,
+                              const std::string& network, const uint256& genesis, std::string& reason)
+{
+    reason = "Could not publish private PQ operator credentials; do not use an incomplete destination";
+#if defined(__linux__) || defined(__APPLE__)
+    try {
+        const auto& path = directory.native();
+        mldsa44::Key key;
+        if (path.empty() || !directory.is_absolute() || path.back() == '/' || path.find('\0') != std::string::npos ||
+            !DecryptOperatorKey(wrapping_key, record, network, genesis, key)) return false;
+        for (const auto& component : directory)
+            if (component == "." || component == "..") return false;
+        Descriptor parent(open(directory.parent_path().c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC));
+        struct stat info;
+        if (parent.fd < 0 || fstat(parent.fd, &info) != 0 || !PrivateCredential(parent.fd, info, true)) return false;
+        const std::string destination = directory.filename().string();
+        std::array<unsigned char, 16> random{};
+        randombytes_buf(random.data(), random.size());
+        const std::string staging = ".olc-pq-" + HexStr(random);
+        if (mkdirat(parent.fd, staging.c_str(), 0700) != 0) return false;
+        struct PendingDirectory {
+            const int parent;
+            const std::string& staging;
+            const std::string& destination;
+            Descriptor directory;
+            bool published{false}, keep{false};
+            PendingDirectory(int fd, const std::string& temporary, const std::string& final_name)
+                : parent(fd), staging(temporary), destination(final_name),
+                  directory(openat(fd, temporary.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)) {}
+            ~PendingDirectory() {
+                if (!keep) {
+                    unlinkat(directory.fd, "olc-pq-operator-key", 0);
+                    unlinkat(directory.fd, "olc-pq-operator-record", 0);
+                    unlinkat(parent, (published ? destination : staging).c_str(), AT_REMOVEDIR);
+                }
+            }
+        } pending{parent.fd, staging, destination};
+        if (pending.directory.fd < 0 || fstat(pending.directory.fd, &info) != 0 ||
+            !PrivateCredential(pending.directory.fd, info, true)) return false;
+        const auto write = [&](const char* name, const unsigned char* bytes, size_t size) {
+            Descriptor file(openat(pending.directory.fd, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0400));
+            if (file.fd < 0) return false;
+            size_t offset = 0;
+            while (offset < size) {
+                const auto count = ::write(file.fd, bytes + offset, size - offset);
+                if (count < 0 && errno == EINTR) continue;
+                if (count <= 0) return false;
+                offset += count;
+            }
+            if (fchmod(file.fd, 0400) != 0 || fsync(file.fd) != 0) return false;
+            SecureBytes readback;
+            return ReadCredential(pending.directory.fd, name, size, readback) &&
+                   sodium_memcmp(readback.data(), bytes, size) == 0;
+        };
+        CDataStream encoded(SER_DISK, 0);
+        encoded << record;
+        if (!write("olc-pq-operator-record", reinterpret_cast<const unsigned char*>(encoded.data()), encoded.size()) ||
+            !write("olc-pq-operator-key", wrapping_key.data(), wrapping_key.size()) || fsync(pending.directory.fd) != 0)
+            return false;
+#ifdef __linux__
+        if (syscall(SYS_renameat2, parent.fd, staging.c_str(), parent.fd, destination.c_str(), RENAME_NOREPLACE) != 0)
+            return false;
+#else
+        if (renameatx_np(parent.fd, staging.c_str(), parent.fd, destination.c_str(), RENAME_EXCL) != 0) return false;
+#endif
+        pending.published = true;
+        if (fsync(parent.fd) != 0) return false;
+        pending.keep = true;
+        reason.clear();
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+#endif
+    return false;
 }
 
 bool DecryptOperatorRecovery(const SecureBytes& master_key, const Record& record,

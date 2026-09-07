@@ -729,6 +729,7 @@ public:
     // Create or retry a pending, controller-local operator recovery key. Public
     // identity is returned only after an exclusive encrypted wallet snapshot.
     bool PreparePQOperator(const fs::path& backup, mldsa44::PublicKey& public_key, std::string& reason);
+    bool ExportPQOperator(const mldsa44::PublicKey& public_key, const fs::path& directory, std::string& reason);
     std::vector<mldsa44::PublicKey> GetPQOperators() const;
     bool LoadPQOperatorRecovery(const uint256& genesis, const pq::KeyID& id,
                                 const pqwallet::OperatorRecovery& recovery);

@@ -619,6 +619,37 @@ UniValue listpqoperators(const JSONRPCRequest& request)
     return result;
 }
 
+UniValue exportpqoperator(const JSONRPCRequest& request)
+{
+    CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
+    if (request.fHelp || request.params.size() != 2)
+        throw std::runtime_error("exportpqoperator \"publickey\" \"credential_directory\"\n"
+            "Prepare operator-only credentials for a backed recovery identity on opt-in regtest.\n"
+            "Requires an encrypted, fully unlocked controller wallet. No spending keys are exported.\n"
+            "The absolute destination must not exist; its parent must be a trusted private directory.\n"
+            "Linux/macOS only. Publishes an owner-private directory with two secret credential files.\n"
+            "Transfer only over a protected channel and seal BOTH files on the operator host.\n"
+            "Returns only publickey and credentials_only; does not register or start an operator.\n");
+    RPCTypeCheck(request.params, {UniValue::VSTR, UniValue::VSTR});
+    LOCK2(cs_main, pwallet->cs_wallet);
+    if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the wallet before exporting PQ operator credentials");
+    EnsureWalletIsUnlocked(pwallet);
+    const auto text = request.params[0].get_str();
+    if (text.size() != 2 * mldsa44::PUBLIC_KEY_SIZE || !IsHex(text))
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid PQ operator public key");
+    const auto bytes = ParseHex(text);
+    mldsa44::PublicKey public_key{};
+    std::copy(bytes.begin(), bytes.end(), public_key.begin());
+    std::string reason;
+    if (!pwallet->ExportPQOperator(public_key, request.params[1].get_str(), reason))
+        throw JSONRPCError(RPC_WALLET_ERROR, reason);
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("publickey", HexStr(public_key));
+    result.pushKV("credentials_only", true);
+    return result;
+}
+
 UniValue listpqaddresses(const JSONRPCRequest& request)
 {
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
@@ -5050,6 +5081,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "getnewpqaddress",          &getnewpqaddress,          true,  {"backup_destination"} },
     { "wallet",             "createpqoperator",         &createpqoperator,         true,  {"backup_destination"} },
     { "wallet",             "listpqoperators",          &listpqoperators,          true,  {} },
+    { "wallet",             "exportpqoperator",         &exportpqoperator,         true,  {"publickey", "credential_directory"} },
     { "wallet",             "listpqaddresses",          &listpqaddresses,          true,  {} },
     { "wallet",             "listpqunspent",             &listpqunspent,             true,  {} },
     { "wallet",             "sendpqtoaddress",           &sendpqtoaddress,           false, {"address", "amount", "backup_destination"} },
@@ -5125,7 +5157,7 @@ void RegisterWalletRPCCommands(CRPCTable &tableRPC)
     }
     static const std::set<std::string> pqOnlyCommands{
         "abandontransaction", "abortrescan", "backupwallet", "encryptwallet",
-        "getnewpqaddress", "createpqoperator", "listpqoperators", "getstakingstatus", "gettransaction", "getwalletinfo",
+        "getnewpqaddress", "createpqoperator", "listpqoperators", "exportpqoperator", "getstakingstatus", "gettransaction", "getwalletinfo",
         "getbalance", "getunconfirmedbalance",
         "listpqaddresses", "listpqunspent", "listwallets", "rescanblockchain",
         "sendpqtoaddress", "walletlock", "walletpassphrase", "walletpassphrasechange"
