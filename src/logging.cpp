@@ -126,6 +126,7 @@ const CLogCategoryDesc LogCategories[] = {
         {BCLog::NET_MN,         "net_mn"},
         {BCLog::DKG,            "dkg"},
         {BCLog::CHAINLOCKS,     "chainlocks"},
+        {BCLog::PQ,             "pq"},
         {BCLog::ALL,            "1"},
         {BCLog::ALL,            "all"},
 };

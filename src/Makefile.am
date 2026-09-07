@@ -554,6 +554,8 @@ libbitcoin_common_a_SOURCES = \
   pqjournal.cpp \
   pqanchors.h \
   pqanchors.cpp \
+  pqfinality.h \
+  pqfinality.cpp \
   primitives/block.cpp \
   primitives/transaction.cpp \
   core_read.cpp \

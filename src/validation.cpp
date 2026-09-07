@@ -1680,8 +1680,19 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
             if (!pqquorum::Decode(payload.data, certificate))
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-certificate");
             pqanchor::Record parent;
-            if (!pqAnchors.TipAnchor(parent))
-                return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-no-anchor");
+            bool hasParent = pqAnchors.TipAnchor(parent);
+            if (!hasParent) {
+                // Before any certificate-bearing block has connected, the
+                // parent anchor is the pinned bootstrap checkpoint itself.
+                const auto* bootstrap = pqanchor::GetBootstrap();
+                std::vector<pqquorum::Member> pinned;
+                if (!bootstrap || certificate.statement.height != bootstrap->height + 1 ||
+                    !pqAnchors.CommitteeAt(bootstrap->height, pinned))
+                    return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-no-anchor");
+                parent.height = bootstrap->height;
+                parent.blockHash = bootstrap->blockHash;
+                parent.committee = pqquorum::Commitment(pinned);
+            }
             // No skipping: the certificate finalizes exactly the parent anchor + 1.
             if (certificate.statement.height != parent.height + 1)
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-height");

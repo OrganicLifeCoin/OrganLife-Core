@@ -71,8 +71,21 @@ class RoundState {
 public:
     RoundState(const uint256& genesis, const uint256& anchor, uint32_t height,
                const std::vector<Member>& members);
+    // Restores journal-replayed state for a used key: a runtime must never
+    // recreate fresh state for a key that already voted. A non-null prevote or
+    // precommit marks that step decided at the restored round.
+    static std::unique_ptr<RoundState> Restore(const uint256& genesis, const uint256& anchor,
+                                               uint32_t height, const std::vector<Member>& members,
+                                               uint32_t round, const uint256& locked, uint32_t lockRound,
+                                               const uint256& prevote, const uint256& precommit,
+                                               std::string& reason);
     RoundState(const RoundState&) = delete;
     RoundState& operator=(const RoundState&) = delete;
+    uint32_t currentRound() const { return current.round; }
+    const uint256& lockedValue() const { return locked; }
+    uint32_t lockedRound() const { return lockRound; }
+    bool hasPrevoted() const { return prevoted; }
+    bool hasPrecommitted() const { return precommitted; }
     bool Advance(uint32_t round);
     bool Prevote(const uint256& validatedProposal, const Certificate* unlockProof,
                  Statement& vote, std::string& reason);

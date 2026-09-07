@@ -18,6 +18,8 @@
 #include "consensus/upgrades.h"
 #include "evo/governancevotetx.h"
 #include "consensus/validation.h"
+#include "pqfinality.h"
+#include "pqtransaction.h"
 #include "llmq/quorums_blockprocessor.h"
 #include "masternode-payments.h"
 #include "policy/policy.h"
@@ -115,6 +117,25 @@ static CMutableTransaction NewCoinbase(const int nHeight, const CScript* pScript
     return txCoinbase;
 }
 
+// Attaches the pending finality commit certificate (finalizing the mirror tip
+// + 1) to the coinbase envelope. Best effort: an absent certificate is always
+// valid and never required for block validity (finality stalls never gate PoS).
+static void AttachFinalityCertificate(CMutableTransaction& txCoinbase)
+{
+    if (!pq::MasternodesActive(Params(), chainActive.Height() + 1)) return;
+    pqquorum::Certificate certificate;
+    if (!pqfinality::Manager::Get().PendingCertificate(certificate)) return;
+    const auto encoded = pqquorum::Encode(certificate);
+    if (encoded.empty()) return;
+    pq::Payload payload;
+    payload.mode = pq::FINALITY;
+    payload.data = encoded;
+    txCoinbase.nVersion = 3;
+    txCoinbase.sapData = nullopt;
+    txCoinbase.nType = CTransaction::PQ;
+    txCoinbase.extraPayload = pq::EncodePayload(payload);
+}
+
 bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet,
                        std::vector<CStakeableOutput>* availableCoins, bool stopPoSOnNewBlock)
 {
@@ -167,6 +188,7 @@ bool SolveProofOfStake(CBlock* pblock, CBlockIndex* pindexPrev, CWallet* pwallet
     CMutableTransaction txCoinbase = NewCoinbase(pindexPrev->nHeight + 1);
     if (!FillPQMasternodePayment(txCoinbase, &txCoinStake, pindexPrev))
         return error("Unable to determine PQ masternode payment");
+    AttachFinalityCertificate(txCoinbase);
     CScript governancePayee;
     CAmount governanceAmount{0};
     uint256 governanceProposal;
@@ -200,6 +222,7 @@ CMutableTransaction CreateCoinbaseTx(const CScript& scriptPubKeyIn, CBlockIndex*
     txCoinbase.vout[0].nValue = GetBlockValue(nHeight, pindexPrev->nChainMinted);
     if (!FillPQMasternodePayment(txCoinbase, nullptr, pindexPrev))
         throw std::runtime_error("Unable to determine PQ masternode payment");
+    AttachFinalityCertificate(txCoinbase);
     CScript governancePayee;
     CAmount governanceAmount{0};
     uint256 governanceProposal;

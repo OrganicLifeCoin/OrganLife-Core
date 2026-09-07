@@ -52,6 +52,33 @@ RoundState::RoundState(const uint256& genesis, const uint256& anchor, uint32_t h
     if (!ValidStatement(current)) throw std::invalid_argument("Invalid PQ finality context");
 }
 
+std::unique_ptr<RoundState> RoundState::Restore(const uint256& genesis, const uint256& anchor,
+                                                uint32_t height, const std::vector<Member>& snapshot,
+                                                uint32_t round, const uint256& locked, uint32_t lockRound,
+                                                const uint256& prevote, const uint256& precommit,
+                                                std::string& reason)
+{
+    reason.clear();
+    try {
+        std::unique_ptr<RoundState> state(new RoundState(genesis, anchor, height, snapshot));
+        state->current.round = round;
+        state->locked = locked;
+        state->lockRound = lockRound;
+        if (!prevote.IsNull()) {
+            state->prevote = prevote;
+            state->prevoted = true;
+        }
+        if (!precommit.IsNull()) {
+            state->precommit = precommit;
+            state->precommitted = true;
+        }
+        return state;
+    } catch (const std::exception&) {
+        reason = "bad-pq-restore-context";
+        return nullptr;
+    }
+}
+
 bool RoundState::Advance(uint32_t round)
 {
     if (!committed.IsNull() || round <= current.round) return false;

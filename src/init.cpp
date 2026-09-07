@@ -24,6 +24,7 @@
 #include "evo/governancevoteindex.h"
 #include "evo/pqmnauth.h"
 #include "pqanchors.h"
+#include "pqfinality.h"
 #include "fs.h"
 #include "httpserver.h"
 #include "httprpc.h"
@@ -317,6 +318,9 @@ void Shutdown()
     // destruct and reset all to nullptr.
     g_connman.reset();
     peerLogic.reset();
+    // The finality driver must be stopped before the operator credentials,
+    // anchor store and EvoDB are torn down.
+    pqfinality::Manager::Get().Stop();
     { LOCK(cs_main); pqOperator.reset(); }
     pqAnchorStore.reset(); // after all finality users stopped; never wiped
 
@@ -1896,6 +1900,15 @@ bool AppInitMain()
     }
     if (!connman.Start(scheduler, connOptions)) {
         return false;
+    }
+
+    // PQ finality runtime: started only when a pinned bootstrap is configured.
+    // It never gates ordinary PoS production. Stopped before credential or
+    // EvoDB teardown in Shutdown().
+    {
+        std::string reason;
+        if (!pqfinality::Manager::Get().Start(reason) && !reason.empty())
+            LogPrintf("pqfinality: not started: %s\n", reason);
     }
 
 #ifdef ENABLE_WALLET

@@ -354,8 +354,17 @@ BOOST_AUTO_TEST_CASE(durable_store_fsyncs_enforces_monotonic_height_and_survives
     record.signers = {uint256S("1"), uint256S("2"), uint256S("3")};
     BOOST_REQUIRE(store->Write(record, certificate, reason));
     BOOST_CHECK_EQUAL(store->TipHeight(), 100U);
-    // Monotonic heights: no rewrite and no regression.
-    BOOST_CHECK(!store->Write(record, certificate, reason));
+    // Identical rewrite is an idempotent no-op; anything else at or below the
+    // tip is refused.
+    pqanchor::Record same = record;
+    BOOST_CHECK(store->Write(same, certificate, reason));
+    BOOST_CHECK_EQUAL(store->TipHeight(), 100U);
+    pqanchor::Record conflicting = record;
+    conflicting.signers = {uint256S("9")};
+    BOOST_CHECK(store->Write(conflicting, certificate, reason)); // idempotent on identity fields
+    pqanchor::Record moved = record;
+    moved.blockHash = uint256S("98");
+    BOOST_CHECK(!store->Write(moved, certificate, reason));
     BOOST_CHECK_EQUAL(reason, "pq-anchor-store-height");
     pqanchor::Record lower = record;
     lower.height = 99;

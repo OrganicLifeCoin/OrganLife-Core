@@ -289,6 +289,15 @@ extern const char* QSENDRECSIGS;
 extern const char* MNAUTH;
 extern const char* PQHELLO;
 extern const char* PQAUTH;
+/**
+ * PQ finality runtime messages. pqprop carries a signed proposal for the
+ * current voting height (optionally with a PoLC unlock certificate), pqvote a
+ * single prevote/precommit, and pqcmt a quorum commit certificate. All three
+ * are bounded; malformed or oversized frames disconnect the peer.
+ */
+extern const char* PQPROP;
+extern const char* PQVOTE;
+extern const char* PQCMT;
 /*
  * Messages for LLMQ-DKG inter-quorum communication
  */

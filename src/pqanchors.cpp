@@ -180,6 +180,15 @@ bool ChainState::RecordAnchor(uint32_t height, const uint256& blockHash, std::ve
     reason.clear();
     uint32_t tip{0};
     const bool hasTip = Read(Kind('F'), tip);
+    // Idempotent replay: re-applying the identical anchor (validation-only
+    // reconnects, reindex) is a no-op; a conflicting value fails closed.
+    if (hasTip && height == tip) {
+        Record existing;
+        if (!Read(AtHeight('f', tip), existing) || existing.blockHash != blockHash)
+            return Fail(reason, "bad-pq-anchor-conflict");
+        reason.clear();
+        return true;
+    }
     if (hasTip && height != tip + 1) return Fail(reason, "bad-pq-anchor-order");
     uint32_t snapshotHeight{0};
     const bool hasSnapshot = Read(Kind('M'), snapshotHeight);
@@ -394,23 +403,24 @@ bool Store::Write(const Record& record, const pqquorum::Certificate& certificate
         reason = "pq-anchor-store-invalid";
         return false;
     }
+    // Idempotent replay: re-recording the identical finalized anchor (e.g. the
+    // in-block certificate for a height this node already committed locally)
+    // is a no-op. A different value at a recorded height is never accepted.
     if (record.height <= TipHeight()) {
+        Record existing;
+        if (record.height == TipHeight() && Read(record.height, existing) &&
+            existing.blockHash == record.blockHash && existing.committee == record.committee)
+            return true;
         reason = "pq-anchor-store-height";
         return false;
     }
     const auto key = std::make_pair(std::string(ANCHOR_PREFIX), HeightSuffix(record.height));
     const auto certKey = std::make_pair(std::string(CERT_PREFIX), HeightSuffix(record.height));
     try {
+        const std::vector<unsigned char> encoded = pqquorum::Encode(certificate);
         CDBBatch batch(db->GetSerializationVersion());
         batch.Write(key, record);
-        // Certificates are stored in their canonical wire encoding; they are
-        // public, verifiable data.
-        const std::vector<unsigned char> encoded = pqquorum::Encode(certificate);
-        if (encoded.empty()) {
-            reason = "pq-anchor-store-invalid";
-            return false;
-        }
-        batch.Write(certKey, encoded);
+        if (!encoded.empty()) batch.Write(certKey, encoded); // the pinned a0 has no certificate
         batch.Write(std::string(TIP_KEY), record.height);
         if (!db->WriteBatch(batch, true)) { // fsync before any caller may rely on it
             reason = "pq-anchor-store-write-failed";

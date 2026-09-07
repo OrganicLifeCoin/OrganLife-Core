@@ -14,6 +14,7 @@
 #include "evo/mnauth.h"
 #include "evo/pqmnauth.h"
 #include "init.h"
+#include "pqfinality.h"
 #include "llmq/quorums_blockprocessor.h"
 #include "llmq/quorums_chainlocks.h"
 #include "llmq/quorums_dkgsessionmgr.h"
@@ -520,6 +521,31 @@ static bool ProcessPQAuth(CNode* peer, const std::string& command, CDataStream& 
             {reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size()}, index,
             chainActive.Height(), Params().GetConsensus().MasternodeCollateralMinConf(), reason)) return reject();
     } catch (const std::exception&) { return reject(); }
+    return true;
+}
+
+static bool ProcessPQFinality(CNode* peer, const std::string& command, CDataStream& bytes)
+{
+    LOCK(cs_main);
+    // Finality traffic is only accepted from a running runtime; a peer sending
+    // it without finality configured is disconnected.
+    auto& state = *State(peer->GetId());
+    auto& manager = pqfinality::Manager::Get();
+    if (!manager.Started()) {
+        peer->fDisconnect = true;
+        return false;
+    }
+    const Span<const unsigned char> payload(reinterpret_cast<const unsigned char*>(bytes.data()),
+                                            bytes.size());
+    if (command == NetMsgType::PQPROP) manager.OnProposal(*peer, payload);
+    else if (command == NetMsgType::PQVOTE) manager.OnVote(*peer, payload);
+    else if (command == NetMsgType::PQCMT) manager.OnCommitment(*peer, payload);
+    else {
+        state.pqClosed = true;
+        peer->fDisconnect = true;
+        return false;
+    }
+    (void)state;
     return true;
 }
 
@@ -1743,8 +1769,11 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
         return true;
     }
 
-    if (strCommand == NetMsgType::PQHELLO || strCommand == NetMsgType::PQAUTH)
-        return ProcessPQAuth(pfrom, strCommand, vRecv, *connman);
+        if (strCommand == NetMsgType::PQHELLO || strCommand == NetMsgType::PQAUTH)
+            return ProcessPQAuth(pfrom, strCommand, vRecv, *connman);
+        if (strCommand == NetMsgType::PQPROP || strCommand == NetMsgType::PQVOTE ||
+            strCommand == NetMsgType::PQCMT)
+            return ProcessPQFinality(pfrom, strCommand, vRecv);
 
     if (strCommand == NetMsgType::VERSION) {
         // Each connection can only send one version message
