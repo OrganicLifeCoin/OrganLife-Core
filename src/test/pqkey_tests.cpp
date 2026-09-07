@@ -10,6 +10,18 @@
 #include <algorithm>
 #include <iterator>
 #include <sodium.h>
+#ifndef WIN32
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+#ifdef __APPLE__
+#include <membership.h>
+#include <sys/acl.h>
+#endif
+#ifdef __linux__
+#include <crypto/common.h>
+#include <sys/xattr.h>
+#endif
 
 namespace {
 pqwallet::SecureBytes TestSeed()
@@ -30,6 +42,165 @@ const pqwallet::SecureBytes MASTER(32, 42); // Public test material only.
 }
 
 BOOST_AUTO_TEST_SUITE(pqkey_tests)
+
+#if defined(__linux__) || defined(__APPLE__)
+BOOST_AUTO_TEST_CASE(operator_credentials_load_from_private_files)
+{
+    struct TemporaryCredentials {
+        const fs::path path = fs::temp_directory_path() / fs::unique_path("olc-credentials-%%%%-%%%%-%%%%");
+        ~TemporaryCredentials() { fs::remove_all(path); }
+    } temporary;
+    const auto& directory = temporary.path;
+    BOOST_REQUIRE(fs::create_directory(directory));
+    BOOST_REQUIRE_EQUAL(chmod(directory.c_str(), 0700), 0);
+    const auto recordFile = directory / "olc-pq-operator-record";
+    const auto keyFile = directory / "olc-pq-operator-key";
+    const uint256 genesis = uint256S("1234");
+    pqwallet::Record record;
+    BOOST_REQUIRE(pqwallet::EncryptOperatorSeed(TestSeed(), MASTER, "regtest", genesis, record));
+    CDataStream bytes(SER_DISK, 0); bytes << record;
+    {
+        fsbridge::ofstream file(recordFile, std::ios::binary);
+        file.write(bytes.data(), bytes.size());
+        BOOST_REQUIRE(file.good());
+    }
+    {
+        fsbridge::ofstream file(keyFile, std::ios::binary);
+        file.write(reinterpret_cast<const char*>(MASTER.data()), MASTER.size());
+        BOOST_REQUIRE(file.good());
+    }
+    BOOST_REQUIRE_EQUAL(chmod(recordFile.c_str(), 0400), 0);
+    BOOST_REQUIRE_EQUAL(chmod(keyFile.c_str(), 0400), 0);
+    mldsa44::Key key; std::string reason = "stale failure";
+    BOOST_REQUIRE_MESSAGE(pqwallet::LoadOperatorCredentials(directory, "regtest", genesis, key, reason), reason);
+    BOOST_CHECK(key.GetPublicKey() == record.public_key);
+    BOOST_CHECK(reason.empty());
+    BOOST_CHECK(!pqwallet::LoadOperatorCredentials(directory, "test", genesis, key, reason));
+    BOOST_CHECK(!key.IsValid()); BOOST_CHECK(!reason.empty());
+    BOOST_CHECK(!pqwallet::LoadOperatorCredentials(directory, "regtest", uint256S("1235"), key, reason));
+    BOOST_CHECK(!key.IsValid());
+
+    const auto reject = [&](const fs::path& path) {
+        BOOST_REQUIRE(key.SetSeed(TestSeed()));
+        reason = "stale failure";
+        BOOST_CHECK(!pqwallet::LoadOperatorCredentials(path, "regtest", genesis, key, reason));
+        BOOST_CHECK(!key.IsValid());
+        BOOST_CHECK_EQUAL(reason, "Could not load private PQ operator credentials");
+    };
+    for (const auto& path : {fs::path(), fs::path("operator-credentials"),
+                            fs::path(directory.string() + "/"), directory / ".",
+                            directory / ".." / "operator-credentials",
+                            fs::path(directory.string() + std::string("\0ignored", 8))})
+        reject(path);
+    const auto alias = directory / "credential-alias";
+    fs::create_directory_symlink(directory, alias);
+    reject(alias);
+    BOOST_REQUIRE(fs::remove(alias));
+    for (const mode_t mode : {0000, 0100, 0600, 0704, 0720, 01700, 02700, 04700}) {
+        BOOST_REQUIRE_EQUAL(chmod(directory.c_str(), mode), 0);
+        reject(directory);
+    }
+    BOOST_REQUIRE_EQUAL(chmod(directory.c_str(), 0700), 0);
+
+    const auto write = [&](const fs::path& path, const std::string& data) {
+        fsbridge::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file.write(data.data(), data.size());
+        file.close();
+        BOOST_REQUIRE(file.good());
+        BOOST_REQUIRE_EQUAL(chmod(path.c_str(), 0400), 0);
+    };
+    for (const auto& path : {recordFile, keyFile}) {
+        const std::string good = path == recordFile ? std::string(bytes.begin(), bytes.end()) :
+            std::string(reinterpret_cast<const char*>(MASTER.data()), MASTER.size());
+        for (const mode_t mode : {0000, 0200, 0404, 0420, 01400, 02400, 04400}) {
+            BOOST_REQUIRE_EQUAL(chmod(path.c_str(), mode), 0);
+            reject(directory);
+        }
+        BOOST_REQUIRE_EQUAL(chmod(path.c_str(), 0400), 0);
+        fs::create_hard_link(path, alias);
+        reject(directory);
+        BOOST_REQUIRE(fs::remove(alias));
+        fs::rename(path, alias);
+        reject(directory); // Missing credential.
+        fs::create_symlink(alias, path);
+        reject(directory);
+        BOOST_REQUIRE(fs::remove(path));
+        BOOST_REQUIRE(fs::create_directory(path));
+        reject(directory);
+        BOOST_REQUIRE(fs::remove(path));
+        BOOST_REQUIRE_EQUAL(mkfifo(path.c_str(), 0600), 0);
+        reject(directory); // Must not block opening a FIFO with no writer.
+        BOOST_REQUIRE(fs::remove(path));
+        for (const auto& bad : {std::string(), good.substr(0, good.size() - 1),
+                               good + "x", std::string(good.size(), '\0')}) {
+            write(path, bad);
+            reject(directory);
+            BOOST_REQUIRE(fs::remove(path));
+        }
+        fs::rename(alias, path);
+    }
+#ifdef __linux__
+    // Kernel xattr layout: version 2 and five canonical 8-byte ACL entries.
+    std::array<unsigned char, 44> acl{};
+    WriteLE32(acl.data(), 2);
+    const uint16_t tags[] = {1, 2, 4, 16, 32};
+    for (const auto& path : {directory, recordFile, keyFile}) {
+        const uint16_t access = path == directory ? 5 : 4;
+        for (size_t i = 0; i < 5; ++i) {
+            WriteLE16(acl.data() + 4 + i * 8, tags[i]);
+            WriteLE16(acl.data() + 6 + i * 8, i == 2 || i == 4 ? 0 : access);
+            WriteLE32(acl.data() + 8 + i * 8, i == 1 ? geteuid() + 1 : 0xffffffff);
+        }
+        if (geteuid() == 0) {
+            WriteLE32(acl.data() + 16, 0);
+            BOOST_REQUIRE_EQUAL(setxattr(path.c_str(), "system.posix_acl_access", acl.data(), acl.size(), 0), 0);
+            BOOST_REQUIRE_MESSAGE(pqwallet::LoadOperatorCredentials(directory, "regtest", genesis, key, reason), reason);
+            BOOST_CHECK(key.GetPublicKey() == record.public_key);
+            BOOST_CHECK(reason.empty());
+            WriteLE32(acl.data() + 16, 1);
+        }
+        BOOST_REQUIRE_EQUAL(setxattr(path.c_str(), "system.posix_acl_access", acl.data(), acl.size(), 0), 0);
+        reject(directory); // An extra named user must never inherit access.
+        BOOST_REQUIRE_EQUAL(removexattr(path.c_str(), "system.posix_acl_access"), 0);
+        BOOST_REQUIRE_EQUAL(chmod(path.c_str(), path == directory ? 0700 : 0400), 0);
+    }
+#endif
+#ifdef __APPLE__
+    // Extended ACLs can grant access not reflected in the POSIX mode bits.
+    for (const auto& path : {directory, recordFile, keyFile}) {
+        acl_t acl = acl_init(1);
+        BOOST_REQUIRE(acl != nullptr);
+        acl_entry_t entry;
+        uuid_t user;
+        BOOST_REQUIRE_EQUAL(mbr_uid_to_uuid(geteuid(), user), 0);
+        BOOST_REQUIRE_EQUAL(acl_create_entry(&acl, &entry), 0);
+        BOOST_REQUIRE_EQUAL(acl_set_tag_type(entry, ACL_EXTENDED_ALLOW), 0);
+        BOOST_REQUIRE_EQUAL(acl_set_qualifier(entry, user), 0);
+        acl_permset_t perms;
+        BOOST_REQUIRE_EQUAL(acl_get_permset(entry, &perms), 0);
+        BOOST_REQUIRE_EQUAL(acl_add_perm(perms, ACL_READ_DATA), 0);
+        BOOST_REQUIRE_EQUAL(acl_set_file(path.c_str(), ACL_TYPE_EXTENDED, acl), 0);
+        acl_free(acl);
+        reject(directory);
+        acl = acl_init(0);
+        BOOST_REQUIRE(acl != nullptr);
+        BOOST_REQUIRE_EQUAL(acl_set_file(path.c_str(), ACL_TYPE_EXTENDED, acl), 0);
+        acl_free(acl);
+    }
+#endif
+    for (const std::string network : {"", "main", "unknown"}) {
+        BOOST_REQUIRE(key.SetSeed(TestSeed()));
+        BOOST_CHECK(!pqwallet::LoadOperatorCredentials(directory, network, genesis, key, reason));
+        BOOST_CHECK(!key.IsValid());
+    }
+    BOOST_REQUIRE(key.SetSeed(TestSeed()));
+    BOOST_CHECK(!pqwallet::LoadOperatorCredentials(directory, "regtest", uint256(), key, reason));
+    BOOST_CHECK(!key.IsValid());
+    BOOST_REQUIRE_MESSAGE(pqwallet::LoadOperatorCredentials(directory, "regtest", genesis, key, reason), reason);
+    BOOST_CHECK(key.GetPublicKey() == record.public_key);
+    BOOST_CHECK(reason.empty());
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(operator_storage_is_separate_from_wallet_and_chain_bound)
 {

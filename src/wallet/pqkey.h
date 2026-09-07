@@ -7,6 +7,7 @@
 #include <pqaddress.h>
 #include <serialize.h>
 #include <uint256.h>
+#include <fs.h>
 #include <string>
 
 namespace pqwallet {
@@ -34,6 +35,11 @@ bool EncryptOperatorSeed(const SecureBytes& seed, const SecureBytes& wrapping_ke
                          const std::string& network, const uint256& genesis, Record& record);
 bool DecryptOperatorKey(const SecureBytes& wrapping_key, const Record& record,
                         const std::string& network, const uint256& genesis, mldsa44::Key& key);
+// Read-only Linux/macOS credential delivery, not provisioning or operator authority.
+// Caller supplies a trusted absolute credential directory and chain identity.
+// Other platforms fail closed; no environment/config fallback or secret logging.
+bool LoadOperatorCredentials(const fs::path& directory, const std::string& network,
+                             const uint256& genesis, mldsa44::Key& key, std::string& reason);
 } // namespace pqwallet
 
 #endif // ORGANICLIFE_WALLET_PQKEY_H
