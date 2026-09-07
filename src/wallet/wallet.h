@@ -1100,6 +1100,8 @@ public:
         CAmount m_mine_cs_delegated_trusted{0};  //!< Trusted, at depth=GetBalance.min_depth or more. Part of m_mine_trusted as well
     };
     Balance GetBalance(int min_depth = 0) const;
+    // Read-only PQ reporting; does not grant ownership to legacy signers.
+    Balance GetPQBalance(int min_depth = 0) const;
 
     CAmount loopTxsBalance(const std::function<void(const uint256&, const CWalletTx&, CAmount&)>&method) const;
     CAmount GetAvailableBalance(bool fIncludeDelegated = true, bool fIncludeShielded = true) const;

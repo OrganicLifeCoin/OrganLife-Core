@@ -14,6 +14,7 @@
 #include "txmempool.h"
 #include "validation.h"
 #include "wallet/db.h"
+#include "wallet/rpcwallet.h"
 #include "wallet/wallet.h"
 #include "wallet/walletutil.h"
 
@@ -24,10 +25,6 @@
 
 #include <boost/test/unit_test.hpp>
 #include <univalue.h>
-
-extern UniValue importmulti(const JSONRPCRequest& request);
-extern UniValue dumpwallet(const JSONRPCRequest& request);
-extern UniValue importwallet(const JSONRPCRequest& request);
 
 // how many times to run all the tests to have a chance to catch errors that only show up with particular random shuffles
 #define RUN_TESTS 100
@@ -756,157 +753,105 @@ BOOST_AUTO_TEST_CASE(legacy_named_wallet_migration_moves_directory_wallet_into_n
     BOOST_CHECK_EQUAL(ReadFileContents(backupDir / "DeveloperWallet" / "wallet.dat"), "developer");
 }
 
-static void AddKey(CWallet& wallet, const CKey& key)
-{
-    LOCK(wallet.cs_wallet);
-    wallet.AddKeyPubKey(key, key.GetPubKey());
-}
+struct PQRescanSetup : TestnetSetup {
+    struct RescanWallet : CWallet {
+        using CWallet::CWallet;
+        ~RescanWallet() { GetDBHandle().Flush(true); }
+    } wallet{"rescan", WalletDatabase::Create(GetDataDir() / "rescan-wallet")};
+    CScript scriptPubKey;
+    PQRescanSetup()
+    {
+        bool firstRun;
+        BOOST_REQUIRE_EQUAL(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+        const SecureString passphrase = "public-rescan-test-passphrase";
+        BOOST_REQUIRE(wallet.EncryptWallet(passphrase));
+        BOOST_REQUIRE(wallet.Unlock(passphrase));
+        std::string address;
+        BOOST_REQUIRE(wallet.GeneratePQAddress(address));
+        pq::KeyID id;
+        BOOST_REQUIRE(pq::DecodeAddress(address, Params().NetworkIDString(), id));
+        BOOST_REQUIRE(wallet.Lock());
+        scriptPubKey = pq::GetScript(id);
+    }
+    ~PQRescanSetup() { SetMockTime(0); }
 
-BOOST_FIXTURE_TEST_CASE(rescan, TestChain100Setup)
+    std::shared_ptr<CBlock> minePQBlock() {
+        std::unique_ptr<CBlockTemplate> blockTemplate = BlockAssembler(
+                Params(), false).CreateNewBlock(scriptPubKey);
+        BOOST_REQUIRE(blockTemplate);
+        std::shared_ptr<CBlock> block = std::make_shared<CBlock>(blockTemplate->block);
+        const int height = WITH_LOCK(cs_main, return chainActive.Height() + 1);
+        BOOST_REQUIRE(SolveBlock(block, height));
+        BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+        BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), block->GetHash());
+        return block;
+    }
+};
+
+BOOST_FIXTURE_TEST_CASE(rescan, PQRescanSetup)
 {
+    const auto firstBlock = minePQBlock();
     // Cap last block file size, and mine new block in a new block file.
-    CBlockIndex* const nullBlock = nullptr;
     CBlockIndex* oldTip = chainActive.Tip();
     GetBlockFileInfo(oldTip->GetBlockPos().nFile)->nSize = MAX_BLOCKFILE_SIZE;
-    CreateAndProcessBlock({}, GetScriptForRawPubKey(coinbaseKey.GetPubKey()));
+    const auto secondBlock = minePQBlock();
     CBlockIndex* newTip = chainActive.Tip();
-
-    LOCK(cs_main);
-
+    BOOST_REQUIRE(oldTip->GetBlockPos().nFile != newTip->GetBlockPos().nFile);
+    WITH_LOCK(wallet.cs_wallet, wallet.SetLastBlockProcessed(newTip));
+    BOOST_REQUIRE(wallet.mapWallet.empty());
     // Verify ScanForWalletTransactions picks up transactions in both the old
     // and new block files.
-    {
-        CWallet wallet("dummy", WalletDatabase::CreateDummy());
-        WITH_LOCK(wallet.cs_wallet, wallet.SetLastBlockProcessed(newTip); );
-        AddKey(wallet, coinbaseKey);
-        WalletRescanReserver reserver(&wallet);
-        reserver.reserve();
-        BOOST_CHECK_EQUAL(nullBlock, wallet.ScanForWalletTransactions(oldTip, nullptr, reserver));
-        const CScript scriptPubKey = GetScriptForRawPubKey(coinbaseKey.GetPubKey());
-        CBlock oldBlock;
-        CBlock newBlock;
-        BOOST_REQUIRE(ReadBlockFromDisk(oldBlock, oldTip));
-        BOOST_REQUIRE(ReadBlockFromDisk(newBlock, newTip));
-        const auto sumToScript = [&](const CTransactionRef& tx) {
-            CAmount v = 0;
-            for (const auto& out : tx->vout) {
-                if (out.scriptPubKey == scriptPubKey) v += out.nValue;
-            }
-            return v;
-        };
-        const CAmount expectedImmature = sumToScript(oldBlock.vtx.at(0)) + sumToScript(newBlock.vtx.at(0));
-        BOOST_CHECK_EQUAL(wallet.GetImmatureBalance(), expectedImmature);
+    WalletRescanReserver reserver(&wallet);
+    BOOST_REQUIRE(reserver.reserve());
+    BOOST_CHECK_EQUAL(nullptr, wallet.ScanForWalletTransactions(oldTip, nullptr, reserver));
+    BOOST_REQUIRE_EQUAL(wallet.mapWallet.size(), 2U);
+    for (const auto& block : {firstBlock, secondBlock}) {
+        const auto* recovered = wallet.GetWalletTx(block->vtx[0]->GetHash());
+        BOOST_REQUIRE(recovered);
+        BOOST_CHECK(wallet.IsPQMine(recovered->tx->vout[0]));
+        BOOST_CHECK_EQUAL(recovered->tx->vout[0].nValue, block->vtx[0]->GetValueOut());
     }
-
-    // !TODO: Prune the older block file.
-    /*
-    PruneOneBlockFile(oldTip->GetBlockPos().nFile);
-    UnlinkPrunedFiles({oldTip->GetBlockPos().nFile});
-
-    // Verify ScanForWalletTransactions only picks transactions in the new block
-    // file.
-    {
-        CWallet wallet("dummy", WalletDatabase::CreateDummy());
-        AddKey(wallet, coinbaseKey);
-        WalletRescanReserver reserver(&wallet);
-        reserver.reserve();
-        BOOST_CHECK_EQUAL(oldTip, wallet.ScanForWalletTransactions(oldTip, nullptr, reserver));;
-        BOOST_CHECK_EQUAL(wallet.GetImmatureBalance(), 250 * COIN);
-    }
-    */
-
-    // Verify importmulti RPC returns failure for a key whose creation time is
-    // before the missing block, and success for a key whose creation time is
-    // after.
-    {
-        CWallet wallet("dummy", WalletDatabase::CreateDummy());
-        WITH_LOCK(wallet.cs_wallet, wallet.SetLastBlockProcessed(newTip); );
-        vpwallets.insert(vpwallets.begin(), &wallet);
-        UniValue keys;
-        keys.setArray();
-        UniValue key;
-        key.setObject();
-        key.pushKV("scriptPubKey", HexStr(GetScriptForRawPubKey(coinbaseKey.GetPubKey())));
-        key.pushKV("timestamp", 0);
-        key.pushKV("internal", UniValue(true));
-        keys.push_back(key);
-        key.clear();
-        key.setObject();
-        CKey futureKey;
-        futureKey.MakeNewKey(true);
-        key.pushKV("scriptPubKey", HexStr(GetScriptForRawPubKey(futureKey.GetPubKey())));
-        key.pushKV("timestamp", newTip->GetBlockTimeMax() + TIMESTAMP_WINDOW + 1);
-        key.pushKV("internal", UniValue(true));
-        keys.push_back(key);
-        JSONRPCRequest request;
-        request.params.setArray();
-        request.params.push_back(keys);
-
-        UniValue response = importmulti(request);
-        // !TODO: after pruning, check that the rescan for the first key fails.
-        BOOST_CHECK_EQUAL(response.write(), "[{\"success\":true},{\"success\":true}]");
-        vpwallets.erase(vpwallets.begin());
-    }
+    BOOST_CHECK_EQUAL(wallet.GetPQBalance().m_mine_trusted, firstBlock->vtx[0]->GetValueOut());
+    BOOST_CHECK_EQUAL(wallet.GetPQBalance().m_mine_immature, secondBlock->vtx[0]->GetValueOut());
+    BOOST_CHECK(wallet.IsLocked());
 }
 
-// Verify importwallet RPC starts rescan at earliest block with timestamp
-// greater or equal than key birthday. Previously there was a bug where
-// importwallet RPC would start the scan at the latest block with timestamp less
-// than or equal to key birthday.
-BOOST_FIXTURE_TEST_CASE(importwallet_rescan, TestChain100Setup)
+BOOST_FIXTURE_TEST_CASE(rescan_from_time_boundary, PQRescanSetup)
 {
-    // Create one block
-    const int64_t BLOCK_TIME = chainActive.Tip()->GetBlockTimeMax() + 15;
-    SetMockTime(BLOCK_TIME);
-    coinbaseTxns.emplace_back(*CreateAndProcessBlock({}, GetScriptForRawPubKey(coinbaseKey.GetPubKey())).vtx[0]);
+    // PQ keys have no legacy birthday metadata; exercise the same timestamp
+    // boundary on a wallet that has not received any block notifications.
+    const int64_t start = Params().GenesisBlock().GetBlockTime() + 10000;
+    SetMockTime(start);
+    const auto before = minePQBlock();
+    SetMockTime(start + 15);
+    const auto boundary = minePQBlock();
+    const int64_t keyTime = boundary->GetBlockTime() + TIMESTAMP_WINDOW;
+    SetMockTime(keyTime);
+    const auto after = minePQBlock();
+    WITH_LOCK(wallet.cs_wallet, wallet.SetLastBlockProcessed(chainActive.Tip()));
+    BOOST_REQUIRE(wallet.mapWallet.empty());
+    WalletRescanReserver reserver(&wallet);
+    BOOST_REQUIRE(reserver.reserve());
+    BOOST_CHECK_EQUAL(wallet.RescanFromTime(keyTime, reserver, true), keyTime);
+    BOOST_CHECK_EQUAL(wallet.mapWallet.size(), 2U);
+    BOOST_CHECK(!wallet.GetWalletTx(before->vtx[0]->GetHash()));
+    BOOST_CHECK(wallet.GetWalletTx(boundary->vtx[0]->GetHash()));
+    BOOST_CHECK(wallet.GetWalletTx(after->vtx[0]->GetHash()));
+    BOOST_CHECK(wallet.IsLocked());
+}
 
-    // Set key birthday to block time increased by the timestamp window, so
-    // rescan will start at the block time.
-    const int64_t KEY_TIME = BLOCK_TIME + TIMESTAMP_WINDOW;
-    SetMockTime(KEY_TIME);
-    coinbaseTxns.emplace_back(*CreateAndProcessBlock({}, GetScriptForRawPubKey(coinbaseKey.GetPubKey())).vtx[0]);
-
-    std::string backup_file = (SetDataDir("importwallet_rescan") / "wallet.backup").string();
-
-    // Import key into wallet and call dumpwallet to create backup file.
-    {
-        CWallet wallet("dummy", WalletDatabase::CreateDummy());
-        {
-            LOCK(wallet.cs_wallet);
-            wallet.mapKeyMetadata[coinbaseKey.GetPubKey().GetID()].nCreateTime = KEY_TIME;
-            wallet.AddKeyPubKey(coinbaseKey, coinbaseKey.GetPubKey());
-        }
-
+BOOST_AUTO_TEST_CASE(legacy_wallet_text_import_export_is_not_exposed)
+{
+    CRPCTable commands;
+    RegisterWalletRPCCommands(commands);
+    for (const auto* method : {"dumpwallet", "importwallet", "importmulti"}) {
+        BOOST_CHECK(commands[method] == nullptr);
         JSONRPCRequest request;
-        request.params.setArray();
-        request.params.push_back(backup_file);
-        vpwallets.insert(vpwallets.begin(), &wallet);
-        ::dumpwallet(request);
+        request.strMethod = method;
+        request.params = UniValue(UniValue::VARR);
+        BOOST_CHECK_EXCEPTION(commands.execute(request), UniValue,
+            [](const UniValue& error) { return error["code"].get_int() == -32601; });
     }
-
-    // Call importwallet RPC and verify all blocks with timestamps >= BLOCK_TIME
-    // were scanned, and no prior blocks were scanned.
-    {
-        CWallet wallet("dummy", WalletDatabase::CreateDummy());
-
-        JSONRPCRequest request;
-        request.params.setArray();
-        request.params.push_back(backup_file);
-        vpwallets[0] = &wallet;
-        ::importwallet(request);
-
-        LOCK(wallet.cs_wallet);
-        BOOST_CHECK_EQUAL(wallet.mapWallet.size(), 2);
-        BOOST_CHECK_EQUAL(coinbaseTxns.size(), 102);
-        for (size_t i = 0; i < coinbaseTxns.size(); ++i) {
-            bool found = wallet.GetWalletTx(coinbaseTxns[i].GetHash());
-            bool expected = i >= 100;
-            BOOST_CHECK_EQUAL(found, expected);
-        }
-    }
-
-    SetMockTime(0);
-    vpwallets.erase(vpwallets.begin());
 }
 
 void removeTxFromMempool(CWalletTx& wtx)

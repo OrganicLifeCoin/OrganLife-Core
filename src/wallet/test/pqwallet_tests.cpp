@@ -5,6 +5,7 @@
 #include <wallet/pqkey.h>
 #include <wallet/rpcwallet.h>
 #include <key_io.h>
+#include <interfaces/wallet.h>
 #include <pqtransaction.h>
 #include <policy/policy.h>
 #include <wallet/fees.h>
@@ -626,6 +627,80 @@ BOOST_AUTO_TEST_CASE(pq_relevance_is_separate_from_ordinary_coin_selection)
     BOOST_CHECK_EQUAL(CallRPC("listpqunspent").size(), 0U);
     BOOST_REQUIRE(m_wallet.AbandonTransaction(outgoing.GetHash()));
     BOOST_CHECK_EQUAL(CallRPC("listpqunspent").size(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(pq_balance_reports_confirmed_immature_and_pending_while_locked)
+{
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 0);
+    BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
+    std::string address;
+    BOOST_REQUIRE(m_wallet.GeneratePQAddress(address));
+    pq::KeyID id;
+    BOOST_REQUIRE(pq::DecodeAddress(address, "regtest", id));
+    BOOST_REQUIRE(m_wallet.Lock());
+    const auto* tip = WITH_LOCK(cs_main, return chainActive.Tip());
+    WITH_LOCK(m_wallet.cs_wallet, m_wallet.SetLastBlockProcessed(tip));
+    auto add = [&](unsigned tag, CAmount value, bool confirmed, bool coinbase) {
+        LOCK2(cs_main, m_wallet.cs_wallet);
+        CMutableTransaction tx;
+        tx.nLockTime = tag;
+        tx.vin.emplace_back(coinbase ? COutPoint() : COutPoint(uint256S("abcd"), tag), CScript());
+        tx.vout.emplace_back(value, pq::GetScript(id));
+        auto ref = MakeTransactionRef(tx);
+        const auto confirmation = confirmed ? CWalletTx::Confirmation{CWalletTx::Status::CONFIRMED,
+            tip->nHeight, tip->GetBlockHash(), 0} : CWalletTx::Confirmation{};
+        BOOST_REQUIRE(m_wallet.AddToWalletIfInvolvingMe(ref, confirmation, true));
+        if (confirmed) pcoinsTip->AddCoin({ref->GetHash(), 0}, Coin(tx.vout[0], tip->nHeight, coinbase, false), false);
+        else mempool.addUnchecked(ref->GetHash(), TestMemPoolEntryHelper().FromTx(tx));
+        return ref;
+    };
+    const auto mature = add(0, 13 * COIN, true, false);
+    const auto immature = add(1, 7 * COIN, true, true);
+    const auto pending = add(2, 3 * COIN, false, false);
+    WITH_LOCK(m_wallet.cs_wallet, m_wallet.LockCoin({mature->GetHash(), 0}));
+    auto check = [&](CAmount confirmed, CAmount unconfirmed, CAmount immature_value) {
+        const auto info = CallRPC("getwalletinfo");
+        BOOST_CHECK_EQUAL(AmountFromValue(info["balance"]), confirmed);
+        BOOST_CHECK_EQUAL(AmountFromValue(info["unconfirmed_balance"]), unconfirmed);
+        BOOST_CHECK_EQUAL(AmountFromValue(info["immature_balance"]), immature_value);
+        const auto displayed = interfaces::Wallet(m_wallet).getBalances();
+        BOOST_CHECK_EQUAL(displayed.balance, confirmed);
+        BOOST_CHECK_EQUAL(displayed.unconfirmed_balance, unconfirmed);
+        BOOST_CHECK_EQUAL(displayed.immature_balance, immature_value);
+        BOOST_CHECK_NO_THROW(BOOST_CHECK_EQUAL(AmountFromValue(CallRPC("getbalance")), confirmed));
+        BOOST_CHECK_NO_THROW(BOOST_CHECK_EQUAL(AmountFromValue(CallRPC("getunconfirmedbalance")), unconfirmed));
+        BOOST_CHECK(m_wallet.IsLocked());
+    };
+    check(13 * COIN, 3 * COIN, 7 * COIN);
+    BOOST_CHECK_EQUAL(AmountFromValue(CallRPC("getbalance 2")), 0);
+    BOOST_CHECK_EQUAL(AmountFromValue(CallRPC("getbalance 0 true true true")), 13 * COIN);
+    BOOST_CHECK_EQUAL(AmountFromValue(CallRPC("getbalance 0 false false false")), 13 * COIN);
+    // Balance visibility must not authorize the old signing/selection path.
+    BOOST_CHECK_EQUAL(m_wallet.GetAvailableBalance(), 0);
+    BOOST_CHECK(m_wallet.GetPQUnspent(false).empty());
+    BOOST_CHECK_EQUAL(m_wallet.GetPQUnspent(true).size(), 1U);
+    // A mempool child consumes the incoming output even before a wallet
+    // notification arrives. Count only its remaining owned change.
+    CMutableTransaction child;
+    child.vin.emplace_back(pending->GetHash(), 0);
+    child.vout.emplace_back(2 * COIN, pq::GetScript(id));
+    const auto child_ref = MakeTransactionRef(child);
+    mempool.addUnchecked(child_ref->GetHash(), TestMemPoolEntryHelper().FromTx(child));
+    check(13 * COIN, 0, 7 * COIN);
+    WITH_LOCK(m_wallet.cs_wallet, BOOST_REQUIRE(m_wallet.AddToWalletIfInvolvingMe(child_ref, {}, true)));
+    check(13 * COIN, 2 * COIN, 7 * COIN);
+    WITH_LOCK(m_wallet.cs_wallet, m_wallet.mapWallet.at(child_ref->GetHash()).setAbandoned());
+    check(13 * COIN, 0, 7 * COIN);
+    mempool.removeRecursive(*child_ref, MemPoolRemovalReason::CONFLICT);
+    check(13 * COIN, 3 * COIN, 7 * COIN);
+    mempool.clear();
+    check(13 * COIN, 0, 7 * COIN);
+    WITH_LOCK(m_wallet.cs_wallet, m_wallet.mapWallet.at(pending->GetHash()).fInMempool = true); // stale notification is not membership
+    check(13 * COIN, 0, 7 * COIN);
+    WITH_LOCK(cs_main, pcoinsTip->SpendCoin({mature->GetHash(), 0}));
+    WITH_LOCK(cs_main, pcoinsTip->SpendCoin({immature->GetHash(), 0}));
+    check(0, 0, 0);
 }
 
 BOOST_AUTO_TEST_CASE(pq_listing_waits_for_pending_wallet_notifications)

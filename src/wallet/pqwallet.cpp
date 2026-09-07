@@ -170,6 +170,45 @@ bool CWallet::IsPQCollateral(const COutPoint& outpoint) const
     return pqmn::Index(*evoDb, Params()).FindCollateral(outpoint, registration);
 }
 
+CWallet::Balance CWallet::GetPQBalance(int min_depth) const
+{
+    LOCK2(cs_main, cs_wallet);
+    Balance balance;
+    if (!PQPaymentsActive()) return balance;
+    const auto& consensus = Params().GetConsensus();
+    const auto add = [&](CAmount& total, CAmount value) {
+        if (!consensus.MoneyRange(value) || value > consensus.nMaxMoneyOut - total)
+            throw std::runtime_error("PQ wallet balance out of range");
+        total += value;
+    };
+    // Keep existing mature-balance semantics: manual locks and MN collateral
+    // remain visible, while governance-locked outputs are not available.
+    for (const auto& coin : GetPQUnspent(true))
+        if (coin.nDepth >= min_depth) add(balance.m_mine_trusted, coin.Value());
+
+    for (const auto& item : mapWallet) {
+        const auto& wtx = item.second;
+        if (!CheckFinalTx(wtx.tx) || wtx.isAbandoned() || wtx.isConflicted()) continue;
+        const bool pending = wtx.isUnconfirmed() && mempool.exists(item.first) &&
+            !wtx.IsCoinBase() && !wtx.IsCoinStake();
+        const auto* block = wtx.isConfirmed() ? LookupBlockIndex(wtx.m_confirm.hashBlock) : nullptr;
+        const bool immature = block && chainActive.Contains(block) &&
+            wtx.m_confirm.block_height == block->nHeight && wtx.IsInMainChainImmature();
+        if (!pending && !immature) continue;
+        for (uint32_t i = 0; i < wtx.tx->vout.size(); ++i) {
+            const auto& output = wtx.tx->vout[i];
+            const COutPoint outpoint(item.first, i);
+            if (!IsPQMine(output) || output.nValue <= 0 || IsSpent(outpoint) || mempool.isSpent(outpoint)) continue;
+            if (immature) {
+                const auto& coin = pcoinsTip->AccessCoin(outpoint);
+                if (coin.IsSpent() || coin.out != output || coin.nHeight != block->nHeight) continue;
+            }
+            add(pending ? balance.m_mine_untrusted_pending : balance.m_mine_immature, output.nValue);
+        }
+    }
+    return balance;
+}
+
 std::vector<COutput> CWallet::GetPQUnspent(bool include_locked, const CCoinControl* coin_control) const
 {
     LOCK2(cs_main, cs_wallet);

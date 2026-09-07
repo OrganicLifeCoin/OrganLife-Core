@@ -10,26 +10,27 @@
 #include "test/librust/utiltest.h"
 
 #include "rpc/server.h"
+#include "rpc/protocol.h"
+#include "rpc/register.h"
 
 #include "core_io.h"
 #include "key_io.h"
 #include "consensus/merkle.h"
 #include "wallet/wallet.h"
 #include "wallet/walletutil.h"
+#include "wallet/rpcwallet.h"
 
 #include "sapling/key_io_sapling.h"
 #include "sapling/address.h"
 #include "sapling/sapling_operation.h"
 
 #include <algorithm>
-#include <unordered_set>
+#include <initializer_list>
 
 #include <boost/test/unit_test.hpp>
 
 #include <univalue.h>
 
-
-extern UniValue CallRPC(std::string args); // Implemented in rpc_tests.cpp
 
 namespace {
 
@@ -67,8 +68,34 @@ namespace {
         return GetTestMasterSaplingSpendingKey().Derive(0x12345);
     }
 
-    std::string ForeignSaplingAddress() {
-        return KeyIO::EncodePaymentAddress(ForeignSaplingSpendingKey().DefaultAddress());
+    void CheckRemovedSaplingRPC(const char* method,
+                                std::initializer_list<std::string> arguments) {
+        const std::string originalNetwork = Params().NetworkIDString();
+        for (const std::string& network : {CBaseChainParams::MAIN,
+                                           CBaseChainParams::TESTNET,
+                                           CBaseChainParams::REGTEST}) {
+            SelectParams(network);
+            CRPCTable commands;
+            RegisterAllCoreRPCCommands(commands);
+            RegisterWalletRPCCommands(commands);
+
+            BOOST_TEST_CONTEXT(network << ": " << method) {
+                BOOST_CHECK(commands[method] == nullptr);
+                BOOST_CHECK(tableRPC[method] == nullptr);
+                for (const std::string& argument : arguments) {
+                    JSONRPCRequest request;
+                    request.strMethod = method;
+                    BOOST_REQUIRE(request.params.read(argument));
+                    BOOST_CHECK_EXCEPTION(commands.execute(request), UniValue,
+                        [&](const UniValue& error) {
+                            return find_value(error, "code").get_int() == RPC_METHOD_NOT_FOUND &&
+                                   find_value(error, "message").get_str() ==
+                                       std::string("Method not found: ") + method;
+                        });
+                }
+            }
+        }
+        SelectParams(originalNetwork);
     }
 
 }
@@ -82,265 +109,55 @@ BOOST_FIXTURE_TEST_SUITE(sapling_rpc_wallet_tests, WalletTestingSetup)
 BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_validateaddress)
 {
     SelectParams(CBaseChainParams::MAIN);
-    WalletRegistration walletRegistration(m_wallet);
+    const auto foreignAddress = ForeignSaplingSpendingKey().DefaultAddress();
+    const std::string encodedAddress = KeyIO::EncodePaymentAddress(foreignAddress);
+    SelectParams(CBaseChainParams::TESTNET);
+    const std::string wrongNetworkAddress = KeyIO::EncodePaymentAddress(foreignAddress);
+    SelectParams(CBaseChainParams::MAIN);
 
-    UniValue retValue;
-
-    // Check number of args
-    BOOST_CHECK_THROW(CallRPC("validateaddress"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("validateaddress toomany args"), std::runtime_error);
-
-    // Wallet should be empty:
-    std::set<libzcash::SaplingPaymentAddress> addrs;
-    m_wallet.GetSaplingPaymentAddresses(addrs);
-    BOOST_CHECK(addrs.size()==0);
-
-    // This Sapling address is not valid, it belongs to another network
-    BOOST_CHECK_NO_THROW(retValue = CallRPC("validateaddress ptestsapling1nrn6exksuqtpld9gu6fwdz4hwg54h2x37gutdds89pfyg6mtjf63km45a8eare5qla45cj75vs8"));
-    UniValue resultObj = retValue.get_obj();
-    bool b = find_value(resultObj, "isvalid").get_bool();
-    BOOST_CHECK_EQUAL(b, false);
-
-    // This Sapling address is valid, but the spending key is not in this wallet
-    const auto foreignKey = ForeignSaplingSpendingKey();
-    const auto foreignAddress = foreignKey.DefaultAddress();
-    BOOST_CHECK_NO_THROW(retValue = CallRPC("validateaddress " + KeyIO::EncodePaymentAddress(foreignAddress)));
-    resultObj = retValue.get_obj();
-    b = find_value(resultObj, "isvalid").get_bool();
-    BOOST_CHECK_EQUAL(b, true);
-    b = find_value(resultObj, "ismine").get_bool();
-    BOOST_CHECK_EQUAL(b, false);
-    BOOST_CHECK_EQUAL(find_value(resultObj, "diversifier").get_str(), HexStr(foreignAddress.d));
-    BOOST_CHECK_EQUAL(find_value(resultObj, "diversifiedtransmissionkey").get_str(), foreignAddress.pk_d.GetHex());
+    // Keep Sapling decoding coverage while asserting the RPC is not exposed in PQ-only mode.
+    BOOST_CHECK(!KeyIO::IsValidPaymentAddressString("not-a-sapling-address"));
+    BOOST_CHECK(KeyIO::IsValidPaymentAddressString(encodedAddress));
+    BOOST_CHECK(!KeyIO::IsValidPaymentAddressString(wrongNetworkAddress));
+    BOOST_CHECK_EQUAL(KeyIO::EncodePaymentAddress(
+                          KeyIO::DecodePaymentAddress(encodedAddress)), encodedAddress);
+    CheckRemovedSaplingRPC("validateaddress", {"[]", "[null]", "[\"" + encodedAddress + "\"]"});
 }
 
 BOOST_AUTO_TEST_CASE(rpc_wallet_getbalance)
 {
-    {
-        LOCK(m_wallet.cs_wallet);
-        m_wallet.SetMinVersion(FEATURE_SAPLING);
-        m_wallet.SetupSPKM(false);
-    }
-    WalletRegistration walletRegistration(m_wallet);
-
-    BOOST_CHECK_THROW(CallRPC("getshieldbalance too many args"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("getshieldbalance invalidaddress"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("getshieldbalance tmC6YZnCUhm19dEXxh3Jb7srdBJxDawaCab"), std::runtime_error);
-    const std::string foreignAddress = ForeignSaplingAddress();
-    BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance " + foreignAddress));
-    BOOST_CHECK_THROW(CallRPC("getshieldbalance " + foreignAddress + " -1"), std::runtime_error);
-    BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance " + foreignAddress + " 0"));
-    BOOST_CHECK_THROW(CallRPC("getshieldbalance tnRZ8bPq2pff3xBWhTJhNkVUkm2uhzksDeW5PvEa7aFKGT9Qi3YgTALZfjaY4jU3HLVKBtHdSXxoPoLA3naMPcHBcY88FcF 1"), std::runtime_error);
-    BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance *"));
-    BOOST_CHECK_NO_THROW(CallRPC("getshieldbalance * 6"));
-    BOOST_CHECK_THROW(CallRPC("getshieldbalance * -1"), std::runtime_error);
-
-    BOOST_CHECK_THROW(CallRPC("listreceivedbyshieldaddress too many args"), std::runtime_error);
-    // negative minconf not allowed
-    BOOST_CHECK_THROW(CallRPC("listreceivedbyshieldaddress DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ -1"), std::runtime_error);
-    // invalid zaddr, taddr not allowed
-    BOOST_CHECK_THROW(CallRPC("listreceivedbyshieldaddress DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ 0"), std::runtime_error);
-    // don't have the spending key
-    BOOST_CHECK_THROW(CallRPC("listreceivedbyshieldaddress " + foreignAddress + " 1"), std::runtime_error);
+    CheckRemovedSaplingRPC("getshieldbalance", {"[]", "[null]", "[\"*\"]"});
+    CheckRemovedSaplingRPC("listreceivedbyshieldaddress", {"[]", "[null]", "[\"DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ\",-1]"});
 }
 
 BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_importkey_paymentaddress)
 {
-    {
-        LOCK(m_wallet.cs_wallet);
-        m_wallet.SetMinVersion(FEATURE_SAPLING);
-        m_wallet.SetupSPKM(false);
-    }
-    WalletRegistration walletRegistration(m_wallet);
-
-    auto testAddress = [](const std::string& key) {
-        UniValue ret;
-        BOOST_CHECK_NO_THROW(ret = CallRPC("importsaplingkey " + key));
-        auto defaultAddr = find_value(ret, "address").get_str();
-        BOOST_CHECK_NO_THROW(ret = CallRPC("validateaddress " + defaultAddr));
-        ret = ret.get_obj();
-        BOOST_CHECK_EQUAL(true, find_value(ret, "isvalid").get_bool());
-        BOOST_CHECK_EQUAL(true, find_value(ret, "ismine").get_bool());
-    };
-
-    testAddress(KeyIO::EncodeSpendingKey(ForeignSaplingSpendingKey()));
+    const auto foreignKey = ForeignSaplingSpendingKey();
+    const std::string encodedKey = KeyIO::EncodeSpendingKey(foreignKey);
+    BOOST_CHECK_EQUAL(KeyIO::EncodeSpendingKey(KeyIO::DecodeSpendingKey(encodedKey)), encodedKey);
+    BOOST_CHECK(KeyIO::EncodeSpendingKey(KeyIO::DecodeSpendingKey("not-a-spending-key")).empty());
+    CheckRemovedSaplingRPC("importsaplingkey", {"[]", "[null]", "[\"" + encodedKey + "\"]"});
 }
 
 /*
- * This test covers RPC commands listsaplingaddresses, importsaplingkey, exportsaplingkey
+ * This test covers RPC commands listshieldaddresses, importsaplingkey, exportsaplingkey
  */
 BOOST_AUTO_TEST_CASE(rpc_wallet_sapling_importexport)
 {
-    {
-        LOCK(m_wallet.cs_wallet);
-        m_wallet.SetMinVersion(FEATURE_SAPLING);
-        m_wallet.SetupSPKM(false);
-    }
-    WalletRegistration walletRegistration(m_wallet);
-
-    UniValue retValue;
-    int n1 = 1000; // number of times to import/export
-    int n2 = 1000; // number of addresses to create and list
-
-    // error if no args
-    BOOST_CHECK_THROW(CallRPC("importsaplingkey"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("exportsaplingkey"), std::runtime_error);
-
-    // error if too many args
-    BOOST_CHECK_THROW(CallRPC("importsaplingkey way too many args"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("exportsaplingkey toomany args"), std::runtime_error);
-
-    // error if invalid args
-    auto m = GetTestMasterSaplingSpendingKey();
-    std::string prefix = std::string("importsaplingkey ") + KeyIO::EncodeSpendingKey(m) + " yes ";
-    BOOST_CHECK_THROW(CallRPC(prefix + "-1"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC(prefix + "2147483647"), std::runtime_error); // allowed, but > height of active chain tip
-    BOOST_CHECK_THROW(CallRPC(prefix + "2147483648"), std::runtime_error); // not allowed, > int32 used for nHeight
-    BOOST_CHECK_THROW(CallRPC(prefix + "100badchars"), std::runtime_error);
-
-    // wallet should currently be empty
-    std::set<libzcash::SaplingPaymentAddress> saplingAddrs;
-    m_wallet.GetSaplingPaymentAddresses(saplingAddrs);
-    BOOST_CHECK(saplingAddrs.empty());
-
-    // verify import and export key
-    for (int i = 0; i < n1; i++) {
-        // create a random Sapling key locally
-        auto testSaplingSpendingKey = m.Derive(i);
-        auto testSaplingPaymentAddress = testSaplingSpendingKey.DefaultAddress();
-        std::string testSaplingAddr = KeyIO::EncodePaymentAddress(testSaplingPaymentAddress);
-        std::string testSaplingKey = KeyIO::EncodeSpendingKey(testSaplingSpendingKey);
-        BOOST_CHECK_NO_THROW(CallRPC(std::string("importsaplingkey ") + testSaplingKey));
-        BOOST_CHECK_NO_THROW(retValue = CallRPC(std::string("exportsaplingkey ") + testSaplingAddr));
-        BOOST_CHECK_EQUAL(retValue.get_str(), testSaplingKey);
-    }
-
-    // Verify we can list the keys imported
-    BOOST_CHECK_NO_THROW(retValue = CallRPC("listshieldaddresses"));
-    UniValue arr = retValue.get_array();
-    BOOST_CHECK((int) arr.size() == n1);
-
-    // Put addresses into a set
-    std::unordered_set<std::string> myaddrs;
-    for (const UniValue& element : arr.getValues()) {
-        myaddrs.insert(element.get_str());
-    }
-
-    // Make new addresses for the set
-    for (int i=0; i<n2; i++) {
-        myaddrs.insert(KeyIO::EncodePaymentAddress(m_wallet.GenerateNewSaplingZKey()));
-    }
-
-    // Verify number of addresses stored in wallet is n1+n2
-    int numAddrs = myaddrs.size();
-    BOOST_CHECK(numAddrs == n1 + n2);
-    m_wallet.GetSaplingPaymentAddresses(saplingAddrs);
-    BOOST_CHECK((int) saplingAddrs.size() == numAddrs);
-
-    // Ask wallet to list addresses
-    BOOST_CHECK_NO_THROW(retValue = CallRPC("listshieldaddresses"));
-    arr = retValue.get_array();
-    BOOST_CHECK((int) arr.size() == numAddrs);
-
-    // Create a set from them
-    std::unordered_set<std::string> listaddrs;
-    for (const UniValue& element : arr.getValues()) {
-        listaddrs.insert(element.get_str());
-    }
-
-    // Verify the two sets of addresses are the same
-    BOOST_CHECK((int) listaddrs.size() == numAddrs);
-    BOOST_CHECK(myaddrs == listaddrs);
-
-}
-
-// Check if address is of given type and spendable from our wallet.
-void CheckHaveAddr(CWallet& pwallet, const libzcash::PaymentAddress& addr)
-{
-
-    BOOST_CHECK(IsValidPaymentAddress(addr));
-    auto addr_of_type = boost::get<libzcash::SaplingPaymentAddress>(&addr);
-    BOOST_ASSERT(addr_of_type != nullptr);
-    BOOST_CHECK(pwallet.HaveSpendingKeyForPaymentAddress(*addr_of_type));
+    const std::string encodedKey = KeyIO::EncodeSpendingKey(ForeignSaplingSpendingKey());
+    CheckRemovedSaplingRPC("importsaplingkey", {"[]", "[null]", "[\"" + encodedKey + "\"]"});
+    CheckRemovedSaplingRPC("exportsaplingkey", {"[]", "[null]", "[\"DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ\"]"});
+    CheckRemovedSaplingRPC("listshieldaddresses", {"[]", "[null]", "[true]"});
 }
 
 BOOST_AUTO_TEST_CASE(rpc_wallet_getnewshieldaddress)
 {
-    {
-        LOCK(m_wallet.cs_wallet);
-        m_wallet.SetMinVersion(FEATURE_SAPLING);
-        m_wallet.SetupSPKM(false);
-    }
-    WalletRegistration walletRegistration(m_wallet);
-
-    // No parameter defaults to sapling address
-    UniValue addr = CallRPC("getnewshieldaddress");
-    CheckHaveAddr(m_wallet, KeyIO::DecodePaymentAddress(addr.get_str()));
-    // Too many arguments will throw with the help
-    BOOST_CHECK_THROW(CallRPC("getnewshieldaddress many args"), std::runtime_error);
-
+    CheckRemovedSaplingRPC("getnewshieldaddress", {"[]", "[null]", "[\"label\"]"});
 }
 
 BOOST_AUTO_TEST_CASE(rpc_shieldsendmany_parameters)
 {
-    {
-        LOCK(m_wallet.cs_wallet);
-        m_wallet.SetMinVersion(FEATURE_SAPLING);
-        m_wallet.SetupSPKM(false);
-    }
-    WalletRegistration walletRegistration(m_wallet);
-
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany toofewargs"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany just too many args here"), std::runtime_error);
-
-    // bad from address
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany "
-                              "INVALIDDMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ []"), std::runtime_error);
-    // empty amounts
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany "
-                              "DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ []"), std::runtime_error);
-
-    // don't have the spending key for this address
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany " + ForeignSaplingAddress() + " []"), std::runtime_error);
-
-    // duplicate address
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany "
-                              "DDTBEPEaub5sk31mUifiv5nHGXtHGnuAJc "
-                              "[{\"address\":\"DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ\", \"amount\":50.0},"
-                              " {\"address\":\"DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ\", \"amount\":12.0} ]"
-    ), std::runtime_error);
-
-    // invalid fee amount, cannot be negative
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany "
-                              "DDTBEPEaub5sk31mUifiv5nHGXtHGnuAJc "
-                              "[{\"address\":\"DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ\", \"amount\":50.0}] "
-                              "1 -0.0001"
-    ), std::runtime_error);
-
-    // invalid fee amount, bigger than MAX_MONEY
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany "
-                              "DDTBEPEaub5sk31mUifiv5nHGXtHGnuAJc "
-                              "[{\"address\":\"DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ\", \"amount\":50.0}] "
-                              "1 21000001"
-    ), std::runtime_error);
-
-    // fee amount is bigger than sum of outputs
-    BOOST_CHECK_THROW(CallRPC("shieldsendmany "
-                              "DDTBEPEaub5sk31mUifiv5nHGXtHGnuAJc "
-                              "[{\"address\":\"DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ\", \"amount\":50.0}] "
-                              "1 50.00000001"
-    ), std::runtime_error);
-
-    // memo bigger than allowed length of ZC_MEMO_SIZE
-    std::vector<char> v (2 * (ZC_MEMO_SIZE+1));     // x2 for hexadecimal string format
-    std::fill(v.begin(),v.end(), 'A');
-    std::string badmemo(v.begin(), v.end());
-    auto pa = m_wallet.GenerateNewSaplingZKey();
-    std::string zaddr1 = KeyIO::EncodePaymentAddress(pa);
-    BOOST_CHECK_THROW(CallRPC(std::string("shieldsendmany DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ ")
-                              + "[{\"address\":\"" + zaddr1 + "\", \"amount\":123.456}]"), std::runtime_error);
-
+    CheckRemovedSaplingRPC("shieldsendmany", {"[]", "[null]", "[\"from_transparent\",[]]"});
 }
 
 // TODO: test private methods
@@ -353,12 +170,10 @@ BOOST_AUTO_TEST_CASE(saplingOperationTests)
     auto consensusParams = Params().GetConsensus();
     WalletRegistration walletRegistration(m_wallet);
 
-    UniValue retValue;
-
     // add keys manually
-    BOOST_CHECK_NO_THROW(retValue = CallRPC("getnewaddress"));
-    const std::string& taddrStr = retValue.get_str();
-    const CTxDestination& taddr1 = DecodeDestination(taddrStr);
+    auto transparentAddress = m_wallet.getNewAddress("");
+    BOOST_REQUIRE(transparentAddress);
+    const CTxDestination& taddr1 = *transparentAddress.getObjResult();
     const auto& zaddr1 = m_wallet.GenerateNewSaplingZKey();
     std::string ret;
 
@@ -512,54 +327,7 @@ BOOST_AUTO_TEST_CASE(rpc_shieldsendmany_taddr_to_sapling)
 
 BOOST_AUTO_TEST_CASE(rpc_listshieldunspent_parameters)
 {
-    {
-        LOCK(m_wallet.cs_wallet);
-        m_wallet.SetupSPKM(false);
-    }
-    WalletRegistration walletRegistration(m_wallet);
-
-    UniValue retValue;
-
-    // too many args
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 2 3 4 5"), std::runtime_error);
-
-    // minconf must be >= 0
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent -1"), std::runtime_error);
-
-    // maxconf must be > minconf
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 2 1"), std::runtime_error);
-
-    // maxconf must not be out of range
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 9999999999"), std::runtime_error);
-
-    // must be an array of addresses
-    const std::string foreignAddress = ForeignSaplingAddress();
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false " + foreignAddress), std::runtime_error);
-
-    // address must be string
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false [123456]"), std::runtime_error);
-
-    // no spending key
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false [\"" + foreignAddress + "\"]"), std::runtime_error);
-
-    // allow watch only
-    BOOST_CHECK_NO_THROW(CallRPC("listshieldunspent 1 999 true [\"" + foreignAddress + "\"]"));
-
-    // wrong network, testnet/regtest instead of mainnet
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 true [\"ptestsapling1wpurflqllgkcs48m46yu9ktlfe3ahndely20dpaanqq3lw9l5xw7yfehst68yclvlpz7x8cltxe\"]"), std::runtime_error);
-
-    // create shielded address so we have the spending key
-    BOOST_CHECK_NO_THROW(retValue = CallRPC("getnewshieldaddress"));
-    std::string myzaddr = retValue.get_str();
-
-    // return empty array for this address
-    BOOST_CHECK_NO_THROW(retValue = CallRPC("listshieldunspent 1 999 false [\"" + myzaddr + "\"]"));
-    UniValue arr = retValue.get_array();
-    BOOST_CHECK_EQUAL(0, arr.size());
-
-    // duplicate address error
-    BOOST_CHECK_THROW(CallRPC("listshieldunspent 1 999 false [\"" + myzaddr + "\", \"" + myzaddr + "\"]"), std::runtime_error);
-
+    CheckRemovedSaplingRPC("listshieldunspent", {"[]", "[null]", "[1,999,true,[\"DMKU6mc52un1MThGCsnNwAtEvncaTdAuaZ\"]]"});
 }
 
 BOOST_AUTO_TEST_SUITE_END()

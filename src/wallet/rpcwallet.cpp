@@ -2417,6 +2417,10 @@ UniValue getbalance(const JSONRPCRequest& request)
             "\nReturns the server's total available balance.\n"
             "The available balance is what the wallet considers currently spendable, and is\n"
             "thus affected by options which limit spendability such as -spendzeroconfchange.\n"
+            "On PQ test chains this reports confirmed, mature owned PQ outputs, including\n"
+            "manually locked outputs and masternode collateral, but excluding governance locks.\n"
+            "Pending PQ change is reported by getunconfirmedbalance, not included here.\n"
+            "The legacy watch-only, delegated and shield flags do not affect PQ balances.\n"
 
             "\nArguments:\n"
             "1. minconf          (numeric, optional, default=0) Only include transactions confirmed at least this many times.\n"
@@ -2451,7 +2455,8 @@ UniValue getbalance(const JSONRPCRequest& request)
                                               (fIncludeShielded ? ISMINE_WATCH_ONLY_ALL : ISMINE_WATCH_ONLY) : ISMINE_NO);
     filter |= fIncludeDelegated ? ISMINE_SPENDABLE_DELEGATED : ISMINE_NO;
     filter |= fIncludeShielded ? ISMINE_SPENDABLE_SHIELDED : ISMINE_NO;
-    return ValueFromAmount(pwallet->GetAvailableBalance(filter, true, nMinDepth));
+    return ValueFromAmount(Params().IsTestChain() ? pwallet->GetPQBalance(nMinDepth).m_mine_trusted :
+        pwallet->GetAvailableBalance(filter, true, nMinDepth));
 }
 
 UniValue getcoldstakingbalance(const JSONRPCRequest& request)
@@ -2533,7 +2538,8 @@ UniValue getunconfirmedbalance(const JSONRPCRequest& request)
 
     LOCK2(cs_main, pwallet->cs_wallet);
 
-    return ValueFromAmount(pwallet->GetUnconfirmedBalance());
+    return ValueFromAmount(Params().IsTestChain() ? pwallet->GetPQBalance().m_mine_untrusted_pending :
+        pwallet->GetUnconfirmedBalance());
 }
 
 /*
@@ -4583,11 +4589,12 @@ UniValue getwalletinfo(const JSONRPCRequest& request)
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("walletname", pwallet->GetName());
     obj.pushKV("walletversion", pwallet->GetVersion());
-    obj.pushKV("balance", ValueFromAmount(pwallet->GetAvailableBalance()));
+    const auto pq_balance = Params().IsTestChain() ? pwallet->GetPQBalance() : CWallet::Balance{};
+    obj.pushKV("balance", ValueFromAmount(Params().IsTestChain() ? pq_balance.m_mine_trusted : pwallet->GetAvailableBalance()));
     obj.pushKV("delegated_balance", ValueFromAmount(pwallet->GetDelegatedBalance()));
     obj.pushKV("cold_staking_balance", ValueFromAmount(pwallet->GetColdStakingBalance()));
-    obj.pushKV("unconfirmed_balance", ValueFromAmount(pwallet->GetUnconfirmedBalance()));
-    obj.pushKV("immature_balance",    ValueFromAmount(pwallet->GetImmatureBalance()));
+    obj.pushKV("unconfirmed_balance", ValueFromAmount(Params().IsTestChain() ? pq_balance.m_mine_untrusted_pending : pwallet->GetUnconfirmedBalance()));
+    obj.pushKV("immature_balance", ValueFromAmount(Params().IsTestChain() ? pq_balance.m_mine_immature : pwallet->GetImmatureBalance()));
     obj.pushKV("immature_delegated_balance",    ValueFromAmount(pwallet->GetImmatureDelegatedBalance()));
     obj.pushKV("immature_cold_staking_balance",    ValueFromAmount(pwallet->GetImmatureColdStakingBalance()));
     obj.pushKV("txcount", (int)pwallet->mapWallet.size());
@@ -5119,6 +5126,7 @@ void RegisterWalletRPCCommands(CRPCTable &tableRPC)
     static const std::set<std::string> pqOnlyCommands{
         "abandontransaction", "abortrescan", "backupwallet", "encryptwallet",
         "getnewpqaddress", "createpqoperator", "listpqoperators", "getstakingstatus", "gettransaction", "getwalletinfo",
+        "getbalance", "getunconfirmedbalance",
         "listpqaddresses", "listpqunspent", "listwallets", "rescanblockchain",
         "sendpqtoaddress", "walletlock", "walletpassphrase", "walletpassphrasechange"
     };
