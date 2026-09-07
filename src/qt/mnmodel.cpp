@@ -12,6 +12,8 @@
 #include "optional.h"
 #include "qt/walletmodel.h"
 #include "tiertwo/tiertwo_sync_state.h"
+#include <validation.h>
+#include <utilstrencodings.h>
 
 #include <QHostAddress>
 
@@ -47,6 +49,23 @@ void MNModel::updateMNList()
     beginResetModel();
     nodes.clear();
     collateralTxAccepted.clear();
+    pqNodes.clear();
+    pqError.clear();
+    if (Params().IsRegTestNet()) {
+        LOCK(cs_main);
+        pqHeight = chainActive.Height();
+        try {
+            if (!pq::MasternodesActive(Params(), pqHeight + 1) || !evoDb)
+                throw std::runtime_error("inactive registry");
+            pqmn::Index registry(*evoDb, Params());
+            if (!registry.MatchesChainTip(chainActive.Tip())) throw std::runtime_error("stale registry");
+            pqNodes = registry.List();
+        } catch (const std::exception&) {
+            pqError = tr("PQ registry inactive, unavailable or syncing. No controller actions are available.");
+        }
+        endResetModel();
+        return;
+    }
     for (const CMasternodeConfig::CMasternodeEntry& mne : masternodeConfig.getEntries()) {
         CDeterministicMNCPtr dmn = nullptr;
         CService service;
@@ -64,14 +83,21 @@ int MNModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid())
         return 0;
-    return nodes.size();
+    return Params().IsRegTestNet() ? pqNodes.size() : nodes.size();
 }
 
 int MNModel::columnCount(const QModelIndex &parent) const
 {
     if (parent.isValid())
         return 0;
-    return 6;
+    return WAS_COLLATERAL_ACCEPTED + 1;
+}
+
+Optional<std::pair<uint256, pqmn::Record>> MNModel::pqRecord(const QModelIndex& index) const
+{
+    if (!index.isValid() || index.model() != this || index.row() < 0 ||
+        static_cast<size_t>(index.row()) >= pqNodes.size()) return nullopt;
+    return pqNodes[index.row()];
 }
 
 
@@ -81,7 +107,31 @@ QVariant MNModel::data(const QModelIndex &index, int role) const
             return QVariant();
 
     int row = index.row();
+    if (Params().IsRegTestNet() && role == Qt::ToolTipRole) {
+        const auto entry = pqRecord(index);
+        return entry ? QVariant(QString::fromStdString(entry->first.GetHex())) : QVariant();
+    }
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
+        if (Params().IsRegTestNet()) {
+            const auto entry = pqRecord(index);
+            if (!entry) return {};
+            const auto& record = entry->second;
+            switch (index.column()) {
+            case ALIAS: {
+                const auto id = QString::fromStdString(entry->first.GetHex());
+                return role == Qt::EditRole ? id : id.left(12) + "…" + id.right(8);
+            }
+            case ADDRESS: return record.service == CService() ? tr("Endpoint not set") : QString::fromStdString(record.service.ToString());
+            case STATUS: return record.revoked ? tr("REVOKED") :
+                (record.MatureAt(std::max(0, pqHeight), Params().GetConsensus().MasternodeCollateralMinConf()) ?
+                    tr("REGISTERED") : tr("IMMATURE"));
+            case PUB_KEY: return QString::fromStdString(HexStr(record.operatorKey));
+            case COLLATERAL_ID: return QString::fromStdString(record.collateral.hash.GetHex());
+            case COLLATERAL_OUT_INDEX: return QString::number(record.collateral.n);
+            case WAS_COLLATERAL_ACCEPTED: return true;
+            default: return {}; // Never return operator secrets or legacy authority fields.
+            }
+        }
         if (row < 0 || row >= nodes.size())
             return QVariant();
         const QString mnAlias = nodes.keys().value(row);
@@ -116,8 +166,7 @@ QVariant MNModel::data(const QModelIndex &index, int role) const
 
 QModelIndex MNModel::index(int row, int column, const QModelIndex& parent) const
 {
-    Q_UNUSED(parent);
-    if (row < 0 || row >= nodes.size())
+    if (parent.isValid() || row < 0 || row >= rowCount() || column < 0 || column >= columnCount())
         return QModelIndex();
     return createIndex(row, column, nullptr);
 }

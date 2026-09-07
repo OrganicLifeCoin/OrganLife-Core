@@ -14,6 +14,7 @@
 
 #include <QTimer>
 #include <QWidget>
+#include <QPersistentModelIndex>
 
 class OrganicLifeGUI;
 class MNModel;
@@ -36,6 +37,7 @@ public:
     ~MasterNodesWidget();
     void resetCoinControl();
     void setMNModel(MNModel* _mnModel);
+    void clearWalletModel() override;
 
     void run(int type) override;
     void onError(QString error, int type) override;
@@ -60,7 +62,7 @@ private:
     FurAbstractListItemDelegate *delegate;
     MNModel *mnModel = nullptr;
     TooltipMenu* menu = nullptr;
-    QModelIndex index;
+    QPersistentModelIndex index;
     QTimer *timer = nullptr;
     CoinControlDialog* coinControlDialog = nullptr;
 
@@ -69,6 +71,8 @@ private:
     bool checkMNsNetwork();
     void startAlias(const QString& strAlias);
     bool startAll(QString& failedMN, bool onlyMissing);
+    void loadWalletModel() override;
+    void pqOperation(int action);
 };
 
 #endif // PIVX_QT_MASTERNODESWIDGET_H

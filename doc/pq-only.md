@@ -191,8 +191,23 @@ request whose response was lost; do not blindly repeat collateral funding.
 The RPC help contains the full option contract. Ordinary CLI JSON conversion
 is supported for the options object.
 
-This does not yet provide a usable masternode: Qt management, service
-verification, rewards and quorum finality remain unavailable. Public P2P and
+The familiar Qt Masternodes page is available on regtest. It reads the current
+confirmed registry (including registrations not controlled by the selected
+wallet), shows immature/registered/revoked state, and offers registration,
+service updates, payout updates/operator rotation and revocation. It uses
+existing wallet addresses and backed operator identities created with
+`createpqoperator`. Registration currently creates a new collateral output with
+zero operator commission; existing bonds, commission and operator provisioning
+remain available through the RPC workflow. Fee inputs are automatically selected;
+masternode coin control and remote start/stop are not yet connected to this page.
+Every transaction requires full unlock, a verified encrypted snapshot and a
+fee/action confirmation before submission. Cancellation or a wallet switch
+before confirmation does not submit a transaction. Registry refresh invalidates
+row selections, and stale sequence checks remain enforced by the shared core.
+The information dialog shows public data only, never private operator material.
+
+This does not yet provide a usable masternode: service verification, rewards
+and quorum finality remain unavailable. Public P2P and
 cross-platform qualification remain pending. Do not use this opt-in mode with a
 value-bearing wallet.
 

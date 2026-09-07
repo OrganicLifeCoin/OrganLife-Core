@@ -12,6 +12,7 @@
 #include "clientmodel.h"
 #include "defaultdialog.h"
 #include "governancemodel.h"
+#include "masternodeswidget.h"
 #include "guiinterface.h"
 #include "interfaces/handler.h"
 #include "networkstyle.h"
@@ -212,6 +213,7 @@ OrganicLifeGUI::OrganicLifeGUI(const NetworkStyle* networkStyle, QWidget* parent
         sendWidget = new SendWidget(this);
         receiveWidget = new ReceiveWidget(this);
         governanceWidget = new GovernanceWidget(this);
+        masternodesWidget = new MasterNodesWidget(this);
         settingsWidget = new SettingsWidget(this);
 
         // Add to parent
@@ -219,6 +221,7 @@ OrganicLifeGUI::OrganicLifeGUI(const NetworkStyle* networkStyle, QWidget* parent
         stackedContainer->addWidget(sendWidget);
         stackedContainer->addWidget(receiveWidget);
         stackedContainer->addWidget(governanceWidget);
+        stackedContainer->addWidget(masternodesWidget);
         stackedContainer->addWidget(settingsWidget);
         stackedContainer->setCurrentWidget(dashboard);
         QTimer::singleShot(0, this, [this]() { updateContentCornerArc(); });
@@ -285,6 +288,7 @@ void OrganicLifeGUI::connectActions()
     connect(receiveWidget, &ReceiveWidget::showHide, this, &OrganicLifeGUI::showHide);
     connect(governanceWidget, &GovernanceWidget::showHide, this, &OrganicLifeGUI::showHide);
     connect(governanceWidget, &GovernanceWidget::execDialog, this, &OrganicLifeGUI::execDialog);
+    connect(masternodesWidget, &MasterNodesWidget::message, this, &OrganicLifeGUI::message);
     connect(navMenu, &NavMenuWidget::walletSelectorRequested, topBar, &TopBar::showWalletSelector);
     connect(topBar, &TopBar::connectionCountChanged, dashboard, &DashboardWidget::setNumConnections);
     connect(dashboard, &DashboardWidget::networkToolsRequested, this, &OrganicLifeGUI::openNetworkMonitor);
@@ -611,6 +615,11 @@ void OrganicLifeGUI::goToGovernance()
     if (Params().IsTestChain() && governanceWidget) showTop(governanceWidget);
 }
 
+void OrganicLifeGUI::goToMasternodes()
+{
+    if (Params().IsRegTestNet() && masternodesWidget) showTop(masternodesWidget);
+}
+
 void OrganicLifeGUI::goToSettings(){
     showTop(settingsWidget);
 }
@@ -819,6 +828,7 @@ bool OrganicLifeGUI::setCurrentWallet(const QString& name)
     sendWidget->setWalletModel(walletModel);
     receiveWidget->setWalletModel(walletModel);
     governanceWidget->setWalletModel(walletModel);
+    masternodesWidget->setWalletModel(walletModel);
     if (govModel) govModel->setWalletModel(walletModel);
     settingsWidget->setWalletModel(walletModel);
     if (rpcConsole) rpcConsole->setWalletModel(walletModel);
@@ -855,6 +865,7 @@ WalletModel* OrganicLifeGUI::removeWallet(const QString& name)
         sendWidget->clearWalletModel();
         receiveWidget->clearWalletModel();
         governanceWidget->clearWalletModel();
+        masternodesWidget->clearWalletModel();
         if (govModel) govModel->setWalletModel(nullptr);
         settingsWidget->clearWalletModel();
         if (rpcConsole) rpcConsole->setWalletModel(nullptr);
@@ -877,6 +888,7 @@ void OrganicLifeGUI::removeAllWallets()
     sendWidget->clearWalletModel();
     receiveWidget->clearWalletModel();
     governanceWidget->clearWalletModel();
+    masternodesWidget->clearWalletModel();
     if (govModel) govModel->setWalletModel(nullptr);
     settingsWidget->clearWalletModel();
     if (rpcConsole) rpcConsole->setWalletModel(nullptr);

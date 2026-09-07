@@ -97,6 +97,9 @@ NavMenuWidget::NavMenuWidget(OrganicLifeGUI *mainWindow, QWidget *parent) :
     for (QWidget* legacy : legacyButtons) {
         legacy->hide();
     }
+    ui->btnMaster->setProperty("name", "master");
+    setupNavButton(ui->btnMaster, tr("Masternodes"));
+    ui->btnMaster->setVisible(Params().IsRegTestNet());
     transactionsButton = new QToolButton(ui->scrollAreaNavVert);
     transactionsButton->setObjectName("btnTransactions");
     transactionsButton->setProperty("name", "transactions");
@@ -110,6 +113,7 @@ NavMenuWidget::NavMenuWidget(OrganicLifeGUI *mainWindow, QWidget *parent) :
     ui->btnGovernance->setVisible(Params().IsTestChain());
     btns = {ui->btnDashboard, ui->btnSend, ui->btnReceive, transactionsButton};
     if (Params().IsTestChain()) btns.append(ui->btnGovernance);
+    if (Params().IsRegTestNet()) btns.append(ui->btnMaster);
     btns.append(ui->btnSettings);
 
     // Match the PQ-only information architecture.
@@ -149,6 +153,10 @@ void NavMenuWidget::connectActions() {
     connect(ui->btnSettings, &QPushButton::clicked, this, &NavMenuWidget::onSettingsClicked);
     connect(transactionsButton, &QToolButton::clicked, this, &NavMenuWidget::onTransactionsClicked);
     connect(ui->btnGovernance, &QToolButton::clicked, this, &NavMenuWidget::onGovClicked);
+    connect(ui->btnMaster, &QToolButton::clicked, this, [this]() {
+        window->goToMasternodes();
+        onNavSelected(ui->btnMaster);
+    });
 
     ui->btnDashboard->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_1));
     ui->btnSend->setShortcut(QKeySequence(SHORT_KEY | Qt::Key_2));

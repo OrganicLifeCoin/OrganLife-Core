@@ -40,6 +40,7 @@ class Notificator;
 class WalletModel;
 class GovernanceModel;
 class ContentCornerArcWidget;
+class MasterNodesWidget;
 
 
 /**
@@ -75,6 +76,7 @@ public Q_SLOTS:
     void goToSend();
     void goToReceive();
     void goToGovernance();
+    void goToMasternodes();
     void goToSettings();
     void goToSettingsInfo();
     void openNetworkMonitor();
@@ -158,6 +160,7 @@ private:
     SendWidget* sendWidget = nullptr;
     ReceiveWidget* receiveWidget = nullptr;
     GovernanceWidget* governanceWidget = nullptr;
+    MasterNodesWidget* masternodesWidget = nullptr;
     SettingsWidget* settingsWidget = nullptr;
 
     SnackBar *snackBar = nullptr;

@@ -7,6 +7,9 @@ class PQWidgetTests : public QObject
 {
     Q_OBJECT
 private Q_SLOTS:
+    void masternodeControllerNavigation();
+    void masternodeRegistryFailsClosed();
+    void masternodeControllerCancelsWithoutWrites();
     void seamlessWalletUsesStandardScreens();
     void actualWalletUnloadQuiescesModel();
     void standardReceiveUsesPQAddressAndBackup();

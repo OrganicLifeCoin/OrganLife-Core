@@ -8,6 +8,7 @@
 #include <QAbstractTableModel>
 #include "masternodeconfig.h"
 #include "qt/walletmodel.h"
+#include <evo/pqmasternode.h>
 
 #include <memory>
 
@@ -47,6 +48,8 @@ public:
     bool removeMn(const QModelIndex& index);
     bool addMn(CMasternodeConfig::CMasternodeEntry* entry);
     void updateMNList();
+    Optional<std::pair<uint256, pqmn::Record>> pqRecord(const QModelIndex& index) const;
+    QString registryError() const { return pqError; }
 
 
     bool isMNsNetworkSynced();
@@ -83,8 +86,11 @@ public:
     void resetCoinControl();
 
 private:
-    WalletModel* walletModel;
-    CCoinControl* coinControl;
+    WalletModel* walletModel{nullptr};
+    CCoinControl* coinControl{nullptr};
+    std::vector<std::pair<uint256, pqmn::Record>> pqNodes;
+    QString pqError;
+    int pqHeight{0};
     // alias mn node ---> pair <ip, dmn (null if not registered)>
     QMap<QString, std::pair<QString, CDeterministicMNCPtr>> nodes;
     QMap<std::string, bool> collateralTxAccepted;
