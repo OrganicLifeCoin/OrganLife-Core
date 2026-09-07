@@ -7,26 +7,20 @@
 
 #include "bls/bls_wrapper.h"
 #include "blockassembler.h"
-#include "consensus/merkle.h"
 #include "consensus/upgrades.h"
 #include "evo/deterministicmns.h"
-#include "evo/providertx.h"
-#include "evo/specialtx_validation.h"
+#include "evo/evodb.h"
 #include "masternode-payments.h"
 #include "netbase.h"
-#include "primitives/transaction.h"
-#include "script/sign.h"
+#include "pqtransaction.h"
 #include "spork.h"
 #include "tiertwo/tiertwo_sync_state.h"
 #include "util/blockstatecatcher.h"
-#include "utilmoneystr.h"
 #include "validation.h"
 
 #include <boost/test/unit_test.hpp>
 
 #include <algorithm>
-#include <limits>
-#include <map>
 
 BOOST_AUTO_TEST_SUITE(mnpayments_tests)
 
@@ -36,308 +30,121 @@ static bool HasPayeeOutput(const CTransactionRef& coinbaseTx, const CScript& pay
                        [&](const CTxOut& out) { return out.scriptPubKey == payee; });
 }
 
-static void ReplacePayeeOutput(CMutableTransaction& coinbaseTx, const CScript& from, const CScript& to)
-{
-    auto it = std::find_if(coinbaseTx.vout.begin(), coinbaseTx.vout.end(),
-                           [&](const CTxOut& out) { return out.scriptPubKey == from; });
-    BOOST_REQUIRE_MESSAGE(it != coinbaseTx.vout.end(), "expected coinbase to pay the original payee");
-    it->scriptPubKey = to;
-}
-
-void enableMnSyncAndMNPayments()
-{
-    // force mnsync complete
-    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_FINISHED);
-
-    // enable SPORK_13
-    int64_t nTime = GetTime() - 10;
-    CSporkMessage spork(SPORK_13_ENABLE_SUPERBLOCKS, nTime + 1, nTime);
-    sporkManager.AddOrUpdateSporkMessage(spork);
-    BOOST_CHECK(sporkManager.IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS));
-
-    spork = CSporkMessage(SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT, nTime + 1, nTime);
-    sporkManager.AddOrUpdateSporkMessage(spork);
-    BOOST_CHECK(sporkManager.IsSporkActive(SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT));
-}
-
-// -----------------------------------------------------------------------------
-// DMN test infrastructure. Mirrors the ProReg-based setup used by
-// evo_deterministicmns_tests: register masternodes through on-chain ProReg
-// special transactions and resolve the payee through the DMN list.
-// -----------------------------------------------------------------------------
-
-// static 0.1 PIV fee used for the special txes in these tests
-static const CAmount fee = 10000000;
-
-struct SimpleUTXO
-{
-    int nHeight;
-    CAmount nValue;
-    bool fCoinbase;
-};
-
-typedef std::map<COutPoint, SimpleUTXO> SimpleUTXOMap;
-
-static bool IsSpendableBy(const CTxOut& out, const CKey& spendKey)
-{
-    const CScript p2pk = CScript() << ToByteVector(spendKey.GetPubKey()) << OP_CHECKSIG;
-    const CScript p2pkh = GetScriptForDestination(spendKey.GetPubKey().GetID());
-    return out.scriptPubKey == p2pk || out.scriptPubKey == p2pkh;
-}
-
-static void AddSpendableOutputs(SimpleUTXOMap& utxos, const CTransaction& tx, int nHeight, const CKey& spendKey, bool fCoinbase)
-{
-    for (size_t j = 0; j < tx.vout.size(); j++) {
-        if (!IsSpendableBy(tx.vout[j], spendKey)) continue;
-        utxos.emplace(std::piecewise_construct,
-                      std::forward_as_tuple(tx.GetHash(), j),
-                      std::forward_as_tuple(SimpleUTXO{nHeight, tx.vout[j].nValue, fCoinbase}));
-    }
-}
-
-static SimpleUTXOMap BuildSimpleUtxoMap(const std::vector<CTransaction>& txs, const CKey& spendKey)
-{
-    SimpleUTXOMap utxos;
-    for (size_t i = 0; i < txs.size(); i++) {
-        AddSpendableOutputs(utxos, txs[i], /*nHeight=*/(int)i + 1, spendKey, /*fCoinbase=*/true);
-    }
-    return utxos;
-}
-
-static std::vector<COutPoint> SelectUTXOs(SimpleUTXOMap& utxos, CAmount amount, CAmount& changeRet)
-{
-    changeRet = 0;
-    amount += fee;
-
-    std::vector<COutPoint> selectedUtxos;
-    CAmount selectedAmount = 0;
-    int chainHeight = WITH_LOCK(cs_main, return chainActive.Height(); );
-    while (!utxos.empty()) {
-        const int maturity = Params().GetConsensus().nCoinbaseMaturity;
-
-        auto bestNonCoinbaseIt = utxos.end();
-        auto bestCoinbaseIt = utxos.end();
-        for (auto it = utxos.begin(); it != utxos.end(); ++it) {
-            if (!it->second.fCoinbase) {
-                if (bestNonCoinbaseIt == utxos.end() || it->second.nValue > bestNonCoinbaseIt->second.nValue) {
-                    bestNonCoinbaseIt = it;
-                }
-                continue;
-            }
-            if (chainHeight - it->second.nHeight < maturity) continue;
-            if (bestCoinbaseIt == utxos.end() || it->second.nValue > bestCoinbaseIt->second.nValue) {
-                bestCoinbaseIt = it;
-            }
-        }
-
-        auto chosenIt = bestNonCoinbaseIt != utxos.end() ? bestNonCoinbaseIt : bestCoinbaseIt;
-        if (chosenIt == utxos.end()) {
-            int minHeight{std::numeric_limits<int>::max()};
-            int maxHeight{std::numeric_limits<int>::min()};
-            size_t coinbaseCount{0};
-            size_t nonCoinbaseCount{0};
-            for (const auto& entry : utxos) {
-                minHeight = std::min(minHeight, entry.second.nHeight);
-                maxHeight = std::max(maxHeight, entry.second.nHeight);
-                if (entry.second.fCoinbase) {
-                    coinbaseCount++;
-                } else {
-                    nonCoinbaseCount++;
-                }
-            }
-            BOOST_REQUIRE_MESSAGE(false,
-                                  strprintf("SelectUTXOs: no eligible UTXO found (chainHeight=%d maturity=%d utxos=%u coinbase=%u noncoinbase=%u minHeight=%d maxHeight=%d)",
-                                            chainHeight, maturity, utxos.size(), coinbaseCount, nonCoinbaseCount,
-                                            minHeight == std::numeric_limits<int>::max() ? -1 : minHeight,
-                                            maxHeight == std::numeric_limits<int>::min() ? -1 : maxHeight));
-        }
-
-        selectedAmount += chosenIt->second.nValue;
-        selectedUtxos.emplace_back(chosenIt->first);
-        utxos.erase(chosenIt);
-        if (selectedAmount >= amount) {
-            changeRet = selectedAmount - amount;
-            break;
-        }
-    }
-
-    BOOST_REQUIRE_MESSAGE(selectedAmount >= amount,
-                          strprintf("SelectUTXOs: insufficient funds (selected=%s required=%s utxos_remaining=%u)",
-                                    FormatMoney(selectedAmount), FormatMoney(amount), utxos.size()));
-    return selectedUtxos;
-}
-
-static void FundTransaction(CMutableTransaction& tx, SimpleUTXOMap& utxos, const CScript& scriptPayout, const CScript& scriptChange, CAmount amount)
-{
-    CAmount change;
-    auto inputs = SelectUTXOs(utxos, amount, change);
-    for (size_t i = 0; i < inputs.size(); i++) {
-        tx.vin.emplace_back(inputs[i]);
-    }
-    tx.vout.emplace_back(CTxOut(amount, scriptPayout));
-    if (change != 0) {
-        tx.vout.emplace_back(change, scriptChange);
-    }
-}
-
-static void SignTransaction(CMutableTransaction& tx, const CKey& coinbaseKey)
-{
-    CBasicKeyStore tempKeystore;
-    tempKeystore.AddKeyPubKey(coinbaseKey, coinbaseKey.GetPubKey());
-
-    for (size_t i = 0; i < tx.vin.size(); i++) {
-        CTransactionRef txFrom;
-        uint256 hashBlock;
-        BOOST_ASSERT(GetTransaction(tx.vin[i].prevout.hash, txFrom, hashBlock));
-        BOOST_ASSERT(SignSignature(tempKeystore, *txFrom, tx, i, SIGHASH_ALL));
-    }
-}
-
 static CKey GetRandomKey()
 {
-    CKey keyRet;
-    keyRet.MakeNewKey(true);
-    return keyRet;
+    CKey key;
+    key.MakeNewKey(true);
+    return key;
 }
 
 static CBLSSecretKey GetRandomBLSKey()
 {
-    CBLSSecretKey sk;
-    sk.MakeNewKey();
-    return sk;
+    CBLSSecretKey key;
+    key.MakeNewKey();
+    return key;
 }
 
 static CScript GenerateRandomAddress()
 {
-    CKey key;
-    key.MakeNewKey(false);
-    return GetScriptForDestination(key.GetPubKey().GetID());
+    return GetScriptForDestination(GetRandomKey().GetPubKey().GetID());
 }
 
-// Creates a ProRegTx with a new collateral in the first output of the tx.
-static CMutableTransaction CreateProRegTx(SimpleUTXOMap& utxos, int port, const CScript& scriptPayout, const CKey& coinbaseKey,
-                                          const CKey& ownerKey,
-                                          const CBLSPublicKey& operatorPubKey)
+static void SetPaymentSettings(bool synced, bool enforce)
 {
-    ProRegPL pl;
-    pl.collateralOutpoint = COutPoint(UINT256_ZERO, 0);
-    pl.addr = LookupNumeric("1.1.1.1", port);
-    pl.keyIDOwner = ownerKey.GetPubKey().GetID();
-    pl.pubKeyOperator = operatorPubKey;
-    pl.keyIDVoting = ownerKey.GetPubKey().GetID();
-    pl.scriptPayout = scriptPayout;
-    pl.nOperatorReward = 0;
-
-    CMutableTransaction tx;
-    tx.nVersion = CTransaction::TxVersion::SAPLING;
-    tx.nType = CTransaction::TxType::PROREG;
-    FundTransaction(tx, utxos, scriptPayout,
-                    GetScriptForDestination(coinbaseKey.GetPubKey().GetID()),
-                    Params().GetConsensus().nMNCollateralAmt);
-
-    pl.inputsHash = CalcTxInputsHash(tx);
-    SetTxPayload(tx, pl);
-    SignTransaction(tx, coinbaseKey);
-
-    return tx;
+    g_tiertwo_sync_state.SetCurrentSyncPhase(synced ? MASTERNODE_SYNC_FINISHED : MASTERNODE_SYNC_INITIAL);
+    const int64_t now = GetTime() - 10;
+    sporkManager.AddOrUpdateSporkMessage(CSporkMessage(
+        SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT, enforce ? now + 1 : 4070908800LL, now));
+    BOOST_CHECK_EQUAL(sporkManager.IsSporkActive(SPORK_8_MASTERNODE_PAYMENT_ENFORCEMENT), enforce);
 }
 
-static bool IsMNPayeeInBlock(const CBlock& block, const CScript& expected)
+struct PQPaymentSetup : TestChainSetup { PQPaymentSetup() : TestChainSetup(0) {} };
+
+BOOST_FIXTURE_TEST_CASE(pq_ignores_stale_legacy_dmn_payments, PQPaymentSetup)
 {
-    for (const auto& txout : block.vtx[0]->vout) {
-        if (txout.scriptPubKey == expected) return true;
-    }
-    return false;
-}
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 0);
 
-BOOST_FIXTURE_TEST_CASE(dmn_payee_test, TestChain100Setup)
-{
-    enableMnSyncAndMNPayments();
+    const CScript minerScript = pq::GetScript(pq::KeyID{});
+    CreateAndProcessBlock({}, minerScript);
+    BOOST_REQUIRE_EQUAL(chainActive.Height(), 1);
 
-    // Advance the chain and enable v6 (deterministic) masternode payments.
-    CreateAndProcessBlock({}, coinbaseKey);
-    CBlockIndex* chainTip = chainActive.Tip();
-    int nHeight = chainTip->nHeight; // 101
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, nHeight + 2);
-    CreateAndProcessBlock({}, coinbaseKey); // last pre-v6 block
-    chainTip = chainActive.Tip();
-    BOOST_CHECK_EQUAL(chainTip->nHeight, ++nHeight);
+    CBlockIndex* tip = WITH_LOCK(cs_main, return chainActive.Tip(););
+    const uint256 tipHash = tip->GetBlockHash();
+    const CScript stalePayee = GenerateRandomAddress();
 
-    // Build the UTXO set from the 100 pre-mined coinbase outputs (250 PIV each on regtest).
-    SimpleUTXOMap utxos = BuildSimpleUtxoMap(coinbaseTxns, coinbaseKey);
+    auto state = std::make_shared<CDeterministicMNState>();
+    state->nRegisteredHeight = 1;
+    state->keyIDOwner = GetRandomKey().GetPubKey().GetID();
+    state->pubKeyOperator.Set(GetRandomBLSKey().GetPublicKey());
+    state->keyIDVoting = state->keyIDOwner;
+    state->addr = LookupNumeric("1.1.1.1", 1001);
+    state->scriptPayout = stalePayee;
 
-    // Register three DMNs, one per block (v6 active from height 103).
-    CCoinsViewCache* view = pcoinsTip.get();
-    int port = 1;
-    for (int i = 0; i < 3; i++) {
-        const CKey& ownerKey = GetRandomKey();
-        const CBLSSecretKey& operatorKey = GetRandomBLSKey();
-        auto tx = CreateProRegTx(utxos, port++, GenerateRandomAddress(), coinbaseKey, ownerKey, operatorKey.GetPublicKey());
-        const uint256& txid = tx.GetHash();
+    auto dmn = std::make_shared<CDeterministicMN>(1);
+    dmn->proTxHash = uint256S("01");
+    dmn->collateralOutpoint = COutPoint(uint256S("02"), 0);
+    dmn->nOperatorReward = 0;
+    dmn->pdmnState = state;
 
-        CValidationState dummyState;
-        BOOST_CHECK(WITH_LOCK(cs_main, return CheckSpecialTx(tx, chainTip, view, dummyState); ));
-
-        CreateAndProcessBlock({tx}, coinbaseKey);
-        chainTip = chainActive.Tip();
-        BOOST_CHECK_EQUAL(chainTip->nHeight, nHeight + 1);
-        BOOST_CHECK(deterministicMNManager->GetListAtChainTip().HasMN(txid));
-
-        AddSpendableOutputs(utxos, CTransaction(tx), nHeight + 1, coinbaseKey, /*fCoinbase=*/false);
-        nHeight++;
-    }
-
-    // Mine 20 blocks: each coinbase must pay the expected DMN payee, and
-    // GetMasternodeTxOuts must resolve to the same payee for that block.
-    for (int i = 0; i < 20; i++) {
-        auto mnList = deterministicMNManager->GetListAtChainTip();
-        auto dmnExpectedPayee = mnList.GetMNPayee();
-        BOOST_REQUIRE(dmnExpectedPayee);
-
-        std::vector<CTxOut> vecMnOuts;
-        BOOST_CHECK(masternodePayments.GetMasternodeTxOuts(chainActive.Tip(), vecMnOuts));
-        BOOST_REQUIRE(!vecMnOuts.empty());
-        BOOST_CHECK_EQUAL(vecMnOuts.size(), 1); // no operator reward configured
-        BOOST_CHECK(vecMnOuts[0].scriptPubKey == dmnExpectedPayee->pdmnState->scriptPayout);
-        BOOST_CHECK_EQUAL(vecMnOuts[0].nValue, GetMasternodePayment(chainActive.Tip()->nHeight + 1));
-
-        CBlock block = CreateAndProcessBlock({}, coinbaseKey);
-        BOOST_CHECK_MESSAGE(IsMNPayeeInBlock(block, dmnExpectedPayee->pdmnState->scriptPayout),
-                            "error: block not paying to the deterministic masternode payee");
-        nHeight++;
-    }
-    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Height();), nHeight);
-
-    // A block paying to a different script instead of the DMN payee must be rejected.
-    auto mnList = deterministicMNManager->GetListAtChainTip();
-    auto dmnExpectedPayee = mnList.GetMNPayee();
-    BOOST_REQUIRE(dmnExpectedPayee);
-    const CScript& payeeScript = dmnExpectedPayee->pdmnState->scriptPayout;
-
-    CBlock badBlock = CreateBlock({}, coinbaseKey);
-    CMutableTransaction coinbase(*badBlock.vtx[0]);
-    ReplacePayeeOutput(coinbase, payeeScript, GenerateRandomAddress());
-    badBlock.vtx[0] = MakeTransactionRef(coinbase);
-    badBlock.hashMerkleRoot = BlockMerkleRoot(badBlock);
-
-    // Outside a governance payment window, the deterministic payee is fully
-    // derivable from the chain and must remain enforced while tier-two data is
-    // syncing (the same state used during initial block download).
-    BOOST_REQUIRE_GE((nHeight + 1) % Params().GetConsensus().nBudgetCycleBlocks, 100);
-    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_INITIAL);
-    BOOST_CHECK(!IsBlockPayeeValid(badBlock, chainActive.Tip()));
-    g_tiertwo_sync_state.SetCurrentSyncPhase(MASTERNODE_SYNC_FINISHED);
-
+    CDeterministicMNList staleList(tipHash, tip->nHeight, 1);
+    staleList.AddMN(dmn);
+    SyncWithValidationInterfaceQueue();
     {
-        auto pBadBlock = std::make_shared<CBlock>(badBlock);
-        SolveBlock(pBadBlock, nHeight + 1);
-        BlockStateCatcherWrapper sc(pBadBlock->GetHash());
-        sc.registerEvent();
-        ProcessNewBlock(pBadBlock, nullptr);
-        BOOST_CHECK(sc.get().found && !sc.get().state.IsValid());
-        BOOST_CHECK_EQUAL(sc.get().state.GetRejectReason(), "bad-cb-payee");
+        LOCK(cs_main);
+        auto transaction = evoDb->BeginTransaction();
+        evoDb->Write(std::make_pair(std::string("dmn_S"), tipHash), staleList);
+        transaction->Commit();
+        BOOST_REQUIRE(evoDb->CommitRootTransaction());
+        deterministicMNManager = std::make_unique<CDeterministicMNManager>(*evoDb);
+        deterministicMNManager->SetTipIndex(tip);
     }
-    BOOST_CHECK(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash();) != badBlock.GetHash());
+
+    const auto loaded = deterministicMNManager->GetListAtChainTip();
+    BOOST_REQUIRE_EQUAL(loaded.GetAllMNsCount(), 1U);
+    const auto loadedMN = loaded.GetMNPayee();
+    BOOST_REQUIRE(loadedMN);
+    BOOST_CHECK(loadedMN->pdmnState->scriptPayout == stalePayee);
+
+    std::vector<CTxOut> legacyPayments;
+    BOOST_REQUIRE(masternodePayments.GetMasternodeTxOuts(tip, legacyPayments));
+    BOOST_REQUIRE_EQUAL(legacyPayments.size(), 1U);
+    BOOST_CHECK(legacyPayments[0].scriptPubKey == stalePayee);
+    BOOST_CHECK_GT(legacyPayments[0].nValue, 0);
+
+    unsigned variant = 0;
+    for (const bool synced : {false, true}) {
+        for (const bool enforce : {false, true}) {
+            SetPaymentSettings(synced, enforce);
+            const CBlock block = CreateBlock({}, minerScript);
+            BOOST_REQUIRE_EQUAL(block.vtx.size(), 1U);
+            BOOST_CHECK(!HasPayeeOutput(block.vtx[0], stalePayee));
+            BOOST_REQUIRE_EQUAL(block.vtx[0]->vout.size(), 1U);
+            BOOST_CHECK(block.vtx[0]->vout[0].scriptPubKey == minerScript);
+            BOOST_CHECK_EQUAL(block.vtx[0]->vout[0].nValue,
+                              GetBlockValue(chainActive.Height() + 1, tip->nChainMinted));
+
+            auto badBlock = std::make_shared<CBlock>(block);
+            CMutableTransaction badCoinbase(*badBlock->vtx[0]);
+            BOOST_REQUIRE_GT(badCoinbase.vout[0].nValue, COIN);
+            badCoinbase.vout[0].nValue -= COIN;
+            badCoinbase.vout.emplace_back(COIN, stalePayee);
+            badCoinbase.nLockTime = ++variant; // distinct invalid-cache entries
+            badBlock->vtx[0] = MakeTransactionRef(badCoinbase);
+            BOOST_REQUIRE(SolveBlock(badBlock, tip->nHeight + 1));
+            BlockStateCatcherWrapper catcher(badBlock->GetHash());
+            catcher.registerEvent();
+            BOOST_CHECK(!ProcessNewBlock(badBlock, nullptr));
+            BOOST_REQUIRE(catcher.get().found);
+            BOOST_CHECK_EQUAL(catcher.get().state.GetRejectReason(), "bad-pq-only-output");
+            BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), tipHash);
+        }
+    }
+
+    SetPaymentSettings(true, true);
+    CBlock goodBlock = CreateBlock({}, minerScript);
+    BOOST_REQUIRE(ProcessNewBlock(std::make_shared<CBlock>(goodBlock), nullptr));
+    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), goodBlock.GetHash());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
