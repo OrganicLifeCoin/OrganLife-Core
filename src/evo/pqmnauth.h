@@ -7,10 +7,11 @@
 #include <fs.h>
 #include <memory>
 
-// Authentication boundary only: no network handler, connection privilege or finality.
+// Registered peer identity only: no connection privilege, service or finality authority.
 namespace pqmnauth {
-// Pending node-owned credentials only. Loading is not registry readiness or
-// service authority; no key export or signing interface is exposed here.
+struct Transcript;
+// Loading is not registry readiness. Only the typed, current-registry-checked
+// peer proof signer is exposed; no key export or arbitrary signing.
 class LocalOperator {
     const uint256 registration;
     mldsa44::Key key;
@@ -20,6 +21,9 @@ public:
                                               const uint256& id, std::string& reason);
     const uint256& Registration() const { return registration; }
     const mldsa44::PublicKey& PublicKey() const { return key.GetPublicKey(); }
+    // Peer authentication only, never arbitrary messages or finality votes.
+    // Caller holds cs_main; checks active/current registry and key on every use.
+    bool SignProof(const Transcript& transcript, std::vector<unsigned char>& proof, std::string& reason) const;
 };
 
 constexpr size_t PROOF_SIZE = 1 + 32 + mldsa44::SIGNATURE_SIZE;

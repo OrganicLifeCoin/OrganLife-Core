@@ -137,8 +137,8 @@ Credentials load before RPC workers and are destroyed after worker shutdown,
 including failed startup. `getpqoperatorinfo` returns only configured status
 and the public registration/key identity. Unknown or unconfirmed registrations
 can still sync: loaded credentials do not imply registry validity, signing
-authority, authentication, service eligibility or finality readiness. No signing
-or private-key export interface is provided. Provisioning, encrypted persistent
+authority, authentication, service eligibility or finality readiness. No general
+signing or plaintext private-key export RPC is provided. Provisioning, encrypted persistent
 wrapping-key custody and backup/recovery remain separate unfinished work.
 
 Controller recovery-key creation is available only with opt-in regtest
@@ -191,7 +191,7 @@ request whose response was lost; do not blindly repeat collateral funding.
 The RPC help contains the full option contract. Ordinary CLI JSON conversion
 is supported for the options object.
 
-This does not yet provide a usable masternode: operator transport/Qt flows, service
+This does not yet provide a usable masternode: Qt management, service
 verification, rewards and quorum finality remain unavailable. Public P2P and
 cross-platform qualification remain pending. Do not use this opt-in mode with a
 value-bearing wallet.
@@ -204,12 +204,34 @@ ineligible identities, and rechecks the current registry before returning an
 authenticated identity. Rotation, revocation, removal or loss of maturity clears
 that identity permanently. It writes no registry state.
 
-This component has no network handler or connection privileges yet. Transport
-must supply fresh local random challenges, a current confirmed registry, network
-and maturity policy, and enforce handshake ordering, deadlines and global peer
-resource limits. It proves key control, not encryption, endpoint ownership,
-service or committee membership. A transparent intermediary can forward the
-handshake; this is not a channel-binding mechanism for secrets or finality.
+Opt-in regtest now exchanges this identity on ordinary peer connections.
+Configured operators initiate after VERSION/VERACK and initial synchronization;
+ordinary nodes respond but need not sign. Each direction sends at most one
+`pqhello` (exactly65 bytes: version1, random32-byte challenge,32-byte tip hash)
+and one `pqauth` (the existing2453-byte proof, no vector/length prefix).
+TCP direction determines initiator/responder, regardless of hello order. The
+tip is an untrusted synchronization hint, not a signed anchor or authority:
+different tips leave the connection usable but unauthenticated until reconnect.
+Signers require matching current registry/key, active network, maturity and no
+revocation. Incoming proofs use the same current confirmed state checks.
+
+The authentication window is30 seconds from local hello, measured by a monotonic
+clock. Missing proof is normal; malformed, duplicate, out-of-order or late PQ
+frames disconnect. Ordinary traffic remains available after the window closes.
+A shared fixed-window ceiling allows16 signing/verification attempts per second under the
+existing chain lock, with no verification queue. Exhaustion leaves the affected
+connection unauthenticated; reconnect to retry. This is not production traffic
+or adversarial resource qualification. State is bounded by existing peer limits.
+
+`getpeerinfo` exposes `pq_registration` only while its session still matches the
+active confirmed registry. Send processing also rechecks it. On recheck, loss of
+maturity, rotation, revocation or registry rollback invalidates the session permanently;
+restoring the registration requires a new connection. Multiple connections with
+the same identity are allowed, but receive no additional authority or weight.
+Legacy MNAUTH fields and privileges are not populated. This proves key control,
+not encryption, endpoint ownership, service, rewards or committee membership.
+A transparent intermediary can forward the handshake; it is not channel binding
+for secrets or finality. Public activation is unchanged.
 
 The testnet has a fresh genesis and network magic. Mainnet startup is refused.
 Sapling parameters and tier-two services are not initialized, and their RPC

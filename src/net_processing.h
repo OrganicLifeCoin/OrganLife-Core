@@ -71,6 +71,7 @@ struct CNodeStateStats {
     double fReliabilityScore;
     uint64_t m_addr_processed = 0;
     uint64_t m_addr_rate_limited = 0;
+    uint256 pq_registration;
 };
 
 struct ForkGuardStatus {

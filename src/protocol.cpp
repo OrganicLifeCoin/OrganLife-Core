@@ -50,6 +50,8 @@ const char* SYNCSTATUSCOUNT = "ssc";
 const char* QFCOMMITMENT = "qfcommit";
 const char* QSENDRECSIGS = "qsendrecsigs";
 const char* MNAUTH = "mnauth";
+const char* PQHELLO = "pqhello";
+const char* PQAUTH = "pqauth";
 const char* QCONTRIB = "qcontrib";
 const char* QCOMPLAINT = "qcomplaint";
 const char* QJUSTIFICATION = "qjustify";
@@ -91,6 +93,8 @@ const static std::string allNetMessageTypes[] = {
     NetMsgType::FILTERADD,
     NetMsgType::FILTERCLEAR,
     NetMsgType::SENDHEADERS,
+    NetMsgType::PQHELLO,
+    NetMsgType::PQAUTH,
     "filtered block",  // Should never occur
     "ix",              // deprecated
     "txlvote",         // deprecated

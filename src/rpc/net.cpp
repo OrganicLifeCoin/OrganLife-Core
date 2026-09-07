@@ -227,6 +227,7 @@ UniValue getpeerinfo(const JSONRPCRequest& request)
             obj.pushKV("inflight", heights);
             obj.pushKV("addr_processed", statestats.m_addr_processed);
             obj.pushKV("addr_rate_limited", statestats.m_addr_rate_limited);
+            obj.pushKV("pq_registration", statestats.pq_registration.IsNull() ? "" : statestats.pq_registration.GetHex());
         }
         obj.pushKV("whitelisted", stats.fWhitelisted);
 

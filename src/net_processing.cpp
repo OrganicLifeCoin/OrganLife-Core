@@ -12,6 +12,8 @@
 #include "chain.h"
 #include "evo/deterministicmns.h"
 #include "evo/mnauth.h"
+#include "evo/pqmnauth.h"
+#include "init.h"
 #include "llmq/quorums_blockprocessor.h"
 #include "llmq/quorums_chainlocks.h"
 #include "llmq/quorums_dkgsessionmgr.h"
@@ -392,6 +394,12 @@ struct CNodeState {
 
     CNodeBlocks nodeBlocks;
 
+    // PQ state is connection-owned under cs_main, never legacy tier-two authority.
+    uint256 pqChallenge, pqTip;
+    bool pqHelloReceived{false}, pqProofReceived{false}, pqClosed{false};
+    std::chrono::steady_clock::time_point pqDeadline{};
+    std::unique_ptr<pqmnauth::Session> pqSession;
+
     CNodeState(CAddress addrIn, std::string addrNameIn) : address(addrIn), name(addrNameIn) {
         fCurrentlyConnected = false;
         nMisbehavior = 0;
@@ -419,6 +427,100 @@ CNodeState* State(NodeId pnode)
     if (it == mapNodeState.end())
         return nullptr;
     return &it->second;
+}
+
+static bool PQAuthActive()
+{
+    AssertLockHeld(cs_main);
+    return pq::MasternodesActive(Params(), chainActive.Height()) && evoDb;
+}
+
+// Shared sign/verify ceiling, with no queue. Exhaustion leaves ordinary peers
+// usable but unauthenticated. Reconnect to retry; no consensus privilege here.
+static bool TakePQAuthWork()
+{
+    AssertLockHeld(cs_main);
+    static auto window = std::chrono::steady_clock::now();
+    static unsigned int used = 0;
+    const auto now = std::chrono::steady_clock::now();
+    if (now - window >= 1s) { window = now; used = 0; }
+    if (used == 16) return false;
+    ++used;
+    return true;
+}
+
+static void SendPQHello(CNode* node, CNodeState& state, CConnman& connman)
+{
+    AssertLockHeld(cs_main);
+    if (!state.pqChallenge.IsNull() || state.pqClosed) return;
+    do { GetStrongRandBytes(state.pqChallenge.begin(), 32); } while (state.pqChallenge.IsNull());
+    state.pqTip = chainActive.Tip()->GetBlockHash();
+    state.pqDeadline = std::chrono::steady_clock::now() + 30s;
+    connman.PushMessage(node, CNetMsgMaker(node->GetSendVersion()).Make(NetMsgType::PQHELLO,
+                        uint8_t{1}, state.pqChallenge, state.pqTip));
+}
+
+static uint256 CurrentPQPeer(CNodeState& state)
+{
+    AssertLockHeld(cs_main);
+    if (!state.pqSession || !state.pqProofReceived) return {};
+    try {
+        if (PQAuthActive()) {
+            pqmn::Index index(*evoDb, Params());
+            std::string reason;
+            if (index.MatchesChainTip(chainActive.Tip())) {
+                const auto id = state.pqSession->Current(index, chainActive.Height(),
+                    Params().GetConsensus().MasternodeCollateralMinConf(), reason);
+                if (!id.IsNull()) return id;
+            }
+        }
+    } catch (const std::exception&) {}
+    state.pqSession.reset(); // Lost identity never revives on the same connection.
+    state.pqClosed = true;
+    return {};
+}
+
+static bool ProcessPQAuth(CNode* peer, const std::string& command, CDataStream& bytes, CConnman& connman)
+{
+    LOCK(cs_main);
+    auto& state = *State(peer->GetId());
+    const auto reject = [&]() { state.pqClosed = true; state.pqSession.reset(); peer->fDisconnect = true; return false; };
+    if (!peer->fSuccessfullyConnected || !PQAuthActive() || state.pqClosed ||
+        (!state.pqChallenge.IsNull() && std::chrono::steady_clock::now() >= state.pqDeadline)) return reject();
+    if (command == NetMsgType::PQHELLO) {
+        if (state.pqHelloReceived || bytes.size() != 65) return reject();
+        state.pqHelloReceived = true;
+        uint8_t version; uint256 challenge, tip;
+        bytes >> version >> challenge >> tip;
+        if (version != 1 || challenge.IsNull() || tip.IsNull() || challenge == state.pqChallenge) return reject();
+        SendPQHello(peer, state, connman);
+        if (challenge == state.pqChallenge) return reject();
+        if (tip != state.pqTip) { state.pqClosed = true; return true; } // Sync first, reconnect for identity.
+        pqmnauth::Transcript transcript{Params().GetConsensus().hashGenesisBlock,
+            peer->fInbound ? challenge : state.pqChallenge,
+            peer->fInbound ? state.pqChallenge : challenge, peer->fInbound};
+        state.pqSession = std::make_unique<pqmnauth::Session>(transcript);
+        transcript.signerIsInitiator = !transcript.signerIsInitiator;
+        const auto* local = GetPQOperator();
+        std::vector<unsigned char> proof;
+        std::string reason;
+        if (local && TakePQAuthWork() && local->SignProof(transcript, proof, reason)) {
+            CSerializedNetMsg message; message.command = NetMsgType::PQAUTH; message.data = std::move(proof);
+            connman.PushMessage(peer, std::move(message));
+        }
+        return true;
+    }
+    if (!state.pqSession || state.pqProofReceived || bytes.size() != pqmnauth::PROOF_SIZE) return reject();
+    state.pqProofReceived = true;
+    if (!TakePQAuthWork()) { state.pqSession.reset(); state.pqClosed = true; return true; }
+    try {
+        pqmn::Index index(*evoDb, Params());
+        std::string reason;
+        if (!index.MatchesChainTip(chainActive.Tip()) || !state.pqSession->Authenticate(
+            {reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size()}, index,
+            chainActive.Height(), Params().GetConsensus().MasternodeCollateralMinConf(), reason)) return reject();
+    } catch (const std::exception&) { return reject(); }
+    return true;
 }
 
 void UpdatePreferredDownload(CNode* node, CNodeState* state)
@@ -836,6 +938,7 @@ bool GetNodeStateStats(NodeId nodeid, CNodeStateStats& stats)
     stats.fReliabilityScore = state->fReliabilityScore;
     stats.m_addr_processed = state->amt_addr_processed;
     stats.m_addr_rate_limited = state->amt_addr_rate_limited;
+    stats.pq_registration = CurrentPQPeer(*state);
     return true;
 }
 
@@ -1639,6 +1742,9 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
         LogPrintf("dropmessagestest DROPPING RECV MESSAGE\n");
         return true;
     }
+
+    if (strCommand == NetMsgType::PQHELLO || strCommand == NetMsgType::PQAUTH)
+        return ProcessPQAuth(pfrom, strCommand, vRecv, *connman);
 
     if (strCommand == NetMsgType::VERSION) {
         // Each connection can only send one version message
@@ -2775,6 +2881,11 @@ bool PeerLogicValidation::SendMessages(CNode* pto, std::atomic<bool>& interruptM
         }
 
         CNodeState& state = *State(pto->GetId());
+
+        CurrentPQPeer(state);
+        if (PQAuthActive() && GetPQOperator() && !IsInitialBlockDownload()) SendPQHello(pto, state, *connman);
+        if (!state.pqChallenge.IsNull() && std::chrono::steady_clock::now() >= state.pqDeadline)
+            state.pqClosed = true; // Missing proof is normal for non-operator peers.
 
         // Address refresh broadcast
         int64_t nNow = GetTimeMicros();

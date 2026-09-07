@@ -62,6 +62,33 @@ std::vector<unsigned char> Encode(const Proof& proof)
     return {stream.begin(), stream.end()};
 }
 
+bool LocalOperator::SignProof(const Transcript& transcript, std::vector<unsigned char>& output, std::string& reason) const
+{
+    AssertLockHeld(cs_main);
+    output.clear(); reason.clear();
+    const auto& params = Params();
+    if (!pq::MasternodesActive(params, chainActive.Height()) || !evoDb ||
+        transcript.genesis != params.GetConsensus().hashGenesisBlock)
+        return Fail(reason, "pq-auth-inactive-network");
+    try {
+        pqmn::Index index(*evoDb, params);
+        pqmn::Record record;
+        if (!index.MatchesChainTip(chainActive.Tip()) ||
+            !ReadOperator(index, registration, chainActive.Height(), params.GetConsensus().MasternodeCollateralMinConf(), record, reason) ||
+            record.operatorKey != key.GetPublicKey()) return Fail(reason, "pq-auth-operator-not-current");
+        const auto message = Message(transcript, registration, key.GetPublicKey());
+        std::vector<unsigned char> signature;
+        if (message.empty() || !key.Sign(message, Context(), signature) || signature.size() != mldsa44::SIGNATURE_SIZE)
+            return Fail(reason, "pq-auth-signing-failed");
+        Proof proof; proof.registration = registration;
+        std::copy(signature.begin(), signature.end(), proof.signature.begin());
+        output = Encode(proof);
+        return true;
+    } catch (const std::exception&) {
+        return Fail(reason, "pq-auth-registry-unavailable");
+    }
+}
+
 bool Decode(Span<const unsigned char> bytes, Proof& proof)
 {
     proof = {};

@@ -81,6 +81,7 @@ BASE_SCRIPTS= [
     'feature_pq_operator.py',
     'feature_pq_operator_recovery.py',
     'feature_pq_masternode_wallet.py',
+    'feature_pq_peer_auth.py',
     'feature_pq_cache.py',
     'feature_pq_pos.py',
     'feature_pq_pos.py --pq-registry',

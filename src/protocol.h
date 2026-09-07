@@ -287,6 +287,8 @@ extern const char* QSENDRECSIGS;
  * The mnauth message is used authenticate MN connections
  */
 extern const char* MNAUTH;
+extern const char* PQHELLO;
+extern const char* PQAUTH;
 /*
  * Messages for LLMQ-DKG inter-quorum communication
  */
