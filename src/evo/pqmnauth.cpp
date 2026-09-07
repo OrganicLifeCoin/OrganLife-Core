@@ -89,6 +89,42 @@ bool LocalOperator::SignProof(const Transcript& transcript, std::vector<unsigned
     }
 }
 
+bool LocalOperator::SignVote(const pqquorum::Statement& statement,
+                             std::array<unsigned char, mldsa44::SIGNATURE_SIZE>& signature,
+                             std::string& reason) const
+{
+    AssertLockHeld(cs_main);
+    signature = {};
+    reason.clear();
+    if ((statement.purpose != pqquorum::Purpose::PREVOTE &&
+         statement.purpose != pqquorum::Purpose::PRECOMMIT) ||
+        statement.genesis != Params().GetConsensus().hashGenesisBlock)
+        return Fail(reason, "pq-vote-invalid-statement");
+    const int tipHeight = chainActive.Height();
+    if (!pq::MasternodesActive(Params(), tipHeight) || !evoDb ||
+        statement.height <= 0 || statement.height > uint32_t(tipHeight) + 1)
+        return Fail(reason, "pq-vote-inactive-network");
+    try {
+        pqmn::Index index(*evoDb, Params());
+        pqmn::Record record;
+        if (!index.MatchesChainTip(chainActive.Tip()) ||
+            !ReadOperator(index, registration, chainActive.Height(),
+                          Params().GetConsensus().MasternodeCollateralMinConf(), record, reason) ||
+            record.operatorKey != key.GetPublicKey()) {
+            if (reason.empty()) reason = "pq-vote-operator-not-current";
+            return false;
+        }
+        std::vector<unsigned char> output;
+        if (!key.Sign(pqquorum::Message(statement), pqquorum::Context(), output) ||
+            output.size() != mldsa44::SIGNATURE_SIZE)
+            return Fail(reason, "pq-vote-signing-failed");
+        std::copy(output.begin(), output.end(), signature.begin());
+        return true;
+    } catch (const std::exception&) {
+        return Fail(reason, "pq-vote-registry-unavailable");
+    }
+}
+
 bool Decode(Span<const unsigned char> bytes, Proof& proof)
 {
     proof = {};

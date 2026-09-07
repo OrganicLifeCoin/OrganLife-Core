@@ -3,8 +3,11 @@
 #ifndef ORGANICLIFE_EVO_PQMNAUTH_H
 #define ORGANICLIFE_EVO_PQMNAUTH_H
 
+#include <crypto/mldsa44.h>
 #include <evo/pqmasternode.h>
 #include <fs.h>
+#include <pqquorum.h>
+#include <array>
 #include <memory>
 
 // Registered peer identity only: no connection privilege, service or finality authority.
@@ -21,9 +24,16 @@ public:
                                               const uint256& id, std::string& reason);
     const uint256& Registration() const { return registration; }
     const mldsa44::PublicKey& PublicKey() const { return key.GetPublicKey(); }
-    // Peer authentication only, never arbitrary messages or finality votes.
+    // Peer authentication only, never arbitrary messages or key export.
     // Caller holds cs_main; checks active/current registry and key on every use.
     bool SignProof(const Transcript& transcript, std::vector<unsigned char>& proof, std::string& reason) const;
+    // Typed finality vote signing (PREVOTE/PRECOMMIT statements only), reachable
+    // only through the durable journal flow. Same per-use registry guards as
+    // SignProof plus the vote height bound. No arbitrary-message signing or key
+    // export is exposed.
+    bool SignVote(const pqquorum::Statement& statement,
+                  std::array<unsigned char, mldsa44::SIGNATURE_SIZE>& signature,
+                  std::string& reason) const;
 };
 
 constexpr size_t PROOF_SIZE = 1 + 32 + mldsa44::SIGNATURE_SIZE;

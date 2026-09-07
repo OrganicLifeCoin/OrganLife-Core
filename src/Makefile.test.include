@@ -113,6 +113,7 @@ BITCOIN_TESTS =\
   test/mldsa_tests.cpp \
   test/pqtransaction_tests.cpp \
   test/pqquorum_tests.cpp \
+  test/pqjournal_tests.cpp \
   test/pqmasternode_tests.cpp \
   test/cuckoocache_tests.cpp \
   test/DoS_tests.cpp \
