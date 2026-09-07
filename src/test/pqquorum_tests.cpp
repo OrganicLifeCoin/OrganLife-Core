@@ -45,6 +45,180 @@ struct QuorumFixture {
 
 BOOST_FIXTURE_TEST_SUITE(pqquorum_tests, QuorumFixture)
 
+BOOST_AUTO_TEST_CASE(round_locks_survive_timeout_and_require_newer_quorum_to_change)
+{
+    pqquorum::RoundState round(statement.genesis, statement.anchor, statement.height, members);
+    const auto first = statement.value;
+    const auto other = uint256S("44");
+    pqquorum::Statement vote;
+    std::string reason;
+    BOOST_REQUIRE(round.Prevote(first, nullptr, vote, reason));
+    BOOST_CHECK(vote.value == first);
+    BOOST_CHECK_EQUAL(vote.round, 0U);
+    BOOST_CHECK(vote.purpose == pqquorum::Purpose::PREVOTE);
+    BOOST_CHECK(!round.Prevote(other, nullptr, vote, reason));
+    BOOST_CHECK(pqquorum::Message(vote).empty());
+    statement.round = 0; statement.purpose = pqquorum::Purpose::PREVOTE;
+    auto insufficient = certificate(2);
+    BOOST_CHECK(!round.Precommit(&insufficient, first, vote, reason));
+    auto proof = certificate();
+    BOOST_REQUIRE(round.Precommit(&proof, first, vote, reason));
+    BOOST_CHECK(vote.value == first);
+    BOOST_CHECK(vote.purpose == pqquorum::Purpose::PRECOMMIT);
+    BOOST_CHECK(!round.Prevote(first, nullptr, vote, reason));
+    BOOST_CHECK(!round.Advance(0));
+    BOOST_REQUIRE(round.Advance(1));
+    BOOST_REQUIRE(round.Prevote(other, nullptr, vote, reason));
+    BOOST_CHECK(vote.value == first); // A timeout is not an unlock proof.
+    BOOST_REQUIRE(round.Precommit(nullptr, {}, vote, reason));
+    BOOST_CHECK(vote.value.IsNull());
+    BOOST_REQUIRE(round.Advance(2));
+    // The older lock survives nil precommit without a nil quorum.
+    BOOST_REQUIRE(round.Prevote(other, nullptr, vote, reason));
+    BOOST_CHECK(vote.value == first);
+    BOOST_REQUIRE(round.Advance(3));
+    statement.round = 2; statement.value = other;
+    proof = certificate();
+    BOOST_REQUIRE(round.Prevote(other, &proof, vote, reason));
+    BOOST_CHECK(vote.value == other);
+}
+
+BOOST_AUTO_TEST_CASE(round_commit_requires_bound_nonnil_precommits_and_is_terminal)
+{
+    pqquorum::RoundState round(statement.genesis, statement.anchor, statement.height, members);
+    uint256 finalized;
+    std::string reason;
+    statement.purpose = pqquorum::Purpose::PREVOTE;
+    BOOST_CHECK(!round.Commit(certificate(), statement.value, finalized, reason));
+    BOOST_CHECK(finalized.IsNull());
+    statement.purpose = pqquorum::Purpose::PRECOMMIT;
+    const auto value = statement.value;
+    statement.value.SetNull();
+    BOOST_CHECK(!round.Commit(certificate(), statement.value, finalized, reason));
+    statement.value = value;
+    ++statement.height;
+    BOOST_CHECK(!round.Commit(certificate(), statement.value, finalized, reason));
+    --statement.height;
+    BOOST_CHECK(!round.Commit(certificate(2), statement.value, finalized, reason));
+    const auto committed = certificate();
+    BOOST_REQUIRE(round.Commit(committed, value, finalized, reason));
+    BOOST_CHECK(finalized == value);
+    BOOST_CHECK(round.Commit(committed, value, finalized, reason));
+    statement.value = uint256S("55");
+    BOOST_CHECK(!round.Commit(certificate(), statement.value, finalized, reason));
+    BOOST_CHECK(finalized.IsNull());
+    BOOST_CHECK(!round.Advance(99));
+    pqquorum::Statement vote;
+    BOOST_CHECK(!round.Prevote(value, nullptr, vote, reason));
+    BOOST_CHECK(!round.Precommit(nullptr, {}, vote, reason));
+}
+
+BOOST_AUTO_TEST_CASE(round_never_endorses_unvalidated_block_data)
+{
+    pqquorum::RoundState round(statement.genesis, statement.anchor, statement.height, members);
+    pqquorum::Statement vote;
+    uint256 finalized;
+    std::string reason;
+    statement.round = 0; statement.purpose = pqquorum::Purpose::PREVOTE;
+    const auto proof = certificate();
+    BOOST_CHECK(!round.Precommit(&proof, {}, vote, reason));
+    BOOST_CHECK(!round.Precommit(&proof, uint256S("99"), vote, reason));
+    BOOST_CHECK(pqquorum::Message(vote).empty());
+    BOOST_REQUIRE(round.Precommit(&proof, statement.value, vote, reason));
+    statement.purpose = pqquorum::Purpose::PRECOMMIT;
+    const auto commit = certificate();
+    BOOST_CHECK(!round.Commit(commit, {}, finalized, reason));
+    BOOST_CHECK(!round.Commit(commit, uint256S("99"), finalized, reason));
+    BOOST_CHECK(finalized.IsNull());
+    BOOST_REQUIRE(round.Commit(commit, statement.value, finalized, reason));
+}
+
+BOOST_AUTO_TEST_CASE(round_nil_quorum_unlocks_but_stale_or_invalid_proofs_do_not)
+{
+    const auto first = statement.value;
+    const auto other = uint256S("44");
+    pqquorum::RoundState round(statement.genesis, statement.anchor, statement.height, members);
+    std::string reason;
+    pqquorum::Statement vote;
+    statement.round = 0; statement.purpose = pqquorum::Purpose::PREVOTE;
+    const auto oldProof = certificate();
+    BOOST_REQUIRE(round.Precommit(&oldProof, first, vote, reason));
+    BOOST_REQUIRE(round.Advance(1));
+    statement.round = 1; statement.value.SetNull();
+    auto nilProof = certificate();
+    BOOST_REQUIRE(round.Precommit(&nilProof, {}, vote, reason));
+    BOOST_CHECK(vote.value.IsNull());
+    BOOST_REQUIRE(round.Advance(2));
+    BOOST_REQUIRE(round.Prevote(other, nullptr, vote, reason));
+    BOOST_CHECK(vote.value == other);
+    statement.round = 2; statement.value = other;
+    auto proof = certificate();
+    BOOST_REQUIRE(round.Precommit(&proof, other, vote, reason));
+    BOOST_CHECK(!round.Precommit(nullptr, {}, vote, reason));
+    BOOST_REQUIRE(round.Precommit(&proof, other, vote, reason)); // exact retry
+    BOOST_REQUIRE(round.Advance(3));
+    BOOST_REQUIRE(round.Prevote(first, &oldProof, vote, reason));
+    BOOST_CHECK(vote.value == other); // round 0 cannot release a round 2 lock
+    BOOST_REQUIRE(round.Advance(4));
+    statement.round = 3; statement.value = first;
+    proof = certificate();
+    proof.signatures[0].bytes[0] ^= 1;
+    BOOST_CHECK(!round.Prevote(first, &proof, vote, reason));
+    BOOST_REQUIRE(round.Prevote(first, nullptr, vote, reason));
+    BOOST_CHECK(vote.value == other);
+}
+
+BOOST_AUTO_TEST_CASE(round_context_and_unlock_proof_fields_are_not_peer_controlled)
+{
+    BOOST_CHECK_THROW(pqquorum::RoundState({}, statement.anchor, statement.height, members), std::invalid_argument);
+    BOOST_CHECK_THROW(pqquorum::RoundState(statement.genesis, {}, statement.height, members), std::invalid_argument);
+    BOOST_CHECK_THROW(pqquorum::RoundState(statement.genesis, statement.anchor, 0, members), std::invalid_argument);
+    auto tooFew = members; tooFew.pop_back();
+    BOOST_CHECK_THROW(pqquorum::RoundState(statement.genesis, statement.anchor, statement.height, tooFew), std::invalid_argument);
+    const auto base = statement;
+    for (int mutation = 0; mutation < 7; ++mutation) {
+        statement = base;
+        pqquorum::RoundState round(base.genesis, base.anchor, base.height, members);
+        BOOST_REQUIRE(round.Advance(2));
+        statement.round = 1; statement.purpose = pqquorum::Purpose::PREVOTE;
+        if (mutation == 0) statement.genesis = uint256S("66");
+        if (mutation == 1) statement.anchor = uint256S("66");
+        if (mutation == 2) statement.committee = uint256S("66");
+        if (mutation == 3) ++statement.height;
+        if (mutation == 4) statement.round = 2;
+        if (mutation == 5) statement.purpose = pqquorum::Purpose::PRECOMMIT;
+        const auto proof = certificate(mutation == 6 ? 2 : 3);
+        std::string reason;
+        pqquorum::Statement vote;
+        BOOST_CHECK(!round.Prevote(base.value, &proof, vote, reason));
+        BOOST_CHECK(!reason.empty());
+        BOOST_CHECK(pqquorum::Message(vote).empty());
+        BOOST_REQUIRE(round.Prevote(base.value, nullptr, vote, reason));
+        BOOST_CHECK(vote.value == base.value);
+        BOOST_CHECK(reason.empty());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(round_unlock_proof_is_not_a_proposal_and_same_value_keeps_lock)
+{
+    const auto original = statement.value;
+    for (bool sameValue : {false, true}) {
+        pqquorum::RoundState round(statement.genesis, statement.anchor, statement.height, members);
+        std::string reason;
+        pqquorum::Statement vote;
+        statement.round = 0; statement.value = original; statement.purpose = pqquorum::Purpose::PREVOTE;
+        auto proof = certificate();
+        BOOST_REQUIRE(round.Precommit(&proof, original, vote, reason));
+        BOOST_REQUIRE(round.Advance(2));
+        statement.round = 1; statement.value = sameValue ? original : uint256S("55");
+        proof = certificate();
+        const auto proposal = uint256S("66");
+        BOOST_REQUIRE(round.Prevote(proposal, &proof, vote, reason));
+        BOOST_CHECK(vote.value == (sameValue ? original : proposal));
+        BOOST_REQUIRE(round.Prevote(proposal, &proof, vote, reason)); // exact decision is idempotent
+    }
+}
+
 BOOST_AUTO_TEST_CASE(strict_quorum_and_roundtrip)
 {
     BOOST_CHECK_EQUAL(pqquorum::Threshold(4), 3U);

@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string>
 
-// Certificate primitive only. Not a finality protocol or an activation switch.
+// Certificate and single-height decision logic, not an activated finality runtime.
 namespace pqquorum {
 constexpr size_t MIN_MEMBERS = 4;
 constexpr size_t MAX_MEMBERS = 400;
@@ -53,5 +53,33 @@ bool Decode(Span<const unsigned char> bytes, Certificate& certificate);
 // Success proves endorsements only, not that the statement is safe to finalize.
 bool Verify(const Certificate& certificate, const Statement& expected,
             const std::vector<Member>& members, std::string& reason);
+
+// Single-height decision logic only. No signing, persistence, network handler,
+// block validation or fork-choice authority. Serialize access; a runtime must
+// durably journal decisions BEFORE signing/broadcast and validate proposed blocks
+// against the trusted anchor. Never recreate this state to resume a used key.
+// Identical decisions are idempotent; conflicting votes at one round/step fail.
+// A future signer must reuse its journaled signature on a retry, not reset state.
+class RoundState {
+    Statement current;
+    const std::vector<Member> members;
+    uint256 locked, prevote, precommit, committed;
+    uint32_t lockRound{0};
+    bool prevoted{false}, precommitted{false};
+public:
+    RoundState(const uint256& genesis, const uint256& anchor, uint32_t height,
+               const std::vector<Member>& members);
+    RoundState(const RoundState&) = delete;
+    RoundState& operator=(const RoundState&) = delete;
+    bool Advance(uint32_t round);
+    bool Prevote(const uint256& validatedProposal, const Certificate* unlockProof,
+                 Statement& vote, std::string& reason);
+    // validatedBlock must be supplied by local chain validation, not the peer proof.
+    // Null means no validated block data; only a nil precommit is then possible.
+    bool Precommit(const Certificate* prevotes, const uint256& validatedBlock,
+                   Statement& vote, std::string& reason);
+    bool Commit(const Certificate& precommits, const uint256& validatedBlock,
+                uint256& finalized, std::string& reason);
+};
 } // namespace pqquorum
 #endif

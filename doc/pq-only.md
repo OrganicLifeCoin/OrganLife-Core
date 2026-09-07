@@ -246,6 +246,16 @@ excluded. Quorum service enforcement and finality runtime remain unavailable.
 Public-network and cross-platform qualification remain pending. Do not use this
 opt-in mode with a value-bearing wallet.
 
+The quorum module now has independently tested, single-height prevote/precommit
+decision logic: round changes preserve locks, only qualifying quorum evidence
+can change them, and final decisions require non-nil precommit quorums plus a
+locally validated block identity. This is not connected to signing or networking.
+Durable vote/lock recovery, the pinned bootstrap checkpoint, committee handoff
+and fork-choice enforcement are still required before runtime activation.
+The approved runtime policy is that loss of quorum pauses finality only; ordinary
+PoS production must not wait for votes, and existing finalized anchors remain
+protected. No finality-based staking gate is introduced here.
+
 The isolated operator-authentication component signs a fixed, versioned proof
 with the registered ML-DSA operator key. It binds genesis, registration, operator
 key, both connection challenges and signer direction using a separate signature

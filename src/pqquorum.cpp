@@ -5,6 +5,7 @@
 #include <streams.h>
 #include <algorithm>
 #include <set>
+#include <stdexcept>
 
 namespace pqquorum {
 namespace {
@@ -39,6 +40,96 @@ bool CanonicalSigners(const std::vector<Signature>& signatures)
     }
     return true;
 }
+}
+
+RoundState::RoundState(const uint256& genesis, const uint256& anchor, uint32_t height,
+                       const std::vector<Member>& snapshot) : members(snapshot)
+{
+    current.genesis = genesis;
+    current.anchor = anchor;
+    current.committee = Commitment(members);
+    current.height = height;
+    if (!ValidStatement(current)) throw std::invalid_argument("Invalid PQ finality context");
+}
+
+bool RoundState::Advance(uint32_t round)
+{
+    if (!committed.IsNull() || round <= current.round) return false;
+    current.round = round;
+    prevoted = precommitted = false;
+    prevote.SetNull(); precommit.SetNull();
+    // Advancing time/round does not release a quorum lock.
+    return true;
+}
+
+bool RoundState::Prevote(const uint256& proposal, const Certificate* proof,
+                         Statement& vote, std::string& reason)
+{
+    vote = {}; reason.clear();
+    if (!committed.IsNull() || precommitted) { reason = "bad-pq-vote-step"; return false; }
+    bool unlock = false;
+    if (proof) {
+        Statement expected = current;
+        expected.round = proof->statement.round;
+        expected.value = proof->statement.value;
+        if (expected.round >= current.round) {
+            reason = "bad-pq-unlock-proof"; return false;
+        }
+        if (!Verify(*proof, expected, members, reason)) return false;
+        unlock = !locked.IsNull() && expected.value != locked && expected.round > lockRound;
+    }
+    const uint256 value = locked.IsNull() || unlock ? proposal : locked;
+    if (prevoted && value != prevote) { reason = "bad-pq-double-prevote"; return false; }
+    if (!prevoted) {
+        if (unlock) locked.SetNull();
+        prevote = value;
+        prevoted = true;
+    }
+    vote = current; vote.value = prevote;
+    return true;
+}
+
+bool RoundState::Precommit(const Certificate* proof, const uint256& validatedBlock,
+                           Statement& vote, std::string& reason)
+{
+    vote = {}; reason.clear();
+    if (!committed.IsNull()) { reason = "bad-pq-vote-step"; return false; }
+    uint256 value;
+    if (proof) {
+        Statement expected = current;
+        expected.value = proof->statement.value;
+        if (!expected.value.IsNull() && expected.value != validatedBlock) {
+            reason = "bad-pq-unvalidated-block"; return false;
+        }
+        if (!Verify(*proof, expected, members, reason)) return false;
+        value = expected.value;
+    }
+    if (precommitted && value != precommit) { reason = "bad-pq-double-precommit"; return false; }
+    if (!precommitted) {
+        if (proof) { locked = value; lockRound = current.round; }
+        precommit = value;
+        precommitted = true;
+    }
+    vote = current; vote.purpose = Purpose::PRECOMMIT; vote.value = precommit;
+    return true;
+}
+
+bool RoundState::Commit(const Certificate& proof, const uint256& validatedBlock,
+                        uint256& finalized, std::string& reason)
+{
+    finalized.SetNull(); reason.clear();
+    Statement expected = current;
+    expected.purpose = Purpose::PRECOMMIT;
+    expected.round = proof.statement.round;
+    expected.value = proof.statement.value;
+    if (expected.value != validatedBlock) { reason = "bad-pq-unvalidated-block"; return false; }
+    if (expected.value.IsNull() || (!committed.IsNull() && committed != expected.value)) {
+        reason = "bad-pq-finality-value"; return false;
+    }
+    if (!Verify(proof, expected, members, reason)) return false;
+    committed = expected.value;
+    finalized = committed;
+    return true;
 }
 
 size_t Threshold(size_t members)
