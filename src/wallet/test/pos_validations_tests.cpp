@@ -12,7 +12,7 @@
 #include "consensus/merkle.h"
 #include "masternode-payments.h"
 #include "primitives/block.h"
-#include "script/sign.h"
+#include "pqtransaction.h"
 #include "test/util/blocksutil.h"
 #include "tiertwo/tiertwo_sync_state.h"
 #include "timedata.h"
@@ -27,24 +27,6 @@
 bool CheckForCoins(CWallet* pwallet, std::vector<CStakeableOutput>* availableCoins, bool lastResult);
 
 BOOST_AUTO_TEST_SUITE(pos_validations_tests)
-
-void reSignTx(CMutableTransaction& mtx,
-              const std::vector<CTxOut>& txPrevOutputs,
-              CWallet* wallet)
-{
-    CTransaction txNewConst(mtx);
-    for (int index=0; index < (int) txPrevOutputs.size(); index++) {
-        const CTxOut& prevOut = txPrevOutputs.at(index);
-        SignatureData sigdata;
-        BOOST_ASSERT(ProduceSignature(
-                TransactionSignatureCreator(wallet, &txNewConst, index, prevOut.nValue, SIGHASH_ALL),
-                prevOut.scriptPubKey,
-                sigdata,
-                txNewConst.GetRequiredSigVersion(),
-                true));
-        UpdateTransaction(mtx, index, sigdata);
-    }
-}
 
 BOOST_FIXTURE_TEST_CASE(coinstake_tests, TestPoSChainSetup)
 {
@@ -71,14 +53,18 @@ BOOST_FIXTURE_TEST_CASE(coinstake_tests, TestPoSChainSetup)
     CTxIn vin2(in2.tx->GetHash(), in2.i);
     mtx.vin.emplace_back(vin2);
 
-    CTxOut prevOutput1 = pwalletMain->GetWalletTx(mtx.vin[0].prevout.hash)->tx->vout[mtx.vin[0].prevout.n];
-    std::vector<CTxOut> txPrevOutputs{prevOutput1, in2.tx->tx->vout[in2.i]};
-
-    reSignTx(mtx, txPrevOutputs, pwalletMain.get());
     pblock->vtx[1] = MakeTransactionRef(mtx);
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
     BOOST_CHECK(SignBlock(*pblock, *pwalletMain));
-    ProcessBlockAndCheckRejectionReason(pblock, "bad-cs-multi-inputs", 250);
+    {
+        LOCK(cs_main);
+        CValidationState state;
+        BOOST_CHECK(!ContextualCheckBlock(*pblock, state, chainActive.Tip()));
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-cs-multi-inputs");
+    }
+    // PQ structure rejects this before signature verification. The contextual
+    // rule above remains covered independently; invalid stakes are not signed.
+    ProcessBlockAndCheckRejectionReason(pblock, "bad-pq-size", 250);
 
     // Check multi-empty-outputs now
     pblock = std::make_shared<CBlock>(pblocktemplate->block);
@@ -87,11 +73,16 @@ BOOST_FIXTURE_TEST_CASE(coinstake_tests, TestPoSChainSetup)
         mtx.vout.emplace_back();
         mtx.vout.back().SetEmpty();
     }
-    reSignTx(mtx, {prevOutput1}, pwalletMain.get());
     pblock->vtx[1] = MakeTransactionRef(mtx);
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
-    BOOST_CHECK(SignBlock(*pblock, *pwalletMain));
-    ProcessBlockAndCheckRejectionReason(pblock, "bad-txns-vout-empty", 250);
+    BOOST_CHECK(!SignBlock(*pblock, *pwalletMain));
+    {
+        LOCK(cs_main);
+        CValidationState state;
+        BOOST_CHECK(!ContextualCheckBlock(*pblock, state, chainActive.Tip()));
+        BOOST_CHECK_EQUAL(state.GetRejectReason(), "bad-txns-vout-empty");
+    }
+    ProcessBlockAndCheckRejectionReason(pblock, "bad-pq-size", 250);
 
     // Now connect the proper block
     pblock = std::make_shared<CBlock>(pblocktemplate->block);
@@ -174,37 +165,69 @@ BOOST_FIXTURE_TEST_CASE(v6_pos_coinbase_without_masternode_payee_is_valid, TestP
     BOOST_REQUIRE(block.IsProofOfStake());
     BOOST_REQUIRE(!block.vtx[0]->vout.empty());
     BOOST_CHECK(block.vtx[0]->vout[0].IsEmpty());
+    BOOST_REQUIRE_EQUAL(block.vtx.size(), 2U);
+    BOOST_CHECK_EQUAL(block.vtx[1]->nType, CTransaction::PQ);
 
     CValidationState state;
     LOCK(cs_main);
     BOOST_CHECK_MESSAGE(CheckBlock(block, state, true, true, true), FormatStateMessage(state));
 }
 
-CTransaction CreateAndCommitTx(CWallet* pwalletMain, const CTxDestination& dest, CAmount destValue, CCoinControl* coinControl = nullptr)
+CTransaction CreateAndCommitTx(CWallet* wallet, const std::string& dest, CAmount destValue, CCoinControl* coinControl = nullptr)
 {
-    CTransactionRef txNew;
-    CReserveKey reservekey(pwalletMain);
-    CAmount nFeeRet = 0;
-    std::string strFailReason;
-    // The minimum depth (100) required to spend coinbase outputs is calculated from the current chain tip.
-    // Since this transaction could be included in a fork block, at a lower height, this may result in
-    // selecting non-yet-available inputs, and thus creating non-connectable blocks due to premature-cb-spend.
-    // So, to be sure, only select inputs which are more than 120-blocks deep in the chain.
-    const bool ok = pwalletMain->CreateTransaction(GetScriptForDestination(dest),
-                                                   destValue,
-                                                   txNew,
-                                                   reservekey,
-                                                   nFeeRet,
-                                                   strFailReason,
-                                                   coinControl,
-                                                   true, /* sign*/
-                                                   false, /*fIncludeDelegated*/
-                                                   nullptr, /*fStakeDelegationVoided*/
-                                                   0, /*nExtraSize*/
-                                                   120 /*nMinDepth*/);
-    BOOST_REQUIRE_MESSAGE(ok, strFailReason);
-    pwalletMain->CommitTransaction(txNew, reservekey, nullptr);
-    return *txNew;
+    LOCK2(cs_main, wallet->cs_wallet);
+    COutPoint input;
+    if (coinControl && coinControl->HasSelected()) {
+        std::vector<OutPointWrapper> selected;
+        coinControl->ListSelected(selected);
+        BOOST_REQUIRE_EQUAL(selected.size(), 1U);
+        input = COutPoint(selected[0].outPoint.hash, selected[0].outPoint.n);
+    } else {
+        // Keep coinbase inputs safely mature on the shorter forks, too.
+        for (const auto& coin : wallet->GetPQUnspent()) {
+            if (coin.nDepth > 120 && coin.Value() >= destValue + CENT) {
+                input = COutPoint(coin.tx->GetHash(), coin.i);
+                break;
+            }
+        }
+    }
+    BOOST_REQUIRE(!input.IsNull());
+    const auto* previous = wallet->GetWalletTx(input.hash);
+    BOOST_REQUIRE(previous && input.n < previous->tx->vout.size());
+    const CTxOut prevout = previous->tx->vout[input.n];
+    BOOST_REQUIRE_GE(prevout.nValue, destValue + CENT);
+    pq::KeyID recipient, owner;
+    BOOST_REQUIRE(pq::DecodeAddress(dest, Params().NetworkIDString(), recipient));
+    BOOST_REQUIRE(pq::ExtractID(prevout.scriptPubKey, owner));
+    mldsa44::Key key;
+    BOOST_REQUIRE(wallet->GetPQKey(owner, key, false));
+    CMutableTransaction tx;
+    tx.nVersion = 3;
+    tx.nType = CTransaction::PQ;
+    tx.sapData = nullopt;
+    tx.vin.emplace_back(input);
+    tx.vout.emplace_back(destValue, pq::GetScript(recipient));
+    if (prevout.nValue > destValue + CENT)
+        tx.vout.emplace_back(prevout.nValue - destValue - CENT, prevout.scriptPubKey);
+    pq::Payload payload;
+    payload.authorizations.resize(1);
+    payload.authorizations[0].public_key = key.GetPublicKey();
+    const auto context = pq::SignatureContext(Params().NetworkIDString());
+    BOOST_REQUIRE(context);
+    std::vector<unsigned char> signature;
+    BOOST_REQUIRE(key.Sign(pq::SignatureMessage(tx, {prevout}, payload,
+        Params().GetConsensus().hashGenesisBlock, 0), *context, signature));
+    BOOST_REQUIRE_EQUAL(signature.size(), payload.authorizations[0].signature.size());
+    std::copy(signature.begin(), signature.end(), payload.authorizations[0].signature.begin());
+    tx.extraPayload = pq::EncodePayload(payload);
+    std::string reason;
+    BOOST_REQUIRE_MESSAGE(pq::VerifyInputs(tx, {prevout}, Params(), reason), reason);
+    // Deliberately construct fork-only and double-spent inputs. The production
+    // payment builder correctly refuses those; chain validation is under test.
+    const auto result = MakeTransactionRef(tx);
+    wallet->CommitTransaction(result, nullptr, nullptr);
+    BOOST_REQUIRE(wallet->GetWalletTx(result->GetHash()));
+    return *result;
 }
 
 COutPoint GetOutpointWithAmount(const CTransaction& tx, CAmount outpointValue)
@@ -274,12 +297,9 @@ std::shared_ptr<CBlock> CreateBlockInternal(CWallet* pwalletMain, const std::vec
 
 static COutput GetUnspentCoin(CWallet* pwallet, std::initializer_list<std::shared_ptr<CBlock>> forkchain = {})
 {
-    std::vector<COutput> availableCoins;
-    CWallet::AvailableCoinsFilter coinsFilter;
-    coinsFilter.minDepth = 120;
-    BOOST_CHECK(pwallet->AvailableCoins(&availableCoins, nullptr, coinsFilter));
+    const auto availableCoins = pwallet->GetPQUnspent();
     for (const auto& coin : availableCoins) {
-        if (!IsSpentOnFork(coin, forkchain)) {
+        if (coin.nDepth > 120 && !IsSpentOnFork(coin, forkchain)) {
             return coin;
         }
     }
@@ -324,21 +344,24 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     // 7) use coinstake on different chains --> should pass.
 
     // Let's create block C with a valid cTx
-    auto cTx = CreateAndCommitTx(pwalletMain.get(), *pwalletMain->getNewAddress("").getObjResult(), kTxLarge);
+    std::string dest;
+    BOOST_REQUIRE(pwalletMain->GeneratePQAddress(dest));
+    auto cTx = CreateAndCommitTx(pwalletMain.get(), dest, kTxLarge);
     const auto& cTx_out = GetOutpointWithAmount(cTx, kTxLarge);
     WITH_LOCK(pwalletMain->cs_wallet, pwalletMain->LockCoin(cTx_out));
     std::shared_ptr<CBlock> pblockC = CreateBlockInternal(pwalletMain.get(), {cTx});
     BOOST_CHECK(ProcessNewBlock(pblockC, nullptr));
 
     // Create block D with a valid dTx
-    auto dTx = CreateAndCommitTx(pwalletMain.get(), *pwalletMain->getNewAddress("").getObjResult(), kTxLarge);
+    BOOST_REQUIRE(pwalletMain->GeneratePQAddress(dest));
+    auto dTx = CreateAndCommitTx(pwalletMain.get(), dest, kTxLarge);
     auto dTxOutPoint = GetOutpointWithAmount(dTx, kTxLarge);
     WITH_LOCK(pwalletMain->cs_wallet, pwalletMain->LockCoin(dTxOutPoint));
     std::shared_ptr<CBlock> pblockD = CreateBlockInternal(pwalletMain.get(), {dTx});
 
     // Create D1 forked block that connects a new tx
-    auto dest = pwalletMain->getNewAddress("").getObjResult();
-    auto d1Tx = CreateAndCommitTx(pwalletMain.get(), *dest, kTxMid);
+    BOOST_REQUIRE(pwalletMain->GeneratePQAddress(dest));
+    auto d1Tx = CreateAndCommitTx(pwalletMain.get(), dest, kTxMid);
     std::shared_ptr<CBlock> pblockD1 = CreateBlockInternal(pwalletMain.get(), {d1Tx});
 
     // Process blocks
@@ -351,7 +374,7 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     BOOST_CHECK(utxo.out.IsNull());
 
     // Create valid block E
-    auto eTx = CreateAndCommitTx(pwalletMain.get(), *dest, kTxMid);
+    auto eTx = CreateAndCommitTx(pwalletMain.get(), dest, kTxMid);
     std::shared_ptr<CBlock> pblockE = CreateBlockInternal(pwalletMain.get(), {eTx});
     BOOST_CHECK(ProcessNewBlock(pblockE, nullptr));
 
@@ -363,7 +386,7 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     CCoinControl coinControl;
     coinControl.fAllowOtherInputs = false;
     coinControl.Select(COutPoint(d1Tx.GetHash(), 0), d1Tx.vout[0].nValue);
-    auto e1Tx = CreateAndCommitTx(pwalletMain.get(), *dest, d1Tx.vout[0].nValue - 0.1 * COIN, &coinControl);
+    auto e1Tx = CreateAndCommitTx(pwalletMain.get(), dest, d1Tx.vout[0].nValue - 0.1 * COIN, &coinControl);
 
     CBlockIndex* pindexPrev = mapBlockIndex.at(pblockD1->GetHash());
     std::shared_ptr<CBlock> pblockE1 = CreateBlockInternal(pwalletMain.get(), {e1Tx}, pindexPrev, {pblockD1});
@@ -381,7 +404,7 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     coinControl.UnSelectAll();
     coinControl.Select(GetOutpointWithAmount(eTx, kTxMid), kTxMid);
     coinControl.fAllowOtherInputs = false;
-    auto D4_tx1 = CreateAndCommitTx(pwalletMain.get(), *dest, kTxSmall, &coinControl);
+    auto D4_tx1 = CreateAndCommitTx(pwalletMain.get(), dest, kTxSmall, &coinControl);
     std::shared_ptr<CBlock> pblockD4 = CreateBlockInternal(pwalletMain.get(), {D4_tx1}, mapBlockIndex.at(pblockC->GetHash()));
     BOOST_CHECK(!ProcessNewBlock(pblockD4, nullptr));
 
@@ -392,19 +415,19 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     // Create block E2 with E2_tx1 and E2_tx2. Where E2_tx2 is spending the outputs of E2_tx1
     CCoinControl coinControlE2;
     coinControlE2.Select(cTx_out, kTxLarge);
-    auto E2_tx1 = CreateAndCommitTx(pwalletMain.get(), *dest, kTxMid, &coinControlE2);
+    auto E2_tx1 = CreateAndCommitTx(pwalletMain.get(), dest, kTxMid, &coinControlE2);
 
     coinControl.UnSelectAll();
     coinControl.Select(GetOutpointWithAmount(E2_tx1, kTxMid), kTxMid);
     coinControl.fAllowOtherInputs = false;
-    auto E2_tx2 = CreateAndCommitTx(pwalletMain.get(), *dest, kTxSmall, &coinControl);
+    auto E2_tx2 = CreateAndCommitTx(pwalletMain.get(), dest, kTxSmall, &coinControl);
 
     std::shared_ptr<CBlock> pblockE2 = CreateBlockInternal(pwalletMain.get(), {E2_tx1, E2_tx2},
                                                            pindexPrev, {pblockD1});
     BOOST_CHECK(ProcessNewBlock(pblockE2, nullptr));
 
     // Create block with F2_tx1 spending E2_tx1 again.
-    auto F2_tx1 = CreateAndCommitTx(pwalletMain.get(), *dest, kTxSmall, &coinControl);
+    auto F2_tx1 = CreateAndCommitTx(pwalletMain.get(), dest, kTxSmall, &coinControl);
 
     pindexPrev = mapBlockIndex.at(pblockE2->GetHash());
     std::shared_ptr<CBlock> pblock5Forked = CreateBlockInternal(pwalletMain.get(), {F2_tx1},
@@ -429,7 +452,7 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     coinControl.UnSelectAll();
     coinControl.Select(dTxOutPoint, kTxLarge);
     coinControl.fAllowOtherInputs = false;
-    auto E3_tx1 = CreateAndCommitTx(pwalletMain.get(), *dest, kTxMid, &coinControl);
+    auto E3_tx1 = CreateAndCommitTx(pwalletMain.get(), dest, kTxMid, &coinControl);
 
     pindexPrev = mapBlockIndex.at(pblockD3->GetHash());
     std::shared_ptr<CBlock> pblockE3 = CreateBlockInternal(pwalletMain.get(), {E3_tx1}, pindexPrev, {pblockD3});
@@ -481,8 +504,8 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     coinControl.Select(COutPoint(input.tx->GetHash(), input.i), input.Value());
     coinControl.fAllowOtherInputs = false;
 
-    dest = pwalletMain->getNewAddress("").getObjResult();
-    auto gTx = CreateAndCommitTx(pwalletMain.get(), *dest, kTxMid, &coinControl);
+    BOOST_REQUIRE(pwalletMain->GeneratePQAddress(dest));
+    auto gTx = CreateAndCommitTx(pwalletMain.get(), dest, kTxMid, &coinControl);
     auto gOut = GetOutpointWithAmount(gTx, kTxMid);
     std::shared_ptr<CBlock> pblockG = CreateBlockInternal(pwalletMain.get(), {gTx});
     BOOST_CHECK(ProcessNewBlock(pblockG, nullptr));
@@ -498,7 +521,7 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     coinControl.UnSelectAll();
     coinControl.Select(gOut, kTxMid);
     coinControl.fAllowOtherInputs = false;
-    auto hTx = CreateAndCommitTx(pwalletMain.get(), *dest, kTxSmall, &coinControl);
+    auto hTx = CreateAndCommitTx(pwalletMain.get(), dest, kTxSmall, &coinControl);
     std::shared_ptr<CBlock> pblockH = CreateBlockInternal(pwalletMain.get(), {hTx});
     BOOST_CHECK(ProcessNewBlock(pblockH, nullptr));
     BOOST_CHECK(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash() ==  pblockH->GetHash()));
@@ -534,7 +557,7 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
 
     // Take I3 coinstake and use it for block I, changing its hash adding a new tx
     std::shared_ptr<CBlock> pblockI = std::make_shared<CBlock>(*pblockI3);
-    auto iTx = CreateAndCommitTx(pwalletMain.get(), *dest, 1 * COIN);
+    auto iTx = CreateAndCommitTx(pwalletMain.get(), dest, 1 * COIN);
     pblockI->vtx.emplace_back(MakeTransactionRef(iTx));
     pblockI->hashMerkleRoot = BlockMerkleRoot(*pblockI);
     assert(SignBlock(*pblockI, *pwalletMain));

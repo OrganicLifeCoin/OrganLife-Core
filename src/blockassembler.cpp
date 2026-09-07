@@ -270,9 +270,10 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
         return nullptr;
     }
 
-    // After v6 enforcement, add LLMQ commitments if needed
+    // Legacy LLMQ commitments are not valid transactions under PQ-only rules.
     const Consensus::Params& consensus = Params().GetConsensus();
-    if (consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0) &&
+    if (!pq::PaymentsActive(chainparams, nHeight) &&
+        consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_0) &&
         fIncludeQfc && llmq::quorumBlockProcessor) {
         LOCK(cs_main);
         for (const auto& p : Params().GetConsensus().llmqs) {
