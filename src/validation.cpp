@@ -133,6 +133,14 @@ struct CBlockIndexWorkComparator {
         if (pa->nChainWork > pb->nChainWork) return false;
         if (pa->nChainWork < pb->nChainWork) return true;
 
+        // Test-chain stakers can extend equal-work branches in every slot.
+        // Local arrival order leaves them split indefinitely: prefer the lower
+        // numeric header hash, also after restart. Use one network-wide rule
+        // (not mutable body flags or per-candidate activation) to keep this a
+        // strict ordering. Saved-anchor and full-block checks still apply.
+        if (Params().IsTestChain())
+            return UintToArith256(pb->GetBlockHash()) < UintToArith256(pa->GetBlockHash());
+
         // ... then by earliest time received, ...
         if (pa->nSequenceId < pb->nSequenceId) return false;
         if (pa->nSequenceId > pb->nSequenceId) return true;

@@ -81,6 +81,32 @@ const std::shared_ptr<const CBlock> GoodBlock(CBlockIndex& parent)
     return FinalizeBlock(Block(parent));
 }
 
+BOOST_AUTO_TEST_CASE(test_chain_equal_work_converges_independent_of_arrival)
+{
+    CBlockIndex& parent = *WITH_LOCK(cs_main, return chainActive.Tip());
+    auto preferred = GoodBlock(parent);
+    auto other = GoodBlock(parent);
+    if (UintToArith256(other->GetHash()) < UintToArith256(preferred->GetHash()))
+        std::swap(preferred, other);
+    BOOST_REQUIRE(preferred->GetHash() != other->GetHash());
+    BOOST_REQUIRE_EQUAL(preferred->nBits, other->nBits);
+
+    // Both are valid and have the same parent/work. Receiving the winner last
+    // must not leave this node permanently attached to its first arrival.
+    BOOST_REQUIRE(ProcessNewBlock(other, nullptr));
+    BOOST_REQUIRE(ProcessNewBlock(preferred, nullptr));
+    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), preferred->GetHash());
+    BOOST_REQUIRE(ProcessNewBlock(other, nullptr));
+    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), preferred->GetHash());
+
+    // Hash ordering is only a tie-break: more work on the losing branch wins.
+    CBlockIndex& losing = *WITH_LOCK(cs_main, return mapBlockIndex.at(other->GetHash()));
+    const auto heavier = GoodBlock(losing);
+    BOOST_REQUIRE(ProcessNewBlock(heavier, nullptr));
+    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), heavier->GetHash());
+    SyncWithValidationInterfaceQueue();
+}
+
 BOOST_AUTO_TEST_CASE(peer_requests_and_accepts_body_for_known_header)
 {
     CConnman::Options options;

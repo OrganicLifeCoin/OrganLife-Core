@@ -467,9 +467,13 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     std::shared_ptr<CBlock> pblockD1 = CreateBlockInternal(pwalletMain.get(), {d1Tx});
 
     // Process blocks
-    ProcessNewBlock(pblockD, nullptr);
+    BOOST_REQUIRE(ProcessNewBlock(pblockD, nullptr));
+    // Keep the reference branch strictly heavier. This test exercises input
+    // provenance, not which equal-work block happens to win the hash tie.
+    const auto referencePadding = CreateBlockInternal(pwalletMain.get());
+    BOOST_REQUIRE(ProcessNewBlock(referencePadding, nullptr));
     ProcessNewBlock(pblockD1, nullptr);
-    BOOST_CHECK(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash() ==  pblockD->GetHash()));
+    BOOST_REQUIRE(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash() == referencePadding->GetHash()));
 
     // Ensure that the coin does not exist in the main chain
     const Coin& utxo = pcoinsTip->AccessCoin(COutPoint(d1Tx.GetHash(), 0));
@@ -640,11 +644,14 @@ BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
     CBlock bl;
     BOOST_CHECK(ReadBlockFromDisk(bl, mapBlockIndex.at(pblockC->GetHash())));
 
-    // Make I3 the tip now.
+    // Match the reference branch's extra block, then make I3 strictly heavier.
+    const auto forkPadding = CreateBlockInternal(pwalletMain.get(), {},
+        mapBlockIndex.at(pblockH3->GetHash()), {pblockD3, pblockE3, pblockF3, pblockG3, pblockH3});
+    BOOST_REQUIRE(ProcessNewBlock(forkPadding, nullptr));
     std::shared_ptr<CBlock> pblockI3 = CreateBlockInternal(pwalletMain.get(),
                                                            {},
-                                                           mapBlockIndex.at(pblockH3->GetHash()),
-                                                           {pblockD3, pblockE3, pblockF3, pblockG3, pblockH3});
+                                                           mapBlockIndex.at(forkPadding->GetHash()),
+                                                           {pblockD3, pblockE3, pblockF3, pblockG3, pblockH3, forkPadding});
     BOOST_CHECK(ProcessNewBlock(pblockI3, nullptr));
     BOOST_CHECK(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash() ==  pblockI3->GetHash()));
 

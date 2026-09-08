@@ -95,7 +95,12 @@ class PQPoSTest(PivxTestFramework):
         payment = miner.sendpqtoaddress(receive_address, 5, str(payment_backup))
         self.mine(mining_address)
         assert receiver.gettransaction(payment["txid"])["confirmations"] > 0
-        self.mine(mining_address, 27)
+        # Independent mature inputs keep the second staker eligible across
+        # repeated forks; a just-used coinstake output must mature again.
+        for index in range(5):
+            miner.sendpqtoaddress(receive_address, 1, str(Path(miner.datadir) / f"stake-input-{index}.dat"))
+            self.mine(mining_address)
+        self.mine(mining_address, 22)
         assert_equal(miner.getblockcount(), 129)
         assert miner.getstakingstatus()["stakeablecoins"] > 0
 
@@ -133,6 +138,46 @@ class PQPoSTest(PivxTestFramework):
             assert_equal(node.getbestblockhash(), stronger_tip)
             assert_equal(node.listbanned(), [])
             assert node.getconnectioncount() > 0
+
+        # Reproduce two stakers extending equal-work branches. Local arrival
+        # order must not keep otherwise connected nodes on equal-work forks.
+        for depth in (1, 3, 1):
+            self.log.info("Rejoining equal-work PoS branches of depth %d", depth)
+            self.disconnect_nodes(0, 1)
+            for _ in range(depth):
+                tips = [None, None]
+                def produce_pair():
+                    self.mocktime += 120
+                    set_node_times(self.nodes, self.mocktime)
+                    for index, address in enumerate((mining_address, receive_address)):
+                        if tips[index] is not None:
+                            continue
+                        try:
+                            tips[index] = self.nodes[index].generatetoaddress(1, address)[0]
+                        except JSONRPCException as error:
+                            if "Couldn't create new blocks" not in error.error["message"]:
+                                raise
+                    return all(tips)
+                # Kernel eligibility is probabilistic. Retry only a missing
+                # block, never extend one island ahead of the other. Regtest's
+                # fixed difficulty gives equal work even after a missed slot.
+                wait_until(produce_pair, timeout=120)
+            headers = [node.getblockheader(tip) for node, tip in zip(self.nodes, tips)]
+            assert tips[0] != tips[1]
+            assert_equal(headers[0]["height"], headers[1]["height"])
+            assert_equal(headers[0]["chainwork"], headers[1]["chainwork"])
+            expected = min(tips, key=lambda tip: int(tip, 16))
+            self.connect_nodes(0, 1)
+            self.sync_blocks(timeout=20)
+            for node in self.nodes:
+                assert_equal(node.getbestblockhash(), expected)
+                assert_equal(node.listbanned(), [])
+
+        # On-disk block indices lose their arrival sequence on restart. The
+        # choice must still agree without the peer forcing a heavier branch.
+        for index in range(self.num_nodes):
+            self.restart_node(index, extra_args=self.extra_args[index] + ["-mocktime=%d" % self.mocktime])
+            assert_equal(self.nodes[index].getbestblockhash(), expected)
 
 
 if __name__ == "__main__":
