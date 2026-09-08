@@ -57,6 +57,7 @@
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QtTest/qtest_widgets.h>
 #include <QThread>
 #include <QTimer>
 #include <QToolButton>
@@ -65,13 +66,24 @@
 #include <algorithm>
 #include <atomic>
 #include <thread>
+#ifdef WIN32
+#include <aclapi.h>
+#endif
+
+void PQWidgetTests::masternodeControllerNavigation_data()
+{
+    QTest::addColumn<QString>("network");
+    QTest::newRow("regtest") << QString::fromStdString(CBaseChainParams::REGTEST);
+    QTest::newRow("testnet") << QString::fromStdString(CBaseChainParams::TESTNET);
+}
 
 void PQWidgetTests::masternodeControllerNavigation()
 {
+    QFETCH(QString, network);
     const auto oldNetwork = Params().NetworkIDString();
     struct Restore { std::string network; ~Restore() { SelectParams(network); } } restore{oldNetwork};
-    SelectParams(CBaseChainParams::REGTEST);
-    auto style = std::unique_ptr<const NetworkStyle>(NetworkStyle::instantiate("regtest"));
+    SelectParams(network.toStdString());
+    auto style = std::unique_ptr<const NetworkStyle>(NetworkStyle::instantiate(network));
     OrganicLifeGUI window(style.get());
     auto* page = window.findChild<MasterNodesWidget*>();
     QVERIFY(page);
@@ -93,18 +105,53 @@ void PQWidgetTests::masternodeRegistryFailsClosed()
 {
     const auto oldNetwork = Params().NetworkIDString();
     struct Restore { std::string network; ~Restore() { masternodeConfig.clear(); SelectParams(network); } } restore{oldNetwork};
-    SelectParams(CBaseChainParams::REGTEST);
     masternodeConfig.add("obsolete", "127.0.0.1:51476", "legacy-secret", "aa", "0");
-    MNModel model(nullptr);
-    model.updateMNList();
-    QCOMPARE(model.rowCount(), 0);
-    QVERIFY(!model.index(0, MNModel::PRIV_KEY, {}).isValid());
+    for (const auto& network : {CBaseChainParams::REGTEST, CBaseChainParams::TESTNET}) {
+        SelectParams(network);
+        MNModel model(nullptr);
+        model.updateMNList();
+        QCOMPARE(model.rowCount(), 0);
+        QVERIFY(!model.registryError().isEmpty());
+        QVERIFY(!model.index(0, MNModel::PRIV_KEY, {}).isValid());
+    }
+}
+
+void PQWidgetTests::masternodeControllerCancelsWithoutWrites_data()
+{
+    QTest::addColumn<QString>("network");
+    QTest::newRow("regtest") << QString::fromStdString(CBaseChainParams::REGTEST);
+    QTest::newRow("testnet") << QString::fromStdString(CBaseChainParams::TESTNET);
 }
 
 void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
 {
+    QFETCH(QString, network);
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
+#ifdef WIN32
+    // QTemporaryDir grants other principals metadata access. Operator exports
+    // deliberately require a stricter owner-only parent, even in this fixture.
+    auto directoryPath = directory.path().toStdWString();
+    PSECURITY_DESCRIPTOR descriptor = nullptr;
+    PSID owner = nullptr;
+    const DWORD readSecurity = GetNamedSecurityInfoW(directoryPath.data(), SE_FILE_OBJECT,
+        OWNER_SECURITY_INFORMATION, &owner, nullptr, nullptr, nullptr, &descriptor);
+    std::unique_ptr<void, decltype(&LocalFree)> ownedDescriptor(descriptor, LocalFree);
+    QCOMPARE(readSecurity, DWORD(ERROR_SUCCESS));
+    QVERIFY(owner && IsValidSid(owner));
+    EXPLICIT_ACCESSW access{};
+    access.grfAccessPermissions = FILE_ALL_ACCESS;
+    access.grfAccessMode = SET_ACCESS;
+    access.Trustee.TrusteeForm = TRUSTEE_IS_SID;
+    access.Trustee.ptstrName = static_cast<wchar_t*>(owner);
+    PACL acl = nullptr;
+    const DWORD createACL = SetEntriesInAclW(1, &access, nullptr, &acl);
+    std::unique_ptr<void, decltype(&LocalFree)> ownedACL(acl, LocalFree);
+    QCOMPARE(createACL, DWORD(ERROR_SUCCESS));
+    QCOMPARE(SetNamedSecurityInfoW(directoryPath.data(), SE_FILE_OBJECT,
+        DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+        nullptr, nullptr, acl, nullptr), DWORD(ERROR_SUCCESS));
+#endif
     const auto oldNetwork = Params().NetworkIDString();
     const auto oldDataDir = gArgs.GetArg("-datadir", "");
     struct Restore {
@@ -115,7 +162,7 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     ECC_Start();
     InitSignatureCache();
     ECCVerifyHandle verify;
-    SelectParams(CBaseChainParams::REGTEST);
+    SelectParams(network.toStdString());
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
     QVERIFY(!chainActive.Tip());
     CBlockIndex genesis;
@@ -148,7 +195,7 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     QCOMPARE(replacementWallet.LoadWallet(firstRun), DB_LOAD_OK);
     WalletModel replacementModel(&replacementWallet, &options);
     replacementModel.init();
-    auto style = std::unique_ptr<const NetworkStyle>(NetworkStyle::instantiate("regtest"));
+    auto style = std::unique_ptr<const NetworkStyle>(NetworkStyle::instantiate(network));
     OrganicLifeGUI window(style.get());
     auto* page = window.findChild<MasterNodesWidget*>();
     QVERIFY(page);
@@ -202,6 +249,7 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     const auto backupDirectory = directory.path() + "/backups";
     QVERIFY(QDir().mkdir(backupDirectory));
     QSettings().setValue(PQWalletUI::backupSettingsKey(&model), backupDirectory);
+    QCOMPARE(PQWalletUI::backupDirectory(&model), backupDirectory);
     QString reviewMessage, errorMessage;
     bool acceptTransaction = false;
     WalletModel* replaceOnConfirmation = nullptr;

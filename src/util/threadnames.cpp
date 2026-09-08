@@ -74,17 +74,24 @@ void RenameThreadPool(ctpl::thread_pool& tp, const char* baseName)
 {
     auto cond = std::make_shared<std::condition_variable>();
     auto mutex = std::make_shared<std::mutex>();
+    auto released = std::make_shared<bool>(false);
     std::atomic<int> doneCnt(0);
     for (int i = 0; i < tp.size(); i++) {
-        tp.push([baseName, i, cond, mutex, &doneCnt](int threadId) {
+        tp.push([baseName, i, cond, mutex, released, &doneCnt](int threadId) {
             util::ThreadRename(strprintf("%s-%d", baseName, i).c_str());
             doneCnt++;
             std::unique_lock<std::mutex> l(*mutex);
-            cond->wait(l);
+            cond->wait(l, [&] { return *released; });
         });
     }
     while (doneCnt != tp.size()) {
         MilliSleep(10);
+    }
+    {
+        // The last worker may have incremented doneCnt without entering wait
+        // yet. Keep the release condition so that notification cannot be lost.
+        std::lock_guard<std::mutex> lock(*mutex);
+        *released = true;
     }
     cond->notify_all();
 }

@@ -13,6 +13,7 @@ class GovernanceDialogTests : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
+    void startupFontRendersBasicTextAndPreservesReadableChoice();
     void coinModeRequiresAmountDirectionAndAutoUnlock();
     void coinModeUiHasQuickPickButtonsAndNoManualUnlock();
     void coinModeQuickPicksUseProposalCapAndClampToLockable();

@@ -42,6 +42,22 @@ endif
 TEST_SRCDIR = test
 TEST_BINARY=test/test_organiclife$(EXEEXT)
 
+# Small native storage check; also runs without the full node/Rust dependencies.
+noinst_PROGRAMS += test/pqjournal_io_tests
+test_pqjournal_io_tests_SOURCES = test/pqjournal_io_tests.cpp pqjournal_io.cpp pqjournal_io.h
+test_pqjournal_io_tests_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+test_pqjournal_io_tests_CXXFLAGS = $(AM_CXXFLAGS) -UNDEBUG
+test_pqjournal_io_tests_LDADD = $(BOOST_LIBS)
+EXTRA_DIST += test/pqjournal_fault_tests.cpp
+
+if TARGET_WINDOWS
+noinst_PROGRAMS += test/pqcredentials_win_tests
+test_pqcredentials_win_tests_SOURCES = test/pqcredentials_win_tests.cpp wallet/pqcredentials_win.cpp wallet/pqcredentials_win.h support/lockedpool.cpp support/cleanse.cpp
+test_pqcredentials_win_tests_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+test_pqcredentials_win_tests_CXXFLAGS = $(AM_CXXFLAGS) -UNDEBUG
+test_pqcredentials_win_tests_LDADD = -ladvapi32
+endif
+
 JSON_TEST_FILES = \
   test/data/script_tests.json \
   test/data/base58_keys_valid.json \
@@ -115,6 +131,7 @@ BITCOIN_TESTS =\
   test/pqquorum_tests.cpp \
   test/pqjournal_tests.cpp \
   test/pqanchors_tests.cpp \
+  test/pqfinality_tests.cpp \
   test/pqmasternode_tests.cpp \
   test/cuckoocache_tests.cpp \
   test/DoS_tests.cpp \
@@ -436,7 +453,10 @@ endif
 
 check-sapling: $(SAPLING_TESTS:.cpp=.cpp.test)
 
-check-local: check-sapling check-standard
+check-journal-io: test/pqjournal_io_tests$(EXEEXT)
+	./test/pqjournal_io_tests$(EXEEXT)
+
+check-local: check-sapling check-standard check-journal-io
 
 %.cpp.test: %.cpp $(TEST_BINARY)
 	@echo Running tests: `cat $< | grep -E "(BOOST_FIXTURE_TEST_SUITE\\(|BOOST_AUTO_TEST_SUITE\\()" | cut -d '(' -f 2 | cut -d ',' -f 1 | cut -d ')' -f 1` from $<

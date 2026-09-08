@@ -3,9 +3,9 @@
 # Distributed under the MIT software license, see the accompanying file COPYING.
 """Controller recovery keys are backed before exposure, never spending keys."""
 from pathlib import Path
-import stat
 import shutil
 
+from test_framework.permissions import assert_private_permissions, make_private_directory
 from test_framework.test_framework import PivxTestFramework
 from test_framework.util import assert_equal, assert_raises_rpc_error
 
@@ -21,6 +21,9 @@ class PQOperatorRecoveryTest(PivxTestFramework):
 
     def run_test(self):
         node = self.nodes[0]
+        export_help = node.help("exportpqoperator")
+        assert "Windows (local fixed NTFS)" in export_help
+        assert "Linux/macOS only" not in export_help
         root = Path(node.datadir)
         snapshot = root / "operator-snapshot.dat"
         password = "public-operator-recovery-passphrase"
@@ -61,7 +64,7 @@ class PQOperatorRecoveryTest(PivxTestFramework):
         # directory.  The wrapping key is credentials-only material; it is
         # never returned by the RPC and cannot be overwritten in place.
         export_parent = root / "private-export-parent"
-        export_parent.mkdir(mode=0o700)
+        make_private_directory(export_parent)
         exported = export_parent / "operator-credentials"
         node.walletlock()
         assert_raises_rpc_error(-13, "walletpassphrase", node.exportpqoperator,
@@ -77,9 +80,9 @@ class PQOperatorRecoveryTest(PivxTestFramework):
         assert_equal(exported_result, {"publickey": first["publickey"], "credentials_only": True})
         record_file = exported / "olc-pq-operator-record"
         key_file = exported / "olc-pq-operator-key"
-        assert_equal(stat.S_IMODE(exported.stat().st_mode), 0o700)
-        assert_equal(stat.S_IMODE(record_file.stat().st_mode), 0o400)
-        assert_equal(stat.S_IMODE(key_file.stat().st_mode), 0o400)
+        assert_private_permissions(exported, 0o700)
+        assert_private_permissions(record_file, 0o400)
+        assert_private_permissions(key_file, 0o400)
         record_bytes = record_file.read_bytes()
         key_bytes = key_file.read_bytes()
         assert_equal(record_bytes[0], 2)  # credentials use the v2 operator record

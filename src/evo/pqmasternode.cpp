@@ -5,15 +5,67 @@
 #include <coins.h>
 #include <hash.h>
 #include <pqanchors.h>
+#include <pqservice.h>
 #include <validation.h>
 #include <algorithm>
 #include <limits>
 #include <set>
 #include <tuple>
 
+namespace pqservice {
+bool Recent(const pqmn::Record& record, uint32_t height, const CChainParams& params)
+{
+    return !record.revoked && record.service != CService() &&
+        record.MatureAt(height, params.GetConsensus().MasternodeCollateralMinConf()) &&
+        record.lastHeartbeatHeight != 0 && record.lastHeartbeatHeight < height &&
+        height - record.lastHeartbeatHeight <= uint32_t(params.GetConsensus().nPQServiceWindow);
+}
+
+bool Eligible(const pqmn::Record& record, uint32_t height, const CChainParams& params, bool anyHeartbeat)
+{
+    const auto first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight;
+    const auto grace = std::max(record.registeredHeight, uint32_t(std::max(0, first)));
+    return !anyHeartbeat || (height >= grace && height - grace <= uint32_t(params.GetConsensus().nPQServiceWindow)) ||
+        Recent(record, height, params);
+}
+
+bool CheckContext(const Heartbeat& heartbeat, const pqmn::Record& record,
+                  const CBlockIndex* parent, const CChainParams& params, std::string& reason)
+{
+    AssertLockHeld(cs_main);
+    reason = "bad-pq-service-context";
+    if (!parent || !Active(params, parent->nHeight + 1) || heartbeat.registration.IsNull() ||
+        !heartbeat.height || heartbeat.height > uint32_t(parent->nHeight) ||
+        uint32_t(parent->nHeight) - heartbeat.height >= uint32_t(std::max(1, params.GetConsensus().nPQServiceWindow / 2)) ||
+        record.revoked || record.service == CService() || heartbeat.sequence != record.sequence ||
+        heartbeat.height <= record.lastHeartbeatHeight ||
+        !record.MatureAt(heartbeat.height, params.GetConsensus().MasternodeCollateralMinConf())) return false;
+    // TestBlockValidity may provide an index without skip pointers.
+    const auto* reference = parent;
+    while (reference && reference->nHeight > int(heartbeat.height)) reference = reference->pprev;
+    if (!reference || reference->GetBlockHash() != heartbeat.blockHash) return false;
+    reason.clear();
+    return true;
+}
+
+bool Verify(const Heartbeat& heartbeat, const pqmn::Index& index,
+            const CBlockIndex* parent, const CChainParams& params, std::string& reason)
+{
+    pqmn::Record record;
+    reason = "bad-pq-service-registration";
+    if (!index.Get(heartbeat.registration, record) || !CheckContext(heartbeat, record, parent, params, reason)) return false;
+    if (!mldsa44::Verify(record.operatorKey, Message(heartbeat, params.GetConsensus().hashGenesisBlock, record.operatorKey),
+                        Context(), heartbeat.signature)) {
+        reason = "bad-pq-service-signature";
+        return false;
+    }
+    return true;
+}
+}
+
 namespace pqmn {
 namespace {
-constexpr uint8_t PQMN_SCHEMA_VERSION = 2;
+constexpr uint8_t PQMN_SCHEMA_VERSION = 4; // Independent heartbeat state; rebuild older indexes.
 bool Fail(std::string& reason, const char* error) { reason = error; return false; }
 template<typename T> bool Zero(const T& value) {
     return std::all_of(value.begin(), value.end(), [](unsigned char c) { return c == 0; });
@@ -220,23 +272,30 @@ void Index::Put(const uint256& id, const Record& record) {
 Optional<std::pair<uint256, Record>> Index::FindPayee(uint32_t height) const
 {
     Optional<std::pair<uint256, Record>> winner;
+    const auto records = List();
+    const bool heartbeatsActive = pqservice::Active(params, height);
+    const bool anyHeartbeat = std::any_of(records.begin(), records.end(), [&](const auto& item) {
+        return pqservice::Recent(item.second, height, params);
+    });
     // Service evidence: with a pinned bootstrap and active finality, a node is
     // payout-eligible when it signed an in-block certificate within the
     // service window, or is within the window of its registration height, or
     // when the window holds no certificate at all (stall is not attributed to
     // individuals). Without finality the previous rules are unchanged.
     const bool finalityConfigured = pqanchor::GetBootstrap() != nullptr;
-    std::vector<uint256> signers;
+    std::map<uint256, uint32_t> signers;
     bool anyCert = false;
-    if (finalityConfigured)
-        pqanchor::SignersInWindow(db, params, height, params.GetConsensus().nPQServiceWindow, signers, anyCert);
+    if (finalityConfigured && !heartbeatsActive)
+        pqanchor::SignersInWindow(db, params, height ? height - 1 : 0,
+                                 params.GetConsensus().nPQServiceWindow, signers, anyCert);
     const auto eligible = [&](const uint256& id, const Record& record) {
+        if (heartbeatsActive) return pqservice::Eligible(record, height, params, anyHeartbeat);
         if (!finalityConfigured || !anyCert) return true;
         if (record.registeredHeight != 0 && height - record.registeredHeight <= params.GetConsensus().nPQServiceWindow)
             return true; // bootstrap grace
-        return std::find(signers.begin(), signers.end(), id) != signers.end();
+        return signers.count(id) != 0;
     };
-    for (const auto& item : List()) {
+    for (const auto& item : records) {
         const auto& record = item.second;
         if (record.revoked || record.service == CService()) continue;
         if (Zero(record.payout) || record.operatorReward > 10000 ||
@@ -355,6 +414,7 @@ bool Index::Process(const CTransaction& tx, const CCoinsViewCache& view, uint32_
             if (original.sequence == std::numeric_limits<uint64_t>::max() || op.sequence != original.sequence + 1)
                 return Fail(reason, "bad-pqmn-sequence");
             replacement = original; replacement.sequence = op.sequence;
+            replacement.lastHeartbeatHeight = 0; // New sequence requires fresh activity.
             switch (op.action) {
             case Action::UPDATE:
                 if (Zero(op.payout) || !verify(original.owner, Role::OWNER, op.ownerSignature)) return Fail(reason, "bad-pqmn-owner-signature");
@@ -416,10 +476,14 @@ bool Index::MatchesChainTip(const CBlockIndex* tip) const
     uint256 best; int first{0};
     const bool hasTip = ReadChecked(db, Prefix('b'), best);
     const bool hasActivation = ReadChecked(db, Prefix('a'), first);
+    int serviceActivation{0};
+    const bool hasServiceActivation = ReadChecked(db, Prefix('j'), serviceActivation);
     uint8_t schema{0};
     const bool hasSchema = ReadChecked(db, Prefix('v'), schema);
-    if (!tip || !pq::MasternodesActive(params, tip->nHeight)) return !hasTip && !hasActivation && !hasSchema;
-    return hasTip && hasActivation && hasSchema && schema == PQMN_SCHEMA_VERSION && best == tip->GetBlockHash() &&
+    if (!tip || !pq::MasternodesActive(params, tip->nHeight)) return !hasTip && !hasActivation && !hasServiceActivation && !hasSchema;
+    return hasTip && hasActivation && hasServiceActivation && hasSchema &&
+        serviceActivation == params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight &&
+        schema == PQMN_SCHEMA_VERSION && best == tip->GetBlockHash() &&
         first == params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
 }
 
@@ -439,7 +503,7 @@ bool Index::ConnectBlock(const CBlock& block, const CBlockIndex& index, CCoinsVi
         if (exists || hasActivation) return Fail(reason, "bad-pqmn-registry-tip");
         LOCK(db.cs);
         auto it = db.GetCurTransaction().NewIteratorUniquePtr();
-        for (char kind : {'c', 'k', 'r', 's', 'u', 'v', 'w'}) {
+        for (char kind : {'c', 'h', 'j', 'k', 'r', 's', 'u', 'v', 'w'}) {
             CDataStream prefix(SER_DISK, 0); prefix << Prefix(kind);
             it->Seek(Prefix(kind));
             if (!it->Valid()) continue;
@@ -451,6 +515,10 @@ bool Index::ConnectBlock(const CBlock& block, const CBlockIndex& index, CCoinsVi
         return Fail(reason, "bad-pqmn-registry-tip");
     if (index.nHeight != firstHeight) {
         uint8_t schema{0};
+        int serviceActivation{0};
+        if (!ReadChecked(db, Prefix('j'), serviceActivation) ||
+            serviceActivation != params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight)
+            return Fail(reason, "bad-pqmn-service-activation");
         if (!ReadChecked(db, Prefix('v'), schema) || schema != PQMN_SCHEMA_VERSION)
             return Fail(reason, "bad-pqmn-schema");
     }
@@ -470,7 +538,31 @@ bool Index::ConnectBlock(const CBlock& block, const CBlockIndex& index, CCoinsVi
         }
     }
     db.Write(std::make_pair(Prefix('w'), index.GetBlockHash()), rewardMarker);
-    if (index.nHeight == firstHeight) db.Write(Prefix('v'), PQMN_SCHEMA_VERSION);
+    if (pqservice::Active(params, index.nHeight)) {
+        std::vector<Previous> heartbeatUndo;
+        pq::Payload payload;
+        if (pq::DecodePayload(*block.vtx[0], payload) && payload.mode == pq::SERVICE) {
+            pqservice::Carrier carrier;
+            if (!pqservice::Decode(payload.data, carrier)) return Fail(reason, "bad-pq-service-payload");
+            // Verify the complete batch before writing, against the parent registry.
+            for (const auto& heartbeat : carrier.heartbeats)
+                if (!pqservice::Verify(heartbeat, *this, index.pprev, params, reason)) return false;
+            for (const auto& heartbeat : carrier.heartbeats) {
+                Record before;
+                if (!Get(heartbeat.registration, before)) return Fail(reason, "bad-pq-service-registration");
+                Record after = before;
+                after.lastHeartbeatHeight = heartbeat.height;
+                heartbeatUndo.push_back({heartbeat.registration, SerializeHash(after), true, before});
+                Erase(heartbeat.registration, before);
+                Put(heartbeat.registration, after);
+            }
+        }
+        db.Write(std::make_pair(Prefix('h'), index.GetBlockHash()), heartbeatUndo);
+    }
+    if (index.nHeight == firstHeight) {
+        db.Write(Prefix('v'), PQMN_SCHEMA_VERSION);
+        db.Write(Prefix('j'), params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight);
+    }
     // Never flush: later transactions see earlier spends/outputs without mutating the caller's view.
     CCoinsViewCache inputs(&view);
     for (const auto& tx : block.vtx) {
@@ -501,6 +593,20 @@ bool Index::DisconnectBlock(const CBlock& block, const CBlockIndex& index, const
         if (!*it) return Fail(reason, "bad-pqmn-block-transaction");
         if (!(*it)->IsCoinBase() && !Undo((*it)->GetHash(), reason)) return false;
     }
+    if (pqservice::Active(params, index.nHeight)) {
+        const auto key = std::make_pair(Prefix('h'), index.GetBlockHash());
+        std::vector<Previous> heartbeatUndo;
+        if (!ReadChecked(db, key, heartbeatUndo) || heartbeatUndo.size() > pqservice::MAX_HEARTBEATS)
+            return Fail(reason, "bad-pq-service-undo");
+        for (const auto& change : heartbeatUndo) {
+            Record current;
+            if (!Get(change.id, current) || SerializeHash(current) != change.after)
+                return Fail(reason, "bad-pq-service-undo-order");
+            Erase(change.id, current);
+            Put(change.id, change.record);
+        }
+        db.Erase(key);
+    }
     Previous rewardUndo;
     const auto rewardKey = std::make_pair(Prefix('w'), index.GetBlockHash());
     if (!ReadChecked(db, rewardKey, rewardUndo)) return Fail(reason, "bad-pqmn-missing-reward-undo");
@@ -513,7 +619,7 @@ bool Index::DisconnectBlock(const CBlock& block, const CBlockIndex& index, const
             Put(rewardUndo.id, rewardUndo.record);
         }
         db.Erase(rewardKey);
-        if (index.nHeight == firstHeight) db.Erase(Prefix('v'));
+        if (index.nHeight == firstHeight) { db.Erase(Prefix('v')); db.Erase(Prefix('j')); }
     }
     if (index.nHeight == firstHeight) { db.Erase(Prefix('b')); db.Erase(Prefix('a')); }
     else db.Write(Prefix('b'), block.hashPrevBlock);

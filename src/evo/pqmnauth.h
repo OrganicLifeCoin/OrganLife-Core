@@ -10,6 +10,8 @@
 #include <array>
 #include <memory>
 
+namespace pqservice { struct Heartbeat; }
+
 // Registered peer identity only: no connection privilege, service or finality authority.
 namespace pqmnauth {
 struct Transcript;
@@ -27,6 +29,7 @@ public:
     // Peer authentication only, never arbitrary messages or key export.
     // Caller holds cs_main; checks active/current registry and key on every use.
     bool SignProof(const Transcript& transcript, std::vector<unsigned char>& proof, std::string& reason) const;
+    bool SignHeartbeat(pqservice::Heartbeat& heartbeat, std::string& reason) const;
     // Typed finality vote signing (PREVOTE/PRECOMMIT statements only), reachable
     // only through the durable journal flow. Same per-use registry guards as
     // SignProof plus the vote height bound. No arbitrary-message signing or key

@@ -45,6 +45,33 @@ struct QuorumFixture {
 
 BOOST_FIXTURE_TEST_SUITE(pqquorum_tests, QuorumFixture)
 
+BOOST_AUTO_TEST_CASE(restore_preserves_explicit_nil_votes)
+{
+    std::string reason;
+    auto round = pqquorum::RoundState::Restore(statement.genesis, statement.anchor, statement.height,
+        members, 5, uint256(), 0, uint256(), uint256(), reason);
+    BOOST_REQUIRE(round);
+    BOOST_CHECK(round->hasPrevoted());
+    BOOST_CHECK(round->hasPrecommitted());
+    pqquorum::Statement decision;
+    BOOST_CHECK(!round->Prevote(statement.value, nullptr, decision, reason));
+    auto undecided = pqquorum::RoundState::Restore(statement.genesis, statement.anchor, statement.height,
+        members, 5, uint256(), 0, std::nullopt, std::nullopt, reason);
+    BOOST_REQUIRE(undecided);
+    BOOST_CHECK(!undecided->hasPrevoted());
+    BOOST_CHECK(!undecided->hasPrecommitted());
+    BOOST_REQUIRE(undecided->Prevote(statement.value, nullptr, decision, reason));
+    BOOST_CHECK(decision.value == statement.value);
+}
+
+BOOST_AUTO_TEST_CASE(restore_rejects_lock_from_future_round)
+{
+    std::string reason;
+    auto round = pqquorum::RoundState::Restore(statement.genesis, statement.anchor, statement.height,
+        members, 5, statement.value, 6, statement.value, statement.value, reason);
+    BOOST_CHECK(!round);
+}
+
 BOOST_AUTO_TEST_CASE(round_locks_survive_timeout_and_require_newer_quorum_to_change)
 {
     pqquorum::RoundState round(statement.genesis, statement.anchor, statement.height, members);

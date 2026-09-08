@@ -17,6 +17,7 @@
 #include "optional.h"
 #include "pqanchors.h"
 #include "pqfinality.h"
+#include "pqservice.h"
 #include "protocol.h"
 #include "sync.h"
 #include "timedata.h"
@@ -38,19 +39,19 @@ UniValue getpqfinalityinfo(const JSONRPCRequest& request)
         throw std::runtime_error("getpqfinalityinfo\n"
             "Report the local PQ finality runtime state. A merely configured bootstrap or node is never\n"
             "reported as operational: \"validated\" is false until the pinned checkpoint verifies against\n"
-            "the active chain, and \"voting\" reflects actual journaled participation.\n"
+            "the active chain. The voting round is runtime progress, not proof of a signature.\n"
             "Result:\n"
-            "  configured       (boolean) pinned bootstrap checkpoint present (regtest only today)\n"
+            "  configured       (boolean) pinned bootstrap checkpoint present (test chains only)\n"
             "  validated        (boolean) checkpoint verified against the active chain\n"
             "  anchor_height    (numeric) highest locally finalized height\n"
             "  anchor_hash      (string)  block hash finalized at anchor_height\n"
             "  committee_size   (numeric) committee size at the anchor\n"
             "  voting_height    (numeric) next height the runtime votes on\n"
-            "  voting_round     (numeric) highest journaled round at voting_height\n"
+            "  voting_round     (numeric) current runtime round at voting_height\n"
             "  locked           (boolean) this identity holds a journaled lock at voting_height\n"
             "  locked_value     (string)  locked block hash, if locked\n"
             "  member           (boolean) the local operator is in the voting committee\n");
-    if (!Params().IsRegTestNet())
+    if (!Params().IsTestChain())
         throw JSONRPCError(RPC_MISC_ERROR, "PQ finality is not active on this network");
     bool configured, validated, hasLock, isMember;
     uint32_t anchorHeight, committeeSize, votingHeight, votingRound;
@@ -71,6 +72,33 @@ UniValue getpqfinalityinfo(const JSONRPCRequest& request)
     return result;
 }
 
+UniValue initpqjournal(const JSONRPCRequest& request)
+{
+    if (request.fHelp || !request.params.empty())
+        throw std::runtime_error("initpqjournal\n"
+            "Initialize this configured walletless operator's finality journal for FIRST USE only.\n"
+            "Run without -pqbootstrap, then restart with the approved checkpoint. Existing or partial\n"
+            "state is never overwritten. Do not use after losing signing history or restoring an old\n"
+            "backup: rotate the operator key through the controller instead. Returns true.\n");
+    LOCK(cs_main);
+    const auto* local = GetPQOperator();
+    if (!local || !evoDb || !pq::MasternodesActive(Params(), chainActive.Height()))
+        throw JSONRPCError(RPC_MISC_ERROR, "Requires a configured walletless operator on an active test chain");
+    if (pqanchor::GetBootstrap())
+        throw JSONRPCError(RPC_MISC_ERROR, "Initialize before configuring -pqbootstrap");
+    pqmn::Index index(*evoDb, Params());
+    pqmn::Record record;
+    if (!index.MatchesChainTip(chainActive.Tip()) || !index.Get(local->Registration(), record) ||
+        record.revoked || record.operatorKey != local->PublicKey() ||
+        !record.MatureAt(chainActive.Height(), Params().GetConsensus().MasternodeCollateralMinConf()))
+        throw JSONRPCError(RPC_MISC_ERROR, "Requires a current mature operator registration");
+    std::string reason;
+    if (!pqjournal::Journal::Initialize(GetDataDir(), Params().GetConsensus().hashGenesisBlock,
+                                      local->Registration(), local->PublicKey(), reason))
+        throw JSONRPCError(RPC_MISC_ERROR, reason);
+    return true;
+}
+
 UniValue getpqoperatorinfo(const JSONRPCRequest& request)
 {
     if (request.fHelp || !request.params.empty())
@@ -78,7 +106,8 @@ UniValue getpqoperatorinfo(const JSONRPCRequest& request)
                                  "finality runtime runs, its journaled voting state. Credential presence is pending status,\n"
                                  "never service readiness, authentication or finality authority. No secrets are returned.\n"
                                  "Result: configured (boolean), registration (hex), publickey (ML-DSA-44 hex),\n"
-                                 "journal_finalized_height (numeric, when finality runs), journal_voted_height (numeric),\n"
+                                 "journal_available (boolean, when a bootstrap is configured), journal_finalized_height\n"
+                                 "(numeric), journal_voted_height (highest retained vote, zero if none),\n"
                                  "journal_locked (boolean).");
     LOCK(cs_main);
     UniValue result(UniValue::VOBJ);
@@ -88,7 +117,7 @@ UniValue getpqoperatorinfo(const JSONRPCRequest& request)
         result.pushKV("registration", pending->Registration().GetHex());
         result.pushKV("publickey", HexStr(pending->PublicKey()));
     }
-    if (pqfinality::Manager::Get().Started() && pending) {
+    if (pqanchor::GetBootstrap() && pending) {
         // Narrowly typed journal introspection only; no key material.
         LOCK(cs_main);
         // Journal state is exposed through the finality status aggregate.
@@ -98,9 +127,12 @@ UniValue getpqoperatorinfo(const JSONRPCRequest& request)
         pqfinality::Manager::Get().GetStatus(configured, validated, anchorHeight, anchorHash,
                                              committeeSize, votingHeight, votingRound, hasLock,
                                              lockedValue, isMember);
-        result.pushKV("journal_finalized_height", uint64_t(anchorHeight));
-        result.pushKV("journal_voted_height", uint64_t(votingHeight));
-        result.pushKV("journal_voting_round", uint64_t(votingRound));
+        uint32_t finalized, voted, round;
+        const bool available = pqfinality::Manager::Get().GetJournalProgress(finalized, voted, round);
+        result.pushKV("journal_available", available);
+        result.pushKV("journal_finalized_height", uint64_t(finalized));
+        result.pushKV("journal_voted_height", uint64_t(voted));
+        result.pushKV("journal_voting_round", uint64_t(round));
         result.pushKV("journal_locked", hasLock);
     }
     return result;
@@ -109,7 +141,7 @@ UniValue getpqoperatorinfo(const JSONRPCRequest& request)
 UniValue listpqmasternodes(const JSONRPCRequest& request)
 {
     if (request.fHelp || !request.params.empty())
-        throw std::runtime_error("listpqmasternodes\nList the current confirmed opt-in regtest PQ registry.\n"
+        throw std::runtime_error("listpqmasternodes\nList the current confirmed test-chain PQ registry.\n"
             "Works without a wallet. Sequence is a decimal string. Registration does not imply service, rewards or finality.\n");
     LOCK(cs_main);
     if (!pq::MasternodesActive(Params(), chainActive.Height() + 1) || !evoDb)
@@ -119,26 +151,18 @@ UniValue listpqmasternodes(const JSONRPCRequest& request)
         pqmn::Index index(*evoDb, Params());
         if (!index.MatchesChainTip(chainActive.Tip())) throw std::runtime_error("stale registry");
         // Service evidence over the consensus window (deterministic, from
-        // in-block certificates; absent certificates keep everyone eligible).
+        // in-block certificates; absent certificates waive only service evidence).
         const int height = chainActive.Height();
+        const uint32_t nextHeight = uint32_t(height) + 1;
         const uint32_t window = uint32_t(Params().GetConsensus().nPQServiceWindow);
-        std::vector<uint256> signers;
-        bool anyCert = false;
-        pqanchor::SignersInWindow(*evoDb, Params(), uint32_t(height), window, signers, anyCert);
-        // Latest certificate signature height per registration (bounded scan).
         std::map<uint256, uint32_t> lastCert;
-        if (anyCert) {
-            pqanchor::ChainState chainState(*evoDb, Params());
-            const int lowest = std::max(1, height - int(window) + 1);
-            for (int h = height; h >= lowest; --h) {
-                pqanchor::Record anchor;
-                if (!chainState.GetAnchor(uint32_t(h), anchor)) continue;
-                for (const auto& signer : anchor.signers) {
-                    if (!lastCert.count(signer)) lastCert[signer] = uint32_t(h);
-                }
-            }
-        }
-        for (const auto& entry : index.List()) {
+        bool anyCert = false;
+        pqanchor::SignersInWindow(*evoDb, Params(), uint32_t(height), window, lastCert, anyCert);
+        const auto records = index.List();
+        const bool anyHeartbeat = std::any_of(records.begin(), records.end(), [&](const auto& entry) {
+            return pqservice::Recent(entry.second, nextHeight, Params());
+        });
+        for (const auto& entry : records) {
             const auto& record = entry.second;
             UniValue item(UniValue::VOBJ);
             item.pushKV("registration", entry.first.GetHex());
@@ -156,13 +180,20 @@ UniValue listpqmasternodes(const JSONRPCRequest& request)
             item.pushKV("collateral_height", static_cast<uint64_t>(record.collateralHeight));
             item.pushKV("last_paid_height", static_cast<uint64_t>(record.lastPaidHeight));
             item.pushKV("revived_height", static_cast<uint64_t>(record.revivedHeight));
+            item.pushKV("last_heartbeat_height", static_cast<uint64_t>(record.lastHeartbeatHeight));
             item.pushKV("revoked", record.revoked);
-            // Finality-derived eligibility; absent certificates (stall) keep
-            // every registered node eligible.
+            // A finality stall waives service evidence, not revocation,
+            // collateral maturity or the requirement for a service endpoint.
             const bool inGrace = record.registeredHeight != 0 &&
-                uint32_t(height) - record.registeredHeight <= window;
-            const bool signedRecent = std::find(signers.begin(), signers.end(), entry.first) != signers.end();
-            item.pushKV("eligible", !anyCert || inGrace || signedRecent);
+                nextHeight >= record.registeredHeight &&
+                nextHeight - record.registeredHeight <= window;
+            const bool signedRecent = lastCert.count(entry.first) != 0;
+            const bool configured = !record.revoked && record.service != CService() &&
+                record.MatureAt(nextHeight, Params().GetConsensus().MasternodeCollateralMinConf());
+            const bool eligible = pqservice::Active(Params(), nextHeight) ?
+                pqservice::Eligible(record, nextHeight, Params(), anyHeartbeat) :
+                (!pqanchor::GetBootstrap() || !anyCert || inGrace || signedRecent);
+            item.pushKV("eligible", configured && eligible);
             const auto cert = lastCert.find(entry.first);
             item.pushKV("last_cert_height", cert == lastCert.end() ? NullUniValue :
                         UniValue(uint64_t(cert->second)));
@@ -914,6 +945,7 @@ static const CRPCCommand commands[] =
     { "network",            "getnettotals",           &getnettotals,           true,  {} },
     { "network",            "getnetworkinfo",         &getnetworkinfo,         true,  {} },
     { "network",            "getpqoperatorinfo",       &getpqoperatorinfo,       true,  {} },
+    { "network",            "initpqjournal",           &initpqjournal,           true,  {} },
     { "network",            "getpqfinalityinfo",       &getpqfinalityinfo,       true,  {} },
     { "network",            "listpqmasternodes",       &listpqmasternodes,       true,  {} },
     { "network",            "getnodeaddresses",       &getnodeaddresses,       true,  {"count"} },

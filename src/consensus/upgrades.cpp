@@ -78,6 +78,10 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
                 /*.strName =*/ "pq_masternodes",
                 /*.strInfo =*/ "Experimental PQ registry (regtest only; no service or finality)",
         },
+        {
+                /*.strName =*/ "pq_service",
+                /*.strInfo =*/ "Independent PQ service heartbeats (local qualification only)",
+        },
 };
 
 UpgradeState NetworkUpgradeState(

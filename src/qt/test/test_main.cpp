@@ -13,6 +13,8 @@
 #include "util/system.h"
 #include "chartutilstests.h"
 #include "governance_dialog_tests.h"
+#include "guiconstants.h"
+#include "guiutil.h"
 #include "uritests.h"
 #include "pqwidgettests.h"
 
@@ -22,6 +24,9 @@
 
 #if defined(QT_STATICPLUGIN)
 #include <QtPlugin>
+#if defined(QT_TEST_QPA_PLATFORM_OFFSCREEN)
+Q_IMPORT_PLUGIN(QOffscreenIntegrationPlugin);
+#endif
 #if defined(QT_QPA_PLATFORM_MINIMAL)
 Q_IMPORT_PLUGIN(QMinimalIntegrationPlugin);
 #endif
@@ -32,6 +37,12 @@ Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
 #elif defined(QT_QPA_PLATFORM_COCOA)
 Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
 #endif
+// Match the application's static image support when exercising wallet icons.
+Q_IMPORT_PLUGIN(QJpegPlugin);
+Q_IMPORT_PLUGIN(QICOPlugin);
+Q_IMPORT_PLUGIN(QSvgPlugin);
+Q_IMPORT_PLUGIN(QSvgIconPlugin);
+Q_IMPORT_PLUGIN(QGifPlugin);
 #endif
 
 extern void noui_connect();
@@ -48,12 +59,20 @@ int main(int argc, char *argv[])
     // Don't remove this, it's needed to access
     // QApplication:: in the tests
     QApplication app(argc, argv);
+    GUIUtil::EnsureReadableQtFonts();
+    // Native Windows settings require an organization, as in real wallet startup.
+    app.setOrganizationName(QAPP_ORG_NAME);
+    app.setOrganizationDomain(QAPP_ORG_DOMAIN);
     app.setApplicationName("OrganicLife-test");
     qRegisterMetaType<CAmount>("CAmount");
 
     // Allow focused wallet regressions and visual previews without running unrelated suites.
     if (qEnvironmentVariable("OLC_QT_TEST_SUITE") == QStringLiteral("pq")) {
         PQWidgetTests tests;
+        return QTest::qExec(&tests, argc, argv);
+    }
+    if (qEnvironmentVariable("OLC_QT_TEST_SUITE") == QStringLiteral("governance")) {
+        GovernanceDialogTests tests;
         return QTest::qExec(&tests, argc, argv);
     }
 

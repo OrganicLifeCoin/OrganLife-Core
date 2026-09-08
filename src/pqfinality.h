@@ -18,6 +18,7 @@
 #include <condition_variable>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <set>
 #include <thread>
 
@@ -25,7 +26,7 @@
 // journal to the daemon lifecycle and bounded P2P transport. The driver votes
 // only for height h = anchor.height + 1 with the value of h in its own active
 // chain, never waits on votes for PoS production, and advances on a verified
-// precommit quorum. P2P handlers only bound-check, dedup and enqueue under the
+// precommit quorum. P2P handlers only bound-check and enqueue under the
 // driver lock; all registry/chain reads and verification happen in the driver
 // under cs_main. The journal's anti-equivocation gate is the only path to
 // operator vote signing.
@@ -34,12 +35,14 @@ namespace pqfinality {
 // regtest via -pqfinalitytimeoutscale=<ms per unit>).
 constexpr int64_t PROPOSE_TIMEOUT_SECONDS = 15;
 constexpr int64_t VOTE_TIMEOUT_SECONDS = 10;
-constexpr uint32_t MAX_ROUND = 100; // rounds retained per height
+constexpr uint32_t ROUND_HISTORY = 4; // retained rounds, not a round-number limit
 
-// Bounded inbox per message class; drop-oldest on exhaustion (never unbounded).
-// This is the global verification budget: at most the inbox is verified per
-// driver pass.
+// Shared bounded inbox; drop-oldest on exhaustion. Per-pass limits leave
+// queued work for another chain-lock acquisition without skipping validation.
+// These budget inbox dispatch only, not Drive's proof checks or storage time.
 constexpr size_t MAX_INBOX = 64;
+constexpr size_t MAX_INBOX_MESSAGES_PER_PASS = 16;
+constexpr size_t MAX_INBOX_SIGNATURES_PER_PASS = pqquorum::MAX_MEMBERS + 1;
 constexpr size_t MAX_RELAYED_SET = 4096;
 
 struct Proposal {
@@ -50,6 +53,22 @@ struct Proposal {
     uint16_t member{0};         // proposer index inside the voting committee
     std::array<unsigned char, mldsa44::SIGNATURE_SIZE> signature{};
 };
+
+// Canonical, bounded proposal wire encoding.
+std::vector<unsigned char> EncodeProposal(const Proposal& proposal);
+bool DecodeProposal(Span<const unsigned char> bytes, Proposal& proposal);
+// Check a single vote against the locally selected height and committee.
+// Only round and value may vary within that immutable context.
+bool VerifyVote(const pqquorum::Certificate& certificate, const pqquorum::Statement& context,
+                const std::vector<pqquorum::Member>& committee, std::string& reason);
+// Shared runtime signing gate: decide first, persist lock/unlock, then journal
+// the signature. A failure never yields broadcastable output. Caller serializes
+// state access; a refused signer consumes this in-memory step until next round
+// or restart, but cannot erase a durable lock.
+bool JournalVote(pqquorum::RoundState& state, pqjournal::Journal& journal,
+                 pqquorum::Purpose step, const uint256& value, const pqquorum::Certificate* proof,
+                 const pqjournal::Journal::Signer& signer, pqquorum::Statement& decision,
+                 pqjournal::Journal::Signature& signature, std::string& reason);
 
 struct InboxItem {
     CNode* peer; // for per-peer disconnect on late protocol violations
@@ -71,6 +90,7 @@ public:
     // Interrupts and joins the driver before credential/EvoDB teardown.
     void Stop();
     bool Started() const { return started; }
+    bool GetJournalProgress(uint32_t& finalized, uint32_t& votedHeight, uint32_t& votedRound) const;
 
     // Status snapshot for RPC reporting (thread safe).
     void GetStatus(bool& configured, bool& validated, uint32_t& anchorHeight, uint256& anchorHash,
@@ -83,11 +103,12 @@ public:
     void OnCommitment(CNode& peer, Span<const unsigned char> bytes);
 
     // Certificate the next block should carry (finalizes mirrorTip + 1); false
-    // when none is pending. Caller holds cs_main. Non-const: prunes published
-    // certificates.
+    // when none is pending. Caller holds cs_main. Recovered from the durable
+    // anchor store, including after restart.
     bool PendingCertificate(pqquorum::Certificate& out);
 
 private:
+    friend struct ManagerTestAccess;
     Manager() = default;
     void Run();
     // One driver step. Returns the suggested sleep in milliseconds.
@@ -107,6 +128,11 @@ private:
                  std::pair<uint256, pqjournal::Journal::Signature>>
             votes;
         std::map<uint32_t, Proposal> proposals; // verified proposals by round
+        std::optional<Proposal> futureProposal; // one nearest verified future proposal, never round-change authority
+        // One highest authenticated future report per identity, independent
+        // of how large or how many round numbers that identity advertises.
+        std::map<uint16_t, pqquorum::Certificate> futureVotes;
+        pqquorum::Certificate bestPolc; // latest quorum proof survives history pruning
         std::unique_ptr<pqquorum::RoundState> round;
         // Timing: per-phase deadlines (ms ticks) for the current round.
         int64_t deadlinePropose{0};
@@ -124,12 +150,20 @@ private:
     bool VerifyVote(const pqquorum::Certificate& certificate, const Height& height,
                     std::string& reason) const;
     bool VerifyProposal(const Proposal& proposal, const Height& height, std::string& reason) const;
+    bool AcceptProposal(Height& height, const Proposal& proposal, std::string& reason);
+    bool RememberProof(Height& height, const pqquorum::Certificate& proof, std::string& reason) const;
+    bool RestoreProof(Height& height, std::string& reason) const;
     // Assembles a canonical quorum certificate from collected votes + own vote.
-    bool BuildCertificate(const Height& height, uint32_t round, pqquorum::Purpose step,
+    bool BuildCertificate(Height& height, uint32_t round, pqquorum::Purpose step,
                           const uint256& value, pqquorum::Certificate& out) const;
+    bool AcceptVote(Height& height, const pqquorum::Certificate& vote, int64_t now, std::string& reason,
+                    bool persistProof = true);
+    // Called only for locally signed or already verified votes in the retained window.
+    // Only inbox batching defers proof assembly; it persists before Drive.
+    bool StoreVote(Height& height, const pqquorum::Certificate& vote, bool persistProof = true);
     // Signs and journals a vote through the journal gate, then broadcasts.
-    bool JournalAndBroadcastVote(Height& height, const pqquorum::Statement& statement,
-                                 std::string& reason);
+    bool JournalAndBroadcastVote(Height& height, pqquorum::Purpose step, const uint256& value,
+                                 const pqquorum::Certificate* proof, std::string& reason);
     void BroadcastNovel(const std::string& command, const std::vector<unsigned char>& bytes,
                         const uint256& key);
     void RelayToPeers(const std::string& command, const std::vector<unsigned char>& bytes) const;
@@ -139,8 +173,10 @@ private:
     static uint32_t CurrentRound(const Height& height) { return height.round ? height.round->currentRound() : 0; }
     void AdvanceRound(Height& height, uint32_t round, int64_t now);
     void AcceptCommitment(Height& height, const pqquorum::Certificate& cert, int64_t now, std::string& reason);
+    void DrainInbox(Height& height, int64_t now);
     // Round decisions and timeouts for one driver pass.
     void Drive(Height& height, int64_t now, std::string& reason);
+    int64_t NextWakeDelay(int64_t now) const;
     // Builds and broadcasts the local proposal for (height, round).
     void Propose(Height& height, std::string& reason);
     int64_t TimeoutFor(uint32_t round, int64_t base) const;
@@ -151,13 +187,11 @@ private:
     std::condition_variable wake;
     std::atomic<bool> started{false};
     bool validated{false}; // pinned bootstrap currently valid (rechecked lazily)
+    int64_t nextCommitmentRelay{0}; // bounded retry of the durable, unpublished certificate
     std::unique_ptr<pqjournal::Journal> journal;
     const pqmnauth::LocalOperator* localOperator{nullptr};
     std::deque<InboxItem> inbox;
     Height working; // driver's single-height working state under cs
-    // Pending published commitments in height order; the assembler carries the
-    // one matching the mirror tip + 1 (at most one certificate per block).
-    std::deque<std::pair<uint32_t, pqquorum::Certificate>> pending;
     // Recently broadcast keys (bounded) to suppress redundant relay.
     std::set<uint256> relayed;
 };

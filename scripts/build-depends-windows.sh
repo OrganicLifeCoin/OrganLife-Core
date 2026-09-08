@@ -335,6 +335,7 @@ configure_project() {
                 --host="$HOST" \
                 --with-qt-bindir="$qt_bindir" \
                 --with-gui=qt6 \
+                --enable-mining-rpc \
                 --disable-tests \
                 --disable-bench \
                 --disable-gui-tests \

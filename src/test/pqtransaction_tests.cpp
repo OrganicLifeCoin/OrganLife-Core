@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 #include <test/test_organiclife.h>
 #include <pqtransaction.h>
+#include <pqservice.h>
 #include <chainparams.h>
 #include <coins.h>
 #include <blockassembler.h>
@@ -494,6 +495,40 @@ BOOST_AUTO_TEST_CASE(bounded_payload_mutations)
             BOOST_CHECK(decoded.authorizations.empty());
         }
     }
+}
+
+BOOST_AUTO_TEST_CASE(service_coinbase_envelope_is_bounded_and_coinbase_only)
+{
+    // Versioned service carrier: optional certificate, then fixed-size proofs.
+    CDataStream data(SER_NETWORK, 0);
+    data << uint8_t{1} << std::vector<unsigned char>{} << uint8_t{1}
+         << uint256S("01") << uint64_t{0} << uint32_t{10} << uint256S("10")
+         << std::array<unsigned char, mldsa44::SIGNATURE_SIZE>{};
+    pq::Payload payload; payload.mode = 8;
+    payload.data = {data.begin(), data.end()};
+    const auto encoded = pq::EncodePayload(payload);
+    BOOST_REQUIRE(!encoded.empty());
+    auto tx = Transfer(pq::KeyID{}, payload);
+    std::string reason;
+    BOOST_CHECK(!pq::CheckStructure(CTransaction(tx), Params(), reason));
+    tx.vin[0].prevout.SetNull();
+    BOOST_REQUIRE(pq::CheckStructure(CTransaction(tx), Params(), reason));
+    BOOST_CHECK_EQUAL(pq::GetSigOpCost(CTransaction(tx)), pq::SIGOP_COST);
+    BOOST_CHECK(!pq::CheckContext(CTransaction(tx), Params(), 11, reason));
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_SERVICE, 11);
+    BOOST_CHECK(!pq::CheckContext(CTransaction(tx), Params(), 10, reason));
+    BOOST_CHECK(pq::CheckContext(CTransaction(tx), Params(), 11, reason));
+    pqservice::Carrier carrier, decoded;
+    BOOST_REQUIRE(pqservice::Decode(payload.data, carrier));
+    carrier.heartbeats.push_back(carrier.heartbeats[0]);
+    BOOST_CHECK(!pqservice::Decode(pqservice::Encode(carrier), decoded));
+    BOOST_CHECK(decoded.heartbeats.empty());
+    carrier.heartbeats.resize(pqservice::MAX_HEARTBEATS + 1);
+    BOOST_CHECK(pqservice::Encode(carrier).empty());
+    payload.data.push_back(0);
+    tx.extraPayload = pq::EncodePayload(payload);
+    BOOST_CHECK(!pq::CheckStructure(CTransaction(tx), Params(), reason));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

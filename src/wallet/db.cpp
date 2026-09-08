@@ -180,6 +180,7 @@ void BerkeleyEnvironment::Close()
     }
 
     int ret = dbenv->close(0);
+    m_error_file.reset();
     if (ret != 0)
         LogPrintf("%s: Error %d closing database environment: %s\n", __func__, ret, DbEnv::strerror(ret));
     if (!fMockDb)
@@ -189,6 +190,7 @@ void BerkeleyEnvironment::Close()
 void BerkeleyEnvironment::Reset()
 {
     dbenv.reset(new DbEnv(DB_CXX_NO_EXCEPTIONS));
+    m_error_file.reset();
     fDbEnvInit = false;
     fMockDb = false;
 }
@@ -232,7 +234,8 @@ bool BerkeleyEnvironment::Open(bool retry)
     dbenv->set_lg_max(1048576);
     dbenv->set_lk_max_locks(40000);
     dbenv->set_lk_max_objects(40000);
-    dbenv->set_errfile(fsbridge::fopen(pathErrorFile, "a")); /// debug
+    m_error_file.reset(fsbridge::fopen(pathErrorFile, "a"));
+    dbenv->set_errfile(m_error_file.get());
     dbenv->set_flags(DB_AUTO_COMMIT, 1);
     dbenv->set_flags(DB_TXN_WRITE_NOSYNC, 1);
     dbenv->log_set_config(DB_LOG_AUTO_REMOVE, 1);
@@ -578,8 +581,11 @@ BerkeleyBatch::BerkeleyBatch(BerkeleyDatabase& database, const char* pszMode, bo
             // be implemented, so no equality checks are needed at all. (Newer
             // versions of BDB have an set_lk_exclusive method for this
             // purpose, but the older version we use does not.)
-            for (const auto& env : g_dbenvs) {
-                CheckUniqueFileid(env.second, strFilename, *pdb_temp, this->env->m_fileids[strFilename]);
+            // In-memory databases have no on-disk file ID (notably on Windows).
+            if (!fMockDb) {
+                for (const auto& env : g_dbenvs) {
+                    CheckUniqueFileid(env.second, strFilename, *pdb_temp, this->env->m_fileids[strFilename]);
+                }
             }
 
             pdb = pdb_temp.release();

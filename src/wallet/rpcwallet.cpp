@@ -592,7 +592,7 @@ UniValue createpqoperator(const JSONRPCRequest& request)
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
     if (request.fHelp || request.params.size() != 1)
         throw std::runtime_error("createpqoperator \"backup_destination\"\n"
-            "Create or retry a controller-local PQ operator recovery key on opt-in regtest.\n"
+            "Create or retry a controller-local PQ operator recovery key on a scheduled test chain.\n"
             "Requires an encrypted, fully unlocked wallet and a new backup file in a trusted directory.\n"
             "A pending key is retried after backup failure or restoration, before generating another key.\n"
             "Returns only publickey and recovery_only; does not register, export or start an operator.\n");
@@ -627,10 +627,11 @@ UniValue exportpqoperator(const JSONRPCRequest& request)
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
     if (request.fHelp || request.params.size() != 2)
         throw std::runtime_error("exportpqoperator \"publickey\" \"credential_directory\"\n"
-            "Prepare operator-only credentials for a backed recovery identity on opt-in regtest.\n"
+            "Prepare operator-only credentials for a backed recovery identity on a scheduled test chain.\n"
             "Requires an encrypted, fully unlocked controller wallet. No spending keys are exported.\n"
             "The absolute destination must not exist; its parent must be a trusted private directory.\n"
-            "Linux/macOS only. Publishes an owner-private directory with two secret credential files.\n"
+            "Supports Linux, macOS and Windows (local fixed NTFS).\n"
+            "Publishes an owner-private directory with two secret credential files.\n"
             "Transfer only over a protected channel and seal BOTH files on the operator host.\n"
             "Returns only publickey and credentials_only; does not register or start an operator.\n");
     RPCTypeCheck(request.params, {UniValue::VSTR, UniValue::VSTR});
@@ -658,7 +659,7 @@ UniValue sendpqmasternode(const JSONRPCRequest& request)
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
     if (request.fHelp || request.params.size() != 3)
         throw std::runtime_error("sendpqmasternode \"action\" {options} \"backup_destination\"\n"
-            "Opt-in regtest controller transactions; not operator service/reward/finality activation.\n"
+            "Test-chain controller transactions; require active PQ masternodes.\n"
             "Actions: register, update, service, revoke. Requires encrypted full unlock.\n"
             "register requires collateral_address, owner_address, operator_publickey, payout_address.\n"
             "Optional register fields: service (numeric IP:port), operator_reward (0..10000 basis points),\n"
@@ -839,11 +840,13 @@ static UniValue SendPQPayment(const JSONRPCRequest& request)
 {
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
-    if (request.fHelp || request.params.size() != 3)
-        throw std::runtime_error(request.strMethod + " \"address\" amount \"backup_destination\"\n"
+    if (request.fHelp || request.params.size() < 3 || request.params.size() > 4)
+        throw std::runtime_error(request.strMethod + " \"address\" amount \"backup_destination\" ( selected_inputs )\n"
             "Send test coins to a PQ address using one or two confirmed PQ inputs and optional PQ change.\n"
             "Requires encryption, full unlock and active PQ consensus.\n"
             "backup_destination must be a new file in an existing directory. The encrypted wallet snapshot is written before relay.\n"
+            "selected_inputs optionally restricts funding to one or two unique {\"txid\":\"hex\",\"vout\":n} objects.\n"
+            "WARNING: explicitly selecting masternode collateral spends its bond and removes the masternode. Manual locks still apply.\n"
             "Returns {txid, fee, experimental: true}.\n");
     if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "Experimental PQ wallets require testnet or regtest");
     pwallet->BlockUntilSyncedToCurrentChain();
@@ -859,6 +862,24 @@ static UniValue SendPQPayment(const JSONRPCRequest& request)
     if (!pq::DecodeAddress(address, Params().NetworkIDString(), id))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid PQ address for this network");
     const CAmount amount = AmountFromValue(request.params[1]);
+    CCoinControl selection;
+    if (request.params.size() == 4) {
+        const auto& inputs = request.params[3];
+        if (!inputs.isArray() || inputs.empty() || inputs.size() > pq::MAX_INPUTS)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "selected_inputs must contain one or two inputs");
+        for (const auto& input : inputs.getValues()) {
+            uint32_t index;
+            if (!input.isObject() || input.size() != 2 || !input["txid"].isStr() ||
+                input["txid"].get_str().size() != 64 || !IsHex(input["txid"].get_str()) ||
+                !input["vout"].isNum() || !ParseUInt32(input["vout"].getValStr(), &index))
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid selected input; expected {txid, vout}");
+            const COutPoint outpoint(uint256S(input["txid"].get_str()), index);
+            if (outpoint.hash.IsNull() || selection.IsSelected(outpoint))
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid or duplicate selected input");
+            selection.Select(outpoint);
+        }
+        selection.fAllowOtherInputs = false;
+    }
     CTransactionRef tx;
     CAmount fee;
     std::string reason;
@@ -871,7 +892,8 @@ static UniValue SendPQPayment(const JSONRPCRequest& request)
         }
         return cleaned;
     };
-    if (!pwallet->CreatePQTransaction(address, amount, tx, fee, reason)) {
+    if (!pwallet->CreatePQTransaction(address, amount, tx, fee, reason,
+                                     request.params.size() == 4 ? &selection : nullptr)) {
         if (!cleanup_new_pq_keys())
             throw JSONRPCError(RPC_WALLET_ERROR, "PQ payment preparation and unused-key cleanup failed; back up the wallet before using any listed PQ address");
         throw JSONRPCError(RPC_WALLET_ERROR, reason);
@@ -5223,7 +5245,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "sendpqmasternode",         &sendpqmasternode,         true,  {"action", "options", "backup_destination"} },
     { "wallet",             "listpqaddresses",          &listpqaddresses,          true,  {} },
     { "wallet",             "listpqunspent",             &listpqunspent,             true,  {} },
-    { "wallet",             "sendpqtoaddress",           &sendpqtoaddress,           false, {"address", "amount", "backup_destination"} },
+    { "wallet",             "sendpqtoaddress",           &sendpqtoaddress,           false, {"address", "amount", "backup_destination", "selected_inputs"} },
     { "wallet",             "getnewexchangeaddress",    &getnewexchangeaddress,    true,  {"label"} },
     { "wallet",             "getnewstakingaddress",     &getnewstakingaddress,     true,  {"label"}  },
     { "wallet",             "getrawchangeaddress",      &getrawchangeaddress,      true,  {} },

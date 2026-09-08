@@ -56,7 +56,7 @@ bool DecryptOperatorRecovery(const SecureBytes& master_key, const Record& record
 bool RewrapOperatorRecovery(const OperatorRecovery& recovery, const pq::KeyID& expected,
                             const SecureBytes& master_key, const SecureBytes& wrapping_key,
                             const std::string& network, const uint256& genesis, Record& record);
-// Read-only Linux/macOS credential delivery, not provisioning or operator authority.
+// Read-only Linux/macOS/Windows credential delivery, not provisioning or operator authority.
 // Caller supplies a trusted absolute credential directory and chain identity.
 // Other platforms fail closed; no environment/config fallback or secret logging.
 bool LoadOperatorCredentials(const fs::path& directory, const std::string& network,

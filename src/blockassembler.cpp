@@ -19,6 +19,7 @@
 #include "evo/governancevotetx.h"
 #include "consensus/validation.h"
 #include "pqfinality.h"
+#include "pqservice.h"
 #include "pqtransaction.h"
 #include "llmq/quorums_blockprocessor.h"
 #include "masternode-payments.h"
@@ -124,12 +125,17 @@ static void AttachFinalityCertificate(CMutableTransaction& txCoinbase)
 {
     if (!pq::MasternodesActive(Params(), chainActive.Height() + 1)) return;
     pqquorum::Certificate certificate;
-    if (!pqfinality::Manager::Get().PendingCertificate(certificate)) return;
-    const auto encoded = pqquorum::Encode(certificate);
-    if (encoded.empty()) return;
+    const bool hasCertificate = pqfinality::Manager::Get().PendingCertificate(certificate);
+    const auto encoded = hasCertificate ? pqquorum::Encode(certificate) : std::vector<unsigned char>{};
     pq::Payload payload;
-    payload.mode = pq::FINALITY;
-    payload.data = encoded;
+    if (pqservice::Active(Params(), chainActive.Height() + 1)) {
+        payload.mode = pq::SERVICE;
+        payload.data = pqservice::Encode({encoded, pqservice::Pending(chainActive.Tip())});
+    } else {
+        payload.mode = pq::FINALITY;
+        payload.data = encoded;
+    }
+    if (payload.data.empty()) return;
     txCoinbase.nVersion = 3;
     txCoinbase.sapData = nullopt;
     txCoinbase.nType = CTransaction::PQ;
@@ -295,6 +301,14 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     if (!(fProofOfStake ? SolveProofOfStake(pblock, pindexPrev, pwallet, availableCoins, stopPoSOnNewBlock)
                         : CreateCoinbaseTx(pblock, scriptPubKeyIn, pindexPrev))) {
         return nullptr;
+    }
+
+    // Account for the actual coinbase metadata before selecting mempool packages.
+    if (pqservice::Active(chainparams, nHeight)) {
+        for (const auto& tx : pblock->vtx) {
+            nBlockSize += tx->GetTotalSize();
+            nBlockSigOps += GetLegacySigOpCount(*tx);
+        }
     }
 
     // Legacy LLMQ commitments are not valid transactions under PQ-only rules.

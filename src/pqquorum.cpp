@@ -113,7 +113,12 @@ bool RoundState::Prevote(const uint256& proposal, const Certificate* proof,
     const uint256 value = locked.IsNull() || unlock ? proposal : locked;
     if (prevoted && value != prevote) { reason = "bad-pq-double-prevote"; return false; }
     if (!prevoted) {
-        if (unlock) locked.SetNull();
+        if (unlock) {
+            locked.SetNull();
+            // Persist the round that authorized this unlock, before any new
+            // vote. A later current-round precommit can then relock durably.
+            lockRound = proof->statement.round;
+        }
         prevote = value;
         prevoted = true;
     }

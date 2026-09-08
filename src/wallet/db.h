@@ -15,7 +15,9 @@
 #include "version.h"
 
 #include <atomic>
+#include <cstdio>
 #include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -38,6 +40,8 @@ private:
     // Don't change into fs::path, as that can result in
     // shutdown problems/crashes caused by a static initialized internal pointer.
     std::string strPath;
+    // Berkeley borrows this stream; keep it alive until its environment closes.
+    std::unique_ptr<FILE, decltype(&fclose)> m_error_file{nullptr, &fclose};
 
 public:
     std::unique_ptr<DbEnv> dbenv;

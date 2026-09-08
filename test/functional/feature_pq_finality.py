@@ -9,6 +9,7 @@ from pathlib import Path
 import time
 
 from test_framework.mininode import MESSAGEMAP, P2PInterface
+from test_framework.permissions import make_private_directory
 from test_framework.test_framework import PivxTestFramework
 from test_framework.authproxy import JSONRPCException
 from test_framework.util import assert_equal, assert_greater_than, set_node_times, wait_until
@@ -154,7 +155,7 @@ class PQFinalityTest(PivxTestFramework):
         root = Path(self.controller.datadir)
         self.registrations, self.credentials, self.payouts = [], [], []
         parent = root / "credentials"
-        parent.mkdir(mode=0o700)
+        make_private_directory(parent)
         for n in [1, 2, 3, 4]:
             operator = self.controller.createpqoperator(
                 str(root / ("operator%d.dat" % n)))["publickey"]

@@ -55,6 +55,7 @@ const char* PQAUTH = "pqauth";
 const char* PQPROP = "pqprop";
 const char* PQVOTE = "pqvote";
 const char* PQCMT = "pqcmt";
+const char* PQSERVICE = "pqservice";
 const char* QCONTRIB = "qcontrib";
 const char* QCOMPLAINT = "qcomplaint";
 const char* QJUSTIFICATION = "qjustify";
@@ -101,6 +102,7 @@ const static std::string allNetMessageTypes[] = {
     NetMsgType::PQPROP,
     NetMsgType::PQVOTE,
     NetMsgType::PQCMT,
+    NetMsgType::PQSERVICE,
     "filtered block",  // Should never occur
     "ix",              // deprecated
     "txlvote",         // deprecated

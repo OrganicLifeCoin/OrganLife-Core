@@ -3,6 +3,7 @@
 #include <test/test_organiclife.h>
 #include <evo/pqmasternode.h>
 #include <evo/pqmnauth.h>
+#include <pqservice.h>
 #include <chainparams.h>
 #include <coins.h>
 #include <consensus/merkle.h>
@@ -152,12 +153,14 @@ BOOST_AUTO_TEST_CASE(local_operator_loads_pending_identity_without_registry_auth
     for (const auto& network : {CBaseChainParams::MAIN, CBaseChainParams::TESTNET}) {
         const auto params = CreateChainParams(network);
         BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory, *params, id, reason));
-        BOOST_CHECK_EQUAL(reason, "PQ operator credentials require regtest PQ masternode activation");
+        BOOST_CHECK_EQUAL(reason, network == CBaseChainParams::MAIN ?
+            "PQ operator credentials require scheduled test-chain PQ masternode activation" :
+            "Could not load private PQ operator credentials");
     }
     for (const int height : {0, -1}) {
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, height);
         BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory, Params(), id, reason));
-        BOOST_CHECK_EQUAL(reason, "PQ operator credentials require regtest PQ masternode activation");
+        BOOST_CHECK_EQUAL(reason, "PQ operator credentials require scheduled test-chain PQ masternode activation");
     }
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
     BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory / "missing", Params(), id, reason));
@@ -445,7 +448,7 @@ BOOST_AUTO_TEST_CASE(reserved_envelope_parses_but_is_disabled_by_default)
     auto tx = Transaction(Registration());
     std::string reason;
     BOOST_CHECK(pq::CheckStructure(tx, Params(), reason));
-    for (const std::string network : {"main", "test", "regtest"}) {
+    for (const std::string network : {"main", "regtest"}) {
         const auto params = CreateChainParams(network);
         for (int height : {0, 1, 100, 1000000})
             BOOST_CHECK(!pq::CheckContext(tx, *params, height, reason));
@@ -453,7 +456,7 @@ BOOST_AUTO_TEST_CASE(reserved_envelope_parses_but_is_disabled_by_default)
     BOOST_CHECK_EQUAL(pq::GetSigOpCost(tx), 4 * pq::SIGOP_COST);
 }
 
-BOOST_AUTO_TEST_CASE(registry_context_requires_explicit_regtest_activation_after_payments)
+BOOST_AUTO_TEST_CASE(registry_context_requires_test_chain_activation_after_payments)
 {
     const auto tx = Transaction(Registration()); std::string reason;
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 20);
@@ -467,12 +470,38 @@ BOOST_AUTO_TEST_CASE(registry_context_requires_explicit_regtest_activation_after
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, invalid);
         BOOST_CHECK(!pq::CheckContext(tx, Params(), 20, reason));
     }
-    for (const std::string network : {"main", "test"}) {
+    for (const std::string network : {"main"}) {
         auto params = CreateChainParams(network);
         params->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 20);
         BOOST_CHECK(!pq::MasternodesActive(*params, 20));
         BOOST_CHECK(!pq::CheckContext(tx, *params, 20, reason));
     }
+}
+
+BOOST_AUTO_TEST_CASE(public_testnet_activates_registry_and_service_without_enabling_mainnet)
+{
+    const auto testnet = CreateChainParams("test");
+    const auto tx = Transaction(Registration());
+    std::string reason;
+    BOOST_CHECK_EQUAL(testnet->GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight, 3000);
+    BOOST_CHECK_EQUAL(testnet->GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight, 3000);
+    for (int height : {-1, 0, 1, 2919, 2999}) {
+        BOOST_CHECK(!pq::MasternodesActive(*testnet, height));
+        BOOST_CHECK(!pqservice::Active(*testnet, height));
+        BOOST_CHECK(!pq::CheckContext(tx, *testnet, height, reason));
+    }
+    for (int height : {3000, 3001, 1000000}) {
+        BOOST_CHECK(pq::MasternodesActive(*testnet, height));
+        BOOST_CHECK(pqservice::Active(*testnet, height));
+        BOOST_CHECK(pq::CheckContext(tx, *testnet, height, reason));
+    }
+    auto mainnet = CreateChainParams("main");
+    mainnet->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 1);
+    mainnet->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+    mainnet->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_SERVICE, 1);
+    BOOST_CHECK(!pq::MasternodesActive(*mainnet, 3000));
+    BOOST_CHECK(!pqservice::Active(*mainnet, 3000));
+    BOOST_CHECK(!pq::CheckContext(tx, *mainnet, 3000, reason));
 }
 
 BOOST_AUTO_TEST_CASE(register_external_internal_collateral_and_undo)
@@ -1191,13 +1220,18 @@ BOOST_AUTO_TEST_CASE(startup_replay_checks_clean_coin_and_evo_tips)
     const auto activation = std::make_pair(std::string("pqmn1a"), Params().GetConsensus().hashGenesisBlock);
     const auto marker = std::make_pair(std::string("pqmn1b"), Params().GetConsensus().hashGenesisBlock);
     const auto schema = std::make_pair(std::string("pqmn1v"), Params().GetConsensus().hashGenesisBlock);
+    const auto serviceActivation = std::make_pair(std::string("pqmn1j"), Params().GetConsensus().hashGenesisBlock);
     evoDb->Write(activation, 2); evoDb->Write(marker, secondHash);
     BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex); // Schema is mandatory.
-    evoDb->Write(schema, uint8_t{2});
-    BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(!requiresReindex);
     evoDb->Write(schema, uint8_t{3});
     BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
-    evoDb->Write(schema, uint8_t{2});
+    evoDb->Write(schema, uint8_t{4});
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
+    evoDb->Write(serviceActivation, Params().GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight);
+    BOOST_CHECK(ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(!requiresReindex);
+    evoDb->Write(schema, uint8_t{5});
+    BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
+    evoDb->Write(schema, uint8_t{4});
     evoDb->Write(marker, firstHash);
     BOOST_CHECK(!ReplayBlocks(Params(), &database, requiresReindex)); BOOST_CHECK(requiresReindex);
     evoDb->Write(marker, secondHash);
@@ -2041,6 +2075,109 @@ BOOST_AUTO_TEST_CASE(pq_reward_queue_rejects_corrupt_payout_fields)
     BOOST_CHECK(!index.GetPayee(20, selected, selectedRecord));
     inactive.revoked = true; evoDb->Write(key, inactive);
     BOOST_CHECK(!index.GetPayee(20, selected, selectedRecord));
+}
+
+BOOST_AUTO_TEST_CASE(service_heartbeat_carrier_updates_and_undo_restores_activity)
+{
+    LOCK(cs_main);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 20);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_SERVICE, 21);
+    const uint256 parentHash = uint256S("1234"); CBlockIndex parent;
+    parent.phashBlock = &parentHash; parent.nHeight = 19;
+    view.SetBestBlock(parentHash); evoDb->WriteBestBlock(parentHash);
+    auto setup = evoDb->BeginTransaction(); setup->Commit();
+    const auto reg = MakeTransactionRef(Transaction(Registration()));
+    RegistryBlock first(parent, {reg});
+    pqmn::Index index(*evoDb, Params()); std::string reason;
+    {
+        auto tx = evoDb->BeginTransaction();
+        BOOST_REQUIRE(index.ConnectBlock(first.block, first.index, view, 20, reason));
+        evoDb->WriteBestBlock(first.hash); tx->Commit();
+    }
+    view.SetBestBlock(first.hash);
+    pqservice::Heartbeat heartbeat;
+    BOOST_REQUIRE(index.MatchesChainTip(&first.index));
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_SERVICE, 22);
+    BOOST_CHECK(!index.MatchesChainTip(&first.index));
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_SERVICE, 21);
+    heartbeat.registration = reg->GetHash(); heartbeat.height = 20; heartbeat.blockHash = first.hash;
+    std::vector<unsigned char> sig;
+    BOOST_REQUIRE(keys[1].Sign(pqservice::Message(heartbeat, Params().GetConsensus().hashGenesisBlock,
+                              keys[1].GetPublicKey()), pqservice::Context(), sig));
+    std::copy(sig.begin(), sig.end(), heartbeat.signature.begin());
+    BOOST_REQUIRE_MESSAGE(pqservice::Verify(heartbeat, index, &first.index, Params(), reason), reason);
+    for (int mutation = 0; mutation < 6; ++mutation) {
+        auto bad = heartbeat;
+        if (mutation == 0) bad.signature[0] ^= 1;
+        if (mutation == 1) bad.sequence++;
+        if (mutation == 2) bad.height++;
+        if (mutation == 3) bad.blockHash = parentHash;
+        if (mutation == 4) bad.registration = parentHash;
+        if (mutation == 5) {
+            BOOST_REQUIRE(keys[1].Sign(pqservice::Message(bad, parentHash, keys[1].GetPublicKey()),
+                                      pqservice::Context(), sig));
+            std::copy(sig.begin(), sig.end(), bad.signature.begin());
+        }
+        BOOST_CHECK(!pqservice::Verify(bad, index, &first.index, Params(), reason));
+    }
+    RegistryBlock carrier(first.index, {});
+    CMutableTransaction coinbase(*carrier.block.vtx[0]);
+    pq::Payload payload; payload.mode = pq::SERVICE;
+    payload.data = pqservice::Encode({{}, {heartbeat}});
+    coinbase.nVersion = 3; coinbase.nType = CTransaction::PQ; coinbase.sapData = nullopt;
+    coinbase.extraPayload = pq::EncodePayload(payload);
+    carrier.block.vtx[0] = MakeTransactionRef(coinbase);
+    carrier.block.hashMerkleRoot = BlockMerkleRoot(carrier.block);
+    carrier.hash = carrier.block.GetHash();
+    {
+        auto tx = evoDb->BeginTransaction();
+        BOOST_REQUIRE_MESSAGE(index.ConnectBlock(carrier.block, carrier.index, view, 20, reason, COIN), reason);
+        pqmn::Record record; BOOST_REQUIRE(index.Get(reg->GetHash(), record));
+        BOOST_CHECK_EQUAL(record.lastHeartbeatHeight, 20U);
+        BOOST_CHECK(!pqservice::Verify(heartbeat, index, &carrier.index, Params(), reason));
+        evoDb->WriteBestBlock(carrier.hash); tx->Commit();
+    }
+    view.SetBestBlock(carrier.hash);
+    auto tx = evoDb->BeginTransaction();
+    BOOST_REQUIRE_MESSAGE(index.DisconnectBlock(carrier.block, carrier.index, view, 20, reason), reason);
+    pqmn::Record record; BOOST_REQUIRE(index.Get(reg->GetHash(), record));
+    BOOST_CHECK_EQUAL(record.lastHeartbeatHeight, 0U);
+    BOOST_CHECK_EQUAL(record.lastPaidHeight, 0U);
+}
+
+BOOST_AUTO_TEST_CASE(service_heartbeat_reward_expiry_grace_and_network_absence)
+{
+    LOCK(cs_main);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_SERVICE, 21);
+    auto transaction = evoDb->BeginTransaction();
+    pqmn::Index index(*evoDb, Params());
+    const auto key = [&](const uint256& id) {
+        return std::make_pair(std::make_pair(std::string("pqmn1r"), Params().GetConsensus().hashGenesisBlock), id);
+    };
+    pqmn::Record first;
+    first.owner = keys[0].GetPublicKey(); first.operatorKey = keys[1].GetPublicKey();
+    first.payout = ID(0); first.collateralKey = ID(2);
+    first.collateral = collateral; first.service = Registration().service;
+    first.registeredHeight = first.collateralHeight = 1;
+    auto second = first;
+    second.lastHeartbeatHeight = 60;
+    const auto older = uint256S("01"), active = uint256S("02");
+    evoDb->Write(key(older), first); evoDb->Write(key(active), second);
+    uint256 selected; pqmn::Record record;
+    BOOST_REQUIRE(index.GetPayee(70, selected, record));
+    BOOST_CHECK(selected == active); // No bootstrap or finality certificate needed.
+    const uint32_t expiry = 60 + Params().GetConsensus().nPQServiceWindow;
+    BOOST_REQUIRE(index.GetPayee(expiry, selected, record));
+    BOOST_CHECK(selected == active);
+    BOOST_REQUIRE(index.GetPayee(expiry + 1, selected, record));
+    BOOST_CHECK(selected == older); // Network-wide evidence absence cannot halt rewards.
+    BOOST_REQUIRE(index.GetPayee(21, selected, record));
+    BOOST_CHECK(selected == older); // Activation grace, no retroactive punishment.
+    first.registeredHeight = 65; evoDb->Write(key(older), first);
+    second.lastPaidHeight = 69; evoDb->Write(key(active), second);
+    BOOST_REQUIRE(index.GetPayee(70, selected, record));
+    BOOST_CHECK(selected == older); // Fresh registration has time to publish.
 }
 
 BOOST_AUTO_TEST_SUITE_END()

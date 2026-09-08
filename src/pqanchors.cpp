@@ -85,6 +85,12 @@ Bootstrap& BootstrapInstance()
     static Bootstrap bootstrap;
     return bootstrap;
 }
+
+Recovery& RecoveryInstance()
+{
+    static Recovery recovery;
+    return recovery;
+}
 } // namespace
 
 uint256 ID(uint32_t height, const uint256& blockHash, const uint256& committee)
@@ -94,9 +100,10 @@ uint256 ID(uint32_t height, const uint256& blockHash, const uint256& committee)
     return hash.GetHash();
 }
 
-std::vector<pqquorum::Member> SelectCommittee(const pqmn::Index& index, uint32_t height)
+std::vector<pqquorum::Member> SelectCommittee(const pqmn::Index& index, uint32_t height, bool* belowMinimum)
 {
     AssertLockHeld(cs_main);
+    if (belowMinimum) *belowMinimum = false;
     std::vector<pqquorum::Member> members;
     const uint32_t confirmations = Params().GetConsensus().MasternodeCollateralMinConf();
     for (const auto& entry : index.List()) {
@@ -108,7 +115,11 @@ std::vector<pqquorum::Member> SelectCommittee(const pqmn::Index& index, uint32_t
     }
     std::sort(members.begin(), members.end(),
               [](const pqquorum::Member& a, const pqquorum::Member& b) { return a.registration < b.registration; });
-    if (members.size() < pqquorum::MIN_MEMBERS || pqquorum::Commitment(members).IsNull()) return {};
+    if (members.size() < pqquorum::MIN_MEMBERS) {
+        if (belowMinimum) *belowMinimum = true;
+        return {};
+    }
+    if (pqquorum::Commitment(members).IsNull()) return {};
     return members;
 }
 
@@ -143,30 +154,32 @@ bool ChainState::CaptureCommittee(const pqmn::Index& index, uint32_t height, std
 {
     AssertLockHeld(cs_main);
     reason.clear();
-    const std::vector<pqquorum::Member> members = SelectCommittee(index, height);
+    bool belowMinimum = false;
+    const std::vector<pqquorum::Member> members = SelectCommittee(index, height, &belowMinimum);
     uint256 commitment;
     if (!members.empty()) {
         commitment = pqquorum::Commitment(members);
         if (commitment.IsNull()) return Fail(reason, "bad-pq-committee-commitment");
     }
-    return StoreCommittee(height, members, commitment, reason);
+    return StoreCommittee(height, members, commitment, reason, belowMinimum);
 }
 
 bool ChainState::StoreCommittee(uint32_t height, const std::vector<pqquorum::Member>& members,
-                                const uint256& commitment, std::string& reason)
+                                const uint256& commitment, std::string& reason, bool belowMinimum)
 {
     uint32_t previous{0};
     const bool hasPrevious = Read(Kind('M'), previous);
     if (hasPrevious) {
         SnapshotEntry latest;
         if (!Read(AtHeight('m', previous), latest)) return Fail(reason, "bad-pq-snapshot-state");
-        if (latest.commitment == commitment) return true; // unchanged: no new snapshot
+        if (latest.commitment == commitment && latest.belowMinimum == belowMinimum) return true;
     } else if (members.empty()) {
         return true; // no committee now and none before: nothing to capture
     }
     SnapshotEntry entry;
     entry.members = members;
     entry.commitment = commitment;
+    entry.belowMinimum = belowMinimum;
     entry.prevHeight = hasPrevious ? previous : 0;
     Write(AtHeight('m', height), entry);
     Write(Kind('M'), height);
@@ -174,56 +187,96 @@ bool ChainState::StoreCommittee(uint32_t height, const std::vector<pqquorum::Mem
 }
 
 bool ChainState::RecordAnchor(uint32_t height, const uint256& blockHash, std::vector<uint256> signers,
-                              std::string& reason)
+                              std::string& reason, uint32_t carrierHeight)
 {
     AssertLockHeld(cs_main);
     reason.clear();
+    if (carrierHeight <= height) return Fail(reason, "bad-pq-anchor-carrier");
     uint32_t tip{0};
     const bool hasTip = Read(Kind('F'), tip);
     // Idempotent replay: re-applying the identical anchor (validation-only
     // reconnects, reindex) is a no-op; a conflicting value fails closed.
     if (hasTip && height == tip) {
         Record existing;
-        if (!Read(AtHeight('f', tip), existing) || existing.blockHash != blockHash)
+        uint32_t target{0};
+        if (!Read(AtHeight('f', tip), existing) || existing.blockHash != blockHash ||
+            !Read(AtHeight('s', carrierHeight), target) || target != height || existing.signers != signers)
             return Fail(reason, "bad-pq-anchor-conflict");
         reason.clear();
         return true;
     }
     if (hasTip && height != tip + 1) return Fail(reason, "bad-pq-anchor-order");
-    uint32_t snapshotHeight{0};
-    const bool hasSnapshot = Read(Kind('M'), snapshotHeight);
-    if (!hasSnapshot) return Fail(reason, "bad-pq-anchor-committee");
-    SnapshotEntry snapshot;
-    if (!Read(AtHeight('m', snapshotHeight), snapshot) || snapshot.commitment.IsNull())
-        return Fail(reason, "bad-pq-anchor-committee");
-    if (height <= snapshotHeight) return Fail(reason, "bad-pq-anchor-height");
+    uint32_t previousTarget{0};
+    if (Read(AtHeight('s', carrierHeight), previousTarget)) return Fail(reason, "bad-pq-anchor-carrier");
+    // The anchor governs the NEXT vote, so its committee comes from the
+    // finalized height, not the old signers or a later certificate carrier.
+    std::vector<pqquorum::Member> members;
+    if (!CommitteeAt(height, members)) return Fail(reason, "bad-pq-anchor-committee");
+    const uint256 commitment = pqquorum::Commitment(members);
+    if (commitment.IsNull()) return Fail(reason, "bad-pq-anchor-committee");
     Record record;
     record.height = height;
     record.blockHash = blockHash;
-    record.committee = snapshot.commitment;
+    record.committee = commitment;
     record.signers = std::move(signers);
     record.prevHeight = hasTip ? tip : 0;
     Write(AtHeight('f', height), record);
+    Write(AtHeight('s', carrierHeight), height);
     Write(Kind('F'), height);
     return true;
 }
 
-bool ChainState::UndoBlock(uint32_t height, std::string& reason)
+bool ChainState::UndoBlock(uint32_t blockHeight, std::optional<uint32_t> anchorHeight, std::string& reason)
 {
     AssertLockHeld(cs_main);
     reason.clear();
     Record anchor;
-    if (Read(AtHeight('f', height), anchor)) {
-        Erase(AtHeight('f', height));
+    if (anchorHeight) {
+        uint32_t tip{0};
+        uint32_t target{0};
+        if (!Read(Kind('F'), tip) || tip != *anchorHeight ||
+            !Read(AtHeight('f', *anchorHeight), anchor) || anchor.height != *anchorHeight ||
+            !Read(AtHeight('s', blockHeight), target) || target != *anchorHeight)
+            return Fail(reason, "bad-pq-anchor-undo-target");
+        Erase(AtHeight('f', *anchorHeight));
+        Erase(AtHeight('s', blockHeight));
         if (anchor.prevHeight == 0) Erase(Kind('F'));
         else Write(Kind('F'), anchor.prevHeight);
     }
     SnapshotEntry snapshot;
-    if (Read(AtHeight('m', height), snapshot)) {
-        Erase(AtHeight('m', height));
+    if (Read(AtHeight('m', blockHeight), snapshot)) {
+        Erase(AtHeight('m', blockHeight));
         if (snapshot.prevHeight == 0) Erase(Kind('M'));
         else Write(Kind('M'), snapshot.prevHeight);
     }
+    return true;
+}
+
+bool ChainState::RestoreRecovery(const Store& store, uint32_t height, const CBlockIndex* tip, std::string& reason)
+{
+    AssertLockHeld(cs_main);
+    reason.clear();
+    Record marker;
+    if (!store.ReadRecoveryMarker(height, marker)) return true;
+    if (!tip || height > uint32_t(tip->nHeight) || marker.height != height || !marker.signers.empty())
+        return Fail(reason, "pq-recovery-mirror-context");
+    const auto* ancestor = tip;
+    while (ancestor && ancestor->nHeight > int(height)) ancestor = ancestor->pprev;
+    std::vector<pqquorum::Member> members;
+    if (!ancestor || ancestor->GetBlockHash() != marker.blockHash || !CommitteeAt(height, members) ||
+        pqquorum::Commitment(members) != marker.committee)
+        return Fail(reason, "pq-recovery-mirror-ancestry");
+    uint32_t previous = TipHeight();
+    Record existing;
+    if (previous >= height) {
+        if (!GetAnchor(height, existing) || existing.blockHash != marker.blockHash || existing.committee != marker.committee)
+            return Fail(reason, "pq-recovery-mirror-conflict");
+        return true;
+    }
+    if (Read(AtHeight('f', height), existing)) return Fail(reason, "pq-recovery-mirror-conflict");
+    marker.prevHeight = previous;
+    Write(AtHeight('f', height), marker);
+    Write(Kind('F'), height);
     return true;
 }
 
@@ -231,6 +284,19 @@ bool ChainState::GetAnchor(uint32_t height, Record& out) const
 {
     AssertLockHeld(cs_main);
     return Read(AtHeight('f', height), out);
+}
+
+bool ChainState::SignersAtCarrier(uint32_t height, std::vector<uint256>& signers) const
+{
+    AssertLockHeld(cs_main);
+    signers.clear();
+    uint32_t target{0};
+    if (!Read(AtHeight('s', height), target)) return false;
+    Record anchor;
+    if (target >= height || !GetAnchor(target, anchor) || anchor.height != target)
+        throw std::runtime_error("Corrupt PQ certificate carrier index");
+    signers = anchor.signers;
+    return true;
 }
 
 bool ChainState::TipAnchor(Record& out) const
@@ -244,7 +310,17 @@ bool ChainState::TipAnchor(Record& out) const
 bool ChainState::CommitteeAt(uint32_t height, std::vector<pqquorum::Member>& members) const
 {
     AssertLockHeld(cs_main);
+    bool snapshotFound = false;
+    return CommitteeAtStatus(height, members, snapshotFound);
+}
+
+bool ChainState::CommitteeAtStatus(uint32_t height, std::vector<pqquorum::Member>& members,
+                                   bool& snapshotFound, bool* belowMinimum) const
+{
+    AssertLockHeld(cs_main);
     members.clear();
+    snapshotFound = false;
+    if (belowMinimum) *belowMinimum = false;
     uint32_t snapshotHeight{0};
     if (!Read(Kind('M'), snapshotHeight)) return false;
     // Snapshots only exist at or below the tip; walk back if the latest is above.
@@ -254,9 +330,11 @@ bool ChainState::CommitteeAt(uint32_t height, std::vector<pqquorum::Member>& mem
         snapshotHeight = previous.prevHeight;
     }
     SnapshotEntry snapshot;
-    if (!Read(AtHeight('m', snapshotHeight), snapshot) || snapshot.members.empty()) return false;
+    if (!Read(AtHeight('m', snapshotHeight), snapshot)) return false;
+    snapshotFound = true;
+    if (belowMinimum) *belowMinimum = snapshot.belowMinimum;
     members = snapshot.members;
-    return true;
+    return !members.empty();
 }
 
 uint32_t ChainState::TipHeight() const
@@ -277,13 +355,14 @@ bool ChainState::SetInitialCommittee(uint32_t height, const std::vector<pqquorum
 
 bool InitBootstrap(const CChainParams& params, std::string& reason)
 {
-    Bootstrap& bootstrap = BootstrapInstance();
+    BootstrapInstance() = {};
+    Bootstrap bootstrap;
     if (!gArgs.IsArgSet("-pqbootstrap") || gArgs.GetArg("-pqbootstrap", "").empty()) {
         reason.clear();
         return true;
     }
-    if (!params.IsRegTestNet()) {
-        reason = "pq-bootstrap-regtest-only";
+    if (!params.IsTestChain()) {
+        reason = "pq-bootstrap-test-chain-only";
         return false;
     }
     // Format: height:blockhash:regid:pubkey[:regid:pubkey ...]
@@ -294,12 +373,12 @@ bool InitBootstrap(const CChainParams& params, std::string& reason)
         return false;
     }
     uint32_t height = 0;
-    if (!ParseUInt32(parts[0], &height) || height == 0) {
+    if (!ParseUInt32(parts[0], &height) || height == 0 || height > uint32_t(std::numeric_limits<int>::max())) {
         reason = "pq-bootstrap-height";
         return false;
     }
     bootstrap.height = height;
-    if (!ParseHexUint256(parts[1], bootstrap.blockHash)) {
+    if (!ParseHexUint256(parts[1], bootstrap.blockHash) || bootstrap.blockHash.IsNull()) {
         reason = "pq-bootstrap-blockhash";
         return false;
     }
@@ -323,10 +402,14 @@ bool InitBootstrap(const CChainParams& params, std::string& reason)
             }
         }
     }
-    if (bootstrap.members.size() < pqquorum::MIN_MEMBERS || bootstrap.members.size() > pqquorum::MAX_MEMBERS) {
+    if (bootstrap.members.size() != pqquorum::MIN_MEMBERS) {
         reason = "pq-bootstrap-members";
         return false;
     }
+    std::sort(bootstrap.members.begin(), bootstrap.members.end(),
+              [](const pqquorum::Member& a, const pqquorum::Member& b) { return a.registration < b.registration; });
+    if (pqquorum::Commitment(bootstrap.members).IsNull()) return Fail(reason, "pq-bootstrap-bad-member");
+    BootstrapInstance() = std::move(bootstrap);
     reason.clear();
     return true;
 }
@@ -337,7 +420,95 @@ const Bootstrap* GetBootstrap()
     return bootstrap.Configured() ? &bootstrap : nullptr;
 }
 
-bool ValidateBootstrap(ChainState& state, const pqmn::Index& index, const CBlockIndex* tip, std::string& reason)
+bool InitRecovery(const CChainParams& params, std::string& reason)
+{
+    RecoveryInstance() = {};
+    Recovery recovery;
+    const auto args = gArgs.GetArgs("-pqemergencycheckpoint");
+    if (args.empty() || (args.size() == 1 && args.front().empty())) {
+        reason.clear();
+        return true;
+    }
+    if (args.size() != 1) return Fail(reason, "pq-recovery-duplicate");
+    if (!params.IsTestChain()) {
+        reason = "pq-recovery-test-chain-only";
+        return false;
+    }
+    std::vector<std::string> parts;
+    boost::split(parts, args.front(), boost::is_any_of(":"));
+    if (parts.size() != 2) return Fail(reason, "pq-recovery-format");
+    if (!ParseUInt32(parts[0], &recovery.height) || recovery.height == 0 ||
+        recovery.height >= uint32_t(std::numeric_limits<int>::max()))
+        return Fail(reason, "pq-recovery-height");
+    if (!ParseHexUint256(parts[1], recovery.blockHash) || recovery.blockHash.IsNull())
+        return Fail(reason, "pq-recovery-blockhash");
+    RecoveryInstance() = recovery;
+    reason.clear();
+    return true;
+}
+
+const Recovery* GetRecovery()
+{
+    Recovery& recovery = RecoveryInstance();
+    return recovery.Configured() ? &recovery : nullptr;
+}
+
+bool ValidateRecovery(const ChainState& state, const Store& store, const CBlockIndex* tip,
+                      std::string& reason)
+{
+    AssertLockHeld(cs_main);
+    reason.clear();
+    const Recovery* recovery = GetRecovery();
+    if (!recovery || !tip) return false;
+
+    Record durable;
+    if (!store.Tip(durable)) return Fail(reason, "pq-recovery-no-durable-anchor");
+    const CBlockIndex* durableAncestor = tip->GetAncestor(int(durable.height));
+    if (!durableAncestor || durableAncestor->GetBlockHash() != durable.blockHash)
+        return Fail(reason, "pq-recovery-durable-ancestry");
+    const CBlockIndex* checkpoint = tip->GetAncestor(int(recovery->height));
+    if (!checkpoint || checkpoint->GetBlockHash() != recovery->blockHash)
+        return Fail(reason, "pq-recovery-ancestry");
+    if (tip->nHeight <= int(recovery->height))
+        return Fail(reason, "pq-recovery-next-ancestry");
+
+    Record marker;
+    const bool marked = store.ReadRecoveryMarker(recovery->height, marker);
+    if (recovery->height <= durable.height) {
+        if (!marked || marker.blockHash != recovery->blockHash)
+            return Fail(reason, "pq-recovery-stale");
+    }
+
+    // Existing exact recovery markers retain approval after finality advances.
+    // New recovery is allowed only at the actual next-height dead end, not
+    // merely because some later historical interval once had fewer voters.
+    if (!marked) {
+        std::vector<pqquorum::Member> historical;
+        bool found = false, belowMinimum = false;
+        state.CommitteeAtStatus(durable.height + 1, historical, found, &belowMinimum);
+        if (!found || !historical.empty() || !belowMinimum) return Fail(reason, "pq-recovery-no-dead-end");
+    }
+
+    std::vector<pqquorum::Member> members;
+    bool snapshotFound = false;
+    state.CommitteeAtStatus(recovery->height, members, snapshotFound);
+    if (!snapshotFound)
+        return Fail(reason, "pq-recovery-committee-unavailable");
+    if (members.size() < pqquorum::MIN_MEMBERS)
+        return Fail(reason, "pq-recovery-committee-empty");
+    std::vector<pqquorum::Member> nextMembers;
+    snapshotFound = false;
+    state.CommitteeAtStatus(recovery->height + 1, nextMembers, snapshotFound);
+    if (!snapshotFound)
+        return Fail(reason, "pq-recovery-next-committee-unavailable");
+    if (nextMembers.size() < pqquorum::MIN_MEMBERS)
+        return Fail(reason, "pq-recovery-committee-empty");
+    if (marked && (marker.committee != pqquorum::Commitment(members) || marker.blockHash != recovery->blockHash))
+        return Fail(reason, "pq-recovery-marker-conflict");
+    return true;
+}
+
+bool ValidateBootstrap(const ChainState& state, const CBlockIndex* tip, std::string& reason)
 {
     AssertLockHeld(cs_main);
     reason.clear();
@@ -350,35 +521,14 @@ bool ValidateBootstrap(ChainState& state, const pqmn::Index& index, const CBlock
         reason = "pq-bootstrap-ancestry";
         return false;
     }
-    pqmn::Record record;
-    const uint32_t confirmations = state.GetParams().GetConsensus().MasternodeCollateralMinConf();
-    // Registry state is current; maturity is checked at the pinned height when
-    // the chain has not reached it yet, otherwise at the current tip. Lazy:
-    // re-checked on every call until it passes; failure keeps finality inactive.
-    const uint32_t maturityHeight = std::max<uint32_t>(bootstrap->height, uint32_t(tip->nHeight));
-    for (const auto& member : bootstrap->members) {
-        try {
-            if (!index.Get(member.registration, record)) {
-                reason = "pq-bootstrap-unknown-registration";
-                return false;
-            }
-        } catch (const std::exception&) {
-            reason = "pq-bootstrap-registry-unavailable";
-            return false;
-        }
-        if (record.revoked || !record.MatureAt(maturityHeight, confirmations) ||
-            record.operatorKey != member.operator_key) {
-            reason = "pq-bootstrap-registration-mismatch";
-            return false;
-        }
-    }
-    // First success: the pinned committee becomes the initial snapshot at H0.
-    if (state.TipHeight() == 0) {
-        std::vector<pqquorum::Member> existing;
-        if (!state.CommitteeAt(bootstrap->height, existing))
-            return state.SetInitialCommittee(bootstrap->height, bootstrap->members, reason);
-    }
-    reason.clear();
+    // Block connection already captured maturity, revocation, service and keys
+    // at this height. Current registry state is not historical evidence, and
+    // configuration must never manufacture or replace a chain snapshot.
+    std::vector<pqquorum::Member> historical;
+    if (!state.CommitteeAt(bootstrap->height, historical))
+        return Fail(reason, "pq-bootstrap-snapshot-unavailable");
+    if (pqquorum::Commitment(historical) != pqquorum::Commitment(bootstrap->members))
+        return Fail(reason, "pq-bootstrap-snapshot-mismatch");
     return true;
 }
 
@@ -408,7 +558,7 @@ bool Store::Write(const Record& record, const pqquorum::Certificate& certificate
     // is a no-op. A different value at a recorded height is never accepted.
     if (record.height <= TipHeight()) {
         Record existing;
-        if (record.height == TipHeight() && Read(record.height, existing) &&
+        if (Read(record.height, existing) && existing.height == record.height &&
             existing.blockHash == record.blockHash && existing.committee == record.committee)
             return true;
         reason = "pq-anchor-store-height";
@@ -433,9 +583,51 @@ bool Store::Write(const Record& record, const pqquorum::Certificate& certificate
     }
 }
 
+bool Store::WriteRecovery(const Record& record, std::string& reason)
+{
+    reason.clear();
+    if (record.height == 0 || record.height >= uint32_t(std::numeric_limits<int>::max()) ||
+        record.blockHash.IsNull() || record.committee.IsNull() || !record.signers.empty())
+        return Fail(reason, "pq-anchor-store-invalid");
+    Record marker;
+    if (ReadRecoveryMarker(record.height, marker)) {
+        Record anchor;
+        if (marker.blockHash == record.blockHash && marker.committee == record.committee &&
+            Read(record.height, anchor) && anchor.blockHash == marker.blockHash &&
+            anchor.committee == marker.committee && TipHeight() >= record.height) return true;
+        return Fail(reason, "pq-anchor-store-height");
+    }
+    Record previous;
+    if (!Tip(previous) || record.height <= previous.height) return Fail(reason, "pq-anchor-store-height");
+    const auto key = std::make_pair(std::string(ANCHOR_PREFIX), HeightSuffix(record.height));
+    if (db->Exists(key) || db->Exists(std::make_pair(std::string(CERT_PREFIX), HeightSuffix(record.height))))
+        return Fail(reason, "pq-anchor-store-height");
+    const auto recoveryKey = std::make_pair(std::string(RECOVERY_PREFIX), HeightSuffix(record.height));
+    try {
+        CDBBatch batch(db->GetSerializationVersion());
+        Record saved = record;
+        saved.prevHeight = previous.height;
+        batch.Write(key, saved);
+        batch.Write(recoveryKey, saved);
+        batch.Write(std::string(TIP_KEY), record.height);
+        if (!db->WriteBatch(batch, true)) return Fail(reason, "pq-anchor-store-write-failed");
+        return true;
+    } catch (const std::exception&) {
+        return Fail(reason, "pq-anchor-store-write-failed");
+    }
+}
+
 bool Store::Read(uint32_t height, Record& out) const
 {
     return db->Read(std::make_pair(std::string(ANCHOR_PREFIX), HeightSuffix(height)), out);
+}
+
+bool Store::ReadRecoveryMarker(uint32_t height, Record& out) const
+{
+    const auto key = std::make_pair(std::string(RECOVERY_PREFIX), HeightSuffix(height));
+    if (db->Read(key, out)) return true;
+    if (db->Exists(key)) throw std::runtime_error("Corrupt PQ recovery marker");
+    return false;
 }
 
 bool Store::ReadCertificate(uint32_t height, pqquorum::Certificate& out) const
@@ -458,19 +650,19 @@ uint32_t Store::TipHeight() const
     return db->Read(std::string(TIP_KEY), tip) ? tip : 0;
 }
 bool SignersInWindow(CEvoDB& db, const CChainParams& params, uint32_t upToHeight, uint32_t window,
-                     std::vector<uint256>& signers, bool& anyCert)
+                     std::map<uint256, uint32_t>& lastCarrier, bool& anyCert)
 {
     AssertLockHeld(cs_main);
-    signers.clear();
+    lastCarrier.clear();
     anyCert = false;
     if (window == 0) return true;
     const auto low = upToHeight >= window ? upToHeight - window + 1 : 1;
     ChainState state(db, params);
-    for (uint32_t height = low; height <= upToHeight; ++height) {
-        Record anchor;
-        if (!state.GetAnchor(height, anchor)) continue;
+    for (uint64_t height = low; height <= upToHeight; ++height) {
+        std::vector<uint256> signers;
+        if (!state.SignersAtCarrier(uint32_t(height), signers)) continue;
         anyCert = true;
-        signers.insert(signers.end(), anchor.signers.begin(), anchor.signers.end());
+        for (const auto& signer : signers) lastCarrier[signer] = uint32_t(height);
     }
     return true;
 }

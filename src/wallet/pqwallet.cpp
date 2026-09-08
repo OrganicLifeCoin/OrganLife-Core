@@ -21,7 +21,7 @@ bool CWallet::PreparePQOperator(const fs::path& backup, mldsa44::PublicKey& publ
     const auto fail = [&](const char* message) { reason = message; return false; };
     const auto& params = Params();
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
-    if (!pq::MasternodesActive(params, first)) return fail("PQ operator recovery requires opt-in regtest masternodes");
+    if (!pq::MasternodesActive(params, first)) return fail("PQ operator recovery requires scheduled test-chain masternodes");
     if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
         return fail("PQ operator recovery requires an encrypted, fully unlocked wallet");
     const auto& genesis = params.GetConsensus().hashGenesisBlock;
@@ -55,7 +55,7 @@ std::vector<mldsa44::PublicKey> CWallet::GetPQOperators() const
 {
     LOCK(cs_KeyStore);
     std::vector<mldsa44::PublicKey> result;
-    if (!Params().IsRegTestNet()) return result;
+    if (!Params().IsTestChain()) return result;
     for (const auto& entry : m_pq_operator_recovery)
         if (entry.second.backed) result.push_back(entry.second.record.public_key);
     return result;
@@ -68,7 +68,7 @@ bool CWallet::ExportPQOperator(const mldsa44::PublicKey& public_key, const fs::p
     const auto fail = [&](const char* message) { reason = message; return false; };
     const auto& params = Params();
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
-    if (!pq::MasternodesActive(params, first)) return fail("PQ operator export requires opt-in regtest masternodes");
+    if (!pq::MasternodesActive(params, first)) return fail("PQ operator export requires scheduled test-chain masternodes");
     if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
         return fail("PQ operator export requires an encrypted, fully unlocked wallet");
     const auto id = pq::GetID(public_key, params.NetworkIDString());
@@ -90,7 +90,7 @@ bool CWallet::LoadPQOperatorRecovery(const uint256& genesis, const pq::KeyID& id
 {
     LOCK(cs_KeyStore);
     const auto expected = pq::GetID(recovery.record.public_key, Params().NetworkIDString());
-    if (!Params().IsRegTestNet() || genesis != Params().GetConsensus().hashGenesisBlock ||
+    if (!Params().IsTestChain() || genesis != Params().GetConsensus().hashGenesisBlock ||
         recovery.record.version != 3 || recovery.backed > 1 || !expected || *expected != id ||
         m_pq_keys.count(id) || m_pq_operator_recovery.count(id) || !SetCrypted()) return false;
     m_pq_operator_recovery.emplace(id, recovery);

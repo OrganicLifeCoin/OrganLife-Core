@@ -48,6 +48,8 @@ public:
  */
 namespace GUIUtil
 {
+// Load an installed fallback only when the default font cannot render basic text.
+void EnsureReadableQtFonts();
 // Create human-readable string from date
 QString dateTimeStr(const QDateTime& datetime);
 QString dateTimeStrWithSeconds(const QDateTime& date);

@@ -13,6 +13,7 @@
 #include "bls/bls_wrapper.h"
 #include "budget/budgetmanager.h"
 #include "guiinterface.h"
+#include "init.h"
 #include "evo/deterministicmns.h"
 #include "evo/evodb.h"
 #include "evo/evonotificationinterface.h"
@@ -72,6 +73,21 @@ extern bool fPrintToConsole;
 extern void noui_connect();
 
 namespace {
+struct CoreTestRuntime {
+    CoreTestRuntime()
+    {
+        if (!SetupNetworking()) throw std::runtime_error("Test networking initialization failed");
+        SetRPCWarmupFinished();
+    }
+    ~CoreTestRuntime()
+    {
+#ifdef WIN32
+        WSACleanup();
+#endif
+    }
+};
+BOOST_GLOBAL_FIXTURE(CoreTestRuntime);
+
 struct UpgradeDefaults {
     bool initialized{false};
     std::array<int, Consensus::MAX_NETWORK_UPGRADES> heights{};
@@ -323,3 +339,14 @@ bool ShutdownRequested()
 {
   return false;
 }
+
+// Unit fixtures do not open daemon credentials or its durable anchor store.
+// Real startup, signing and anchor persistence are exercised by functional tests.
+const pqmnauth::LocalOperator* GetPQOperator() { return nullptr; }
+pqanchor::Store* GetPQAnchorStore() { return nullptr; }
+
+// Managed-wallet lifecycle needs AppInitMain, not this fixture's scheduler.
+// Fail explicitly if a unit test accidentally attempts to start daemon work.
+CScheduler& GetNodeScheduler() { throw std::logic_error("daemon scheduler unavailable in unit tests"); }
+bool StartWalletStakingThread(CWallet*) { throw std::logic_error("daemon staking unavailable in unit tests"); }
+void StopWalletStakingThread(CWallet*) { throw std::logic_error("daemon staking unavailable in unit tests"); }

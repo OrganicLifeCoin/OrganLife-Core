@@ -26,7 +26,7 @@ std::vector<unsigned char> Bytes(const char* hex)
     return result;
 }
 const std::vector<unsigned char> MESSAGE{0, 1, 2, 3, 255};
-const std::vector<unsigned char> CONTEXT{'O', 'L', 'C', '-', 't', 'e', 's', 't'};
+const std::vector<unsigned char> MLDSA_CONTEXT{'O', 'L', 'C', '-', 't', 'e', 's', 't'};
 const Span<const unsigned char> EMPTY{};
 static_assert(!std::is_copy_constructible<mldsa44::Key>::value, "Secret keys must not be copied");
 static_assert(!std::is_copy_assignable<mldsa44::Key>::value, "Secret keys must not be copied");
@@ -67,13 +67,13 @@ BOOST_AUTO_TEST_CASE(random_keys_and_signatures)
     BOOST_REQUIRE(second.Generate());
     BOOST_CHECK(first.GetPublicKey() != second.GetPublicKey());
     std::vector<unsigned char> sig1, sig2;
-    BOOST_REQUIRE(first.Sign(MESSAGE, CONTEXT, sig1));
-    BOOST_REQUIRE(first.Sign(MESSAGE, CONTEXT, sig2));
+    BOOST_REQUIRE(first.Sign(MESSAGE, MLDSA_CONTEXT, sig1));
+    BOOST_REQUIRE(first.Sign(MESSAGE, MLDSA_CONTEXT, sig2));
     BOOST_CHECK_EQUAL(sig1.size(), mldsa44::SIGNATURE_SIZE);
     BOOST_CHECK(sig1 != sig2);
-    BOOST_CHECK(mldsa44::Verify(first.GetPublicKey(), MESSAGE, CONTEXT, sig1));
-    BOOST_CHECK(mldsa44::Verify(first.GetPublicKey(), MESSAGE, CONTEXT, sig2));
-    BOOST_CHECK(!mldsa44::Verify(second.GetPublicKey(), MESSAGE, CONTEXT, sig1));
+    BOOST_CHECK(mldsa44::Verify(first.GetPublicKey(), MESSAGE, MLDSA_CONTEXT, sig1));
+    BOOST_CHECK(mldsa44::Verify(first.GetPublicKey(), MESSAGE, MLDSA_CONTEXT, sig2));
+    BOOST_CHECK(!mldsa44::Verify(second.GetPublicKey(), MESSAGE, MLDSA_CONTEXT, sig1));
 }
 
 BOOST_AUTO_TEST_CASE(invalid_and_cleared_keys)
@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(invalid_and_cleared_keys)
     mldsa44::Key key;
     std::vector<unsigned char> signature(10, 0xff);
     BOOST_CHECK(!key.IsValid());
-    BOOST_CHECK(!key.Sign(MESSAGE, CONTEXT, signature));
+    BOOST_CHECK(!key.Sign(MESSAGE, MLDSA_CONTEXT, signature));
     BOOST_CHECK(signature.empty());
     BOOST_REQUIRE(key.Generate());
     key.Clear();
@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE(invalid_and_cleared_keys)
     BOOST_CHECK(std::all_of(key.GetPublicKey().begin(), key.GetPublicKey().end(),
                             [](unsigned char b) { return b == 0; }));
     signature.assign(10, 0xff);
-    BOOST_CHECK(!key.Sign(MESSAGE, CONTEXT, signature));
+    BOOST_CHECK(!key.Sign(MESSAGE, MLDSA_CONTEXT, signature));
     BOOST_CHECK(signature.empty());
     key.Clear();
     BOOST_REQUIRE(key.Generate());
@@ -100,11 +100,11 @@ BOOST_AUTO_TEST_CASE(signature_output_can_alias_inputs)
     mldsa44::Key key;
     BOOST_REQUIRE(key.Generate());
     auto signature = MESSAGE;
-    BOOST_REQUIRE(key.Sign(signature, CONTEXT, signature));
-    BOOST_CHECK(mldsa44::Verify(key.GetPublicKey(), MESSAGE, CONTEXT, signature));
-    signature = CONTEXT;
+    BOOST_REQUIRE(key.Sign(signature, MLDSA_CONTEXT, signature));
+    BOOST_CHECK(mldsa44::Verify(key.GetPublicKey(), MESSAGE, MLDSA_CONTEXT, signature));
+    signature = MLDSA_CONTEXT;
     BOOST_REQUIRE(key.Sign(MESSAGE, signature, signature));
-    BOOST_CHECK(mldsa44::Verify(key.GetPublicKey(), MESSAGE, CONTEXT, signature));
+    BOOST_CHECK(mldsa44::Verify(key.GetPublicKey(), MESSAGE, MLDSA_CONTEXT, signature));
 }
 
 BOOST_AUTO_TEST_CASE(seed_sizes_and_rekey)
@@ -128,20 +128,20 @@ BOOST_AUTO_TEST_CASE(message_context_key_and_signature_tampering)
     mldsa44::Key key;
     BOOST_REQUIRE(key.Generate());
     std::vector<unsigned char> signature;
-    BOOST_REQUIRE(key.Sign(MESSAGE, CONTEXT, signature));
+    BOOST_REQUIRE(key.Sign(MESSAGE, MLDSA_CONTEXT, signature));
     auto message = MESSAGE;
     message[0] ^= 1;
-    BOOST_CHECK(!mldsa44::Verify(key.GetPublicKey(), message, CONTEXT, signature));
-    auto context = CONTEXT;
+    BOOST_CHECK(!mldsa44::Verify(key.GetPublicKey(), message, MLDSA_CONTEXT, signature));
+    auto context = MLDSA_CONTEXT;
     context[0] ^= 1;
     BOOST_CHECK(!mldsa44::Verify(key.GetPublicKey(), MESSAGE, context, signature));
     auto public_key = key.GetPublicKey();
     public_key[0] ^= 1;
-    BOOST_CHECK(!mldsa44::Verify(public_key, MESSAGE, CONTEXT, signature));
+    BOOST_CHECK(!mldsa44::Verify(public_key, MESSAGE, MLDSA_CONTEXT, signature));
     for (size_t i : {size_t{0}, size_t{1000}, signature.size() - 1}) {
         auto changed = signature;
         changed[i] ^= 1;
-        BOOST_CHECK(!mldsa44::Verify(key.GetPublicKey(), MESSAGE, CONTEXT, changed));
+        BOOST_CHECK(!mldsa44::Verify(key.GetPublicKey(), MESSAGE, MLDSA_CONTEXT, changed));
     }
 }
 
@@ -206,10 +206,10 @@ BOOST_AUTO_TEST_CASE(repeated_operations)
         key_time += Clock::now() - start;
         std::vector<unsigned char> signature;
         start = Clock::now();
-        BOOST_REQUIRE(key.Sign(MESSAGE, CONTEXT, signature));
+        BOOST_REQUIRE(key.Sign(MESSAGE, MLDSA_CONTEXT, signature));
         sign_time += Clock::now() - start;
         start = Clock::now();
-        BOOST_REQUIRE(mldsa44::Verify(key.GetPublicKey(), MESSAGE, CONTEXT, signature));
+        BOOST_REQUIRE(mldsa44::Verify(key.GetPublicKey(), MESSAGE, MLDSA_CONTEXT, signature));
         verify_time += Clock::now() - start;
     }
     BOOST_TEST_MESSAGE("ML-DSA-44 mean microseconds (32 iterations): keygen="

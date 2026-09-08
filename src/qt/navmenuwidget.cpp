@@ -99,7 +99,7 @@ NavMenuWidget::NavMenuWidget(OrganicLifeGUI *mainWindow, QWidget *parent) :
     }
     ui->btnMaster->setProperty("name", "master");
     setupNavButton(ui->btnMaster, tr("Masternodes"));
-    ui->btnMaster->setVisible(Params().IsRegTestNet());
+    ui->btnMaster->setVisible(Params().IsTestChain());
     transactionsButton = new QToolButton(ui->scrollAreaNavVert);
     transactionsButton->setObjectName("btnTransactions");
     transactionsButton->setProperty("name", "transactions");
@@ -113,7 +113,7 @@ NavMenuWidget::NavMenuWidget(OrganicLifeGUI *mainWindow, QWidget *parent) :
     ui->btnGovernance->setVisible(Params().IsTestChain());
     btns = {ui->btnDashboard, ui->btnSend, ui->btnReceive, transactionsButton};
     if (Params().IsTestChain()) btns.append(ui->btnGovernance);
-    if (Params().IsRegTestNet()) btns.append(ui->btnMaster);
+    if (Params().IsTestChain()) btns.append(ui->btnMaster);
     btns.append(ui->btnSettings);
 
     // Match the PQ-only information architecture.

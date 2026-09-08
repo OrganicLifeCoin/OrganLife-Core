@@ -45,6 +45,7 @@ DIST_DOCS = \
   $(wildcard doc/*.md) \
   $(wildcard doc/release-notes/*.md)
 DIST_CONTRIB = $(top_srcdir)/contrib/organiclife-cli.bash-completion \
+  $(top_srcdir)/contrib/devtools/test-pqjournal-native.sh \
 	       $(top_srcdir)/contrib/organiclife-tx.bash-completion \
 	       $(top_srcdir)/contrib/organiclifed.bash-completion \
 	           $(top_srcdir)/contrib/init \

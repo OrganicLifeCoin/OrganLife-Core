@@ -49,7 +49,6 @@
 
 #include <QApplication>
 #include <QFile>
-#include <QFontDatabase>
 #include <QFont>
 #include <QFontMetrics>
 #include <QLibraryInfo>
@@ -111,47 +110,6 @@ static QString GetLangTerritory(bool forceLangFromSetting = false)
     // 3) -lang command line argument
     lang_territory = QString::fromStdString(gArgs.GetArg("-lang", lang_territory.toStdString()));
     return (forceLangFromSetting) ? lang_territory_qsettings : lang_territory;
-}
-
-static bool FontLooksBroken()
-{
-    // Heuristic: if the default application font can't render basic ASCII glyphs,
-    // Qt will likely show "tofu" (squares) for most UI text.
-    const QFont f = QApplication::font();
-    const QFontMetrics fm(f);
-    return !fm.inFont(QChar('A')) || !fm.inFont(QChar('a')) || !fm.inFont(QChar('0'));
-}
-
-static void EnsureReadableQtFonts()
-{
-#if defined(Q_OS_LINUX) && defined(__aarch64__)
-    // On some aarch64 Linux environments with static Qt, font discovery can fail and result
-    // in "tofu" (squares) for most text. Proactively load a common system font and set it
-    // as the application default.
-    //
-    // Keep this scoped to aarch64 Linux to avoid overriding user theme/font choices on other
-    // platforms.
-    const QString arch = QSysInfo::currentCpuArchitecture().toLower();
-    if (arch != "arm64" && arch != "aarch64") return;
-
-    if (!FontLooksBroken()) return;
-
-    const QStringList candidates = {
-        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    };
-
-    for (const QString& path : candidates) {
-        if (!QFile::exists(path)) continue;
-        const int id = QFontDatabase::addApplicationFont(path);
-        if (id < 0) continue;
-        const QStringList fams = QFontDatabase::applicationFontFamilies(id);
-        if (fams.isEmpty()) continue;
-        QApplication::setFont(QFont(fams.first()));
-        break;
-    }
-#endif
 }
 
 class PasswordMaskProxyStyle final : public QProxyStyle
@@ -841,7 +799,7 @@ int main(int argc, char* argv[])
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif
     BitcoinApplication app(argc, argv);
-    EnsureReadableQtFonts();
+    GUIUtil::EnsureReadableQtFonts();
     EnsureReadablePasswordMask(app);
 
     // Register meta types used for QMetaObject::invokeMethod

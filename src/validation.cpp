@@ -1421,9 +1421,18 @@ DisconnectResult DisconnectBlock(CBlock& block, const CBlockIndex* pindex, CCoin
             error("DisconnectBlock: %s", reason);
             return DISCONNECT_FAILED;
         }
+        std::optional<uint32_t> anchorHeight;
+        if (pq::IsFinality(*block.vtx[0])) {
+            pqquorum::Certificate certificate;
+            if (!pq::DecodeFinalityCertificate(*block.vtx[0], certificate)) {
+                error("DisconnectBlock: bad-pq-finality-certificate");
+                return DISCONNECT_FAILED;
+            }
+            anchorHeight = certificate.statement.height;
+        }
         // Undo the committee snapshots and anchor records this block created.
         // The durable pqanchors/ store is intentionally NOT rolled back.
-        if (!pqanchor::ChainState(*evoDb, Params()).UndoBlock(pindex->nHeight, reason)) {
+        if (!pqanchor::ChainState(*evoDb, Params()).UndoBlock(pindex->nHeight, anchorHeight, reason)) {
             error("DisconnectBlock: %s", reason);
             return DISCONNECT_FAILED;
         }
@@ -1481,10 +1490,10 @@ DisconnectResult DisconnectBlock(CBlock& block, const CBlockIndex* pindex, CCoin
 
     // set the old best Sapling anchor back
     // We can get this from the `hashFinalSaplingRoot` of the last block
-    // However, this is only reliable if the last block was on or after
-    // the Sapling activation height. Otherwise, the last anchor was the
-    // empty root.
-    if (consensus.NetworkUpgradeActive(pindex->pprev->nHeight, Consensus::UPGRADE_V5_0)) {
+    // Genesis never connects its transactions or commits a Sapling tree,
+    // including on networks where Sapling activates at height zero.
+    if (pindex->pprev->nHeight > 0 &&
+        consensus.NetworkUpgradeActive(pindex->pprev->nHeight, Consensus::UPGRADE_V5_0)) {
         view.PopAnchor(pindex->pprev->hashFinalSaplingRoot);
     } else {
         view.PopAnchor(SaplingMerkleTree::empty_root());
@@ -1497,7 +1506,7 @@ DisconnectResult DisconnectBlock(CBlock& block, const CBlockIndex* pindex, CCoin
     return fClean ? DISCONNECT_OK : DISCONNECT_UNCLEAN;
 }
 
-void static FlushBlockFile(bool fFinalize = false)
+bool static FlushBlockFile(bool fFinalize = false)
 {
     LOCK(cs_LastBlockFile);
 
@@ -1510,6 +1519,7 @@ void static FlushBlockFile(bool fFinalize = false)
     if (!status) {
         AbortNode("Flushing block file to disk failed. This is likely the result of an I/O error.");
     }
+    return status;
 }
 
 bool FindUndoPos(CValidationState& state, int nFile, FlatFilePos& pos, unsigned int nAddSize);
@@ -1542,10 +1552,75 @@ const CBlockIndex* FinalityAncestor(const CBlockIndex* block, uint32_t height)
     while (walk && walk->nHeight > int(height)) walk = walk->pprev;
     return walk && walk->nHeight == int(height) ? walk : nullptr;
 }
+
+// Finality excludes a branch from local fork choice, not from intrinsic block
+// validity. Keep this check on every candidate admission and selection path.
+bool IsAllowedBySavedAnchor(const CBlockIndex* candidate) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+    pqanchor::Record anchor;
+    const auto* store = GetPQAnchorStore();
+    if (!store || !store->Tip(anchor)) return true;
+    if (candidate->nHeight >= int(anchor.height)) {
+        const auto* ancestor = FinalityAncestor(candidate, anchor.height);
+        return ancestor && ancestor->GetBlockHash() == anchor.blockHash;
+    }
+    if (const auto* anchored = LookupBlockIndex(anchor.blockHash)) {
+        const auto* ancestor = FinalityAncestor(anchored, candidate->nHeight);
+        return ancestor && ancestor->GetBlockHash() == candidate->GetBlockHash();
+    }
+    // Full reindex may not have loaded the future anchor header yet. Leave
+    // historical-prefix validation and reconciliation to ConnectBlock/startup.
+    return true;
+}
+
+// A received certificate can select a lower-work branch, but cannot make its
+// blocks valid. ConnectTip still validates and durably checkpoints the carrier
+// before publishing its anchor. No state is changed by this preference check.
+CBlockIndex* CertifiedForkCandidate(const CBlock& carrier) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+    if (carrier.vtx.empty() || !pq::IsFinality(*carrier.vtx[0]) || !chainActive.Tip()) return nullptr;
+    CBlockIndex* candidate = LookupBlockIndex(carrier.GetHash());
+    if (!candidate || chainActive.Contains(candidate) ||
+        !pq::MasternodesActive(Params(), candidate->nHeight)) return nullptr;
+    // Ordinary work selection already handles better candidates. In particular,
+    // normal certificate carriers must not trigger a full candidate-list refill.
+    if (CBlockIndexWorkComparator()(chainActive.Tip(), candidate)) return nullptr;
+    pqanchor::Record parent;
+    const auto* store = GetPQAnchorStore();
+    if (!store || !store->Tip(parent) || uint64_t(candidate->nHeight) <= uint64_t(parent.height) + 1 ||
+        !IsAllowedBySavedAnchor(candidate)) return nullptr;
+    for (const auto* walk = candidate; !chainActive.Contains(walk); walk = walk->pprev) {
+        if (!walk || !walk->IsValid(BLOCK_VALID_TRANSACTIONS) || !(walk->nStatus & BLOCK_HAVE_DATA))
+            return nullptr;
+    }
+    pqquorum::Certificate certificate;
+    if (!pq::DecodeFinalityCertificate(*carrier.vtx[0], certificate)) return nullptr;
+    const auto* target = FinalityAncestor(candidate, parent.height + 1);
+    if (!target) return nullptr;
+    pqquorum::Statement expected;
+    expected.purpose = pqquorum::Purpose::PRECOMMIT;
+    expected.genesis = Params().GetConsensus().hashGenesisBlock;
+    expected.anchor = pqanchor::ID(parent.height, parent.blockHash, parent.committee);
+    expected.committee = parent.committee;
+    expected.height = parent.height + 1;
+    expected.round = certificate.statement.round;
+    expected.value = target->GetBlockHash();
+    std::vector<pqquorum::Member> committee;
+    std::string reason;
+    if (!evoDb || !pqanchor::ChainState(*evoDb, Params()).CommitteeAt(parent.height, committee) ||
+        !pqquorum::Verify(certificate, expected, committee, reason)) return nullptr;
+    return candidate;
+}
 } // namespace
 
-static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& view, bool fJustCheck = false) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+using PQFinalized = std::optional<std::pair<pqanchor::Record, pqquorum::Certificate>>;
+
+static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& view,
+                         bool fJustCheck = false, PQFinalized* finalized = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
+    if (finalized) finalized->reset();
     AssertLockHeld(cs_main);
     // Check it again in case a previous version let a bad block in
     if (!CheckBlock(block, state, !fJustCheck, !fJustCheck, !fJustCheck)) {
@@ -1641,6 +1716,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     CAmount nValueOut = 0;
     CAmount nValueIn = 0;
     unsigned int nMaxBlockSigOps = MAX_BLOCK_SIGOPS_CURRENT;
+    PQFinalized pqFinalized;
 
     // Sapling
     SaplingMerkleTree sapling_tree;
@@ -1656,9 +1732,25 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         if (GetPQAnchorStore()) {
             pqanchor::Record anchorTip;
             if (GetPQAnchorStore()->Tip(anchorTip)) {
-                const CBlockIndex* ancestor = FinalityAncestor(pindex, anchorTip.height);
-                if (!ancestor || ancestor->GetBlockHash() != anchorTip.blockHash)
-                    return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-ancestry");
+                if (pindex->nHeight >= int(anchorTip.height)) {
+                    const CBlockIndex* ancestor = FinalityAncestor(pindex, anchorTip.height);
+                    if (!ancestor || ancestor->GetBlockHash() != anchorTip.blockHash)
+                        return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-ancestry");
+                } else if (const auto* anchored = LookupBlockIndex(anchorTip.blockHash)) {
+                    // Historical replay: compare against the saved anchor's
+                    // ancestors rather than asking an earlier block for a future ancestor.
+                    const auto* ancestor = FinalityAncestor(anchored, pindex->nHeight);
+                    if (!ancestor || ancestor->GetBlockHash() != block.GetHash())
+                        return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-ancestry");
+                } else {
+                    // Full reindex has not loaded the anchor header yet. Check
+                    // every stored height as it is replayed; import reconciliation
+                    // must reach the saved tip before this node can start voting.
+                    if (!fReindex) return state.Error("PQ finalized anchor header unavailable; reindex required");
+                    pqanchor::Record saved;
+                    if (GetPQAnchorStore()->Read(pindex->nHeight, saved) && saved.blockHash != block.GetHash())
+                        return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-ancestry");
+                }
             }
         }
         if (!GetPQMasternodePayment(pindex->pprev, pqMasternodePayments))
@@ -1686,11 +1778,10 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         if (pq::IsFinality(*block.vtx[0])) {
             if (!pqanchor::GetBootstrap())
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-inactive");
-            pq::Payload payload;
-            if (!pq::DecodePayload(*block.vtx[0], payload) || payload.mode != pq::FINALITY)
-                return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-payload");
+            if (!pqanchor::ValidateBootstrap(pqAnchors, pindex->pprev, reason))
+                return state.DoS(100, false, REJECT_INVALID, "bad-pq-bootstrap");
             pqquorum::Certificate certificate;
-            if (!pqquorum::Decode(payload.data, certificate))
+            if (!pq::DecodeFinalityCertificate(*block.vtx[0], certificate))
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-certificate");
             pqanchor::Record parent;
             bool hasParent = pqAnchors.TipAnchor(parent);
@@ -1731,17 +1822,26 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
             for (const auto& signature : certificate.signatures)
                 signers.push_back(committee.at(signature.member).registration);
             if (!pqAnchors.RecordAnchor(certificate.statement.height, finalized->GetBlockHash(),
-                                        std::move(signers), reason))
+                                        std::move(signers), reason, pindex->nHeight))
                 return state.DoS(100, false, REJECT_INVALID, reason);
-            // Durable, non-rollbackable enforcement source; fsynced before use.
+            // Stage the irreversible write until ALL block checks succeed.
+            // The EvoDB mirror above belongs to the caller's rollbackable batch.
             if (GetPQAnchorStore()) {
                 pqanchor::Record durable;
                 if (!pqAnchors.TipAnchor(durable))
                     return state.Error("PQ finalized anchor state unavailable");
-                if (!GetPQAnchorStore()->Write(durable, certificate, reason))
-                    return state.DoS(100, false, REJECT_INVALID, reason);
+                pqFinalized = std::make_pair(std::move(durable), std::move(certificate));
             }
         }
+    }
+
+    if (pq::MasternodesActive(Params(), pindex->nHeight) && GetPQAnchorStore()) {
+        std::string reason;
+        // Reindex replays administrator approvals only at their exact block,
+        // after normal certificate validation. No peer/configured new root is
+        // created here, and durable anchor protection forbids undo below it.
+        if (!pqanchor::ChainState(*evoDb, Params()).RestoreRecovery(
+                *GetPQAnchorStore(), pindex->nHeight, pindex, reason)) return state.Error(reason);
     }
 
     std::vector<PrecomputedTransactionData> precomTxData;
@@ -1941,6 +2041,10 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         invalid_out::setInvalidOutPoints.clear();
     }
 
+    // Only ConnectTip may publish this, after committing and flushing the
+    // outer state. VerifyDB and fJustCheck never persist irreversible anchors.
+    if (finalized) *finalized = std::move(pqFinalized);
+
     return true;
 }
 
@@ -1994,7 +2098,7 @@ bool static FlushStateToDisk(CValidationState& state, FlushStateMode mode)
                 return AbortNode(state, "Disk space is low!", _("Error: Disk space is low!"));
             }
             // First make sure all block and undo data is flushed to disk.
-            FlushBlockFile();
+            if (!FlushBlockFile()) return state.Error("Failed to flush block files");
             // Then update all block file information (which may refer to block and undo files).
             {
                 std::vector<std::pair<int, const CBlockFileInfo*> > vFiles;
@@ -2033,6 +2137,10 @@ bool static FlushStateToDisk(CValidationState& state, FlushStateMode mode)
             if (!evoDb->CommitRootTransaction()) {
                 return AbortNode(state, "Failed to commit EvoDB");
             }
+            // Explicit checkpoints precede irreversible finality. Draining
+            // caches alone does not sync either database's write-ahead log.
+            if (mode == FLUSH_STATE_ALWAYS && (!pcoinsdbview->Sync() || !evoDb->GetRawDB().Sync()))
+                return AbortNode(state, "Failed to sync chainstate or EvoDB");
             nLastFlush = nNow;
             // Update money supply on memory, reading data from disk
             if (!ShutdownRequested() && !IsInitialBlockDownload()) {
@@ -2051,10 +2159,10 @@ bool static FlushStateToDisk(CValidationState& state, FlushStateMode mode)
     return true;
 }
 
-void FlushStateToDisk()
+bool FlushStateToDisk()
 {
     CValidationState state;
-    FlushStateToDisk(state, FLUSH_STATE_ALWAYS);
+    return FlushStateToDisk(state, FLUSH_STATE_ALWAYS);
 }
 
 /** Update chainActive and related internal data structures. */
@@ -2258,11 +2366,12 @@ bool static ConnectTip(CValidationState& state, CBlockIndex* pindexNew, const st
     nTimeReadFromDisk += nTime2 - nTime1;
     int64_t nTime3;
     LogPrint(BCLog::BENCHMARK, "  - Load block from disk: %.2fms [%.2fs]\n", (nTime2 - nTime1) * 0.001, nTimeReadFromDisk * 0.000001);
+    PQFinalized pqFinalized;
     {
         auto dbTx = evoDb->BeginTransaction();
 
         CCoinsViewCache view(pcoinsTip.get());
-        bool rv = ConnectBlock(blockConnecting, state, pindexNew, view, false);
+        bool rv = ConnectBlock(blockConnecting, state, pindexNew, view, false, &pqFinalized);
         GetMainSignals().BlockChecked(blockConnecting, state);
         if (!rv) {
             if (state.IsInvalid())
@@ -2281,11 +2390,16 @@ bool static ConnectTip(CValidationState& state, CBlockIndex* pindexNew, const st
     LogPrint(BCLog::BENCHMARK, "  - Flush: %.2fms [%.2fs]\n", (nTime4 - nTime3) * 0.001, nTimeFlush * 0.000001);
 
     // Write the chain state to disk, if necessary. Always write to disk if this is the first of a new file.
-    FlushStateMode flushMode = FLUSH_STATE_IF_NEEDED;
+    FlushStateMode flushMode = pqFinalized ? FLUSH_STATE_ALWAYS : FLUSH_STATE_IF_NEEDED;
     if (pindexNew->pprev && (pindexNew->GetBlockPos().nFile != pindexNew->pprev->GetBlockPos().nFile))
         flushMode = FLUSH_STATE_ALWAYS;
     if (!FlushStateToDisk(state, flushMode))
         return false;
+    if (pqFinalized) {
+        std::string reason;
+        if (!GetPQAnchorStore()->Write(pqFinalized->first, pqFinalized->second, reason))
+            return AbortNode(state, "Failed to persist PQ finalized anchor: " + reason);
+    }
     int64_t nTime5 = GetTimeMicros();
     nTimeChainState += nTime5 - nTime4;
     LogPrint(BCLog::BENCHMARK, "  - Writing chainstate: %.2fms [%.2fs]\n", (nTime5 - nTime4) * 0.001, nTimeChainState * 0.000001);
@@ -2320,6 +2434,11 @@ static CBlockIndex* FindMostWorkChain()
             if (it == setBlockIndexCandidates.rend())
                 return nullptr;
             pindexNew = *it;
+        }
+
+        if (!IsAllowedBySavedAnchor(pindexNew)) {
+            setBlockIndexCandidates.erase(pindexNew);
+            continue;
         }
 
         // Check whether all blocks on the path between the currently active chain and the candidate are valid.
@@ -2367,6 +2486,9 @@ static CBlockIndex* FindMostWorkChain()
 /** Delete all entries in setBlockIndexCandidates that are worse than the current tip. */
 static void PruneBlockIndexCandidates()
 {
+    // A certified branch may have been selected outside the work candidates.
+    // Only its now fully validated active tip joins the ordinary candidate set.
+    setBlockIndexCandidates.insert(chainActive.Tip());
     // Note that we can't delete the current block itself, as we may need to return to it later in case a
     // reorganization to a better block fails.
     std::set<CBlockIndex*, CBlockIndexWorkComparator>::iterator it = setBlockIndexCandidates.begin();
@@ -2375,6 +2497,19 @@ static void PruneBlockIndexCandidates()
     }
     // Either the current tip or a successor of it we're working towards is left in setBlockIndexCandidates.
     assert(!setBlockIndexCandidates.empty());
+}
+
+// Moving to a lower-work tip can make previously pruned branches eligible
+// again. Rebuild admissions before resuming ordinary fork selection.
+static void RepopulateBlockIndexCandidates() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
+{
+    AssertLockHeld(cs_main);
+    for (const auto& entry : mapBlockIndex) {
+        CBlockIndex* candidate = entry.second;
+        if (candidate->IsValid(BLOCK_VALID_TRANSACTIONS) && candidate->nChainTx &&
+            !setBlockIndexCandidates.value_comp()(candidate, chainActive.Tip()) && IsAllowedBySavedAnchor(candidate))
+            setBlockIndexCandidates.insert(candidate);
+    }
 }
 
 /**
@@ -2495,6 +2630,8 @@ bool ActivateBestChain(CValidationState& state, std::shared_ptr<const CBlock> pb
 
     CBlockIndex* pindexNewTip = nullptr;
     CBlockIndex* pindexMostWork = nullptr;
+    CBlockIndex* preferredCertified = nullptr;
+    bool considerCertificate = true;
     do {
         boost::this_thread::interruption_point();
 
@@ -2510,11 +2647,20 @@ bool ActivateBestChain(CValidationState& state, std::shared_ptr<const CBlock> pb
             LOCK(mempool.cs); // Lock transaction pool for at least as long as it takes for connectTrace to be consumed
             CBlockIndex* starting_tip = chainActive.Tip();
             bool blocks_connected = false;
+            if (considerCertificate) {
+                if (pblock) preferredCertified = pindexMostWork = CertifiedForkCandidate(*pblock);
+                considerCertificate = false;
+            }
             do {
                 // We absolutely may not unlock cs_main until we've made forward progress
                 // (with the exception of shutdown due to hardware issues, low disk space, etc).
                 ConnectTrace connectTrace; // Destructed before cs_main is unlocked
 
+                // Finality may advance while cs_main is released between steps.
+                if (pindexMostWork && !IsAllowedBySavedAnchor(pindexMostWork)) {
+                    setBlockIndexCandidates.erase(pindexMostWork);
+                    pindexMostWork = nullptr;
+                }
                 if (pindexMostWork == nullptr) {
                     pindexMostWork = FindMostWorkChain();
                 }
@@ -2530,6 +2676,11 @@ bool ActivateBestChain(CValidationState& state, std::shared_ptr<const CBlock> pb
                     return false;
                 blocks_connected = true;
 
+                if (preferredCertified && (fInvalidFound || chainActive.Contains(preferredCertified))) {
+                    RepopulateBlockIndexCandidates();
+                    preferredCertified = nullptr;
+                    pindexMostWork = nullptr;
+                }
                 if (fInvalidFound) {
                     // Wipe cache, we may need another branch now.
                     pindexMostWork = nullptr;
@@ -2578,6 +2729,13 @@ bool ActivateBestChain(CValidationState& state, std::shared_ptr<const CBlock> pb
 bool InvalidateBlock(CValidationState& state, const CChainParams& chainparams, CBlockIndex* pindex)
 {
     AssertLockHeld(cs_main);
+    // Refuse before touching flags, candidates or any unfinalized descendants.
+    // A failed manual rollback must leave the active chain restartable.
+    pqanchor::Record anchor;
+    if (chainActive.Contains(pindex) && GetPQAnchorStore() &&
+        GetPQAnchorStore()->Tip(anchor) && pindex->nHeight <= int(anchor.height))
+        return state.Error("Cannot invalidate a block at or below the PQ finalized anchor");
+
     // Mark the block itself as invalid.
     pindex->nStatus |= BLOCK_FAILED_VALID;
     setDirtyBlockIndex.insert(pindex);
@@ -2606,13 +2764,7 @@ bool InvalidateBlock(CValidationState& state, const CChainParams& chainparams, C
 
     // The resulting new best tip may not be in setBlockIndexCandidates anymore, so
     // add it again.
-    BlockMap::iterator it = mapBlockIndex.begin();
-    while (it != mapBlockIndex.end()) {
-        if (it->second->IsValid(BLOCK_VALID_TRANSACTIONS) && it->second->nChainTx && !setBlockIndexCandidates.value_comp()(it->second, chainActive.Tip())) {
-            setBlockIndexCandidates.insert(it->second);
-        }
-        it++;
-    }
+    RepopulateBlockIndexCandidates();
 
     InvalidChainFound(pindex);
     return true;
@@ -2630,7 +2782,7 @@ bool ReconsiderBlock(CValidationState& state, CBlockIndex* pindex)
         if (!it->second->IsValid() && it->second->GetAncestor(nHeight) == pindex) {
             it->second->nStatus &= ~BLOCK_FAILED_MASK;
             setDirtyBlockIndex.insert(it->second);
-            if (it->second->IsValid(BLOCK_VALID_TRANSACTIONS) && it->second->nChainTx && setBlockIndexCandidates.value_comp()(chainActive.Tip(), it->second)) {
+            if (it->second->IsValid(BLOCK_VALID_TRANSACTIONS) && it->second->nChainTx && setBlockIndexCandidates.value_comp()(chainActive.Tip(), it->second) && IsAllowedBySavedAnchor(it->second)) {
                 setBlockIndexCandidates.insert(it->second);
             }
             if (it->second == pindexBestInvalid) {
@@ -2749,7 +2901,7 @@ bool ReceivedBlockTransactions(const CBlock& block, CValidationState& state, CBl
                 LOCK(cs_nBlockSequenceId);
                 pindex->nSequenceId = nBlockSequenceId++;
             }
-            if (chainActive.Tip() == nullptr || !setBlockIndexCandidates.value_comp()(pindex, chainActive.Tip())) {
+            if ((chainActive.Tip() == nullptr || !setBlockIndexCandidates.value_comp()(pindex, chainActive.Tip())) && IsAllowedBySavedAnchor(pindex)) {
                 setBlockIndexCandidates.insert(pindex);
             }
             std::pair<std::multimap<CBlockIndex*, CBlockIndex*>::iterator, std::multimap<CBlockIndex*, CBlockIndex*>::iterator> range = mapBlocksUnlinked.equal_range(pindex);
@@ -2793,7 +2945,7 @@ bool FindBlockPos(CValidationState& state, FlatFilePos& pos, unsigned int nAddSi
         if (!fKnown) {
             LogPrintf("Leaving block file %i: %s\n", nFile, vinfoBlockFile[nFile].ToString());
         }
-        FlushBlockFile(!fKnown);
+        if (!FlushBlockFile(!fKnown)) return state.Error("Failed to flush previous block file");
         nLastBlockFile = nFile;
     }
 
@@ -3728,7 +3880,7 @@ bool static LoadBlockIndexDB(std::string& strError) EXCLUSIVE_LOCKS_REQUIRED(cs_
                 pindex->nChainSaplingValue = pindex->nSaplingValue;
             }
         }
-        if (pindex->IsValid(BLOCK_VALID_TRANSACTIONS) && (pindex->nChainTx || pindex->pprev == nullptr))
+        if (pindex->IsValid(BLOCK_VALID_TRANSACTIONS) && (pindex->nChainTx || pindex->pprev == nullptr) && IsAllowedBySavedAnchor(pindex))
             setBlockIndexCandidates.insert(pindex);
         if (pindex->nStatus & BLOCK_FAILED_MASK && (!pindexBestInvalid || pindex->nChainWork > pindexBestInvalid->nChainWork))
             pindexBestInvalid = pindex;
@@ -4327,7 +4479,9 @@ void static CheckBlockIndex()
             assert((pindex->nStatus & BLOCK_FAILED_MASK) == 0); // The failed mask cannot be set for blocks without invalid parents.
         }
         if (!CBlockIndexWorkComparator()(pindex, chainActive.Tip()) && pindexFirstMissing == nullptr) {
-            if (pindexFirstInvalid == nullptr) { // If this block sorts at least as good as the current tip and is valid, it must be in setBlockIndexCandidates.
+            // A saved anchor may exclude an otherwise valid higher-work branch.
+            // Older candidates are removed lazily when selected after finality advances.
+            if (pindexFirstInvalid == nullptr && IsAllowedBySavedAnchor(pindex)) {
                 assert(setBlockIndexCandidates.count(pindex));
             }
         } else { // If this block sorts worse than the current tip, it cannot be in setBlockIndexCandidates.

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying file COPYING.
 #include <evo/pqmnauth.h>
+#include <pqservice.h>
 #include <streams.h>
 #include <validation.h>
 #include <wallet/pqkey.h>
@@ -10,7 +11,7 @@ namespace pqmnauth {
 std::unique_ptr<LocalOperator> LocalOperator::Load(const fs::path& directory, const CChainParams& params,
                                                  const uint256& id, std::string& reason)
 {
-    reason = "PQ operator credentials require regtest PQ masternode activation";
+    reason = "PQ operator credentials require scheduled test-chain PQ masternode activation";
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
     if (!pq::MasternodesActive(params, first)) return nullptr;
     if (id.IsNull()) { reason = "PQ operator registration must be nonzero"; return nullptr; }
@@ -123,6 +124,30 @@ bool LocalOperator::SignVote(const pqquorum::Statement& statement,
     } catch (const std::exception&) {
         return Fail(reason, "pq-vote-registry-unavailable");
     }
+}
+
+bool LocalOperator::SignHeartbeat(pqservice::Heartbeat& heartbeat, std::string& reason) const
+{
+    AssertLockHeld(cs_main);
+    heartbeat = {};
+    reason = "pq-service-operator-not-current";
+    if (!evoDb || !pqservice::Active(Params(), chainActive.Height() + 1)) return false;
+    pqmn::Index index(*evoDb, Params());
+    pqmn::Record record;
+    if (!index.MatchesChainTip(chainActive.Tip()) || !index.Get(registration, record) ||
+        record.operatorKey != key.GetPublicKey()) return false;
+    pqservice::Heartbeat candidate;
+    candidate.registration = registration; candidate.sequence = record.sequence;
+    candidate.height = chainActive.Height(); candidate.blockHash = chainActive.Tip()->GetBlockHash();
+    if (!pqservice::CheckContext(candidate, record, chainActive.Tip(), Params(), reason)) return false;
+    std::vector<unsigned char> signature;
+    if (!key.Sign(pqservice::Message(candidate, Params().GetConsensus().hashGenesisBlock, key.GetPublicKey()),
+                  pqservice::Context(), signature) || signature.size() != mldsa44::SIGNATURE_SIZE)
+        return Fail(reason, "pq-service-signing-failed");
+    std::copy(signature.begin(), signature.end(), candidate.signature.begin());
+    heartbeat = candidate;
+    reason.clear();
+    return true;
 }
 
 bool Decode(Span<const unsigned char> bytes, Proof& proof)

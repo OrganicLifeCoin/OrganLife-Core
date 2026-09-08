@@ -1,0 +1,24 @@
+Backport: winpthreads: Run thread dtors in reverse order
+Upstream: https://sourceforge.net/p/mingw-w64/mailman/message/58849178/
+Keep the current MinGW 7 ABI; destroy C++ TLS objects before emutls storage.
+--- a/src/thread.c
++++ b/src/thread.c
+@@ -932,7 +932,8 @@
+ _pthread_cleanup_dest (pthread_t t)
+ {
+ 	_pthread_v *tv;
+-	unsigned int i, j;
++	unsigned int j;
++	int i;
+ 
+ 	if (!t)
+ 		return;
+@@ -945,7 +946,7 @@
+ 		int flag = 0;
+ 
+ 		pthread_spin_lock (&tv->spin_keys);
+-		for (i = 0; i < tv->keymax; i++)
++		for (i = tv->keymax - 1; i >= 0; i--)
+ 		{
+ 			void *val = tv->keyval[i];
+ 

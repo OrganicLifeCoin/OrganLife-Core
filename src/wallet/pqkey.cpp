@@ -7,6 +7,9 @@
 #include <cstring>
 #include <streams.h>
 #include <utilstrencodings.h>
+#ifdef WIN32
+#include <wallet/pqcredentials_win.h>
+#endif
 #ifndef WIN32
 #include <cerrno>
 #include <fcntl.h>
@@ -205,11 +208,18 @@ bool LoadOperatorCredentials(const fs::path& directory, const std::string& netwo
                              const uint256& genesis, mldsa44::Key& key, std::string& reason)
 {
     key.Clear(); reason = "Could not load private PQ operator credentials";
-#ifndef WIN32
     try {
+        if ((network != "test" && network != "regtest") || genesis.IsNull()) return false;
+        SecureBytes wrapping_key, encoded;
+        constexpr size_t RECORD_SIZE = 1 + mldsa44::PUBLIC_KEY_SIZE + 24 + 48;
+#ifdef WIN32
+        static_assert(RECORD_SIZE == 1385, "Windows operator record size mismatch");
+        encoded.resize(RECORD_SIZE);
+        wrapping_key.resize(32);
+        if (!ReadWindowsOperatorCredentials(directory.wstring(), encoded, wrapping_key)) return false;
+#else
         const auto& path = directory.native();
-        if ((network != "test" && network != "regtest") || genesis.IsNull() ||
-            path.empty() || !directory.is_absolute() || path.back() == '/' || path.find('\0') != std::string::npos)
+        if (path.empty() || !directory.is_absolute() || path.back() == '/' || path.find('\0') != std::string::npos)
             return false;
         for (const auto& component : directory)
             if (component == "." || component == "..") return false;
@@ -217,10 +227,9 @@ bool LoadOperatorCredentials(const fs::path& directory, const std::string& netwo
         struct stat info;
         if (parent.fd < 0 || fstat(parent.fd, &info) != 0 || !S_ISDIR(info.st_mode) || !PrivateCredential(parent.fd, info, true))
             return false;
-        SecureBytes wrapping_key, encoded;
-        constexpr size_t RECORD_SIZE = 1 + mldsa44::PUBLIC_KEY_SIZE + 24 + 48;
         if (!ReadCredential(parent.fd, "olc-pq-operator-record", RECORD_SIZE, encoded) ||
             !ReadCredential(parent.fd, "olc-pq-operator-key", 32, wrapping_key)) return false;
+#endif
         Record record;
         const auto* begin = reinterpret_cast<const char*>(encoded.data());
         CDataStream stream(begin, begin + encoded.size(), SER_DISK, 0);
@@ -231,9 +240,6 @@ bool LoadOperatorCredentials(const fs::path& directory, const std::string& netwo
     } catch (const std::exception&) {
         key.Clear();
     }
-#else
-    reason = "PQ operator credential loading is not supported on this platform";
-#endif
     return false;
 }
 
@@ -247,7 +253,23 @@ bool WriteOperatorCredentials(const fs::path& directory, const Record& record, c
                               const std::string& network, const uint256& genesis, std::string& reason)
 {
     reason = "Could not publish private PQ operator credentials; do not use an incomplete destination";
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef WIN32
+    try {
+        mldsa44::Key key;
+        if (!DecryptOperatorKey(wrapping_key, record, network, genesis, key)) return false;
+        CDataStream encoded(SER_DISK, 0);
+        encoded << record;
+        std::array<unsigned char, 16> random{};
+        randombytes_buf(random.data(), random.size());
+        if (!WriteWindowsOperatorCredentials(directory.wstring(),
+            Span<const unsigned char>(reinterpret_cast<const unsigned char*>(encoded.data()), encoded.size()),
+            wrapping_key, random)) return false;
+        reason.clear();
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+#elif defined(__linux__) || defined(__APPLE__)
     try {
         const auto& path = directory.native();
         mldsa44::Key key;

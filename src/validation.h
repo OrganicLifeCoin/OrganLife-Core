@@ -214,8 +214,8 @@ CAmount GetBlockValue(int nHeight, CAmount nChainMinted);
 
 /** Create a new block index entry for a given block hash */
 CBlockIndex* InsertBlockIndex(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
-/** Flush all state, indexes and buffers to disk. */
-void FlushStateToDisk();
+/** Flush and sync all state, indexes and buffers; false on a fatal local I/O error. */
+bool FlushStateToDisk();
 
 
 /** (try to) add transaction to memory pool **/

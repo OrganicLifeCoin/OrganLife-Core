@@ -26,8 +26,6 @@
 
 #include <univalue.h>
 
-#include <mutex>
-
 UniValue
 createArgs(int nRequired, const char* address1=nullptr, const char* address2=nullptr)
 {
@@ -42,9 +40,6 @@ createArgs(int nRequired, const char* address1=nullptr, const char* address2=nul
 
 UniValue CallRPC(std::string args)
 {
-    static std::once_flag warmup_finished;
-    std::call_once(warmup_finished, [] { SetRPCWarmupFinished(); });
-
     std::vector<std::string> vArgs;
     boost::split(vArgs, args, boost::is_any_of(" \t"));
     std::string strMethod = vArgs[0];

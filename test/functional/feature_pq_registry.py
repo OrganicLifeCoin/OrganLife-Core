@@ -15,7 +15,8 @@ class PQRegistryTest(PivxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 1
         self.base_args = ["-connect=0", "-dnsseed=0", "-discover=0", "-staking=0",
-                          "-createwalletbackups=0", "-checklevel=4"]
+                          "-createwalletbackups=0", "-checklevel=4", "-checkblocks=0",
+                          "-nuparams=v5_shield:0"]
         self.extra_args = [self.base_args + ["-nuparams=pq_masternodes:3"]]
 
     def run_test(self):
@@ -26,7 +27,7 @@ class PQRegistryTest(PivxTestFramework):
         blocks = node.generatetoaddress(5, address)
         self.restart_node(0, self.extra_args[0])
         assert_equal(node.getbestblockhash(), blocks[-1])
-        assert node.verifychain(0)
+        assert node.verifychain(0)  # all blocks, at the configured checklevel=4
         self.stop_node(0)
         # Changing or disabling rules on an already indexed chain requires an explicit rebuild.
         for change in [[], ["-nuparams=pq_masternodes:4"], ["-nuparams=pq_masternodes:6"]]:

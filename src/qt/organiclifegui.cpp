@@ -617,7 +617,7 @@ void OrganicLifeGUI::goToGovernance()
 
 void OrganicLifeGUI::goToMasternodes()
 {
-    if (Params().IsRegTestNet() && masternodesWidget) showTop(masternodesWidget);
+    if (Params().IsTestChain() && masternodesWidget) showTop(masternodesWidget);
 }
 
 void OrganicLifeGUI::goToSettings(){

@@ -10,6 +10,15 @@ Requirements
 - WSL2 with Ubuntu 22.04+
 - 50GB+ free disk space
 
+MinGW 7 needs the upstream winpthreads TLS-destructor-order fix for Qt 6.9+.
+The depends build detects those headers and builds the same 7.0.0 runtime with
+that fix; it does not modify system libraries or replace newer runtimes.
+Rebuild depends instead of reusing an older MinGW 7 cache with `--skip-depends`.
+Other toolchains must include the [upstream ordering fix](https://sourceforge.net/p/mingw-w64/mailman/message/58849178/)
+or its equivalent. Compilation alone does not qualify this runtime behavior:
+run `test_organiclife.exe --run_test=util_tests/native_thread_tls_destructor_keeps_its_storage`
+and the complete Qt test executable on native Windows, including normal exit.
+
 Setup WSL2
 ----------
 

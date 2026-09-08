@@ -145,6 +145,23 @@ QString resolveQtSourceFile(const QString& fileName)
 }
 } // namespace
 
+void GovernanceDialogTests::startupFontRendersBasicTextAndPreservesReadableChoice()
+{
+    GUIUtil::EnsureReadableQtFonts();
+    const QFontMetrics metrics(QApplication::font());
+    QVERIFY(metrics.inFont(QChar('A')));
+    QVERIFY(metrics.inFont(QChar('a')));
+    QVERIFY(metrics.inFont(QChar('0')));
+    const QFont original = QApplication::font();
+    QFont chosen = original;
+    chosen.setPointSize(17);
+    QApplication::setFont(chosen);
+    GUIUtil::EnsureReadableQtFonts();
+    const QFont after = QApplication::font();
+    QApplication::setFont(original);
+    QCOMPARE(after, chosen);
+}
+
 void GovernanceDialogTests::coinModeRequiresAmountDirectionAndAutoUnlock()
 {
     QWidget parent;
@@ -229,7 +246,12 @@ void GovernanceDialogTests::coinModeUiHasQuickPickButtonsAndNoManualUnlock()
         QFAIL("Missing quick-pick/button geometry controls");
         return;
     }
-    QVERIFY(btnQuarter->geometry().top() >= amountEdit->geometry().bottom());
+    const QString capturePath = qEnvironmentVariable("OLC_VOTE_CAPTURE_PATH");
+    if (!capturePath.isEmpty()) QVERIFY(dialog.grab().save(capturePath));
+    QVERIFY2(btnQuarter->geometry().top() >= amountEdit->geometry().bottom(),
+        qPrintable(QString("Quick-pick top %1, amount bottom %2, same parent %3")
+            .arg(btnQuarter->geometry().top()).arg(amountEdit->geometry().bottom())
+            .arg(btnQuarter->parentWidget() == amountEdit->parentWidget())));
 }
 
 void GovernanceDialogTests::coinModeQuickPicksUseProposalCapAndClampToLockable()
@@ -2401,8 +2423,8 @@ void GovernanceDialogTests::containerDialogsAvoidQueuedRecenteringAfterShow()
              "openDialogWithOpaqueBackgroundY should not asynchronously reposition dialogs");
     QVERIFY2(helperSlice.contains(QStringLiteral("if (dialogOwnsOpenPosition(widget))")),
              "openDialogWithOpaqueBackgroundY should have a dedicated own-position centering path");
-    QVERIFY2(helperSlice.contains(QStringLiteral("widget->move(anchorRect.center() - QPoint(widget->width() / 2, widget->height() / 2));")),
-             "openDialogWithOpaqueBackgroundY should center own-position dialogs before show");
+    QVERIFY2(helperSlice.contains(QStringLiteral("widget->setGeometry(QRect(anchorRect.center() - widget->rect().center(), widget->size()));")),
+             "openDialogWithOpaqueBackgroundY should center the dialog client area before show");
 
     const QString binderStartToken = QStringLiteral("class RoundedMaskBinder final : public QObject");
     const QString binderEndToken = QStringLiteral("void applyRoundedDialogMask(QDialog* dialog, QWidget* contentFrame, int radiusPx)");
@@ -2748,7 +2770,7 @@ void GovernanceDialogTests::voteDialogCentersOnParentWindowWithoutParentClamping
     mainWindow.resize(420, 300);
     mainWindow.move(180, 120);
     mainWindow.show();
-    QTest::qWait(40);
+    QVERIFY(QTest::qWaitForWindowActive(&mainWindow));
     QCoreApplication::processEvents();
 
     MNModel mnModel(nullptr);
@@ -2756,20 +2778,14 @@ void GovernanceDialogTests::voteDialogCentersOnParentWindowWithoutParentClamping
     VoteDialog dialog(&mainWindow, &model, &mnModel);
     dialog.setProposal(BuildTestProposal(4));
     dialog.show();
-    QTest::qWait(100);
+    QVERIFY(QTest::qWaitForWindowActive(&dialog));
     QCoreApplication::processEvents();
 
-    const QRect parentGlobal(mainWindow.mapToGlobal(QPoint(0, 0)), mainWindow.size());
-    const QRect dialogGlobal = dialog.frameGeometry();
-
-    QVERIFY2(std::abs(dialogGlobal.center().x() - parentGlobal.center().x()) <= 4,
-             qPrintable(QString("Dialog not centered horizontally (dialog=%1, parent=%2)")
-                                .arg(dialogGlobal.center().x())
-                                .arg(parentGlobal.center().x())));
-    QVERIFY2(std::abs(dialogGlobal.center().y() - parentGlobal.center().y()) <= 4,
-             qPrintable(QString("Dialog not centered vertically (dialog=%1, parent=%2)")
-                                .arg(dialogGlobal.center().y())
-                                .arg(parentGlobal.center().y())));
+    const auto centerDelta = [&] {
+        return dialog.mapToGlobal(dialog.rect().center()) - mainWindow.mapToGlobal(mainWindow.rect().center());
+    };
+    QTRY_VERIFY2(std::abs(centerDelta().x()) <= 4, "Dialog did not settle centered horizontally");
+    QTRY_VERIFY2(std::abs(centerDelta().y()) <= 4, "Dialog did not settle centered vertically");
 
     const QDir appDir(QCoreApplication::applicationDirPath());
     const QString sourcePath = resolveQtSourceFile("votedialog.cpp");
@@ -2811,16 +2827,17 @@ void GovernanceDialogTests::voteDialogRemainsCenteredWhenOpenedViaOpaqueBackgrou
 
     bool checkerExecuted = false;
     QPoint finalCenter;
+    QPoint parentCenter;
     QTimer::singleShot(180, &dialog, [&]() {
         checkerExecuted = true;
-        finalCenter = dialog.frameGeometry().center();
+        finalCenter = dialog.mapToGlobal(dialog.rect().center());
+        parentCenter = mainWindow.mapToGlobal(mainWindow.rect().center());
         dialog.reject();
     });
 
     (void)openDialogWithOpaqueBackgroundY(&dialog, &mainWindow, 4.5, 5, false);
 
     QVERIFY(checkerExecuted);
-    const QPoint parentCenter = mainWindow.frameGeometry().center();
     QVERIFY2(std::abs(finalCenter.x() - parentCenter.x()) <= 4,
              qPrintable(QString("Dialog not centered horizontally after helper open (dialog=%1, parent=%2)")
                                 .arg(finalCenter.x())
@@ -2853,16 +2870,17 @@ void GovernanceDialogTests::opaqueBackgroundHelperCentersOwnPositionDialogs()
 
     bool checkerExecuted = false;
     QPoint finalCenter;
+    QPoint parentCenter;
     QTimer::singleShot(120, &dialog, [&]() {
         checkerExecuted = true;
-        finalCenter = dialog.frameGeometry().center();
+        finalCenter = dialog.mapToGlobal(dialog.rect().center());
+        parentCenter = mainWindow.mapToGlobal(mainWindow.rect().center());
         dialog.reject();
     });
 
     (void)openDialogWithOpaqueBackgroundY(&dialog, &mainWindow, 3, 5, false);
 
     QVERIFY(checkerExecuted);
-    const QPoint parentCenter = mainWindow.frameGeometry().center();
     QVERIFY2(std::abs(finalCenter.x() - parentCenter.x()) <= 4,
              qPrintable(QString("Dialog not centered horizontally for owns-position helper path (dialog=%1, parent=%2)")
                                 .arg(finalCenter.x())
@@ -4607,7 +4625,7 @@ void GovernanceDialogTests::walletShellKeepsBrandIslandOutsideNavigation()
     QVERIFY2(!navigation->isAncestorOf(brandIsland), "The logo island must not belong to the navigation widget");
     QVERIFY2(!navigation->isAncestorOf(brandLogo), "The logo image must not be painted from inside the navigation widget");
     QVERIFY(!brandLogo->hasScaledContents());
-    QVERIFY(brandLogo->pixmap() && !brandLogo->pixmap()->isNull());
+    QVERIFY(!brandLogo->property("pixmap").value<QPixmap>().isNull());
 
     QWidget* leftShell = brandIsland->parentWidget();
     QVERIFY(leftShell != nullptr);
@@ -4795,9 +4813,9 @@ void GovernanceDialogTests::dashboardHeaderExposesCompactLiveStatusCluster()
     QVERIFY(staking != nullptr);
     if (!cluster || !sync || !connections || !staking) return;
     QVERIFY(cluster->maximumHeight() <= 30);
-    QVERIFY(sync->pixmap() && !sync->pixmap()->isNull());
-    QVERIFY(connections->pixmap() && !connections->pixmap()->isNull());
-    QVERIFY(staking->pixmap() && !staking->pixmap()->isNull());
+    QVERIFY(!sync->property("pixmap").value<QPixmap>().isNull());
+    QVERIFY(!connections->property("pixmap").value<QPixmap>().isNull());
+    QVERIFY(!staking->property("pixmap").value<QPixmap>().isNull());
 }
 
 void GovernanceDialogTests::dashboardStatusBadgesExposeRestrainedSemanticStates()
@@ -4896,9 +4914,9 @@ void GovernanceDialogTests::walletBrandIslandUsesOriginalTransparentLogoAsset()
 
     QCOMPARE(floatingLogo->property("sourceAsset").toString(), QStringLiteral(":/img-logo-pivx"));
     QCOMPARE(cardLogo->property("sourceAsset").toString(), QStringLiteral(":/img-logo-pivx"));
-    QVERIFY(floatingLogo->pixmap() && !floatingLogo->pixmap()->isNull());
-    QVERIFY(cardLogo->pixmap() && !cardLogo->pixmap()->isNull());
-    QVERIFY2(floatingLogo->pixmap()->width() >= 120, "The supplied logo must fill more of its floating island");
+    QVERIFY(!floatingLogo->property("pixmap").value<QPixmap>().isNull());
+    QVERIFY(!cardLogo->property("pixmap").value<QPixmap>().isNull());
+    QVERIFY2(floatingLogo->property("pixmap").value<QPixmap>().width() >= 120, "The supplied logo must fill more of its floating island");
 }
 
 void GovernanceDialogTests::dashboardChartShowsValuesOnlyOnHover()
@@ -5601,24 +5619,19 @@ void GovernanceDialogTests::txDetailDialogCentersOnParentWindow()
     parent.resize(900, 680);
     parent.move(170, 110);
     parent.show();
-    QTest::qWait(40);
+    QVERIFY(QTest::qWaitForWindowActive(&parent));
     QCoreApplication::processEvents();
 
     TxDetailDialog detailDialog(&parent, false);
     detailDialog.show();
-    QTest::qWait(80);
+    QVERIFY(QTest::qWaitForWindowActive(&detailDialog));
     QCoreApplication::processEvents();
 
-    const QRect parentGlobal(parent.mapToGlobal(QPoint(0, 0)), parent.size());
-    const QRect dialogGlobal = detailDialog.frameGeometry();
-    QVERIFY2(std::abs(dialogGlobal.center().x() - parentGlobal.center().x()) <= 4,
-             qPrintable(QString("TxDetailDialog not centered horizontally (dialog=%1 parent=%2)")
-                                .arg(dialogGlobal.center().x())
-                                .arg(parentGlobal.center().x())));
-    QVERIFY2(std::abs(dialogGlobal.center().y() - parentGlobal.center().y()) <= 4,
-             qPrintable(QString("TxDetailDialog not centered vertically (dialog=%1 parent=%2)")
-                                .arg(dialogGlobal.center().y())
-                                .arg(parentGlobal.center().y())));
+    const auto centerDelta = [&] {
+        return detailDialog.mapToGlobal(detailDialog.rect().center()) - parent.mapToGlobal(parent.rect().center());
+    };
+    QTRY_VERIFY2(std::abs(centerDelta().x()) <= 4, "TxDetailDialog did not settle centered horizontally");
+    QTRY_VERIFY2(std::abs(centerDelta().y()) <= 4, "TxDetailDialog did not settle centered vertically");
 }
 
 void GovernanceDialogTests::txDetailDialogUsesSharedDraggableHeaderChrome()

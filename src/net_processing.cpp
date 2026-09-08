@@ -15,6 +15,7 @@
 #include "evo/pqmnauth.h"
 #include "init.h"
 #include "pqfinality.h"
+#include "pqservice.h"
 #include "llmq/quorums_blockprocessor.h"
 #include "llmq/quorums_chainlocks.h"
 #include "llmq/quorums_dkgsessionmgr.h"
@@ -397,6 +398,8 @@ struct CNodeState {
 
     // PQ state is connection-owned under cs_main, never legacy tier-two authority.
     uint256 pqChallenge, pqTip;
+    int64_t pqServiceNextRelay{0};
+    uint256 pqServiceCursor;
     bool pqHelloReceived{false}, pqProofReceived{false}, pqClosed{false};
     std::chrono::steady_clock::time_point pqDeadline{};
     std::unique_ptr<pqmnauth::Session> pqSession;
@@ -1401,7 +1404,9 @@ bool static AlreadyHave(const CInv& inv) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     }
 
     case MSG_BLOCK:
-        if (LookupBlockIndex(inv.hash) != nullptr) return true;
+        if (const auto* index = LookupBlockIndex(inv.hash)) {
+            if (index->nStatus & (BLOCK_HAVE_DATA | BLOCK_FAILED_MASK)) return true;
+        }
         return mapRejectedBlocks.count(inv.hash);
     case MSG_TXLOCK_REQUEST:
         // deprecated
@@ -1769,6 +1774,15 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
         return true;
     }
 
+        if (strCommand == NetMsgType::PQSERVICE) {
+            LOCK(cs_main);
+            if (!pfrom->fSuccessfullyConnected ||
+                !pqservice::Receive({reinterpret_cast<const unsigned char*>(vRecv.data()), vRecv.size()})) {
+                pfrom->fDisconnect = true;
+                return false;
+            }
+            return true;
+        }
         if (strCommand == NetMsgType::PQHELLO || strCommand == NetMsgType::PQAUTH)
             return ProcessPQAuth(pfrom, strCommand, vRecv, *connman);
         if (strCommand == NetMsgType::PQPROP || strCommand == NetMsgType::PQVOTE ||
@@ -2511,8 +2525,17 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
         CInv inv(MSG_BLOCK, hashBlock);
         LogPrint(BCLog::NET, "received block %s peer=%d\n", inv.hash.ToString(), pfrom->GetId());
 
+        bool haveParent, haveBlock;
+        {
+            LOCK(cs_main);
+            haveParent = LookupBlockIndex(pblock->hashPrevBlock) != nullptr;
+            const auto* index = LookupBlockIndex(hashBlock);
+            // A known header still needs its body after an interrupted download.
+            haveBlock = index && (index->nStatus & (BLOCK_HAVE_DATA | BLOCK_FAILED_MASK));
+            MarkBlockAsReceived(hashBlock);
+        }
         // sometimes we will be sent their most recent block and its not the one we want, in that case tell where we are
-        if (!mapBlockIndex.count(pblock->hashPrevBlock)) {
+        if (!haveParent) {
             CBlockLocator locator = WITH_LOCK(cs_main, return chainActive.GetLocator(););
             if (find(pfrom->vBlockRequested.begin(), pfrom->vBlockRequested.end(), hashBlock) != pfrom->vBlockRequested.end()) {
                 // we already asked for this block, so lets work backwards and ask for the previous block
@@ -2525,10 +2548,9 @@ bool static ProcessMessage(CNode* pfrom, std::string strCommand, CDataStream& vR
             }
         } else {
             pfrom->AddInventoryKnown(inv);
-            if (!mapBlockIndex.count(hashBlock)) {
+            if (!haveBlock) {
                 {
                     LOCK(cs_main);
-                    MarkBlockAsReceived(hashBlock);
                     mapBlockSource.emplace(hashBlock, pfrom->GetId());
                 }
                 ProcessNewBlock(pblock, nullptr);
@@ -2912,6 +2934,7 @@ bool PeerLogicValidation::SendMessages(CNode* pto, std::atomic<bool>& interruptM
         CNodeState& state = *State(pto->GetId());
 
         CurrentPQPeer(state);
+        pqservice::Send(*pto, state.pqServiceNextRelay, state.pqServiceCursor);
         if (PQAuthActive() && GetPQOperator() && !IsInitialBlockDownload()) SendPQHello(pto, state, *connman);
         if (!state.pqChallenge.IsNull() && std::chrono::steady_clock::now() >= state.pqDeadline)
             state.pqClosed = true; // Missing proof is normal for non-operator peers.

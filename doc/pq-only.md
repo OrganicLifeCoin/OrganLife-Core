@@ -14,7 +14,7 @@ PQ path automatically. The matching RPCs are:
 - `getnewpqaddress backup_destination`
 - `listpqaddresses`
 - `listpqunspent`
-- `sendpqtoaddress address amount backup_destination`
+- `sendpqtoaddress address amount backup_destination ( selected_inputs )`
 - `backupwallet destination`
 
 Every new receive or change key is an independent ML-DSA-44 seed stored only in
@@ -99,6 +99,13 @@ payment coin control may select confirmed collateral, but manual locks and
 pending-operation relay conflicts still apply. Protection follows registry undo
 and mempool removal without persistent automatic wallet locks.
 
+The optional `sendpqtoaddress` fourth argument selects exactly one or two unique
+`{"txid":"64-character hex", "vout":0}` inputs. No other inputs are added.
+Selecting a collateral output deliberately spends the bond and removes that
+masternode; omitting the argument retains automatic collateral protection.
+Malformed, unavailable, manually locked and insufficient selections fail without
+relay. The encrypted wallet backup is still required before broadcast.
+
 The wallet core can construct and validate registration (internal or external
 collateral), owner updates/rotation, service updates and revocation in this
 opt-in mode. Owner and collateral signing use the fully unlocked encrypted
@@ -131,7 +138,64 @@ The read-only loader rejects unsafe ownership, permissions, ACLs, links and
 invalid encrypted records; directory ancestors and the service identity must
 be trusted. Linux supports owner-private files or the narrowly validated
 systemd credential ACL; macOS supports owner-private files without extended
-ACLs. Other platforms fail closed.
+ACLs. Windows requires local fixed NTFS, ownership by the current process user,
+and a nonempty DACL granting access only to that user or LocalSystem. It rejects
+reparse points, multiple file links, device/UNC/alternate-stream paths, aliases,
+wrong sizes and concurrent writers. The ordinary absolute drive path may contain
+Unicode. Trusted ancestors and service identity are still required; the loader
+does not repair permissions or provide protection from administrators or a
+compromised service account. Other platforms fail closed.
+
+The Windows policy uses handle-based
+[GetSecurityInfo](https://learn.microsoft.com/en-us/windows/win32/api/aclapi/nf-aclapi-getsecurityinfo)
+inspection rather than a path permission precheck. A standalone native reader
+regression needs only the installed MinGW compiler (or the normal Windows test
+build), not node/Rust dependencies:
+
+```sh
+x86_64-w64-mingw32-g++ -std=c++17 -O1 -DWIN32 -UNDEBUG -static -Isrc \
+  src/test/pqcredentials_win_tests.cpp src/wallet/pqcredentials_win.cpp \
+  src/support/lockedpool.cpp src/support/cleanse.cpp \
+  -ladvapi32 -o pqcredentials_win_tests.exe
+```
+
+Run that executable on native Windows with `TEMP` on local NTFS. It creates only
+randomly named synthetic fixtures, deletes successful fixtures, and reports any
+unavailable symlink/alternate-owner checks explicitly. Cross-compilation alone
+does not qualify runtime behavior. Its byte-reader checks do not replace full
+wallet cryptography, daemon startup or deployment tests.
+
+The operator, operator-recovery and finality-smoke functional tests also run on
+native Windows with `test_runner.py --force --skipcache`. Their disposable
+credential fixtures use Windows PowerShell to set and check protected owner-only
+ACLs, including explicit Everyone-read access for the unsafe-permission rejection
+case. Run them with the test directory on local NTFS; POSIX runs retain their
+exact permission-mode checks. Successful startup and export still exercise the
+daemon's real credential validation, not a replacement in the test helper.
+
+The isolated `src/test/mldsa` CMake build additionally provides a Windows
+`test_pqcredentials` target using the actual wallet encryption, credential
+loader, ML-DSA signing and credential publisher. It checks wrong keys, networks,
+genesis hashes, tampered fields, spending/recovery record domains, and clearing
+an existing key after failed reload. Run both that target and `test_mldsa`
+natively; a successful cross-build is not sufficient.
+The MinGW credential target also intercepts native calls at link time to test
+partial writes, failure of either file flush and failure of the final move.
+Each failure must leave the destination absent, preserve an existing export
+and remove its staging files. These hooks exist only in the test executable.
+
+Windows controller credential export uses the same version-2 format as Linux
+and macOS. It requires a private trusted local-NTFS parent, creates owner-only
+protected ACLs before writing either file, flushes and verifies both files
+(using the wallet's secure allocator for wrapping-key readback), and publishes
+with a same-parent, non-replacing
+[write-through directory move](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw).
+Existing files, directories and links are never overwritten. Failed publication
+cleans only the operation's staging files; do not use a failed destination.
+The parent and ancestors must remain trusted through the final move, which
+requires closing their read handles. These native API checks are not physical
+power-loss certification or encrypted host custody; protect both exported files
+on the operator host and retain the controller recovery backup.
 
 Credentials load before RPC workers and are destroyed after worker shutdown,
 including failed startup. `getpqoperatorinfo` returns only configured status
@@ -234,27 +298,218 @@ Missing, incorrect or noncanonical payouts fail block validation. Payment queue
 changes and their undo are persisted with the registry, including same-block
 registration updates and collateral spends.
 
-This changes the opt-in registry record/schema to version 2 and changes its
-block payment rules. Old active-regtest databases are rejected; reindex alone
-cannot make a formerly valid unpaid block history satisfy the new rules. Use a
-separate clean regtest data directory. Do not delete wallets to upgrade. Public
-testnet/mainnet activation remains unchanged.
+Before `pq_service` activation, service credit comes from certificate **carrier blocks** in the preceding
+24 committed blocks on regtest, not the older blocks those certificates finalize.
+A certificate in the block being paid cannot affect that block's payee. The
+carrier index is undone with the carrier and reconstructed by reindex. With a
+pinned bootstrap and any certificate in that window, eligible registrations
+must have signed a certificate in the window or still be within registration
+grace. If the window has no certificates, only the evidence requirement is
+waived: revoked, immature and endpoint-less registrations remain ineligible.
+`listpqmasternodes` reports eligibility for the next block, not a guarantee of
+winning it; `last_cert_height` is the latest qualifying carrier height.
+Certificate omission by block producers remains a fairness/qualification limit.
 
-This still does not provide fully operational masternodes: a configured endpoint
-is not evidence of online service, and offline nodes are not yet automatically
-excluded. Quorum service enforcement and finality runtime remain unavailable.
-Public-network and cross-platform qualification remain pending. Do not use this
+The opt-in registry/index schema is now version 4 (record version 3). Older experimental databases
+require explicit reindex; there is no automatic reset or wallet deletion. A
+history made under different payment/service rules may still fail replay, so
+use a separate disposable regtest directory in that case. Reindex cannot make
+a formerly valid unpaid block history satisfy the new rules. Version 1.1.7 schedules
+public-testnet registry and service activation at height 3000; mainnet stays disabled.
+
+The experimental regtest runtime now connects journaled prevote/precommit voting,
+committee snapshots and saved finality anchors. Its pinned bootstrap must contain
+exactly four operators matching the committee captured at that historical block;
+later registration changes do not rewrite that checkpoint. Round catch-up requires
+the full quorum. A single bounded future proposal can survive delivery before its
+round, but cannot advance a round by itself. Public-network, service-fairness,
+crash-recovery and cross-platform qualification remain incomplete. Do not use this
 opt-in mode with a value-bearing wallet.
 
-The quorum module now has independently tested, single-height prevote/precommit
-decision logic: round changes preserve locks, only qualifying quorum evidence
-can change them, and final decisions require non-nil precommit quorums plus a
-locally validated block identity. This is not connected to signing or networking.
-Durable vote/lock recovery, the pinned bootstrap checkpoint, committee handoff
-and fork-choice enforcement are still required before runtime activation.
+The highest verified prevote quorum proof is saved in the existing journal and
+rechecked against the trusted committee after restart. Unpublished commit
+certificates are recovered from the anchor store and reannounced at most once
+every15 seconds so a restarting miner can recover a missed announcement.
+Both chainstate rebuild and full reindex preserve stored anchor protection.
+
+Finality persistence now requires a checked storage checkpoint first. Block
+validation only stages an in-block certificate; the outer block connection
+commits its state, flushes block/undo files and the block index, and syncs both
+chainstate and EvoDB before writing the irreversible anchor. Voting-derived
+finalization and initial checkpoint seeding use the same prerequisite, before
+recording finalized signing history. A file/database flush failure prevents
+publication and requests local shutdown; it is not blamed on the peer's block.
+Verification-only block replay does not write irreversible anchors.
+
+The `--crash-recovery` functional scenario abruptly kills a carrier node and a
+voting node, then checks that ordinary restart retains their finalized blocks.
+It also interrupts an actual coin-database batch, verifies that no new anchor
+log record was written, and recovers by explicit reindex. The two state
+databases are still not a single atomic transaction: an interrupted partial
+flush deliberately refuses ordinary startup and requires rebuilding from the
+saved block files. No wallet or finality history is automatically erased.
+These process-crash checks are not physical power-loss or filesystem/hardware
+durability certification.
+
+For a new walletless operator identity, first sync its confirmed registration
+without signing credentials. A network already publishing certificates needs
+the approved `-pqbootstrap` checkpoint even for passive sync. Then restart with
+the new credentials and without `-pqbootstrap`, call `initpqjournal` once, and
+restart with the approved checkpoint after initialization succeeds. The same
+sequence applies to a fresh key after rotation; catch up before provisioning.
+The command refuses existing or
+partial state. Normal startup requires both the `.journal` and `.lock` files;
+it never creates missing signing history. Preserve both outside chainstate.
+Do not reinitialize a used identity after loss, copy it to concurrent operators,
+or resume an old backup: rotate the operator key through the controller if the
+latest exclusive signing history cannot be proven. Local file locking cannot
+detect cloned state on another host. Journal storage supports POSIX and local,
+fixed NTFS on Windows; other Windows filesystems and reparse-point directories
+are refused. Journal directories and their ancestors must be trusted: file locks
+do not defend against a local actor who can replace or restore signing history.
+Opened files must be regular, single-link files; temporary files are checked
+before truncation. The separate marker remains exclusively held across file
+replacement and after a storage failure. Windows replacement closes the old
+append handle first, without releasing that marker. Flush/write-through errors
+refuse signing; no unsupported-flush success fallback is used.
+Recovery also flushes the validated journal before exposing cached signatures,
+because complete records can remain only in the OS cache after a failed flush.
+The Windows private credential reader, authenticated record loading and
+exclusive publication have separate native tests; journal storage support alone
+is not full Windows operator qualification. Complete Windows daemon/Qt startup,
+protected host custody and the controller-to-operator provisioning workflow
+still require native integration testing.
+Journal growth is capped at1GiB; reaching the limit stops new signing, not PoS.
+New proof records remain in format2; older builds that do not recognize them
+fail closed. Never downgrade a used operator's signing state by deleting records.
+
+`getpqoperatorinfo` reports journal availability and actual persisted progress;
+zero retained-vote height after compaction does not mean the operator never voted.
+`getpqfinalityinfo` reports stored anchor protection separately from bootstrap
+validation and reports the actual runtime round, not an inferred signature.
 The approved runtime policy is that loss of quorum pauses finality only; ordinary
 PoS production must not wait for votes, and existing finalized anchors remain
 protected. No finality-based staking gate is introduced here.
+
+Fork choice excludes branches conflicting with a saved anchor even if they have
+more work, without marking their blocks intrinsically invalid. Manual invalidation
+at or below an active finalized anchor is refused before changing block flags or
+disconnecting its unfinalized descendants. The `--conflicting-fork` finality
+regression covers these protections, reconsideration, restart and both reindex
+modes. A fully received carrier with a verified next-height certificate can also
+select a lower-work branch through ordinary full block validation. Invalid
+carriers cannot publish anchors, and failed validation restores ordinary fork
+choice. The `--certified-fork` regression covers received-carrier adoption,
+invalid certificates/carriers and restart. The `--peer-fork` variant reconnects
+a higher-work minority that lacks the certified branch, downloads it through
+ordinary GETBLOCKS/INV traffic and verifies adoption and restart. Headers-first
+sync is disabled; no alternate certificate-request protocol is needed for this
+case. A known header without block data can be requested and its body validated;
+corrupt contents do not prevent a later valid body with the same header.
+Gossip-only recovery before a carrier exists and arbitrary reordered-body
+partition recovery are not yet qualified by these tests.
+
+The six-node transition regression exercises four-to-five committee growth,
+strict four-of-five finality (three do not suffice), operator key rotation,
+new-journal rejoin and revocation. Its `--collateral-spend` variant spends the
+fifth operator's actual bond, verifies the five-to-four historical committee
+handoff, continued finality with the remaining four, registry removal and restart.
+Falling below four configured registrations
+leaves no next committee: finality stays at the preceding anchor while ordinary
+payments, staking and the single network reward continue. Automatically crossing
+that empty historical committee is deliberately prohibited. The separate
+administrator-approved recovery path below is not public activation qualification.
+
+### Independent service activity and emergency checkpoints (local qualification)
+
+`-nuparams=pq_service:HEIGHT` activates independent signed heartbeats on regtest
+only, in addition to `pq_masternodes`. Both public networks remain unchanged.
+The activation height is part of registry-cache identity: changing it requires
+an explicit reindex, not silent reuse of another rule set's state.
+
+Walletless operators publish ML-DSA-44 proofs without fee funds, a bootstrap or
+a finality journal. Each proof binds genesis, registration, current operator key,
+registry sequence, and a recent ancestor's height/hash. A coinbase service
+envelope carries up to 16 proofs and optionally the existing finality certificate.
+The pending pool holds at most 400 identities; incoming verification attempts
+are capped at 16 per second. Existing peer-send passes refresh and relay proofs.
+
+After activation, rewards use these independent proofs rather than certificate
+signer lists. Activity remains fresh for the service window (24 blocks on
+regtest); registration and activation have the same grace period. Selection uses
+parent state, preserves the existing whole-6-OLC rotation, and falls back to the
+configured mature queue when the entire network lacks fresh activity. Revocation,
+collateral maturity and service-endpoint requirements are never waived.
+`listpqmasternodes` exposes `last_heartbeat_height`. Registry sequence changes
+require new activity; block disconnect/reindex restores the corresponding state.
+These are signed activity proofs, not proof of complete service or protection
+against block-producer censorship and network-wide denial of service.
+
+For an actual historical below-four dead end, an administrator may explicitly
+configure `-pqemergencycheckpoint=HEIGHT:BLOCKHASH`. This is test-chain-only and
+requires an existing durable anchor, a known below-minimum committee at its next
+height, and restored chain-derived committees at the chosen checkpoint and its
+next height. Both blocks must already be in the local validated chain. Healthy
+backlogs, missing snapshots, wrong ancestry and unsigned peer-selected checkpoints
+do not authorize recovery. No committee keys are accepted in this setting.
+
+Operators must coordinate the same checkpoint outside the protocol. Startup
+flushes history before atomically recording a durable recovery marker; it then
+restores the rollbackable mirror. Old anchors, certificates and signing journals
+are retained. Restart and either reindex mode replay the saved approval even
+after the setting is removed. Repeating the same setting after further finality
+is harmless; conflicting or unapproved older settings fail startup. A fresh node
+must first validate the historical chain and establish its original trust root;
+this is not an automatic catch-up or peer recovery mechanism. Staking and ordinary
+payments continue without finality and do not require a checkpoint.
+
+Local functional scenarios:
+
+```sh
+python3 test/functional/feature_pq_finality_smoke.py --service-heartbeats
+python3 test/functional/feature_pq_finality_smoke.py --service-envelopes
+python3 test/functional/feature_pq_finality_smoke.py --emergency-recovery
+```
+
+Finality peer-message dispatch retains a shared64-message FIFO, with the existing
+drop-oldest overflow policy. Each driver pass consumes at most16 messages and401
+declared signature slots (one maximum proof-bearing proposal). Remaining messages
+are processed on later passes, releasing the chain lock between batches. All
+signature checks remain; malformed proofs also consume their declared budget.
+Round decisions still run after each batch. This is an inbox work bound, not a
+wall-clock guarantee. With an empty inbox, polling uses the next unfinished
+voting step's deadline, capped at500ms; completed steps do not keep polling
+expired deadlines every10ms. Passive nodes also use the500ms idle cap.
+Current-round received PREVOTEs persist their complete
+quorum proof once per touched statement at batch end, before local decisions.
+Pending proofs are also persisted before a future-round message can prune their
+votes. Local votes and future-vote promotion retain immediate proof persistence;
+a failed proof append poisons the journal and prevents further local signing.
+Round-decision proof checks, journal syncs and chainstate
+flushes remain separately unqualified under maximum load. It does not guarantee
+delivery or finality under sustained queue overflow.
+
+For native storage checks, `make -C src check-journal-io` exercises the configured
+platform without starting a node. GNU-linker failure/crash checks can also be
+built with existing depends (no new dependencies):
+
+```
+PQ_DEPENDS=/path/to/depends/x86_64-pc-linux-gnu bash contrib/devtools/test-pqjournal-native.sh
+CXX=x86_64-w64-mingw32-g++ PQ_DEPENDS=/path/to/depends/x86_64-w64-mingw32 bash contrib/devtools/test-pqjournal-native.sh
+```
+
+The Linux command runs both isolated checks. Run both cross-built `.exe` files
+on native Windows with `TEMP` on local NTFS; compilation alone is not validation.
+The journal check uses actual framing, hashes and file I/O, deterministic fake
+signature bytes and disabled logging, not wallet/cryptographic validation.
+Calling the out-of-scope signature verifier aborts the check instead of accepting
+fake signatures as valid.
+Link-time wrappers inject append/temporary flush failure, partial writes, rename,
+post-rename parent-sync and reopen failures, plus abrupt process exits after
+durable append and replacement. Each case verifies exclusive access, refusal of
+further signing, and retained votes, locks and proofs after reopening. These are
+process-crash tests, not physical power-loss or outer chainstate/anchor atomicity
+qualification. Failure injection is absent from production executables.
 
 The isolated operator-authentication component signs a fixed, versioned proof
 with the registered ML-DSA operator key. It binds genesis, registration, operator
@@ -291,7 +546,26 @@ the same identity are allowed, but receive no additional authority or weight.
 Legacy MNAUTH fields and privileges are not populated. This proves key control,
 not encryption, endpoint ownership, service, rewards or committee membership.
 A transparent intermediary can forward the handshake; it is not channel binding
-for secrets or finality. Public activation is unchanged.
+for secrets or finality.
+
+### Public-testnet activation in 1.1.7
+
+Registry transactions, the rotating whole-6-OLC network reward and signed service
+heartbeats activate together at height 3000. Before that height, existing payments
+and staking retain their rules. Regtest remains explicitly opt-in; mainnet remains
+disabled. Operator recovery/export and the familiar Qt controller support testnet
+keys and reject records from another network or genesis. Credentials alone are
+not a registered masternode or permission to vote.
+
+Upgrade every validator before height 3000, including wallet, seed and API/indexer
+nodes. Preserve wallets, chain history and any signing journals. Replay existing
+history with the candidate before rollout; changing registry cache identity can
+require explicit reindex, never deletion of wallets or an automatic chain reset.
+The controller holds four separate 4000-OLC bonds; VPS operators run walletless
+with private operator-only credentials. Wait for four registrations to mature,
+then coordinate one exact chain-validated bootstrap checkpoint. Do not configure
+emergency recovery for initial deployment. Finality is optional for chain progress:
+staking and payments continue when voting is unavailable.
 
 The testnet has a fresh genesis and network magic. Mainnet startup is refused.
 Sapling parameters and tier-two services are not initialized, and their RPC

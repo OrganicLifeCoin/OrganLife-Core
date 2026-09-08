@@ -14,11 +14,12 @@ constexpr uint8_t STAKE = 2;
 constexpr uint8_t GOVERNANCE_PROPOSAL = 3;
 constexpr uint8_t GOVERNANCE_LOCK = 4;
 constexpr uint8_t GOVERNANCE_CAST = 5;
-// Requires opt-in regtest registry activation; public networks remain disabled.
+// Requires scheduled test-chain registry activation; mainnet remains disabled.
 constexpr uint8_t MASTERNODE = 6;
 // Finality commit certificate, carried ONLY in a coinbase extraPayload.
 // Absent certificate is always valid; a present one must verify at ConnectBlock.
 constexpr uint8_t FINALITY = 7;
+constexpr uint8_t SERVICE = 8;
 constexpr size_t MAX_MASTERNODE_DATA_SIZE = 12000;
 constexpr size_t MAX_MASTERNODE_TX_SIZE = 24000;
 constexpr size_t MAX_INPUTS = 2;
@@ -39,6 +40,7 @@ struct Payload {
 bool IsGovernanceMode(uint8_t mode);
 // Finality coinbase envelope classification only (no certificate validation).
 bool IsFinality(const CTransaction& tx);
+bool DecodeFinalityCertificate(const CTransaction& tx, pqquorum::Certificate& certificate);
 // Envelope classification only; does not replace structure/context/signature validation.
 bool IsMasternode(const CTransaction& tx);
 

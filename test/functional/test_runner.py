@@ -85,6 +85,7 @@ BASE_SCRIPTS= [
     'feature_pq_masternode_payments.py',
     'feature_pq_masternode_payments.py --pos',
     'feature_pq_peer_auth.py',
+    'feature_pq_finality_smoke.py',
     'feature_pq_cache.py',
     'feature_pq_pos.py',
     'feature_pq_pos.py --pq-registry',
@@ -220,6 +221,18 @@ EXTENDED_SCRIPTS = [
     'sapling_fillblock.py',                     # ~ 780 sec
     'feature_fee_estimation.py',                # ~ 360 sec
     # vv Tests less than 5m vv
+    'feature_pq_finality_smoke.py --round-recovery',
+    'feature_pq_finality_smoke.py --reindex',
+    'feature_pq_finality_smoke.py --committee-transitions',
+    'feature_pq_finality_smoke.py --collateral-spend',
+    'feature_pq_finality_smoke.py --crash-recovery',
+    'feature_pq_finality_smoke.py --bootstrap-mismatch',
+    'feature_pq_finality_smoke.py --conflicting-fork',
+    'feature_pq_finality_smoke.py --certified-fork',
+    'feature_pq_finality_smoke.py --peer-fork',
+    'feature_pq_finality_smoke.py --service-envelopes',
+    'feature_pq_finality_smoke.py --service-heartbeats',
+    'feature_pq_finality_smoke.py --emergency-recovery',
     # vv Tests less than 2m vv
     # vv Tests less than 60s vv
     #'p2p_feefilter.py',
@@ -399,7 +412,7 @@ def main():
     if args.help:
         # Print help for test_runner.py, then print help of the first script (with args removed) and exit.
         parser.print_help()
-        subprocess.check_call([(config["environment"]["SRCDIR"] + '/test/functional/' + test_list[0].split()[0])] + ['-h'])
+        subprocess.check_call([sys.executable, config["environment"]["SRCDIR"] + '/test/functional/' + test_list[0].split()[0], '-h'])
         sys.exit(0)
 
     check_script_list(config["environment"]["SRCDIR"])
@@ -471,7 +484,7 @@ def run_tests(test_list, src_dir, build_dir, exeext, tmpdir, jobs=1, enable_cove
             pingTravis()
         if keep_cache != "skip":
             try:
-                subprocess.check_output([tests_dir + 'create_cache.py'] + flags + ["--tmpdir=%s/cache" % tmpdir])
+                subprocess.check_output([sys.executable, tests_dir + 'create_cache.py'] + flags + ["--tmpdir=%s/cache" % tmpdir])
             except subprocess.CalledProcessError as e:
                 sys.stdout.buffer.write(e.output)
                 raise
@@ -507,7 +520,7 @@ def run_tests(test_list, src_dir, build_dir, exeext, tmpdir, jobs=1, enable_cove
                 print('\n============')
                 print('{}Combined log for {}:{}'.format(BOLD[1], testdir, BOLD[0]))
                 print('============\n')
-                combined_logs, _ = subprocess.Popen([os.path.join(tests_dir, 'combine_logs.py'), '-c', testdir], universal_newlines=True, stdout=subprocess.PIPE).communicate()
+                combined_logs, _ = subprocess.Popen([sys.executable, os.path.join(tests_dir, 'combine_logs.py'), '-c', testdir], universal_newlines=True, stdout=subprocess.PIPE).communicate()
                 print("\n".join(deque(combined_logs.splitlines(), combined_logs_len)))
 
     print_results(test_results, max_len_name, (int(time.time() - time0)))
@@ -577,7 +590,7 @@ class TestHandler:
             tmpdir_arg = ["--tmpdir={}".format(testdir)]
             self.jobs.append((t,
                               time.time(),
-                              subprocess.Popen([self.tests_dir + test_argv[0]] + test_argv[1:] + self.flags + portseed_arg + tmpdir_arg,
+                              subprocess.Popen([sys.executable, self.tests_dir + test_argv[0]] + test_argv[1:] + self.flags + portseed_arg + tmpdir_arg,
                                                universal_newlines=True,
                                                stdout=log_stdout,
                                                stderr=log_stderr),

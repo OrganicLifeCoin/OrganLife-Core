@@ -197,6 +197,11 @@ class PivxTestFramework():
 
         if not self.options.nocleanup and not self.options.noshutdown and success != TestStatus.FAILED:
             self.log.info("Cleaning up")
+            # Windows cannot remove an open log; keep only console reporting.
+            for handler in self.log.handlers[:]:
+                if isinstance(handler, logging.FileHandler):
+                    self.log.removeHandler(handler)
+                    handler.close()
             shutil.rmtree(self.options.tmpdir)
         else:
             self.log.warning("Not cleaning up dir %s" % self.options.tmpdir)
@@ -558,7 +563,7 @@ class PivxTestFramework():
 
             for i in range(MAX_NODES):
                 for entry in os.listdir(cache_path(i)):
-                    if entry not in ['wallet.dat', 'chainstate', 'blocks', 'sporks', 'evodb', 'backups', "wallets", "llmq"]:
+                    if entry not in ['wallet.dat', 'chainstate', 'blocks', 'sporks', 'evodb', 'backups', "wallets", "llmq", "pqanchors"]:
                         os.remove(cache_path(i, entry))
             os.remove(os.path.join(get_datadir_path(cachedir, 0), ".incomplete"))
 

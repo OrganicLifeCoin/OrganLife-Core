@@ -53,4 +53,22 @@ BOOST_AUTO_TEST_CASE(fsbridge_fstream)
     }
 }
 
+BOOST_AUTO_TEST_CASE(fsbridge_fstream_binary_modes)
+{
+    const auto path = SetDataDir("fsbridge-binary") / "binary.dat";
+    const std::string expected("a\0b\r\n\xff", 6);
+    {
+        fsbridge::ofstream file(path, std::ios_base::binary);
+        BOOST_REQUIRE(file.is_open());
+        file.write(expected.data(), expected.size());
+        BOOST_REQUIRE(file.good());
+    }
+    {
+        fsbridge::ifstream file(path, std::ios_base::binary);
+        BOOST_REQUIRE(file.is_open());
+        const std::string actual(std::istreambuf_iterator<char>(file), {});
+        BOOST_CHECK(actual == expected);
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()

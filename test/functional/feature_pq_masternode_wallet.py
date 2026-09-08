@@ -107,6 +107,7 @@ class PQMasternodeWalletTest(PivxTestFramework):
         assert_equal(observer.listpqmasternodes()[0]["operator_payout_address"], addresses["mining"])
         revoked_block = submit("revoke", {}, 3)
         assert_equal(observer.listpqmasternodes()[0]["revoked"], True)
+        assert_equal(observer.listpqmasternodes()[0]["eligible"], False)
         # Reorg and restart must expose confirmed state, not a wallet-side cache.
         observer.invalidateblock(revoked_block)
         assert_equal(observer.listpqmasternodes()[0]["revoked"], False)
@@ -121,6 +122,7 @@ class PQMasternodeWalletTest(PivxTestFramework):
         assert_equal(record["revoked"], False)
         assert_equal(record["operator_publickey"], replacement)
         assert_equal(record["service"], "")
+        assert_equal(record["eligible"], False)
         submit("service", {"service": "[::1]:20001", "operator_payout_address": addresses["mining"]}, 5)
         # Existing confirmed collateral is registered without being spent for fees.
         collateral2 = controller.getnewpqaddress(str(root / "collateral2.dat"))["address"]
@@ -153,6 +155,52 @@ class PQMasternodeWalletTest(PivxTestFramework):
         assert controller.gettransaction(registration)["confirmations"] > 0
         assert controller.gettransaction(registered2)["confirmations"] > 0
         assert controller.verifychain(0)
+        assert observer.verifychain(0)
+
+        # Explicit coin selection can retire a masternode by spending its bond.
+        # Automatic selection above must not spend either registered collateral.
+        self.connect_nodes(0, 1)
+        controller.walletpassphrase("controller-test", 600)
+        selected = [{"txid": funded, "vout": bond["vout"]}]
+        for bad in [None, {}, [], "[]", selected * 2, selected * 3, [None], [{}],
+                    [{"txid": funded}], [dict(selected[0], extra=True)],
+                    [{"txid": "00" * 32, "vout": 0}], [{"txid": "bad", "vout": 0}]] + [
+                    [{"txid": funded, "vout": value}] for value in [None, True, "0", -1, 1.5, 4294967296]]:
+            assert_raises_rpc_error(-8, "", controller.sendpqtoaddress, addresses["mining"], 1,
+                                    str(root / "invalid-selection.dat"), bad)
+        assert_raises_rpc_error(-4, "selected coin", controller.sendpqtoaddress, addresses["mining"], 1,
+                                str(root / "unavailable-selection.dat"), [{"txid": "12" * 32, "vout": 0}])
+        assert_raises_rpc_error(-4, "Insufficient", controller.sendpqtoaddress, addresses["mining"], 101,
+                                str(root / "insufficient-selection.dat"), selected)
+        addresses_before = controller.listpqaddresses()
+        assert_raises_rpc_error(-4, "backup", controller.sendpqtoaddress, addresses["mining"], 1,
+                                str(root / "missing" / "spend-bond.dat"), selected)
+        assert_equal(controller.listpqaddresses(), addresses_before)
+        assert_equal(controller.getrawmempool(), [])
+        assert controller.gettxout(funded, bond["vout"]) is not None
+        spent = controller.cli.sendpqtoaddress(addresses["mining"], 1,
+                    str(root / "spend-bond.dat"), json.dumps(selected))["txid"]
+        assert (root / "spend-bond.dat").is_file()
+        raw = controller.gettransaction(spent)["hex"]
+        decoded = controller.decoderawtransaction(raw)
+        assert_equal([(item["txid"], item["vout"]) for item in decoded["vin"]],
+                     [(funded, bond["vout"])])
+        self.sync_mempools()
+        controller.generatetoaddress(1, addresses["mining"])
+        self.sync_all()
+        assert_equal([item["registration"] for item in observer.listpqmasternodes()], [registration])
+        assert_equal(observer.gettxout(funded, bond["vout"]), None)
+        both = [{"txid": spent, "vout": index} for index in range(2)]
+        combined = controller.sendpqtoaddress(addresses["mining"], 1,
+                    str(root / "two-selected.dat"), both)["txid"]
+        inputs = controller.decoderawtransaction(controller.gettransaction(combined)["hex"])["vin"]
+        assert_equal({(item["txid"], item["vout"]) for item in inputs}, {(spent, 0), (spent, 1)})
+        assert_equal(len(inputs), 2)
+        self.sync_mempools()
+        controller.generatetoaddress(1, addresses["mining"])
+        self.sync_all()
+        self.restart_node(1)
+        assert_equal(observer.listpqmasternodes(), controller.listpqmasternodes())
         assert observer.verifychain(0)
 
 

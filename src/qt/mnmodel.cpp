@@ -51,7 +51,7 @@ void MNModel::updateMNList()
     collateralTxAccepted.clear();
     pqNodes.clear();
     pqError.clear();
-    if (Params().IsRegTestNet()) {
+    if (Params().IsTestChain()) {
         LOCK(cs_main);
         pqHeight = chainActive.Height();
         try {
@@ -83,7 +83,7 @@ int MNModel::rowCount(const QModelIndex &parent) const
 {
     if (parent.isValid())
         return 0;
-    return Params().IsRegTestNet() ? pqNodes.size() : nodes.size();
+    return Params().IsTestChain() ? pqNodes.size() : nodes.size();
 }
 
 int MNModel::columnCount(const QModelIndex &parent) const
@@ -107,12 +107,12 @@ QVariant MNModel::data(const QModelIndex &index, int role) const
             return QVariant();
 
     int row = index.row();
-    if (Params().IsRegTestNet() && role == Qt::ToolTipRole) {
+    if (Params().IsTestChain() && role == Qt::ToolTipRole) {
         const auto entry = pqRecord(index);
         return entry ? QVariant(QString::fromStdString(entry->first.GetHex())) : QVariant();
     }
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
-        if (Params().IsRegTestNet()) {
+        if (Params().IsTestChain()) {
             const auto entry = pqRecord(index);
             if (!entry) return {};
             const auto& record = entry->second;

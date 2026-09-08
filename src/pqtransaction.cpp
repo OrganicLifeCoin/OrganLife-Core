@@ -1,6 +1,7 @@
 // Copyright (c) 2026 The OrganicLife Coin developers
 // Distributed under the MIT software license, see the accompanying file COPYING.
 #include <pqtransaction.h>
+#include <pqservice.h>
 #include <chainparams.h>
 #include <streams.h>
 #include <algorithm>
@@ -13,16 +14,16 @@ bool IsMasternode(const CTransaction& tx)
 }
 namespace {
 bool Fail(std::string& reason, const char* message) { reason = message; return false; }
-bool HasData(uint8_t mode) { return IsGovernanceMode(mode) || mode == MASTERNODE || mode == FINALITY; }
+bool HasData(uint8_t mode) { return IsGovernanceMode(mode) || mode == MASTERNODE || mode == FINALITY || mode == SERVICE; }
 size_t DataLimit(uint8_t mode)
 {
-    return mode == MASTERNODE ? MAX_MASTERNODE_DATA_SIZE :
+    return mode == SERVICE ? pqservice::MAX_CARRIER_SIZE : mode == MASTERNODE ? MAX_MASTERNODE_DATA_SIZE :
            mode == FINALITY ? pqquorum::MAX_CERTIFICATE_SIZE : MAX_GOVERNANCE_DATA_SIZE;
 }
 bool ValidCount(uint8_t mode, size_t count)
 {
     return ((mode == TRANSFER || HasData(mode)) && count >= 1 && count <= MAX_INPUTS) ||
-           (mode == STAKE && count == 1) || (mode == FINALITY && count == 0);
+           (mode == STAKE && count == 1) || ((mode == FINALITY || mode == SERVICE) && count == 0);
 }
 } // namespace
 
@@ -33,8 +34,24 @@ bool IsGovernanceMode(uint8_t mode)
 
 bool IsFinality(const CTransaction& tx)
 {
+    if (tx.nType == CTransaction::PQ && tx.IsCoinBase() && tx.extraPayload &&
+        tx.extraPayload->size() >= 2 && (*tx.extraPayload)[1] == SERVICE) {
+        pqquorum::Certificate certificate;
+        return DecodeFinalityCertificate(tx, certificate);
+    }
     return tx.nType == CTransaction::PQ && tx.IsCoinBase() && tx.extraPayload &&
            tx.extraPayload->size() >= 2 && (*tx.extraPayload)[1] == FINALITY;
+}
+
+bool DecodeFinalityCertificate(const CTransaction& tx, pqquorum::Certificate& certificate)
+{
+    certificate = {};
+    Payload payload;
+    if (!tx.IsCoinBase() || !DecodePayload(tx, payload)) return false;
+    if (payload.mode == FINALITY) return pqquorum::Decode(payload.data, certificate);
+    pqservice::Carrier carrier;
+    return payload.mode == SERVICE && pqservice::Decode(payload.data, carrier) &&
+        !carrier.certificate.empty() && pqquorum::Decode(carrier.certificate, certificate);
 }
 
 bool HasMarker(const CScript& script) { return !script.empty() && script[0] == OP_INVALIDOPCODE; }
@@ -73,7 +90,7 @@ bool DecodePayload(const CTransaction& tx, Payload& payload)
     const size_t authorization_size = 3 + AUTH_SIZE * bytes[2];
     if ((!HasData(bytes[1]) && bytes.size() != authorization_size) ||
         (HasData(bytes[1]) && (bytes.size() <= authorization_size ||
-         bytes.size() > authorization_size + DataLimit(bytes[1]) + 3))) return false;
+         bytes.size() > authorization_size + DataLimit(bytes[1]) + (bytes[1] == SERVICE ? 9 : 3)))) return false;
     Payload decoded;
     decoded.mode = bytes[1];
     decoded.authorizations.resize(bytes[2]);
@@ -107,11 +124,15 @@ bool CheckStructure(const CTransaction& tx, const CChainParams& params, std::str
     if (tx.nVersion != 3 || tx.sapData || !DecodePayload(tx, payload)) return Fail(reason, "bad-pq-payload");
     // A finality commit certificate is carried ONLY in the coinbase envelope.
     if (tx.IsCoinBase()) {
-        if (payload.mode != FINALITY || !payload.authorizations.empty())
+        if ((payload.mode != FINALITY && payload.mode != SERVICE) || !payload.authorizations.empty())
             return Fail(reason, "bad-pq-generation");
+        pqservice::Carrier carrier;
+        if (payload.mode == SERVICE && !pqservice::Decode(payload.data, carrier))
+            return Fail(reason, "bad-pq-service-payload");
         return true;
     }
     if (payload.mode == FINALITY) return Fail(reason, "bad-pq-finality-not-coinbase");
+    if (payload.mode == SERVICE) return Fail(reason, "bad-pq-service-not-coinbase");
     const bool stake = tx.IsCoinStake();
     if ((payload.mode == STAKE) != stake) return Fail(reason, "bad-pq-mode");
     const size_t sizeLimit = payload.mode == MASTERNODE ? MAX_MASTERNODE_TX_SIZE : MAX_TX_SIZE;
@@ -138,12 +159,15 @@ bool PaymentsActive(const CChainParams& params, int height)
 bool MasternodesActive(const CChainParams& params, int height)
 {
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
-    return params.IsRegTestNet() && first > 0 && height >= first && PaymentsActive(params, first);
+    return params.IsTestChain() && first > 0 && height >= first && PaymentsActive(params, first);
 }
 
 bool CheckContext(const CTransaction& tx, const CChainParams& params, int height, std::string& reason)
 {
     reason.clear();
+    if (tx.nType == CTransaction::PQ && tx.extraPayload && tx.extraPayload->size() >= 2 &&
+        (*tx.extraPayload)[1] == SERVICE && !pqservice::Active(params, height))
+        return Fail(reason, "bad-pq-service-not-active");
     if (IsMasternode(tx) && !MasternodesActive(params, height))
         return Fail(reason, "bad-pq-masternode-not-active");
     // The pre-launch genesis coinbase is fixed by the network identity and is
@@ -262,6 +286,10 @@ bool VerifyInputs(const CTransaction& tx, const std::vector<CTxOut>& prevouts,
 unsigned int GetSigOpCost(const CTransaction& tx)
 {
     Payload payload;
+    if (DecodePayload(tx, payload) && payload.mode == SERVICE) {
+        pqservice::Carrier carrier;
+        return pqservice::Decode(payload.data, carrier) ? SIGOP_COST * carrier.heartbeats.size() : 0;
+    }
     return DecodePayload(tx, payload) ? SIGOP_COST * (payload.authorizations.size() + (payload.mode == MASTERNODE ? 3 : 0)) : 0;
 }
 }

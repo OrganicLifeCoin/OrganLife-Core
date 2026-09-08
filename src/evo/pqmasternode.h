@@ -27,7 +27,7 @@ struct Payload {
     Signature ownerSignature{}, operatorSignature{}, collateralSignature{};
 };
 struct Record {
-    static constexpr uint8_t SERIALIZATION_VERSION = 2;
+    static constexpr uint8_t SERIALIZATION_VERSION = 3;
     COutPoint collateral;
     mldsa44::PublicKey owner{}, operatorKey{};
     pq::KeyID collateralKey{}, payout{}, operatorPayout{};
@@ -36,6 +36,7 @@ struct Record {
     uint64_t sequence{0};
     uint32_t registeredHeight{0}, collateralHeight{0};
     uint32_t lastPaidHeight{0}, revivedHeight{0};
+    uint32_t lastHeartbeatHeight{0};
     bool revoked{false};
     // Maturity alone does not establish service, voting or reward eligibility.
     bool MatureAt(uint32_t height, uint32_t confirmations) const;
@@ -47,7 +48,7 @@ struct Record {
         READWRITE(obj.collateral, obj.owner, obj.operatorKey, obj.collateralKey, obj.payout,
                   obj.operatorPayout, obj.service, obj.operatorReward, obj.sequence,
                   obj.registeredHeight, obj.collateralHeight, obj.lastPaidHeight,
-                  obj.revivedHeight, obj.revoked);
+                  obj.revivedHeight, obj.lastHeartbeatHeight, obj.revoked);
     }
 };
 
@@ -58,7 +59,7 @@ Span<const unsigned char> Context(Role role);
 std::vector<unsigned char> SigningMessage(const CTransaction& tx, const std::vector<CTxOut>& prevouts,
                                          const uint256& genesis);
 
-// Registry and payout runtime are opt-in regtest only; quorum service/finality are not installed.
+// Registry and payouts require scheduled test-chain activation; finality also requires a validated bootstrap.
 // Caller holds cs_main, owns the CEvoDB transaction and supplies the pre-spend view.
 // Caller also validates ordinary transaction values/issuance, maturity and locktime.
 class Index {

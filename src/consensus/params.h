@@ -40,6 +40,7 @@ enum UpgradeIndex : uint32_t {
     UPGRADE_TESTDUMMY,
     UPGRADE_PQ,
     UPGRADE_PQ_MASTERNODES,
+    UPGRADE_PQ_SERVICE,
     // NOTE: Also add new upgrades to NetworkUpgradeInfo in upgrades.cpp
     MAX_NETWORK_UPGRADES
 };

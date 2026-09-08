@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <compat.h> // Set Windows socket definitions before libevent includes Winsock.
 #include <event2/event.h>
 
 #ifdef EVENT_SET_MEM_FUNCTIONS_IMPLEMENTED

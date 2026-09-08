@@ -385,6 +385,7 @@ libbitcoin_server_a_SOURCES = \
   evo/governancevoteindex.cpp \
   evo/pqmasternode.cpp \
   evo/pqmnauth.cpp \
+  pqservice_runtime.cpp \
   evo/governancevotetx.cpp \
   evo/mnauth.cpp \
   evo/providertx.cpp \
@@ -552,7 +553,11 @@ libbitcoin_common_a_SOURCES = \
   pqquorum.cpp \
   pqjournal.h \
   pqjournal.cpp \
+  pqjournal_io.h \
+  pqjournal_io.cpp \
   pqanchors.h \
+  pqservice.h \
+  pqservice.cpp \
   pqanchors.cpp \
   pqfinality.h \
   pqfinality.cpp \
@@ -604,6 +609,8 @@ libbitcoin_util_a_SOURCES = \
   compat/strnlen.cpp \
   fs.cpp \
   wallet/pqkey.cpp \
+  wallet/pqcredentials_win.cpp \
+  wallet/pqcredentials_win.h \
   interfaces/handler.cpp \
   logging.cpp \
   random.cpp \

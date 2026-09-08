@@ -12,6 +12,8 @@
 #include <pqquorum.h>
 #include <uint256.h>
 #include <memory>
+#include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -41,7 +43,7 @@ uint256 ID(uint32_t height, const uint256& blockHash, const uint256& committee);
 struct Record {
     uint32_t height{0};
     uint256 blockHash;
-    uint256 committee; // commitment of the voting committee
+    uint256 committee; // finalized-height committee governing the NEXT vote
     std::vector<uint256> signers; // registration IDs endorsing, from the cert
     uint32_t prevHeight{0}; // previous anchor height (O(1) undo)
     SERIALIZE_METHODS(Record, obj) { READWRITE(obj.height, obj.blockHash, obj.committee, obj.signers, obj.prevHeight); }
@@ -51,14 +53,15 @@ struct SnapshotEntry {
     std::vector<pqquorum::Member> members;
     uint256 commitment;
     uint32_t prevHeight{0};
-    SERIALIZE_METHODS(SnapshotEntry, obj) { READWRITE(obj.members, obj.commitment, obj.prevHeight); }
+    bool belowMinimum{false};
+    SERIALIZE_METHODS(SnapshotEntry, obj) { READWRITE(obj.members, obj.commitment, obj.prevHeight, obj.belowMinimum); }
 };
 
 // Deterministic committee selection from registry state at a height: mature,
 // non-revoked registrations with a non-empty service endpoint, ordered by
 // registration ID ascending, capped at MAX_MEMBERS. Fewer than MIN_MEMBERS
 // means NO committee (finality stalls; the threshold is never lowered).
-std::vector<pqquorum::Member> SelectCommittee(const pqmn::Index& index, uint32_t height);
+std::vector<pqquorum::Member> SelectCommittee(const pqmn::Index& index, uint32_t height, bool* belowMinimum = nullptr);
 
 // Publicly verifiable positive service evidence: collects the registration IDs
 // that signed in-block finality certificates within [upToHeight - window + 1,
@@ -66,8 +69,9 @@ std::vector<pqquorum::Member> SelectCommittee(const pqmn::Index& index, uint32_t
 // all (a committee-level stall is never attributed to individuals).
 // Caller holds cs_main.
 bool SignersInWindow(CEvoDB& db, const CChainParams& params, uint32_t upToHeight, uint32_t window,
-                     std::vector<uint256>& signers, bool& anyCert);
+                     std::map<uint256, uint32_t>& lastCarrier, bool& anyCert);
 
+class Store;
 class ChainState {
 public:
     ChainState(CEvoDB& db, const CChainParams& params) : db(db), params(params) {}
@@ -78,16 +82,24 @@ public:
     // Records a validated in-block anchor. Height must be TipHeight() + 1 and
     // the value must extend the previous anchor (verified by the caller).
     bool RecordAnchor(uint32_t height, const uint256& blockHash, std::vector<uint256> signers,
-                      std::string& reason);
+                      std::string& reason, uint32_t carrierHeight);
+    // Rebuild only a previously durable administrator-approved checkpoint.
+    // Never creates approval or a committee from configuration/peer data.
+    bool RestoreRecovery(const Store& store, uint32_t height, const CBlockIndex* tip, std::string& reason);
     // Undoes snapshot/anchor records for the block on disconnect.
-    bool UndoBlock(uint32_t height, std::string& reason);
+    bool UndoBlock(uint32_t blockHeight, std::optional<uint32_t> anchorHeight, std::string& reason);
     bool GetAnchor(uint32_t height, Record& out) const;
+    // Service is credited at certificate publication, not its older target.
+    bool SignersAtCarrier(uint32_t height, std::vector<uint256>& signers) const;
     bool TipAnchor(Record& out) const;
     // Latest committee snapshot at or below height; false = none (finality
     // inactive: no bootstrap or no qualifying committee yet).
     bool CommitteeAt(uint32_t height, std::vector<pqquorum::Member>& members) const;
+    // Like CommitteeAt, but reports whether a historical snapshot was found
+    // even when that snapshot intentionally contains an empty committee.
+    bool CommitteeAtStatus(uint32_t height, std::vector<pqquorum::Member>& members,
+                           bool& snapshotFound, bool* belowMinimum = nullptr) const;
     uint32_t TipHeight() const;
-    const CChainParams& GetParams() const { return params; }
     // Writes the pinned bootstrap committee as the initial snapshot (H0).
     bool SetInitialCommittee(uint32_t height, const std::vector<pqquorum::Member>& members, std::string& reason);
 
@@ -100,7 +112,7 @@ private:
     template <typename V> void Write(const std::pair<std::string, uint256>& key, const V& value);
     void Erase(const std::pair<std::string, uint256>& key);
     bool StoreCommittee(uint32_t height, const std::vector<pqquorum::Member>& members,
-                        const uint256& commitment, std::string& reason);
+                        const uint256& commitment, std::string& reason, bool belowMinimum = false);
 };
 
 // Pinned initial checkpoint (-pqbootstrap=height:blockhash:regid:pubkey:...).
@@ -112,14 +124,32 @@ struct Bootstrap {
     std::vector<pqquorum::Member> members;
     bool Configured() const { return !members.empty(); }
 };
-// Parses the regtest-only argument at init; false fails startup.
+// Parses the test-chain-only argument at init; false fails startup.
 bool InitBootstrap(const CChainParams& params, std::string& reason);
 const Bootstrap* GetBootstrap();
-// Lazy validation, re-checked until it passes; failure keeps finality inactive
-// but never rejects the chain. On first success the pinned committee is stored
-// as the initial snapshot at the pinned height. Caller holds cs_main.
-bool ValidateBootstrap(ChainState& state, const pqmn::Index& index, const CBlockIndex* tip,
+// Lazy runtime validation; failure keeps voting inactive. Certificate-bearing
+// blocks require a valid trust root as well. Requires the exact historical
+// chain-derived snapshot; configuration does not create one. Caller holds cs_main.
+bool ValidateBootstrap(const ChainState& state, const CBlockIndex* tip,
                        std::string& reason);
+
+// Administrator-only emergency recovery checkpoint (height:blockhash).
+// Regtest/qualification only; the committee is always taken from historical
+// ChainState snapshots and is never supplied by configuration.
+struct Recovery {
+    uint32_t height{0};
+    uint256 blockHash;
+    bool Configured() const { return height != 0 && !blockHash.IsNull(); }
+};
+bool InitRecovery(const CChainParams& params, std::string& reason);
+const Recovery* GetRecovery();
+
+// Validates an explicitly configured recovery against the active chain, every
+// durable anchor already present, and chain-derived committees at the recovery
+// height and its next height. Caller holds cs_main.
+class Store;
+bool ValidateRecovery(const ChainState& state, const Store& store, const CBlockIndex* tip,
+                      std::string& reason);
 
 // Non-rollbackable durable store under <datadir>/pqanchors/. Never reset by
 // reindex; every write is fsynced before returning. Heights strictly increase.
@@ -127,9 +157,14 @@ class Store {
 public:
     static std::unique_ptr<Store> Open(const fs::path& datadir, std::string& reason);
     // Records a locally validated anchor and its certificate, fsynced. Refuses
-    // a height at or below the current tip (finality is never overwritten).
+    // conflicting/missing older records. Identical historical replay is a no-op
+    // and never moves the tip backward or replaces its original certificate.
     bool Write(const Record& record, const pqquorum::Certificate& certificate, std::string& reason);
+    // Records an administrator recovery checkpoint without a certificate.
+    // The recovery marker is atomic with the anchor and durable tip.
+    bool WriteRecovery(const Record& record, std::string& reason);
     bool Read(uint32_t height, Record& out) const;
+    bool ReadRecoveryMarker(uint32_t height, Record& out) const;
     bool ReadCertificate(uint32_t height, pqquorum::Certificate& out) const;
     bool Tip(Record& out) const;
     uint32_t TipHeight() const;
@@ -139,6 +174,7 @@ private:
     std::unique_ptr<CDBWrapper> db;
     static constexpr const char* ANCHOR_PREFIX = "pqanchor1a";
     static constexpr const char* CERT_PREFIX = "pqanchor1c";
+    static constexpr const char* RECOVERY_PREFIX = "pqanchor1r";
     static constexpr const char* TIP_KEY = "pqanchor1t";
 };
 } // namespace pqanchor

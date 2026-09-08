@@ -16,6 +16,9 @@
 #include <algorithm>
 #include <chrono>
 #include <future>
+#if defined(__linux__) || defined(__APPLE__)
+#include <sys/stat.h>
+#endif
 
 extern UniValue CallRPC(std::string args);
 
@@ -122,8 +125,8 @@ BOOST_AUTO_TEST_CASE(operator_identity_requires_verified_recovery_snapshot)
     BOOST_REQUIRE(m_wallet.Unlock(NEW_PASSPHRASE));
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     BOOST_CHECK(!m_wallet.PreparePQOperator(GetDataDir() / "disabled.dat", public_key, reason));
-    SelectParams(CBaseChainParams::TESTNET);
-    BOOST_CHECK(!m_wallet.PreparePQOperator(GetDataDir() / "public-testnet.dat", public_key, reason));
+    SelectParams(CBaseChainParams::MAIN);
+    BOOST_CHECK(!m_wallet.PreparePQOperator(GetDataDir() / "mainnet.dat", public_key, reason));
     BOOST_CHECK(public_key == mldsa44::PublicKey{});
     BOOST_CHECK(m_wallet.GetPQOperators().empty());
     SelectParams(CBaseChainParams::REGTEST);
@@ -155,12 +158,13 @@ BOOST_AUTO_TEST_CASE(operator_export_cannot_bypass_controller_authorization)
     BOOST_CHECK(reason.find("Unknown or unbacked") != std::string::npos);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
-    BOOST_CHECK(reason.find("opt-in regtest") != std::string::npos);
-    for (const auto& network : {CBaseChainParams::TESTNET, CBaseChainParams::MAIN}) {
-        SelectParams(network);
-        BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
-        BOOST_CHECK(reason.find("opt-in regtest") != std::string::npos);
-    }
+    BOOST_CHECK(reason.find("scheduled test-chain") != std::string::npos);
+    SelectParams(CBaseChainParams::TESTNET);
+    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    BOOST_CHECK(reason.find("Unknown or unbacked") != std::string::npos);
+    SelectParams(CBaseChainParams::MAIN);
+    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    BOOST_CHECK(reason.find("scheduled test-chain") != std::string::npos);
     SelectParams(CBaseChainParams::REGTEST);
     BOOST_CHECK(!fs::exists(destination));
 }
@@ -921,6 +925,54 @@ BOOST_AUTO_TEST_CASE(pq_transfer_uses_finalized_payload_and_full_size_fees)
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_FIXTURE_TEST_SUITE(pqwallet_testnet_tests, RegisteredTestnetWallet)
+
+BOOST_AUTO_TEST_CASE(operator_controller_backup_export_and_reload_are_network_bound)
+{
+    BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
+    mldsa44::PublicKey public_key{};
+    std::string reason;
+    const auto backup = GetDataDir() / "testnet-operator-recovery.dat";
+    BOOST_REQUIRE_MESSAGE(m_wallet.PreparePQOperator(backup, public_key, reason), reason);
+    BOOST_REQUIRE(fs::is_regular_file(backup));
+    BOOST_REQUIRE_EQUAL(m_wallet.GetPQOperators().size(), 1U);
+    BOOST_CHECK(m_wallet.GetPQOperators().front() == public_key);
+    BOOST_CHECK(m_wallet.GetPQAddresses().empty());
+#if defined(__linux__) || defined(__APPLE__)
+    // The generic core fixture creates a public parent. Export intentionally
+    // requires owner-only storage; native Windows ACL/export coverage is in Qt.
+    BOOST_REQUIRE_EQUAL(chmod(GetDataDir().c_str(), 0700), 0);
+    const auto directory = GetDataDir() / "testnet-operator-export";
+    BOOST_REQUIRE_MESSAGE(m_wallet.ExportPQOperator(public_key, directory, reason), reason);
+    mldsa44::Key exported;
+    BOOST_REQUIRE_MESSAGE(pqwallet::LoadOperatorCredentials(directory, "test",
+        Params().GetConsensus().hashGenesisBlock, exported, reason), reason);
+    BOOST_CHECK(exported.GetPublicKey() == public_key);
+    BOOST_CHECK(!pqwallet::LoadOperatorCredentials(directory, "regtest",
+        CreateChainParams(CBaseChainParams::REGTEST)->GetConsensus().hashGenesisBlock, exported, reason));
+    BOOST_CHECK(!exported.IsValid());
+#endif
+    CWallet loaded("operator-reloaded", WalletDatabase::CreateDummy());
+    BOOST_REQUIRE_EQUAL(WalletBatch(m_wallet.GetDBHandle()).LoadWallet(&loaded), DB_LOAD_OK);
+    BOOST_CHECK(loaded.IsLocked());
+    BOOST_CHECK(loaded.GetPQOperators() == m_wallet.GetPQOperators());
+    BOOST_REQUIRE(loaded.Unlock(PASSPHRASE));
+#if defined(__linux__) || defined(__APPLE__)
+    BOOST_REQUIRE_MESSAGE(loaded.ExportPQOperator(public_key, GetDataDir() / "reloaded-export", reason), reason);
+#endif
+    CheckWrongNetworkLoad(m_wallet, CBaseChainParams::REGTEST);
+}
+
+BOOST_AUTO_TEST_CASE(finality_status_is_available_without_claiming_activation)
+{
+    const auto status = CallRPC("getpqfinalityinfo");
+    BOOST_CHECK(!status["configured"].get_bool());
+    BOOST_CHECK(!status["validated"].get_bool());
+    BOOST_CHECK(!status["member"].get_bool());
+    SelectParams(CBaseChainParams::MAIN);
+    BOOST_CHECK_THROW(CallRPC("getpqfinalityinfo"), std::runtime_error);
+    SelectParams(CBaseChainParams::TESTNET);
+}
 
 BOOST_AUTO_TEST_CASE(receiving_before_activation_preserves_security_and_network_gates)
 {

@@ -7,6 +7,7 @@ from pathlib import Path
 import time
 
 from test_framework.blocktools import create_block, create_coinbase
+from test_framework.permissions import make_private_directory, set_credential_permissions
 from test_framework.test_framework import PivxTestFramework
 from test_framework.test_node import ErrorMatch
 from test_framework.util import assert_equal, assert_raises_rpc_error
@@ -39,14 +40,14 @@ class PQOperatorTest(PivxTestFramework):
             for method in ["getwalletinfo", "createpqproposal", "creategovvotelock", "castgovvote", "listgovlocks"]:
                 assert_raises_rpc_error(-32601, "Method not found", getattr(node, method))
         directory = Path(node.datadir) / "private-operator"
-        directory.mkdir(mode=0o700)
+        make_private_directory(directory)
         record = bytes.fromhex(json.loads((Path(__file__).parent / "data/pq_operator.json").read_text())["record"])
         key_file = directory / "olc-pq-operator-key"
         record_file = directory / "olc-pq-operator-record"
         key_file.write_bytes(b"*" * 32)  # Public dummy wrapping key; never use outside tests.
         record_file.write_bytes(record)
-        key_file.chmod(0o400)
-        record_file.chmod(0o400)
+        set_credential_permissions(key_file, 0o400)
+        set_credential_permissions(record_file, 0o400)
         identity = "12" * 32
         credentials = "-pqoperatorcredentials=" + str(directory)
         registration = "-pqoperatorid=" + identity
@@ -61,12 +62,12 @@ class PQOperatorTest(PivxTestFramework):
             reject(enabled + args, "exactly once each")
         for invalid in ["", "0" * 64, "12", "g" * 64, "12" * 33, "0x" + identity]:
             reject(enabled + [credentials, "-pqoperatorid=" + invalid], "64 hexadecimal characters and nonzero")
-        reject(self.base_args + [credentials, registration], "require regtest PQ masternode activation")
+        reject(self.base_args + [credentials, registration], "require scheduled test-chain PQ masternode activation")
         if not self.options.walletless:
             reject(enabled + [credentials, registration, "-disablewallet=0"], "require -disablewallet")
         for activation in ["0", "-1"]:
             reject(self.base_args + ["-nuparams=pq_masternodes:" + activation, credentials, registration],
-                   "require regtest PQ masternode activation")
+                   "require scheduled test-chain PQ masternode activation")
         reject(enabled + ["-pqoperatorcredentials=relative", registration], "Could not load private PQ operator credentials")
 
         # Unknown/unconfirmed identity can sync, but configured must never mean active.
@@ -104,16 +105,16 @@ class PQOperatorTest(PivxTestFramework):
         self.stop_node(0)
 
         # Each restart re-reads credentials; it must not reuse a cached decrypted key.
-        key_file.chmod(0o600)
+        set_credential_permissions(key_file, 0o600)
         key_file.write_bytes(b"+" * 32)
-        key_file.chmod(0o400)
+        set_credential_permissions(key_file, 0o400)
         reject(options, "Could not load private PQ operator credentials")
-        key_file.chmod(0o600)
+        set_credential_permissions(key_file, 0o600)
         key_file.write_bytes(b"*" * 32)
-        key_file.chmod(0o400)
-        record_file.chmod(0o404)
+        set_credential_permissions(key_file, 0o400)
+        set_credential_permissions(record_file, 0o404)
         reject(options, "Could not load private PQ operator credentials")
-        record_file.chmod(0o400)
+        set_credential_permissions(record_file, 0o400)
         self.start_node(0, enabled)
         assert_equal(node.getpqoperatorinfo(), {"configured": False})
         self.stop_node(0)
@@ -125,9 +126,9 @@ class PQOperatorTest(PivxTestFramework):
         assert (b"*" * 32).hex() not in log
         assert (b"\x11" * 32).hex() not in log
         self.stop_node(0)
-        # Deny testnet before reading a regtest credential, including explicit opt-in.
+        # Scheduled testnet activation must not accept a regtest credential.
         reject(self.base_args + ["-regtest=0", "-testnet=1", credentials, registration],
-               "require regtest PQ masternode activation")
+               "Could not load private PQ operator credentials")
         self.start_node(0, enabled)
 
 

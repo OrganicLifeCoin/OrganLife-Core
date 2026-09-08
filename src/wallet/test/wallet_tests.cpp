@@ -4,6 +4,7 @@
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <compat.h>
 #include "wallet/test/wallet_test_fixture.h"
 
 #include "blockassembler.h"
@@ -19,6 +20,9 @@
 #include "wallet/walletutil.h"
 
 #include <fstream>
+#ifndef WIN32
+#include <fcntl.h>
+#endif
 #include <set>
 #include <utility>
 #include <vector>
@@ -266,6 +270,61 @@ void CheckConflictMetadataPersistence(CWallet& wallet, bool sapling)
 }
 }
 
+BOOST_AUTO_TEST_CASE(database_error_log_is_closed)
+{
+    const auto directory = GetDataDir() / "error-log-close";
+    for (const bool explicitClose : {true, false}) {
+        FILE* errorFile = nullptr;
+#ifdef WIN32
+        HANDLE handle = INVALID_HANDLE_VALUE;
+#else
+        int descriptor = -1;
+#endif
+        auto environment = std::make_unique<BerkeleyEnvironment>(directory);
+        {
+            BOOST_REQUIRE(environment->Open(false));
+            environment->dbenv->get_errfile(&errorFile);
+            BOOST_REQUIRE(errorFile);
+#ifdef WIN32
+            handle = reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(errorFile)));
+#else
+            descriptor = fileno(errorFile);
+#endif
+            if (explicitClose) environment->Close();
+            else environment.reset();
+        }
+#ifdef WIN32
+        DWORD flags = 0;
+        const bool closed = !GetHandleInformation(handle, &flags) && GetLastError() == ERROR_INVALID_HANDLE;
+#else
+        const bool closed = fcntl(descriptor, F_GETFD) == -1 && errno == EBADF;
+#endif
+        BOOST_CHECK(closed);
+        // Keep the pre-fix failure from leaking the test's own diagnostic stream.
+        if (!closed) fclose(errorFile);
+        BOOST_CHECK(fs::remove(directory / "db.log"));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(database_failed_open_releases_error_log)
+{
+    const auto directory = GetDataDir() / "error-log-open-failure";
+    fs::create_directory(directory);
+    {
+        std::ofstream config((directory / "DB_CONFIG").string());
+        config << "invalid-test-only-configuration\n";
+    }
+    BerkeleyEnvironment environment(directory);
+    BOOST_CHECK(!environment.Open(true));
+    // On Windows an unclosed diagnostic stream prevents removal even after Reset().
+    boost::system::error_code error;
+    BOOST_CHECK(fs::remove(directory / "db.log", error));
+    BOOST_CHECK(!error);
+    BOOST_REQUIRE(fs::remove(directory / "DB_CONFIG"));
+    BOOST_REQUIRE(environment.Open(false));
+    environment.Close();
+}
+
 BOOST_AUTO_TEST_CASE(dummy_wallet_transactions_are_successful_noops)
 {
     auto database = WalletDatabase::CreateDummy();
@@ -275,6 +334,30 @@ BOOST_AUTO_TEST_CASE(dummy_wallet_transactions_are_successful_noops)
     BOOST_CHECK(batch.TxnCommit());
     BOOST_CHECK(batch.TxnBegin());
     BOOST_CHECK(batch.TxnAbort());
+}
+
+BOOST_AUTO_TEST_CASE(mock_database_can_open_while_disk_database_is_open)
+{
+    auto disk = WalletDatabase::Create(GetDataDir() / "mock-coexistence");
+    {
+        BerkeleyBatch batch(*disk, "cr+");
+        BOOST_REQUIRE(batch.Write(std::string("disk-marker"), 42));
+    }
+    BerkeleyDatabase mock(GetDataDir() / "fresh-mock", true);
+    // In-memory databases have no disk file ID to compare with other environments.
+    BOOST_CHECK_NO_THROW({
+        BerkeleyBatch batch(mock, "cr+");
+        BOOST_CHECK(batch.Write(std::string("mock-marker"), 7));
+    });
+    {
+        BerkeleyBatch batch(*disk, "r");
+        int marker = 0;
+        BOOST_CHECK(batch.Read(std::string("disk-marker"), marker));
+        BOOST_CHECK_EQUAL(marker, 42);
+        BOOST_CHECK(!batch.Exists(std::string("mock-marker")));
+    }
+    mock.Flush(true);
+    disk->Flush(true);
 }
 
 BOOST_AUTO_TEST_CASE(wallet_transaction_begin_and_commit_failure_are_atomic)

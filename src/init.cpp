@@ -558,7 +558,7 @@ std::string HelpMessage(HelpMessageMode mode)
 
     strUsage += HelpMessageGroup("Debugging/Testing options:");
     strUsage += HelpMessageOpt("-uacomment=<cmt>", "Append comment to the user agent string");
-    strUsage += HelpMessageOpt("-pqoperatorcredentials=<dir>", "Load pending operator credentials from a private absolute directory (regtest PQ masternodes only; requires -disablewallet and -pqoperatorid). Does not enable masternode service or finality.");
+    strUsage += HelpMessageOpt("-pqoperatorcredentials=<dir>", "Load operator credentials from a private absolute directory (scheduled test-chain PQ masternodes only; requires -disablewallet and -pqoperatorid). Credentials alone do not establish registry eligibility or finality.");
     strUsage += HelpMessageOpt("-pqoperatorid=<txid>", "Registration identity for pending PQ operator credentials (64 hexadecimal characters, nonzero)");
     if (showDebug) {
         strUsage += HelpMessageOpt("-checkblockindex", strprintf("Do a full consistency check for mapBlockIndex, setBlockIndexCandidates, chainActive and mapBlocksUnlinked occasionally. Also sets -checkmempool (default: %u)", defaultChainParams->DefaultConsistencyChecks()));
@@ -786,6 +786,27 @@ void ThreadImport(const std::vector<fs::path>& vImportFiles)
     {
         LOCK(cs_main);
         if (pqAnchorStore) {
+            std::string reason;
+            pqanchor::ChainState anchors(*evoDb, Params());
+            const auto* recovery = pqanchor::GetRecovery();
+            if (recovery) {
+                if (!pqanchor::ValidateRecovery(anchors, *pqAnchorStore, chainActive.Tip(), reason)) {
+                    UIError("PQ emergency checkpoint rejected: " + reason);
+                    StartShutdown();
+                    return;
+                }
+                pqanchor::Record record;
+                record.height = recovery->height; record.blockHash = recovery->blockHash;
+                std::vector<pqquorum::Member> members;
+                anchors.CommitteeAt(record.height, members);
+                record.committee = pqquorum::Commitment(members);
+                // History must be durable before the irreversible marker.
+                if (!FlushStateToDisk() || !pqAnchorStore->WriteRecovery(record, reason)) {
+                    UIError("PQ emergency checkpoint persistence failed: " + reason);
+                    StartShutdown();
+                    return;
+                }
+            }
             pqanchor::Record tipRecord;
             if (pqAnchorStore->Tip(tipRecord)) {
                 const CBlockIndex* ancestor =
@@ -796,6 +817,21 @@ void ThreadImport(const std::vector<fs::path>& vImportFiles)
                           "Finality protection cannot be silently discarded; resolve the local history "
                           "manually before restarting.\n"),
                         tipRecord.height, tipRecord.blockHash.ToString()));
+                    StartShutdown();
+                    return;
+                }
+                // Complete a checkpoint interrupted between durable marker and
+                // mirror flush, even if its one-time argument was removed.
+                auto transaction = evoDb->BeginTransaction();
+                if (!anchors.RestoreRecovery(*pqAnchorStore, tipRecord.height, chainActive.Tip(), reason) ||
+                    (recovery && !anchors.RestoreRecovery(*pqAnchorStore, recovery->height, chainActive.Tip(), reason))) {
+                    UIError("PQ emergency checkpoint mirror failed: " + reason);
+                    StartShutdown();
+                    return;
+                }
+                transaction->Commit();
+                if (!FlushStateToDisk()) {
+                    UIError("PQ emergency checkpoint mirror flush failed");
                     StartShutdown();
                     return;
                 }
@@ -1288,13 +1324,14 @@ bool AppInitMain()
     }
 
     // Durable finalized-anchor store (never reset by reindex) and the pinned
-    // regtest-only bootstrap checkpoint. Failure here fails startup closed.
+    // test-chain bootstrap checkpoint. Failure here fails startup closed.
     assert(!pqAnchorStore);
     {
         std::string reason;
         pqAnchorStore = pqanchor::Store::Open(GetDataDir(), reason);
         if (!pqAnchorStore) return UIError(reason);
         if (!pqanchor::InitBootstrap(Params(), reason)) return UIError(reason);
+        if (!pqanchor::InitRecovery(Params(), reason)) return UIError(reason);
     }
 
     InitSignatureCache();

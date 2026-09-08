@@ -2,7 +2,7 @@ dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
 define(_CLIENT_VERSION_MAJOR, 1)
 define(_CLIENT_VERSION_MINOR, 1)
-define(_CLIENT_VERSION_REVISION, 6)
+define(_CLIENT_VERSION_REVISION, 7)
 define(_CLIENT_VERSION_BUILD, 0)
 define(_CLIENT_VERSION_RC, 0)
 define(_CLIENT_VERSION_IS_RELEASE, true)
@@ -1658,7 +1658,11 @@ fi
 
 AC_CONFIG_SUBDIRS([src/chiabls])
 
+dnl Apply bundled-library options after recording the root recheck arguments;
+dnl otherwise config.status --recheck silently disables the project's tests.
+AC_CONFIG_COMMANDS_POST([
 ac_configure_args="${ac_configure_args} --disable-shared --with-pic --with-bignum=no --enable-module-recovery --disable-jni --disable-openssl-tests --enable-benchmark=no --enable-tests=no --enable-exhaustive-tests=no"
+])
 AC_CONFIG_SUBDIRS([src/secp256k1])
 
 AC_OUTPUT

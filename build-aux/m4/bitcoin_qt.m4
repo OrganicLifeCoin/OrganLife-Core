@@ -130,6 +130,7 @@ AC_DEFUN([BITCOIN_QT_CONFIGURE],[
         fi
       }
       qt6_qminimal_plugin_libs=$(qt6_try_prl "$qt_plugin_path/platforms/libqminimal.prl" "$qt_plugin_path/platforms/qminimal.prl")
+      qt6_qoffscreen_plugin_libs=$(qt6_try_prl "$qt_plugin_path/platforms/libqoffscreen.prl" "$qt_plugin_path/platforms/qoffscreen.prl")
       qt6_qjpeg_plugin_libs=$(qt6_try_prl "$qt_plugin_path/imageformats/libqjpeg.prl" "$qt_plugin_path/imageformats/qjpeg.prl")
       qt6_qico_plugin_libs=$(qt6_try_prl "$qt_plugin_path/imageformats/libqico.prl" "$qt_plugin_path/imageformats/qico.prl")
       qt6_qsvg_plugin_libs=$(qt6_try_prl "$qt_plugin_path/imageformats/libqsvg.prl" "$qt_plugin_path/imageformats/qsvg.prl")
@@ -146,6 +147,15 @@ AC_DEFUN([BITCOIN_QT_CONFIGURE],[
       _BITCOIN_QT_CHECK_STATIC_PLUGINS([Q_IMPORT_PLUGIN(QMinimalIntegrationPlugin)],[-lqminimal])
     fi
     AC_DEFINE([QT_QPA_PLATFORM_MINIMAL], [1], [Define this symbol if the minimal Qt platform exists])
+    dnl Static Linux/Windows tests need a font-capable deterministic platform.
+    dnl Keep the optional offscreen plugin out of the application's link inputs.
+    if { test "x$TARGET_OS" = xlinux || test "x$TARGET_OS" = xwindows; } && test "x$use_gui_tests" = xyes && test "x$have_qt_test" = xyes && test -n "$qt6_qoffscreen_plugin_libs"; then
+      qt_app_libs="$QT_LIBS"
+      _BITCOIN_QT_CHECK_STATIC_PLUGINS([Q_IMPORT_PLUGIN(QOffscreenIntegrationPlugin)],[$qt6_qoffscreen_plugin_libs])
+      QT_TEST_LIBS="$qt6_qoffscreen_plugin_libs $QT_TEST_LIBS"
+      QT_LIBS="$qt_app_libs"
+      AC_DEFINE([QT_TEST_QPA_PLATFORM_OFFSCREEN], [1], [Define if static Qt tests have the offscreen platform])
+    fi
     if test "x$QT_LIB_PREFIX" = xQt6 && test -n "$qt6_qjpeg_plugin_libs"; then
       _BITCOIN_QT_CHECK_STATIC_PLUGINS([Q_IMPORT_PLUGIN(QJpegPlugin)],[$qt6_qjpeg_plugin_libs])
     else

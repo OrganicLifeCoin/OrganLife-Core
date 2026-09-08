@@ -188,6 +188,7 @@ static std::string openmodeToStr(std::ios_base::openmode mode)
 
 void ifstream::open(const fs::path& p, std::ios_base::openmode mode)
 {
+    mode |= std::ios_base::in;
     close();
     m_file = fsbridge::fopen(p, openmodeToStr(mode).c_str());
     if (m_file == nullptr) {
@@ -211,6 +212,7 @@ void ifstream::close()
 
 void ofstream::open(const fs::path& p, std::ios_base::openmode mode)
 {
+    mode |= std::ios_base::out;
     close();
     m_file = fsbridge::fopen(p, openmodeToStr(mode).c_str());
     if (m_file == nullptr) {

@@ -146,14 +146,14 @@ MasterNodesWidget::MasterNodesWidget(OrganicLifeGUI *parent) :
         onStartAllClicked(REQUEST_START_ALL);
     });
     connect(ui->pushButtonStartMissing, &QPushButton::clicked, [this]() {
-        if (Params().IsRegTestNet()) onPQOperatorsClicked();
+        if (Params().IsTestChain()) onPQOperatorsClicked();
         else onStartAllClicked(REQUEST_START_MISSING);
     });
     connect(ui->listMn, &QListView::clicked, this, &MasterNodesWidget::onMNClicked);
     connect(ui->btnAbout, &OptionButton::clicked, [this](){window->openFAQ(SettingsFaqWidget::Section::MASTERNODE);});
     connect(ui->btnAboutController, &OptionButton::clicked, [this](){window->openFAQ(SettingsFaqWidget::Section::MNCONTROLLER);});
     connect(ui->btnCoinControl, &OptionButton::clicked, this, &MasterNodesWidget::onCoinControlClicked);
-    if (Params().IsRegTestNet()) {
+    if (Params().IsTestChain()) {
         setMNModel(new MNModel(this));
         ui->pushButtonSave->setText(tr("Register masternode"));
         ui->pushButtonSave->setEnabled(false);
@@ -168,7 +168,7 @@ MasterNodesWidget::MasterNodesWidget(OrganicLifeGUI *parent) :
 
 void MasterNodesWidget::loadWalletModel()
 {
-    if (Params().IsRegTestNet() && mnModel) {
+    if (Params().IsTestChain() && mnModel) {
         coinControlDialog->setModel(walletModel);
         mnModel->updateMNList();
         updateListState();
@@ -178,7 +178,7 @@ void MasterNodesWidget::loadWalletModel()
 void MasterNodesWidget::onPQOperatorsClicked()
 {
     QPointer<WalletModel> controller = walletModel;
-    if (!Params().IsRegTestNet() || !controller) return;
+    if (!Params().IsTestChain() || !controller) return;
     QDialog dialog(this);
     dialog.setObjectName("pqOperatorsDialog");
     dialog.setWindowTitle(tr("Operator keys"));
@@ -407,7 +407,7 @@ void MasterNodesWidget::clearWalletModel()
     if (auto* dialog = findChild<QDialog*>("pqOperatorsDialog")) dialog->reject();
     if (menu) menu->hide();
     index = QPersistentModelIndex();
-    if (Params().IsRegTestNet()) {
+    if (Params().IsTestChain()) {
         ui->pushButtonSave->setEnabled(false);
         ui->btnCoinControl->setEnabled(false);
         ui->pushButtonStartMissing->setEnabled(false);
@@ -457,12 +457,12 @@ void MasterNodesWidget::updateListState()
     bool show = mnModel && mnModel->rowCount() > 0;
     ui->listMn->setVisible(show);
     ui->emptyContainer->setVisible(!show);
-    ui->pushButtonStartAll->setVisible(show && !Params().IsRegTestNet());
-    if (Params().IsRegTestNet()) {
+    ui->pushButtonStartAll->setVisible(show && !Params().IsTestChain());
+    if (Params().IsTestChain()) {
         if (menu) menu->hide();
         const auto error = mnModel ? mnModel->registryError() : tr("Registry unavailable");
         ui->labelSubtitle1->setText(error.isEmpty() ?
-            tr("Confirmed PQ registry · Local testing only. Registration is not service, reward or finality eligibility.") : error);
+            tr("Confirmed PQ registry · Registration alone does not establish service, reward or finality eligibility.") : error);
         ui->pushButtonSave->setEnabled(walletModel && error.isEmpty());
         ui->btnCoinControl->setEnabled(walletModel && error.isEmpty());
         ui->pushButtonStartMissing->setEnabled(walletModel && error.isEmpty());
@@ -478,8 +478,8 @@ void MasterNodesWidget::onMNClicked(const QModelIndex& _index)
     pos.setY(pos.y() + (DECORATION_SIZE * 1.5));
     if (!this->menu) {
         this->menu = new TooltipMenu(window, this);
-        this->menu->setEditBtnText(Params().IsRegTestNet() ? tr("Update service") : tr("Start"));
-        this->menu->setDeleteBtnText(Params().IsRegTestNet() ? tr("Revoke") : tr("Delete"));
+        this->menu->setEditBtnText(Params().IsTestChain() ? tr("Update service") : tr("Start"));
+        this->menu->setDeleteBtnText(Params().IsTestChain() ? tr("Revoke") : tr("Delete"));
         this->menu->setCopyBtnText(tr("Info"));
         connect(this->menu, &TooltipMenu::message, this, &MasterNodesWidget::message);
         connect(this->menu, &TooltipMenu::onEditClicked, this, &MasterNodesWidget::onEditMNClicked);
@@ -508,7 +508,7 @@ bool MasterNodesWidget::checkMNsNetwork()
 
 void MasterNodesWidget::onEditMNClicked()
 {
-    if (Params().IsRegTestNet()) { pqOperation(static_cast<int>(pqmn::Action::SERVICE)); return; }
+    if (Params().IsTestChain()) { pqOperation(static_cast<int>(pqmn::Action::SERVICE)); return; }
     if (walletModel) {
         if (!walletModel->isRegTestNetwork() && !checkMNsNetwork()) return;
         // Start MN
@@ -605,7 +605,7 @@ void MasterNodesWidget::onError(QString error, int type)
 
 void MasterNodesWidget::onInfoMNClicked()
 {
-    if (Params().IsRegTestNet()) {
+    if (Params().IsTestChain()) {
         const auto entry = mnModel ? mnModel->pqRecord(index) : nullopt;
         if (!entry) return;
         QDialog dialog(this);
@@ -664,7 +664,7 @@ void MasterNodesWidget::onInfoMNClicked()
 
 void MasterNodesWidget::onDeleteMNClicked()
 {
-    if (Params().IsRegTestNet()) { pqOperation(static_cast<int>(pqmn::Action::REVOKE)); return; }
+    if (Params().IsTestChain()) { pqOperation(static_cast<int>(pqmn::Action::REVOKE)); return; }
     QString qAliasString = index.data(Qt::DisplayRole).toString();
 
     if (!ask(tr("Delete Masternode"), tr("You are just about to delete Masternode:\n%1\n\nAre you sure?").arg(qAliasString))) {
@@ -679,7 +679,7 @@ void MasterNodesWidget::onDeleteMNClicked()
 
 void MasterNodesWidget::onCreateMNClicked()
 {
-    if (Params().IsRegTestNet()) { pqOperation(static_cast<int>(pqmn::Action::REGISTER)); return; }
+    if (Params().IsTestChain()) { pqOperation(static_cast<int>(pqmn::Action::REGISTER)); return; }
     WalletModel::UnlockContext ctx(walletModel->requestUnlock());
     if (!ctx.isValid()) {
         // Unlock wallet was cancelled

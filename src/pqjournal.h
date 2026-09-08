@@ -38,16 +38,25 @@ public:
     // (registration, operator key): a rotated key has never signed anything and
     // naturally starts a fresh file, while the retired key's journal is
     // retained under its own name. The caller passes the already network-
-    // specific datadir; no network subdirectory is appended here. A missing
-    // file is the ONLY case that creates one: the directory (0700) and a fresh
-    // header-only file are written and fsynced (file and directory). An
+    // specific datadir; no network subdirectory is appended here. Both the
+    // journal and its lifetime-lock marker must already exist. An
     // existing file must bind the identical header; any mismatch, unreadable
     // content, or corruption that is not a trailing partial record fails closed
     // (nullptr, never sign). A trailing partial record from a crash mid-append
     // is truncated back to the last valid record, fsynced, and replay continues.
+    // A separate .lock file is never replaced by compaction and stays locked
+    // until destruction, even after poisoning. Preserve it with the journal:
+    // either missing artifact fails closed, without recreating anything.
+    // A copied/old pair is not safe recovery: local leases cannot detect another
+    // host or a stale backup. Rotate the operator key when history is uncertain.
     static std::unique_ptr<Journal> Load(const fs::path& datadir, const uint256& genesis,
                                          const uint256& registration, const mldsa44::PublicKey& key,
                                          std::string& reason);
+    // Explicit FIRST USE only. Refuses if either journal or marker exists.
+    // Never use to recover a lost/old signing history: rotate the operator key.
+    static std::unique_ptr<Journal> Initialize(const fs::path& datadir, const uint256& genesis,
+                                               const uint256& registration, const mldsa44::PublicKey& key,
+                                               std::string& reason);
     ~Journal();
     Journal(const Journal&) = delete;
     Journal& operator=(const Journal&) = delete;
@@ -76,14 +85,27 @@ public:
     uint32_t FinalizedHeight() const;
     // Highest journaled round for (height, step) so a restarted driver resumes.
     bool HighestVoted(uint32_t height, pqquorum::Purpose step, uint32_t& round) const;
+    // Actual persisted finality and highest retained vote; zero means absent.
+    // False (with cleared output) means the journal is unavailable/poisoned.
+    bool GetProgress(uint32_t& finalized, uint32_t& votedHeight, uint32_t& votedRound) const;
+    // Public quorum material, already verified by the caller. Retain only the
+    // highest PREVOTE proof per live height; fsync before use. On restore the
+    // runtime must reverify against its trusted committee and anchor.
+    bool RecordProof(const pqquorum::Certificate& proof, std::string& reason);
+    bool GetProof(uint32_t height, pqquorum::Certificate& proof) const;
 
 private:
+    static std::unique_ptr<Journal> Open(const fs::path& datadir, const uint256& genesis,
+                                         const uint256& registration, const mldsa44::PublicKey& key,
+                                         bool initialize, std::string& reason);
     struct VoteKey {
         uint32_t height, round;
         pqquorum::Purpose step;
         bool operator<(const VoteKey& other) const;
     };
     struct VoteRecord {
+        uint256 anchor;
+        uint256 committee;
         uint256 value;
         Signature signature;
     };
@@ -92,29 +114,31 @@ private:
         uint256 value;
     };
     Journal(const fs::path& file, const uint256& genesisIn, const uint256& registrationIn,
-            const mldsa44::PublicKey& operatorKeyIn, FILE* append, const uint256& chainHashIn);
-
-    static std::unique_ptr<Journal> Create(const fs::path& directory, const fs::path& file,
-                                           const uint256& genesis, const uint256& registration,
-                                           const mldsa44::PublicKey& key, std::string& reason);
-    std::optional<std::vector<unsigned char>> ReadAllBytes() const;
+            const mldsa44::PublicKey& operatorKeyIn, int leaseIn);
     // Replays records into state, truncating a trailing partial record; fails
     // closed on any other inconsistency.
     bool Replay(const std::vector<unsigned char>& bytes, std::string& reason);
     // Atomically rewrites the file to header + retained finalized records +
-    // votes/locks above the finalized height. Best effort; a failure keeps the
-    // append-only file intact (logged), never loses state.
+    // votes/locks above the finalized height. A write, fsync, rename, or
+    // post-rename reopen failure poisons this instance; reopen verifies the
+    // journal before signing again.
     bool Compact();
     bool Append(uint8_t type, const std::vector<unsigned char>& payload, std::string& reason);
+    bool HasSpace(size_t bytes, std::string& reason);
+    bool CheckProof(const pqquorum::Certificate& proof, std::string& reason) const;
+    void Poison();
 
     mutable Mutex mutex;
     const fs::path path;
     const uint256 genesis, registration;
     const mldsa44::PublicKey operatorKey;
-    FILE* file; // Append handle; writes are durable before any success return.
+    const int lease; // OS-held lock on the stable sidecar, not the replaced inode.
+    FILE* file{nullptr}; // Append handle; writes are durable before any success return.
     uint256 chainHash; // Last durable chain hash (header hash when empty).
+    bool poisoned{false};
     std::map<VoteKey, VoteRecord> votes;
     std::map<uint32_t, LockRecord> locks;
+    std::map<uint32_t, pqquorum::Certificate> proofs;
     uint32_t finalizedHeight{0};
     uint256 finalizedValue, finalizedAnchor;
     bool hasFinalized{false};

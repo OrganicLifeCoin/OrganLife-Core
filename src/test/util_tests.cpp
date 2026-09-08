@@ -13,11 +13,15 @@
 #include "utilmoneystr.h"
 #include "test/test_organiclife.h"
 #include "util/vector.h"
+#include "util/threadnames.h"
+#include "ctpl_stl.h"
 
 #include <stdint.h>
 #include <fstream>
 #include <vector>
-#ifndef WIN32
+#ifdef WIN32
+#include <atomic>
+#else
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
@@ -25,6 +29,66 @@
 #include <boost/test/unit_test.hpp>
 
 BOOST_FIXTURE_TEST_SUITE(util_tests, BasicTestingSetup)
+
+#ifdef WIN32
+namespace {
+int tlsMarker = 0;
+thread_local int* tlsPointer = nullptr;
+std::atomic<bool> tlsCleanupKeptStorage{false};
+struct NativeThreadCleanup {
+    ~NativeThreadCleanup() { tlsCleanupKeptStorage.store(tlsPointer == &tlsMarker); }
+};
+
+DWORD WINAPI CheckNativeThreadTLS(void* argument)
+{
+    const auto mode = reinterpret_cast<uintptr_t>(argument);
+    if (mode == 1) {
+        try { throw 1; } catch (...) {}
+    } else if (mode == 2) {
+        // Qt reads its thread pointer before registering its C++ TLS destructor.
+        tlsPointer = &tlsMarker;
+        static thread_local NativeThreadCleanup cleanup;
+    }
+    return 0;
+}
+}
+
+BOOST_AUTO_TEST_CASE(native_thread_tls_destructor_keeps_its_storage)
+{
+    tlsCleanupKeptStorage.store(false);
+    for (uintptr_t mode = 0; mode < 3; ++mode) {
+        HANDLE worker = CreateThread(nullptr, 0, CheckNativeThreadTLS,
+                                     reinterpret_cast<void*>(mode), 0, nullptr);
+        BOOST_REQUIRE(worker != nullptr);
+        const DWORD result = WaitForSingleObject(worker, 10000);
+        BOOST_CHECK(CloseHandle(worker));
+        BOOST_REQUIRE_EQUAL(result, WAIT_OBJECT_0);
+    }
+    BOOST_CHECK(tlsCleanupKeptStorage.load());
+}
+#endif
+
+BOOST_AUTO_TEST_CASE(thread_pool_rename_releases_every_worker)
+{
+    // Repeated rename/shutdown exercises the barrier used by BLS startup.
+    // A lost notification leaves stop(true) waiting for a naming task forever.
+    for (int round = 0; round < 100; ++round) {
+        ctpl::thread_pool pool(4);
+        RenameThreadPool(pool, "test-pool");
+        std::vector<std::future<bool>> tasks;
+        for (int i = 0; i < 4; ++i) {
+            tasks.push_back(pool.push([](int) {
+#if defined(HAVE_THREAD_LOCAL)
+                return util::ThreadGetInternalName().find("test-pool-") == 0;
+#else
+                return true;
+#endif
+            }));
+        }
+        for (auto& task : tasks) BOOST_CHECK(task.get());
+        pool.stop(true);
+    }
+}
 
 BOOST_AUTO_TEST_CASE(util_criticalsection)
 {

@@ -45,7 +45,10 @@
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QFileDialog>
+#include <QFile>
 #include <QFont>
+#include <QFontDatabase>
+#include <QFontMetrics>
 #include <QLineEdit>
 #include <QScreen>
 #include <QSettings>
@@ -67,6 +70,28 @@ void ForceActivation();
 
 namespace GUIUtil
 {
+void EnsureReadableQtFonts()
+{
+#if defined(Q_OS_LINUX)
+    const QFontMetrics metrics(QApplication::font());
+    if (metrics.inFont(QChar('A')) && metrics.inFont(QChar('a')) && metrics.inFont(QChar('0'))) return;
+    const QStringList candidates = {
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    };
+    for (const QString& path : candidates) {
+        if (!QFile::exists(path)) continue;
+        const int id = QFontDatabase::addApplicationFont(path);
+        if (id < 0) continue;
+        const QStringList families = QFontDatabase::applicationFontFamilies(id);
+        if (families.isEmpty()) continue;
+        QApplication::setFont(QFont(families.first()));
+        break;
+    }
+#endif
+}
+
 QString dateTimeStr(const QDateTime& date)
 {
     return QLocale().toString(date.date(), QLocale::ShortFormat) + QString(" ") + date.toString("hh:mm");

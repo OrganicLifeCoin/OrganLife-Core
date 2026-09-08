@@ -16,6 +16,7 @@ src/organiclife-tx
 src/qt/organiclife-qt
 src/bench/bench_organiclife
 src/test/test_organiclife
+src/test/pqjournal_io_tests
 src/test/test_organiclife_fuzzy
 src/qt/test/test_organiclife-qt
 src/test/fuzz/address_deserialize

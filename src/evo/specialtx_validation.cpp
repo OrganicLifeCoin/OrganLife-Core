@@ -11,6 +11,7 @@
 #include "coins.h"
 #include "chainparams.h"
 #include "pqtransaction.h"
+#include "pqservice.h"
 #include "clientversion.h"
 #include "consensus/validation.h"
 #include "evo/deterministicmns.h"
@@ -704,9 +705,10 @@ static bool CheckSpecialTxBasic(const CTransaction& tx, CValidationState& state)
     }
 
     // PQ coinstakes carry their ML-DSA authorization in the special payload.
-    // A PQ coinbase is special only when it carries a FINALITY certificate.
+    // PQ coinbases may carry finality certificates and independent service proofs.
     const bool pqFinalityCoinbase = tx.IsCoinBase() && tx.nType == CTransaction::PQ &&
-        tx.extraPayload && tx.extraPayload->size() >= 2 && (*tx.extraPayload)[1] == pq::FINALITY;
+        tx.extraPayload && tx.extraPayload->size() >= 2 &&
+        ((*tx.extraPayload)[1] == pq::FINALITY || (*tx.extraPayload)[1] == pq::SERVICE);
     if ((tx.IsCoinBase() && !pqFinalityCoinbase) || (tx.IsCoinStake() && tx.nType != CTransaction::PQ)) {
         return state.DoS(10, error("%s: Special tx is coinbase or coinstake", __func__),
                          REJECT_INVALID, "bad-txns-special-coinbase");
@@ -721,6 +723,7 @@ static bool CheckSpecialTxBasic(const CTransaction& tx, CValidationState& state)
     // Size limits
     const size_t payloadLimit = tx.nType == CTransaction::PQ && tx.extraPayload->size() >= 2 ?
         ((*tx.extraPayload)[1] == pq::MASTERNODE ? pq::MAX_MASTERNODE_TX_SIZE :
+         (*tx.extraPayload)[1] == pq::SERVICE ? pqservice::MAX_CARRIER_SIZE + 12 :
          (*tx.extraPayload)[1] == pq::FINALITY ? pqquorum::MAX_CERTIFICATE_SIZE + 6 : MAX_SPECIALTX_EXTRAPAYLOAD) :
         MAX_SPECIALTX_EXTRAPAYLOAD;
     if (tx.extraPayload->size() > payloadLimit) {

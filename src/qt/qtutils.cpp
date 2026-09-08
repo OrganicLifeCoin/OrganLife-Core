@@ -662,7 +662,8 @@ bool openDialogWithOpaqueBackgroundY(QDialog* widget, OrganicLifeGUI* gui, doubl
     if (dialogOwnsOpenPosition(widget)) {
         const QRect anchorRect = resolveCenterTarget();
         if (!anchorRect.isNull()) {
-            widget->move(anchorRect.center() - QPoint(widget->width() / 2, widget->height() / 2));
+            // Center the client area; move() positions the native window frame.
+            widget->setGeometry(QRect(anchorRect.center() - widget->rect().center(), widget->size()));
             const QPoint targetCenter = anchorRect.center();
             traceDialogPositionCheckpointImpl(widget, "open_helper_move", &targetCenter);
         } else {

@@ -298,6 +298,7 @@ extern const char* PQAUTH;
 extern const char* PQPROP;
 extern const char* PQVOTE;
 extern const char* PQCMT;
+extern const char* PQSERVICE;
 /*
  * Messages for LLMQ-DKG inter-quorum communication
  */
