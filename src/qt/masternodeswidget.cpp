@@ -26,9 +26,10 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QLineEdit>
-#include <QPlainTextEdit>
 #include <QDir>
 #include <QFileDialog>
+#include <QSettings>
+#include <QSaveFile>
 #include <QUuid>
 
 #define DECORATION_SIZE 65
@@ -155,7 +156,7 @@ MasterNodesWidget::MasterNodesWidget(OrganicLifeGUI *parent) :
     connect(ui->btnCoinControl, &OptionButton::clicked, this, &MasterNodesWidget::onCoinControlClicked);
     if (Params().IsTestChain()) {
         setMNModel(new MNModel(this));
-        ui->pushButtonSave->setText(tr("Register masternode"));
+        ui->pushButtonSave->setText(tr("Create Masternode"));
         ui->pushButtonSave->setEnabled(false);
         ui->pushButtonStartMissing->setText(tr("Operator keys"));
         ui->pushButtonStartMissing->setEnabled(false);
@@ -267,8 +268,7 @@ void MasterNodesWidget::pqOperation(int action)
     const CCoinControl selectedCoins = *coinControlDialog->coinControl;
     pqmn::Payload op;
     op.action = static_cast<pqmn::Action>(action);
-    const bool registering = op.action == pqmn::Action::REGISTER;
-    if (!registering) {
+    {
         const auto entry = mnModel->pqRecord(index);
         if (!entry || entry->second.sequence == UINT64_MAX) return;
         op.registration = entry->first;
@@ -280,34 +280,25 @@ void MasterNodesWidget::pqOperation(int action)
     }
     QDialog dialog(this);
     dialog.setObjectName("pqMasternodeDialog");
-    dialog.setWindowTitle(registering ? tr("Register masternode") : tr("Manage masternode"));
+    dialog.setWindowTitle(tr("Manage masternode"));
     auto* form = new QFormLayout(&dialog);
     form->setSpacing(14);
-    auto* explanation = new QLabel(registering ?
-        tr("Uses existing wallet addresses and a backed operator identity. Creates a new collateral output. Remote startup, rewards and finality are not enabled.") :
+    auto* explanation = new QLabel(
         tr("Registration: %1\nNext sequence: %2").arg(QString::fromStdString(op.registration.GetHex())).arg(QString::number(op.sequence)), &dialog);
     explanation->setWordWrap(true);
     form->addRow(explanation);
-    QComboBox owner, collateral, payout, operators, operation;
+    QComboBox payout, operators, operation;
     QLineEdit service, operatorPayout;
     for (const auto& address : controller->getWallet()->GetPQAddresses()) {
         const auto text = QString::fromStdString(address);
-        owner.addItem(text); collateral.addItem(text); payout.addItem(text);
+        payout.addItem(text);
     }
-    if (collateral.count() > 1) collateral.setCurrentIndex(1);
     for (const auto& key : controller->getWallet()->GetPQOperators()) {
         const auto hex = QString::fromStdString(HexStr(key));
         operators.addItem(hex.left(20) + "…", hex);
     }
     payout.setEditable(true);
-    if (registering) {
-        form->addRow(tr("Owner address"), &owner);
-        form->addRow(tr("Collateral address"), &collateral);
-        form->addRow(tr("Payout address"), &payout);
-        form->addRow(tr("Backed operator"), &operators);
-        form->addRow(tr("Service IP:port (optional)"), &service);
-        op.collateral = COutPoint(uint256(), 0);
-    } else if (op.action == pqmn::Action::SERVICE) {
+    if (op.action == pqmn::Action::SERVICE) {
         operation.addItem(tr("Update service endpoint"), static_cast<int>(pqmn::Action::SERVICE));
         operation.addItem(tr("Update payout / rotate operator"), static_cast<int>(pqmn::Action::UPDATE));
         form->addRow(tr("Action"), &operation);
@@ -336,30 +327,21 @@ void MasterNodesWidget::pqOperation(int action)
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     dialog.resize(680, dialog.sizeHint().height());
     if (dialog.exec() != QDialog::Accepted || !controller || controller != walletModel) return;
-    if (!registering && op.action == pqmn::Action::SERVICE) op.action = static_cast<pqmn::Action>(operation.currentData().toInt());
+    if (op.action == pqmn::Action::SERVICE) op.action = static_cast<pqmn::Action>(operation.currentData().toInt());
     WalletModel::UnlockContext unlock(controller->requestUnlock());
     if (!unlock.isValid() || !controller || controller != walletModel) return;
     auto* wallet = controller->getWallet();
     const auto address = [&](const QString& text, pq::KeyID& id) {
         return pq::DecodeAddress(text.trimmed().toStdString(), Params().NetworkIDString(), id);
     };
-    if (registering || op.action == pqmn::Action::UPDATE) {
+    if (op.action == pqmn::Action::UPDATE) {
         const auto bytes = ParseHex(operators.currentData().toString().toStdString());
         if (bytes.size() != op.operatorKey.size() || !address(payout.currentText(), op.payout)) {
             warn(tr("Masternode"), tr("Choose a backed operator and a valid payout address.")); return;
         }
         std::copy(bytes.begin(), bytes.end(), op.operatorKey.begin());
     }
-    if (registering) {
-        mldsa44::Key ownerKey, collateralKey;
-        if (owner.currentText() == collateral.currentText() ||
-            !wallet->GetPQKey(owner.currentText().toStdString(), ownerKey) ||
-            !wallet->GetPQKey(collateral.currentText().toStdString(), collateralKey)) {
-            warn(tr("Masternode"), tr("Choose distinct owner and collateral addresses from this wallet.")); return;
-        }
-        op.owner = ownerKey.GetPublicKey(); op.collateralKey = collateralKey.GetPublicKey();
-    }
-    if (op.action == pqmn::Action::SERVICE || (registering && !service.text().isEmpty())) {
+    if (op.action == pqmn::Action::SERVICE) {
         op.service = LookupNumeric(service.text().trimmed().toStdString());
         if (!op.service.IsValid() || !op.service.GetPort()) { warn(tr("Masternode"), tr("Enter a numeric IP:port.")); return; }
     }
@@ -375,18 +357,17 @@ void MasterNodesWidget::pqOperation(int action)
     if (!wallet->PreparePQMasternodeTransaction(op, backup.toStdString(), tx, fee, reason, &selectedCoins)) {
         warn(tr("Masternode"), QString::fromStdString(reason)); return;
     }
-    const auto actionName = registering ? tr("Register") : op.action == pqmn::Action::REVOKE ? tr("Revoke") :
+    const auto actionName = op.action == pqmn::Action::REVOKE ? tr("Revoke") :
         op.action == pqmn::Action::SERVICE ? tr("Update service") : tr("Update payout / operator");
-    auto summary = tr("Action: %1\nRegistration: %2\nFee: %3\nCollateral created: %4\nEncrypted backup: %5")
-        .arg(actionName).arg(QString::fromStdString(registering ? tx->GetHash().GetHex() : op.registration.GetHex()))
+    auto summary = tr("Action: %1\nRegistration: %2\nFee: %3\nEncrypted backup: %4")
+        .arg(actionName).arg(QString::fromStdString(op.registration.GetHex()))
         .arg(GUIUtil::formatBalance(fee, BitcoinUnits::PIV))
-        .arg(GUIUtil::formatBalance(registering ? Params().GetConsensus().nMNCollateralAmt : 0, BitcoinUnits::PIV)).arg(backup);
-    if (registering) summary += tr("\nOwner: %1\nCollateral address: %2").arg(owner.currentText(), collateral.currentText());
-    if (registering || op.action == pqmn::Action::UPDATE) {
+        .arg(backup);
+    if (op.action == pqmn::Action::UPDATE) {
         const auto id = pq::GetID(op.operatorKey, Params().NetworkIDString());
         summary += tr("\nPayout: %1\nOperator fingerprint: %2").arg(payout.currentText(), id ? QString::fromStdString(HexStr(*id)) : "");
     }
-    if (registering || op.action == pqmn::Action::SERVICE)
+    if (op.action == pqmn::Action::SERVICE)
         summary += tr("\nService: %1").arg(service.text());
     if (op.action == pqmn::Action::SERVICE) summary += tr("\nOperator payout: %1").arg(operatorPayout.text());
     if (op.action == pqmn::Action::UPDATE) summary += tr("\nChanging the operator clears its service endpoint and payout.");
@@ -398,12 +379,64 @@ void MasterNodesWidget::pqOperation(int action)
     inform(tr("Transaction submitted: %1. Wait for confirmation before another change.").arg(QString::fromStdString(committed.hashTx.GetHex())));
 }
 
+void MasterNodesWidget::createPQMasternode()
+{
+    QPointer<WalletModel> controller = walletModel;
+    if (!controller || !mnModel || !mnModel->registryError().isEmpty()) return;
+    const CCoinControl selectedCoins = *coinControlDialog->coinControl;
+    MasterNodeWizardDialog wizard(controller, mnModel, this);
+    if (wizard.exec() != QDialog::Accepted || !controller || controller != walletModel) return;
+    if (!wizard.isOk) { warn(tr("Error creating masternode"), wizard.returnStr); return; }
+    WalletModel::UnlockContext unlock(controller->requestUnlock());
+    if (!unlock.isValid() || !controller || controller != walletModel) return;
+    QString directory;
+    if (!PQWalletUI::ensureBackupDirectory(this, controller, directory) || !controller || controller != walletModel) return;
+    auto* wallet = controller->getWallet();
+    pqmn::Payload op;
+    op.action = pqmn::Action::REGISTER;
+    op.collateral = COutPoint(uint256(), 0);
+    op.service = LookupNumeric(wizard.service().toStdString());
+    const auto backupBase = QDir(directory).filePath("olc-pq-masternode-" + QUuid::createUuid().toString(QUuid::WithoutBraces));
+    std::string reason;
+    if (!wallet->PreparePQOperator((backupBase + "-wallet-before-registration.dat").toStdString(), op.operatorKey, reason)) {
+        warn(tr("Error creating masternode"), QString::fromStdString(reason)); return;
+    }
+    std::string ownerAddress, collateralAddress, payoutAddress;
+    mldsa44::Key owner, collateral;
+    if (!wallet->GeneratePQAddress(ownerAddress) || !wallet->GeneratePQAddress(collateralAddress) ||
+        !wallet->GeneratePQAddress(payoutAddress) || !wallet->GetPQKey(ownerAddress, owner) ||
+        !wallet->GetPQKey(collateralAddress, collateral) || !pq::DecodeAddress(payoutAddress, Params().NetworkIDString(), op.payout)) {
+        warn(tr("Error creating masternode"), tr("Could not prepare wallet keys. No transaction was sent.")); return;
+    }
+    op.owner = owner.GetPublicKey(); op.collateralKey = collateral.GetPublicKey();
+    CTransactionRef tx;
+    CAmount fee;
+    const auto backup = backupBase + ".dat";
+    if (!wallet->PreparePQMasternodeTransaction(op, backup.toStdString(), tx, fee, reason, &selectedCoins)) {
+        warn(tr("Error creating masternode"), QString::fromStdString(reason)); return;
+    }
+    const auto summary = tr("Name: %1\nService: %2\nCollateral: %3\nFee: %4\nEncrypted backup: %5\n\nThe collateral and rewards stay in this wallet. Create this masternode?")
+        .arg(wizard.alias(), QString::fromStdString(op.service.ToString()),
+             GUIUtil::formatBalance(Params().GetConsensus().nMNCollateralAmt, BitcoinUnits::PIV),
+             GUIUtil::formatBalance(fee, BitcoinUnits::PIV), backup);
+    if (!ask(tr("Create Masternode"), summary) || !controller || controller != walletModel) return;
+    const auto committed = wallet->CommitTransaction(tx, nullptr, g_connman.get());
+    if (committed.status != CWallet::CommitStatus::OK) { warn(tr("Masternode"), QString::fromStdString(committed.ToString())); return; }
+    QSettings().setValue("pqMasternodeNames/" + QString::fromStdString(Params().GetConsensus().hashGenesisBlock.GetHex()) + "/" +
+                         QString::fromStdString(committed.hashTx.GetHex()), wizard.alias());
+    resetCoinControl();
+    inform(tr("Transaction submitted: %1. After confirmation, open the masternode information to export its server configuration.")
+        .arg(QString::fromStdString(committed.hashTx.GetHex())));
+}
+
 void MasterNodesWidget::clearWalletModel()
 {
     PWidget::clearWalletModel();
     coinControlDialog->setModel(nullptr);
     resetCoinControl();
     if (auto* dialog = findChild<QDialog*>("pqMasternodeDialog")) dialog->reject();
+    if (auto* dialog = findChild<MasterNodeWizardDialog*>()) dialog->reject();
+    if (auto* dialog = findChild<MnInfoDialog*>()) dialog->reject();
     if (auto* dialog = findChild<QDialog*>("pqOperatorsDialog")) dialog->reject();
     if (menu) menu->hide();
     index = QPersistentModelIndex();
@@ -606,26 +639,69 @@ void MasterNodesWidget::onError(QString error, int type)
 void MasterNodesWidget::onInfoMNClicked()
 {
     if (Params().IsTestChain()) {
+        QPointer<WalletModel> controller = walletModel;
         const auto entry = mnModel ? mnModel->pqRecord(index) : nullopt;
         if (!entry) return;
-        QDialog dialog(this);
-        dialog.setWindowTitle(tr("Masternode registration"));
-        auto* layout = new QVBoxLayout(&dialog);
-        auto* details = new QPlainTextEdit(&dialog);
-        details->setReadOnly(true);
+        MnInfoDialog dialog(this);
         const auto& r = entry->second;
-        details->setPlainText(tr("Registration: %1\nSequence: %2\nCollateral: %3:%4\nService: %5\nPayout: %6\nOperator public key: %7\n\nRegistration does not establish service, rewards or finality.")
-            .arg(QString::fromStdString(entry->first.GetHex())).arg(QString::number(r.sequence))
-            .arg(QString::fromStdString(r.collateral.hash.GetHex())).arg(r.collateral.n)
-            .arg(QString::fromStdString(r.service.ToString()))
-            .arg(QString::fromStdString(pq::EncodeAddress(r.payout, Params().NetworkIDString())))
-            .arg(QString::fromStdString(HexStr(r.operatorKey))));
-        layout->addWidget(details);
-        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
-        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-        layout->addWidget(buttons);
-        dialog.resize(660, 350);
+        dialog.setData(QString::fromStdString(HexStr(r.operatorKey)), index.data().toString(),
+                       QString::fromStdString(r.service.ToString()), QString::fromStdString(r.collateral.hash.GetHex()),
+                       QString::number(r.collateral.n), index.sibling(index.row(), MNModel::STATUS).data().toString());
         dialog.exec();
+        if (!dialog.exportMN || !controller || controller != walletModel) return;
+        const auto current = mnModel->pqRecord(index);
+        if (!current || current->first != entry->first || current->second.operatorKey != r.operatorKey) return;
+        const auto config = PQWalletUI::masternodeConfig(entry->first, r.service);
+        if (config.isEmpty()) { warn(tr("Masternode"), tr("Set a valid service address before exporting.")); return; }
+        if (!ask(tr("Remote Masternode Data"), tr("Export the operator files and copy the server configuration?\nThe files allow this server to operate the masternode, but cannot spend your coins. Transfer both files securely to the server.")) ||
+            !controller || controller != walletModel) return;
+        WalletModel::UnlockContext unlock(controller->requestUnlock());
+        if (!unlock.isValid() || !controller || controller != walletModel) return;
+        const auto parent = QFileDialog::getExistingDirectory(this, tr("Choose a private folder for operator credentials"));
+        if (parent.isEmpty() || !controller || controller != walletModel) return;
+        const auto destination = QDir(parent).filePath("olc-masternode-" + QString::fromStdString(entry->first.GetHex()) + "-" +
+                                                       QUuid::createUuid().toString(QUuid::WithoutBraces));
+        std::string reason;
+        if (!controller->getWallet()->ExportPQOperator(r.operatorKey, destination.toStdString(), reason)) {
+            warn(tr("Masternode"), QString::fromStdString(reason)); return;
+        }
+        const QString instructions =
+            "OrganicLife masternode operator export (LOCAL transfer bundle)\n\n"
+            "olc-pq-operator-record and olc-pq-operator-key are BOTH SECRET.\n"
+            "They authorize this operator, not spending from your controller wallet.\n"
+            "Never transfer a wallet .dat backup or its passphrase to the VPS.\n\n"
+            "The local export folder is NOT the remote datadir. On the Linux VPS,\n"
+            "copy organiclifecoin.conf into the datadir named inside that file. Copy\n"
+            "ONLY olc-pq-operator-record and olc-pq-operator-key into the separate\n"
+            "pqoperatorcredentials directory named in the configuration. README.txt\n"
+            "stays here for reference. Do not point pqoperatorcredentials at this bundle.\n\n"
+            "Use a separate walletless daemon instance for this registration. Create the\n"
+            "absolute datadir in organiclifecoin.conf, owned by the daemon account (0700).\n"
+            "Copy the two secret files securely into its operator subdirectory (0700),\n"
+            "with files readable only by that account (0600). Keep the configuration\n"
+            "outside the secret directory and pass its absolute path with -conf.\n"
+            "Allow the configured P2P port, never expose the loopback RPC port.\n\n"
+            "FIRST START / FINALITY: Wait for registration confirmation. Sync a passive\n"
+            "node without pqoperatorcredentials/pqoperatorid first. If the network already\n"
+            "publishes certificates, use its externally approved pqbootstrap checkpoint\n"
+            "for this passive sync. Then start with operator credentials, temporarily\n"
+            "without pqbootstrap, and run organiclife-cli -conf=<absolute-config> initpqjournal\n"
+            "ONCE for this new identity. Restart with the network's approved checkpoint.\n"
+            "Do not invent a checkpoint or copy another operator's signing history.\n"
+            "Never delete or reset an existing journal or lock file. Preserve them\n"
+            "outside chainstate across upgrades. Registration alone is not proof that\n"
+            "the operator is online, receiving rewards or participating in finality.\n";
+        for (const auto& file : {std::make_pair(QString("organiclifecoin.conf"), config),
+                                 std::make_pair(QString("README.txt"), instructions)}) {
+            QSaveFile output(QDir(destination).filePath(file.first));
+            const auto bytes = file.second.toUtf8();
+            if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
+                warn(tr("Masternode"), tr("The two secret operator files are complete in %1, but the configuration or instructions are incomplete. Nothing was copied to the clipboard. Retry Export to create a new complete bundle; keep this partial folder private.").arg(destination));
+                return;
+            }
+        }
+        GUIUtil::setClipboard(config);
+        inform(tr("Server configuration copied. Operator files, configuration and setup instructions saved in %1. Follow README.txt for the first server startup; keep wallet backups on the controller.").arg(destination));
         return;
     }
     WalletModel::UnlockContext ctx(walletModel->requestUnlock());
@@ -679,7 +755,7 @@ void MasterNodesWidget::onDeleteMNClicked()
 
 void MasterNodesWidget::onCreateMNClicked()
 {
-    if (Params().IsTestChain()) { pqOperation(static_cast<int>(pqmn::Action::REGISTER)); return; }
+    if (Params().IsTestChain()) { createPQMasternode(); return; }
     WalletModel::UnlockContext ctx(walletModel->requestUnlock());
     if (!ctx.isValid()) {
         // Unlock wallet was cancelled

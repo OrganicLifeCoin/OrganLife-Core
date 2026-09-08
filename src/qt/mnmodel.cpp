@@ -16,6 +16,7 @@
 #include <utilstrencodings.h>
 
 #include <QHostAddress>
+#include <QSettings>
 
 MNModel::MNModel(QObject *parent) : QAbstractTableModel(parent) {}
 
@@ -119,7 +120,9 @@ QVariant MNModel::data(const QModelIndex &index, int role) const
             switch (index.column()) {
             case ALIAS: {
                 const auto id = QString::fromStdString(entry->first.GetHex());
-                return role == Qt::EditRole ? id : id.left(12) + "…" + id.right(8);
+                if (role == Qt::EditRole) return id;
+                return QSettings().value("pqMasternodeNames/" + QString::fromStdString(Params().GetConsensus().hashGenesisBlock.GetHex()) + "/" + id,
+                                         id.left(12) + "…" + id.right(8));
             }
             case ADDRESS: return record.service == CService() ? tr("Endpoint not set") : QString::fromStdString(record.service.ToString());
             case STATUS: return record.revoked ? tr("REVOKED") :

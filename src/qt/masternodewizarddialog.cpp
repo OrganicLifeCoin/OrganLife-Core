@@ -10,6 +10,7 @@
 #include "bls/key_io.h"
 #include "chainparams.h"
 #include "mnmodel.h"
+#include "netbase.h"
 #include "qt/walletmodel.h"
 #include "qtutils.h"
 
@@ -90,6 +91,8 @@ MasterNodeWizardDialog::MasterNodeWizardDialog(WalletModel* model, MNModel* _mnM
     ui->labelMessage3->setText(formatHtmlContent(
                 formatParagraph(tr("The registration transaction will embed the %1 collateral, "
                         "which remains yours and is locked while the node runs.").arg(collateralAmountStr))));
+    if (Params().IsTestChain()) ui->labelMessage3->setText(ui->labelMessage3->text() +
+        formatParagraph(tr("Keys and encrypted wallet backups are prepared automatically before the final fee confirmation. Cancelling that confirmation sends no coins; the unused keys and backups are retained.")));
 
     initCssEditLine(ui->lineEditName);
     // MN alias must not contain spaces or "#" character
@@ -104,7 +107,7 @@ MasterNodeWizardDialog::MasterNodeWizardDialog(WalletModel* model, MNModel* _mnM
     initCssEditLine(ui->lineEditIpAddress);
     initCssEditLine(ui->lineEditPort);
     ui->stackedWidget->setCurrentIndex(pos);
-    ui->lineEditPort->setEnabled(false);    // use default port number
+    ui->lineEditPort->setEnabled(Params().IsTestChain());
     ui->lineEditPort->setText(QString::number(Params().GetDefaultPort()));
 
     // Confirm icons
@@ -199,6 +202,19 @@ bool MasterNodeWizardDialog::createMNInternal()
         return false;
     }
 
+    // The controller page prepares and confirms the PQ transaction only after
+    // this familiar input wizard has completed. Cancelling this input wizard
+    // creates no keys; declining the later fee review retains backed keys.
+    if (Params().IsTestChain()) {
+        const auto endpoint = LookupNumeric(service().toStdString());
+        if (alias().isEmpty() || !ui->lineEditName->hasAcceptableInput() ||
+            !endpoint.IsValid() || !endpoint.GetPort()) {
+            returnStr = tr("Enter a name, a numeric IP address and a port from 1 to 65535.");
+            return false;
+        }
+        return true;
+    }
+
     // validate IP address
     QString addressLabel = ui->lineEditName->text();
     if (addressLabel.isEmpty()) {
@@ -253,6 +269,23 @@ bool MasterNodeWizardDialog::createMNInternal()
                        portStr,
                        GUIUtil::formatBalance(mnModel->getMNCollateralRequiredAmount()));
     return true;
+}
+
+QString MasterNodeWizardDialog::alias() const
+{
+    return ui->lineEditName->text().trimmed();
+}
+
+QString MasterNodeWizardDialog::service() const
+{
+    auto ip = ui->lineEditIpAddress->text().trimmed();
+    bool validPort = false;
+    const auto portText = ui->lineEditPort->text().trimmed();
+    const auto port = portText.isEmpty() ? unsigned(Params().GetDefaultPort()) : portText.toUInt(&validPort);
+    if (portText.isEmpty()) validPort = true;
+    if (!validPort || !port || port > 65535 || ip.isEmpty()) return {};
+    if (ip.contains(':') && !ip.startsWith('[')) ip = '[' + ip + ']';
+    return ip + ':' + QString::number(port);
 }
 
 void MasterNodeWizardDialog::onBackClicked()

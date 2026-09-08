@@ -6,6 +6,7 @@
 #include "walletmodel.h"
 
 #include <chainparams.h>
+#include <netaddress.h>
 #include <wallet/walletutil.h>
 
 #include <QCryptographicHash>
@@ -14,6 +15,21 @@
 #include <QPointer>
 #include <QSettings>
 #include <QUuid>
+
+QString PQWalletUI::masternodeConfig(const uint256& registration, const CService& service)
+{
+    if (!Params().IsTestChain() || registration.IsNull() || !service.IsValid() || !service.GetPort()) return {};
+    const auto id = QString::fromStdString(registration.GetHex());
+    const auto data = "/var/lib/organiclifecoin/pq-" + id;
+    // Each operator gets its own data, signing history and RPC port on the VPS.
+    // Credentials are intentionally not serialized into a clipboard string.
+    return QString("%1=1\ndatadir=%2\ndisablewallet=1\nstaking=0\nserver=1\nlisten=1\n"
+                   "pqoperatorid=%3\npqoperatorcredentials=%2/operator\n\n[%4]\n"
+                   "externalip=%5\nport=%6\nrpcbind=127.0.0.1\nrpcallowip=127.0.0.1\nrpcport=%7\n")
+        .arg(Params().NetworkIDString() == "test" ? "testnet" : "regtest", data, id,
+             QString::fromStdString(Params().NetworkIDString()), QString::fromStdString(service.ToString()))
+        .arg(service.GetPort()).arg(service.GetPort() == 65535 ? 65534 : service.GetPort() + 1);
+}
 
 QString PQWalletUI::backupSettingsKey(WalletModel* model)
 {

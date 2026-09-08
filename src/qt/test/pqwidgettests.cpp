@@ -21,6 +21,8 @@
 #include "transactiontablemodel.h"
 #include "walletmodeltransaction.h"
 #include "masternodeswidget.h"
+#include "masternodewizarddialog.h"
+#include "mninfodialog.h"
 #include "mnmodel.h"
 
 #include <chainparams.h>
@@ -31,6 +33,7 @@
 #include <interfaces/handler.h>
 #include <interfaces/wallet.h>
 #include <key.h>
+#include <netbase.h>
 #include <pqtransaction.h>
 #include <scheduler.h>
 #include <script/sigcache.h>
@@ -49,6 +52,8 @@
 #include <QElapsedTimer>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QClipboard>
+#include <QFileDialog>
 #include <QListView>
 #include <QLineEdit>
 #include <QPointer>
@@ -66,6 +71,7 @@
 #include <algorithm>
 #include <atomic>
 #include <thread>
+#include <sstream>
 #ifdef WIN32
 #include <aclapi.h>
 #endif
@@ -96,6 +102,7 @@ void PQWidgetTests::masternodeControllerNavigation()
     QVERIFY(!page->findChild<QPushButton*>("pushButtonStartMissing")->isHidden());
     QVERIFY(!page->findChild<QPushButton*>("pushButtonStartMissing")->isEnabled());
     QVERIFY(!page->findChild<QPushButton*>("pushButtonSave")->isEnabled());
+    QCOMPARE(page->findChild<QPushButton*>("pushButtonSave")->text(), QString("Create Masternode"));
     QVERIFY(!page->findChild<QWidget*>("btnCoinControl")->isHidden());
     page->clearWalletModel();
     QVERIFY(!page->findChild<QPushButton*>("pushButtonSave")->isEnabled());
@@ -114,6 +121,45 @@ void PQWidgetTests::masternodeRegistryFailsClosed()
         QVERIFY(!model.registryError().isEmpty());
         QVERIFY(!model.index(0, MNModel::PRIV_KEY, {}).isValid());
     }
+}
+
+void PQWidgetTests::masternodeServerConfiguration()
+{
+    const auto oldNetwork = Params().NetworkIDString();
+    struct Restore { std::string network; ~Restore() { SelectParams(network); } } restore{oldNetwork};
+    const auto id = uint256S("aabbcc");
+    for (const auto& network : {CBaseChainParams::REGTEST, CBaseChainParams::TESTNET}) {
+        SelectParams(network);
+        MNModel model(nullptr);
+        MasterNodeWizardDialog wizard(nullptr, &model);
+        wizard.findChild<QLineEdit*>("lineEditIpAddress")->setText("8.8.8.8");
+        wizard.findChild<QLineEdit*>("lineEditPort")->clear();
+        QCOMPARE(wizard.service(), "8.8.8.8:" + QString::number(Params().GetDefaultPort()));
+        for (const auto& endpoint : {"8.8.8.8:49736", "[2001:4860::8888]:49746"}) {
+            const auto config = PQWalletUI::masternodeConfig(id, LookupNumeric(endpoint));
+            QVERIFY(config.contains("disablewallet=1\n"));
+            QVERIFY(config.contains("pqoperatorid=" + QString::fromStdString(id.GetHex())));
+            QVERIFY(config.contains("pqoperatorcredentials=/var/lib/organiclifecoin/pq-"));
+            QVERIFY(config.contains(QString("externalip=") + endpoint));
+            const auto section = config.indexOf(network == CBaseChainParams::TESTNET ? "[test]" : "[regtest]");
+            QVERIFY(section > 0);
+            QVERIFY(config.indexOf("\nport=") > section);
+            QVERIFY(config.indexOf("\nrpcport=") > section);
+            QVERIFY(!config.contains("privatekey"));
+            QVERIFY(!config.contains("rpcpassword"));
+            struct ConfigArgs : ArgsManager { using ArgsManager::ReadConfigStream; } parsed;
+            std::istringstream stream(config.toStdString());
+            parsed.ReadConfigStream(stream);
+            parsed.SelectConfigNetwork(network);
+            QCOMPARE(parsed.GetArg("-port", 0), int64_t(LookupNumeric(endpoint).GetPort()));
+            QCOMPARE(parsed.GetArg("-rpcport", 0), int64_t(LookupNumeric(endpoint).GetPort() + 1));
+            QCOMPARE(parsed.GetArg("-externalip", ""), std::string(endpoint));
+        }
+        QVERIFY(PQWalletUI::masternodeConfig(uint256(), LookupNumeric("8.8.8.8:49736")).isEmpty());
+        QVERIFY(PQWalletUI::masternodeConfig(id, CService()).isEmpty());
+    }
+    SelectParams(CBaseChainParams::MAIN);
+    QVERIFY(PQWalletUI::masternodeConfig(id, LookupNumeric("8.8.8.8:49736")).isEmpty());
 }
 
 void PQWidgetTests::masternodeControllerCancelsWithoutWrites_data()
@@ -185,9 +231,9 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     QVERIFY(wallet.EncryptWallet(SecureString("test-only")));
     QVERIFY(wallet.Unlock(SecureString("test-only")));
     for (int i = 0; i < 3; ++i) { std::string address; QVERIFY(wallet.GeneratePQAddress(address)); }
-    mldsa44::PublicKey operatorKey;
+    mldsa44::PublicKey operatorKey{};
     std::string reason;
-    QVERIFY2(wallet.PreparePQOperator(fs::path(directory.path().toStdString()) / "operator.dat", operatorKey, reason), reason.c_str());
+    QVERIFY(wallet.GetPQOperators().empty()); // The creation wizard must prepare its own identity.
     OptionsModel options;
     WalletModel model(&wallet, &options);
     model.init();
@@ -208,11 +254,12 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     const auto before = QDir(directory.path()).entryList();
     bool sawDialog = false;
     QTimer::singleShot(0, page, [&] {
-        auto* dialog = page->findChild<QDialog*>("pqMasternodeDialog");
+        auto* dialog = page->findChild<MasterNodeWizardDialog*>();
         sawDialog = dialog && dialog->isVisible();
         const auto preview = qEnvironmentVariable("OLC_MN_PREVIEW_DIR");
         if (sawDialog && !preview.isEmpty()) QVERIFY(dialog->grab().save(preview + "/register.png"));
         if (dialog) dialog->reject();
+        else if (auto* old = page->findChild<QDialog*>("pqMasternodeDialog")) old->reject();
     });
     QVERIFY(QMetaObject::invokeMethod(page, "onCreateMNClicked", Qt::DirectConnection));
     QVERIFY(sawDialog);
@@ -262,27 +309,48 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
         }
         else errorMessage = text;
     });
-    const auto review = [&] {
+    const auto review = [&](const QString& ip = QString(), const QString& port = QString("49736")) {
         QTimer::singleShot(0, page, [&] {
-            if (auto* dialog = page->findChild<QDialog*>("pqMasternodeDialog")) dialog->accept();
+            auto* dialog = page->findChild<MasterNodeWizardDialog*>();
+            QVERIFY(dialog);
+            auto* next = dialog->findChild<QPushButton*>("btnNext");
+            next->click();
+            dialog->findChild<QLineEdit*>("lineEditName")->setText("Test-masternode");
+            next->click();
+            dialog->findChild<QLineEdit*>("lineEditIpAddress")->setText(ip.isEmpty() ? (network == "test" ? "2001:4860::8888" : "8.8.8.8") : ip);
+            dialog->findChild<QLineEdit*>("lineEditPort")->setText(port);
+            QVERIFY(dialog->findChildren<QComboBox*>().empty()); // No address or operator selection.
+            const auto preview = qEnvironmentVariable("OLC_MN_PREVIEW_DIR");
+            if (!preview.isEmpty()) QVERIFY(dialog->grab().save(preview + "/create-service.png"));
+            next->click();
         });
         return QMetaObject::invokeMethod(page, "onCreateMNClicked", Qt::DirectConnection);
     };
+    for (const auto& endpoint : {std::make_pair(QString("example.com"), QString("49736")),
+                                std::make_pair(QString("8.8.8.8"), QString("0")),
+                                std::make_pair(QString("2001:4860::8888"), QString("65536"))}) {
+        QVERIFY(review(endpoint.first, endpoint.second));
+        QVERIFY(reviewMessage.isEmpty());
+        QVERIFY2(errorMessage.contains("numeric IP"), qPrintable(errorMessage));
+        QVERIFY(wallet.GetPQOperators().empty());
+        QCOMPARE(QDir(backupDirectory).entryList({"*.dat"}, QDir::Files).size(), 0);
+    }
     mnCoinControl->coinControl->Select(COutPoint(uint256S("ee"), 0));
     QVERIFY(review());
     QVERIFY(reviewMessage.isEmpty());
     QVERIFY2(errorMessage.contains("selected coin"), qPrintable(errorMessage));
-    QCOMPARE(QDir(backupDirectory).entryList({"*.dat"}, QDir::Files).size(), 0);
+    QCOMPARE(QDir(backupDirectory).entryList({"*.dat"}, QDir::Files).size(), 1); // Operator recovery only, no transaction.
     mnCoinControl->coinControl->SetNull();
     mnCoinControl->coinControl->Select(COutPoint(funding->GetHash(), 0));
     errorMessage.clear();
     QVERIFY(review());
     QVERIFY2(!reviewMessage.isEmpty(), qPrintable(errorMessage));
     QVERIFY(reviewMessage.contains("Fee:"));
-    QVERIFY(reviewMessage.contains(QString::fromStdString(wallet.GetPQAddresses().front())));
+    QVERIFY(reviewMessage.contains("Test-masternode"));
+    QVERIFY(reviewMessage.contains("49736"));
     QCOMPARE(wallet.mapWallet.size(), size_t(1)); // Rejected confirmation never persists or relays.
     QCOMPARE(mempool.size(), size_t(0));
-    QCOMPARE(QDir(backupDirectory).entryList({"*.dat"}, QDir::Files).size(), 1);
+    QCOMPARE(QDir(backupDirectory).entryList({"*.dat"}, QDir::Files).size(), 3);
     reviewMessage.clear(); errorMessage.clear();
     QSettings().setValue(PQWalletUI::backupSettingsKey(&model), directory.path() + "/missing/backup");
     QVERIFY(review());
@@ -306,7 +374,44 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     QVERIFY(!mnCoinControl->coinControl->HasSelected());
     QCOMPARE(wallet.mapWallet.size(), size_t(2));
     QCOMPARE(mempool.size(), size_t(1));
-    QCOMPARE(QDir(backupDirectory).entryList({"*.dat"}, QDir::Files).size(), 2);
+    QCOMPARE(QDir(backupDirectory).entryList({"*.dat"}, QDir::Files).size(), 5);
+    CTransactionRef registration;
+    for (const auto& entry : wallet.mapWallet) if (entry.first != funding->GetHash()) registration = entry.second.tx;
+    QVERIFY(registration);
+    const auto nameKey = "pqMasternodeNames/" + QString::fromStdString(genesisHash.GetHex()) + "/" +
+                         QString::fromStdString(registration->GetHash().GetHex());
+    QCOMPARE(QSettings().value(nameKey).toString(), QString("Test-masternode"));
+    QSettings().remove(nameKey);
+    QCOMPARE(registration->vout.at(0).nValue, Params().GetConsensus().nMNCollateralAmt);
+    pqmn::Payload payload;
+    pq::Payload envelope;
+    QVERIFY(pq::DecodePayload(*registration, envelope));
+    QVERIFY(pqmn::Decode(envelope.data, payload));
+    QVERIFY(payload.operatorKey != operatorKey);
+    operatorKey = payload.operatorKey;
+    QVERIFY(payload.owner != payload.collateralKey);
+    QCOMPARE(payload.service.GetPort(), uint16_t(49736));
+    const auto backupFile = reviewMessage.section("Encrypted backup: ", 1).section('\n', 0, 0);
+    {
+        // Berkeley DB must close the source before opening its backup copy
+        // (the copies intentionally have the same database file ID).
+        wallet.GetDBHandle().Flush(false);
+        struct BackupWallet : CWallet {
+            using CWallet::CWallet;
+            ~BackupWallet() { GetDBHandle().Flush(true); }
+        } restored("mn-backup", WalletDatabase::Create(fs::path(backupFile.toStdString())));
+        QCOMPARE(restored.LoadWallet(firstRun), DB_LOAD_OK);
+        QVERIFY(restored.IsCrypted());
+        QVERIFY(restored.Unlock(SecureString("test-only")));
+        const auto recoveredOperators = restored.GetPQOperators();
+        QVERIFY(std::find(recoveredOperators.begin(), recoveredOperators.end(), operatorKey) != recoveredOperators.end());
+        for (const auto& id : {*pq::GetID(payload.owner, Params().NetworkIDString()),
+                               *pq::GetID(payload.collateralKey, Params().NetworkIDString()), payload.payout}) {
+            mldsa44::Key recovered;
+            QVERIFY(restored.GetPQKey(id, recovered, false));
+        }
+    }
+    const auto operatorCount = wallet.GetPQOperators().size();
     bool operatorDialogSeen = false;
     QTimer::singleShot(0, page, [&] {
         auto* dialog = page->findChild<QDialog*>("pqOperatorsDialog");
@@ -362,12 +467,12 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     QVERIFY(QMetaObject::invokeMethod(page, "onPQOperatorsClicked", Qt::DirectConnection));
     QVERIFY(operatorDialogSeen);
     page->setWalletModel(&model);
-    QCOMPARE(wallet.GetPQOperators().size(), size_t(2));
+    QCOMPARE(wallet.GetPQOperators().size(), operatorCount + 1);
     QCOMPARE(wallet.mapWallet.size(), size_t(2)); // Provisioning never creates a spend.
     QTimer::singleShot(0, page, [&] { page->clearWalletModel(); });
     QVERIFY(QMetaObject::invokeMethod(page, "onPQOperatorsClicked", Qt::DirectConnection));
     QVERIFY(!page->findChild<QPushButton*>("pushButtonStartMissing")->isEnabled());
-    QCOMPARE(wallet.GetPQOperators().size(), size_t(2));
+    QCOMPARE(wallet.GetPQOperators().size(), operatorCount + 1);
     page->setWalletModel(&model);
     QSettings().remove(PQWalletUI::backupSettingsKey(&model));
 
@@ -394,6 +499,73 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
         QVERIFY(window.grab().save(preview + "/masternodes.png"));
     }
     QVERIFY(!registryModel->index(0, MNModel::PRIV_KEY, {}).data().isValid());
+    record.service = LookupNumeric("[2001:4860::8888]:49736");
+    evoDb->Write(recordKey, record);
+    registryModel->updateMNList();
+    QVERIFY(QMetaObject::invokeMethod(page, "onMNClicked", Qt::DirectConnection,
+                                     Q_ARG(QModelIndex, registryModel->index(0, MNModel::ALIAS, {}))));
+    bool infoSeen = false;
+    QTimer::singleShot(0, page, [&] {
+        auto* dialog = page->findChild<MnInfoDialog*>();
+        infoSeen = dialog && dialog->isVisible();
+        if (dialog) {
+            QVERIFY(dialog->findChild<QPushButton*>("pushExport"));
+            if (!preview.isEmpty()) QVERIFY(dialog->grab().save(preview + "/info.png"));
+            dialog->reject();
+        } else if (auto* old = page->findChild<QDialog*>()) old->reject();
+    });
+    QVERIFY(QMetaObject::invokeMethod(page, "onInfoMNClicked", Qt::DirectConnection));
+    QVERIFY(infoSeen);
+    bool closedOnUnload = false;
+    QTimer::singleShot(0, page, [&] {
+        auto* dialog = page->findChild<MnInfoDialog*>();
+        if (!dialog) return;
+        page->clearWalletModel();
+        closedOnUnload = !dialog->isVisible();
+        dialog->reject();
+    });
+    QVERIFY(QMetaObject::invokeMethod(page, "onInfoMNClicked", Qt::DirectConnection));
+    QVERIFY(closedOnUnload);
+    page->setWalletModel(&model);
+    QVERIFY(QMetaObject::invokeMethod(page, "onMNClicked", Qt::DirectConnection,
+                                     Q_ARG(QModelIndex, registryModel->index(0, MNModel::ALIAS, {}))));
+    const bool nativeDialogsDisabled = QApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
+    QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, true);
+    struct RestoreDialogs { bool disabled; ~RestoreDialogs() { QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, disabled); } } restoreDialogs{nativeDialogsDisabled};
+    bool exportedFromInfo = false;
+    QTimer exportTimer;
+    connect(&exportTimer, &QTimer::timeout, page, [&] {
+        if (auto* dialog = page->findChild<MnInfoDialog*>(); dialog && dialog->isVisible()) {
+            dialog->findChild<QPushButton*>("pushExport")->click();
+        }
+        if (auto* chooser = page->findChild<QFileDialog*>(); chooser && chooser->isVisible()) {
+            chooser->setDirectory(directory.path());
+            QMetaObject::invokeMethod(chooser, "accept", Qt::DirectConnection);
+            exportedFromInfo = true;
+            exportTimer.stop();
+        }
+    });
+    exportTimer.start(10);
+    QTimer::singleShot(5000, &exportTimer, [&] { // Bound a broken dialog test, rather than hanging the suite.
+        exportTimer.stop();
+        for (auto* dialog : page->findChildren<QDialog*>()) dialog->reject();
+    });
+    QApplication::clipboard()->setText("unchanged");
+    QVERIFY(QMetaObject::invokeMethod(page, "onInfoMNClicked", Qt::DirectConnection));
+    QVERIFY(exportedFromInfo);
+    const auto exports = QDir(directory.path()).entryList({"olc-masternode-*"}, QDir::Dirs | QDir::NoDotAndDotDot);
+    QCOMPARE(exports.size(), 1);
+    mldsa44::Key infoKey;
+    QVERIFY2(pqwallet::LoadOperatorCredentials(QDir(directory.path()).filePath(exports.front()).toStdString(),
+        Params().NetworkIDString(), genesisHash, infoKey, reason), reason.c_str());
+    QVERIFY(infoKey.GetPublicKey() == operatorKey);
+    QCOMPARE(QApplication::clipboard()->text(), PQWalletUI::masternodeConfig(uint256S("bb"), record.service));
+    QFile exportedConfig(QDir(directory.path()).filePath(exports.front() + "/organiclifecoin.conf"));
+    QVERIFY(exportedConfig.open(QIODevice::ReadOnly));
+    QCOMPARE(QString::fromUtf8(exportedConfig.readAll()), QApplication::clipboard()->text());
+    QCOMPARE(wallet.mapWallet.size(), size_t(2)); // Export neither spends nor copies controller keys.
+    mldsa44::Key spendingKey;
+    QVERIFY(!wallet.GetPQKey(*pq::GetID(infoKey.GetPublicKey(), Params().NetworkIDString()), spendingKey, false));
     QPersistentModelIndex selected = registryModel->index(0, MNModel::ALIAS, {});
     record.revoked = true;
     evoDb->Write(recordKey, record);

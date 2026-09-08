@@ -10,6 +10,7 @@ private Q_SLOTS:
     void masternodeControllerNavigation_data();
     void masternodeControllerNavigation();
     void masternodeRegistryFailsClosed();
+    void masternodeServerConfiguration();
     void masternodeControllerCancelsWithoutWrites_data();
     void masternodeControllerCancelsWithoutWrites();
     void seamlessWalletUsesStandardScreens();

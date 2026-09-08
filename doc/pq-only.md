@@ -255,15 +255,32 @@ request whose response was lost; do not blindly repeat collateral funding.
 The RPC help contains the full option contract. Ordinary CLI JSON conversion
 is supported for the options object.
 
-The familiar Qt Masternodes page is available on regtest. It reads the current
+The familiar Qt Masternodes page is available on activated test chains. It reads the current
 confirmed registry (including registrations not controlled by the selected
 wallet), shows immature/registered/revoked state, and offers registration,
-service updates, payout updates/operator rotation and revocation. It uses
-existing wallet addresses and backed operator identities. The Operator keys
-dialog can create an identity after a verified encrypted recovery backup, or
+service updates, payout updates/operator rotation and revocation. **Create Masternode**
+reuses the original name/IP wizard; the port defaults to the network port and
+can be changed for multiple operators on one VPS. It automatically prepares
+distinct owner, collateral and payout addresses plus a backed operator identity,
+then shows the collateral, fee and encrypted backup before submission. No manual
+address or operator-key selection is required. Cancelling the input wizard writes
+nothing. Declining the final fee confirmation sends no transaction, but retains
+prepared keys and encrypted backups; these are not registered masternodes.
+Names are local UI preferences, not consensus data, and may need restoring after
+migrating the controller to another computer.
+
+The original information dialog exports the selected operator's two secret files,
+a non-secret `organiclifecoin.conf` and `README.txt` into a new private directory.
+Only the non-secret configuration is copied to the clipboard. The generated
+configuration isolates each operator's data and signing history, puts port settings
+in the correct network section, disables the wallet and binds RPC to loopback.
+It does not deploy or start a server, initialize signing history, or choose a
+finality checkpoint. Follow the first-start sequence below and the exported README.
+The advanced Operator keys dialog can create an identity after a verified encrypted recovery backup, or
 export a backed identity into a new private credential directory. Its two files
 are operator secrets, not wallet spending keys: securely transfer and seal both
-on the operator host. Existing destinations are never overwritten. Failed
+on the operator host. Full-wallet `.dat` backups stay on the controller; they are
+never part of the server export. Existing destinations are never overwritten. Failed
 creation backups leave an unpublished pending identity for the next retry.
 `createpqoperator` and `exportpqoperator` remain available through RPC.
 Registration currently creates a new collateral output with

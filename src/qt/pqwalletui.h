@@ -7,12 +7,15 @@
 
 class WalletModel;
 class QWidget;
+class CService;
+class uint256;
 
 namespace PQWalletUI {
 QString backupSettingsKey(WalletModel* model);
 QString backupDirectory(WalletModel* model);
 bool ensureBackupDirectory(QWidget* parent, WalletModel* model, QString& directory);
 bool backupSnapshot(WalletModel* model, QString& directory);
+QString masternodeConfig(const uint256& registration, const CService& service);
 }
 
 #endif

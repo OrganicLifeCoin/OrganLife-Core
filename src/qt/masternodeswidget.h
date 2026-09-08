@@ -74,6 +74,7 @@ private:
     bool startAll(QString& failedMN, bool onlyMissing);
     void loadWalletModel() override;
     void pqOperation(int action);
+    void createPQMasternode();
 };
 
 #endif // PIVX_QT_MASTERNODESWIDGET_H

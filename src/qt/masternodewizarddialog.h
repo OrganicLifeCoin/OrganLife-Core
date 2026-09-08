@@ -29,6 +29,8 @@ public:
     ~MasterNodeWizardDialog() override;
     void showEvent(QShowEvent *event) override;
     QString translate(const char *msg) override { return tr(msg); }
+    QString alias() const;
+    QString service() const;
 
     QString returnStr = "";
     bool isOk = false;
