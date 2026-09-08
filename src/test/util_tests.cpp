@@ -261,6 +261,20 @@ BOOST_AUTO_TEST_CASE(util_CommandLineArgs_are_separate_from_config)
     }
 }
 
+BOOST_AUTO_TEST_CASE(util_ConfigFile_preserves_exact_line_endings)
+{
+    const auto path = GetDataDir() / "inline-config-crlf.conf";
+    const std::string contents = "pqoperatorconfig=test-only\r\n";
+    {
+        fsbridge::ofstream file(path, std::ios::binary);
+        file << contents;
+    }
+    TestArgsManager args;
+    args.ReadConfigFile(path.string());
+    BOOST_CHECK_EQUAL(args.ConfigFileContents(), contents);
+    BOOST_CHECK_EQUAL(args.GetArg("-pqoperatorconfig", ""), "test-only");
+}
+
 BOOST_AUTO_TEST_CASE(util_GetBoolArg)
 {
     TestArgsManager testArgs;

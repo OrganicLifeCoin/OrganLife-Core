@@ -240,7 +240,7 @@ int main()
     SetACL(directory, privateACL);
     const auto recordFile = directory + L"\\olc-pq-operator-record";
     const auto configFile = directory + L"\\organiclifecoin.conf";
-    const std::string config = "# \xc5\xbe\n" "pqoperatorconfig=00\n";
+    const std::string config = "# \xc5\xbe\r\n" "pqoperatorconfig=00\r\n";
     Write(configFile, Span<const unsigned char>(reinterpret_cast<const unsigned char*>(config.data()), config.size()));
     SetACL(configFile, privateACL);
     assert(pqwallet::IsPrivateWindowsConfigFile(configFile, config));

@@ -965,7 +965,7 @@ void ArgsManager::ReadConfigFile(const std::string& confPath)
         }
     }
 
-    fsbridge::ifstream stream(config_path);
+    fsbridge::ifstream stream(config_path, std::ios::binary);
 
     m_config_file_path = config_path;
     m_config_file_contents.clear();
