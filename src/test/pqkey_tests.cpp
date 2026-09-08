@@ -117,6 +117,71 @@ BOOST_AUTO_TEST_CASE(backed_operator_rewrap_preserves_identity_not_controller_cu
     }
 }
 
+BOOST_AUTO_TEST_CASE(operator_inline_config_round_trip_is_bounded_and_chain_bound)
+{
+    const uint256 genesis = uint256S("1234");
+    pqwallet::Record record;
+    BOOST_REQUIRE(pqwallet::EncryptOperatorSeed(TestSeed(), MASTER, "regtest", genesis, record));
+
+    const std::string encoded = pqwallet::EncodeOperatorConfig(record, MASTER);
+    BOOST_REQUIRE_EQUAL(encoded.size(), 2834U);
+    BOOST_CHECK(std::all_of(encoded.begin(), encoded.end(), [](unsigned char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+    }));
+
+    mldsa44::Key key;
+    std::string reason;
+    BOOST_REQUIRE_MESSAGE(pqwallet::DecodeOperatorConfig(encoded, "regtest", genesis, key, reason), reason);
+    BOOST_CHECK(key.GetPublicKey() == record.public_key);
+    BOOST_CHECK(reason.empty());
+
+    BOOST_CHECK(!pqwallet::DecodeOperatorConfig(encoded, "test", genesis, key, reason));
+    BOOST_CHECK(!key.IsValid());
+    BOOST_CHECK(!pqwallet::DecodeOperatorConfig(encoded, "regtest", uint256S("1235"), key, reason));
+    BOOST_CHECK(!key.IsValid());
+    for (const auto& malformed : {encoded.substr(0, encoded.size() - 1), encoded + "0",
+                                  std::string(2834, 'g'), std::string(2834, '0')}) {
+        BOOST_CHECK(!pqwallet::DecodeOperatorConfig(malformed, "regtest", genesis, key, reason));
+        BOOST_CHECK(!key.IsValid());
+    }
+    auto changed = encoded;
+    changed.back() = changed.back() == '0' ? '1' : '0';
+    BOOST_CHECK(!pqwallet::DecodeOperatorConfig(changed, "regtest", genesis, key, reason));
+    changed = encoded;
+    changed[2] = 'A';
+    BOOST_CHECK(!pqwallet::DecodeOperatorConfig(changed, "regtest", genesis, key, reason));
+}
+
+BOOST_AUTO_TEST_CASE(operator_inline_config_requires_private_config_file)
+{
+#ifndef WIN32
+    const fs::path directory = fs::temp_directory_path() / fs::unique_path("olc-pq-config-%%%%-%%%%");
+    BOOST_REQUIRE(fs::create_directory(directory));
+    struct Cleanup { fs::path path; ~Cleanup() { fs::remove_all(path); } } cleanup{directory};
+    const fs::path config = directory / "organiclifecoin.conf";
+    {
+        fsbridge::ofstream file(config, std::ios::binary);
+        file << "pqoperatorconfig=00\n";
+    }
+    BOOST_REQUIRE_EQUAL(chmod(config.c_str(), 0400), 0);
+    const std::string config_contents = "pqoperatorconfig=00\n";
+    BOOST_CHECK(pqwallet::IsPrivateOperatorConfigFile(config, config_contents));
+    BOOST_CHECK(!pqwallet::IsPrivateOperatorConfigFile(config, "pqoperatorconfig=01\n"));
+    BOOST_CHECK(!pqwallet::IsPrivateOperatorConfigFile(config, config_contents + "\n"));
+    for (const mode_t mode : {0000, 0040, 0004, 0440}) {
+        BOOST_REQUIRE_EQUAL(chmod(config.c_str(), mode), 0);
+        BOOST_CHECK(!pqwallet::IsPrivateOperatorConfigFile(config, config_contents));
+    }
+    BOOST_REQUIRE_EQUAL(chmod(config.c_str(), 0400), 0);
+    const fs::path alias = directory / "alias";
+    fs::create_symlink(config, alias);
+    BOOST_REQUIRE(fs::is_symlink(alias));
+    BOOST_CHECK(!pqwallet::IsPrivateOperatorConfigFile(alias, config_contents));
+#else
+    BOOST_TEST_MESSAGE("Windows private-config ACLs are exercised by pqcredentials_win_tests");
+#endif
+}
+
 BOOST_AUTO_TEST_CASE(operator_recovery_is_not_spending_or_deployment_storage)
 {
     const uint256 genesis = uint256S("1234");

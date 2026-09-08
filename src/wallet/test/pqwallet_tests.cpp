@@ -138,32 +138,38 @@ BOOST_AUTO_TEST_CASE(operator_export_cannot_bypass_controller_authorization)
     const auto destination = GetDataDir() / "must-not-exist";
     mldsa44::PublicKey public_key{};
     std::string reason;
-    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    const auto denied = [&](const mldsa44::PublicKey& key) {
+        BOOST_CHECK(!m_wallet.ExportPQOperator(key, destination, reason));
+        std::string credential = "must-clear-on-failure";
+        BOOST_CHECK(!m_wallet.ExportPQOperatorConfig(key, credential, reason));
+        BOOST_CHECK(credential.empty());
+    };
+    denied(public_key);
     BOOST_CHECK(reason.find("fully unlocked") != std::string::npos);
     BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
-    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    denied(public_key);
     BOOST_CHECK(reason.find("fully unlocked") != std::string::npos);
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
     BOOST_REQUIRE(m_wallet.PreparePQOperator(GetDataDir() / "export-recovery.dat", public_key, reason));
     BOOST_REQUIRE(m_wallet.Lock());
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, true));
-    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    denied(public_key);
     BOOST_CHECK(reason.find("fully unlocked") != std::string::npos);
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, false));
     std::string spending_address;
     BOOST_REQUIRE(m_wallet.GeneratePQAddress(spending_address));
     mldsa44::Key spending_key;
     BOOST_REQUIRE(m_wallet.GetPQKey(spending_address, spending_key));
-    BOOST_CHECK(!m_wallet.ExportPQOperator(spending_key.GetPublicKey(), destination, reason));
+    denied(spending_key.GetPublicKey());
     BOOST_CHECK(reason.find("Unknown or unbacked") != std::string::npos);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    denied(public_key);
     BOOST_CHECK(reason.find("scheduled test-chain") != std::string::npos);
     SelectParams(CBaseChainParams::TESTNET);
-    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    denied(public_key);
     BOOST_CHECK(reason.find("Unknown or unbacked") != std::string::npos);
     SelectParams(CBaseChainParams::MAIN);
-    BOOST_CHECK(!m_wallet.ExportPQOperator(public_key, destination, reason));
+    denied(public_key);
     BOOST_CHECK(reason.find("scheduled test-chain") != std::string::npos);
     SelectParams(CBaseChainParams::REGTEST);
     BOOST_CHECK(!fs::exists(destination));
@@ -1092,6 +1098,52 @@ BOOST_AUTO_TEST_CASE(key_and_coin_listing_resource_samples)
     // Real encrypted records and wallet/RPC scans, with synthetic confirmed
     // transactions and trusted UTXOs. Setup/persistence is outside these timings;
     // unlock includes the existing calibrated passphrase KDF. RSS is external.
+}
+
+BOOST_AUTO_TEST_CASE(gettransaction_reports_pq_coinbase_reward)
+{
+    const auto* tip = chainActive.Tip();
+    BOOST_REQUIRE(tip);
+    WITH_LOCK(m_wallet.cs_wallet, m_wallet.SetLastBlockProcessed(tip));
+    BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
+    std::string address;
+    BOOST_REQUIRE(m_wallet.GeneratePQAddress(address));
+    pq::KeyID id;
+    BOOST_REQUIRE(pq::DecodeAddress(address, "test", id));
+
+    CMutableTransaction coinbase;
+    coinbase.nLockTime = 991;
+    coinbase.vin.emplace_back();
+    coinbase.vout.emplace_back(1 * COIN, CScript() << OP_TRUE); // Not ours; reward is not vout 0.
+    coinbase.vout.emplace_back(6 * COIN, pq::GetScript(id));
+    const auto tx = MakeTransactionRef(coinbase);
+    {
+        LOCK(m_wallet.cs_wallet);
+        BOOST_REQUIRE(m_wallet.AddToWalletIfInvolvingMe(tx, {}, true));
+    }
+
+    const UniValue result = CallRPC("gettransaction " + tx->GetHash().GetHex());
+    BOOST_CHECK_EQUAL(AmountFromValue(result["amount"]), 6 * COIN);
+    BOOST_REQUIRE_EQUAL(result["details"].size(), 1U);
+    BOOST_CHECK_EQUAL(AmountFromValue(result["details"][0]["amount"]), 6 * COIN);
+    BOOST_CHECK_EQUAL(result["details"][0]["vout"].get_int(), 1);
+    BOOST_CHECK_EQUAL(result["details"][0]["category"].get_str(), "orphan");
+    {
+        LOCK(m_wallet.cs_wallet);
+        m_wallet.SetLastBlockProcessed(tip);
+        m_wallet.mapWallet.at(tx->GetHash()).m_confirm =
+            {CWalletTx::Status::CONFIRMED, tip->nHeight, tip->GetBlockHash(), 0};
+    }
+    const auto immature = CallRPC("gettransaction " + tx->GetHash().GetHex());
+    BOOST_CHECK_EQUAL(immature["details"][0]["category"].get_str(), "immature");
+    BOOST_CHECK_EQUAL(AmountFromValue(immature["amount"]), 6 * COIN);
+    CBlockIndex matureTip = *tip;
+    matureTip.nHeight += Params().GetConsensus().nCoinbaseMaturity;
+    WITH_LOCK(m_wallet.cs_wallet, m_wallet.SetLastBlockProcessed(&matureTip));
+    const auto mature = CallRPC("gettransaction " + tx->GetHash().GetHex());
+    BOOST_CHECK_EQUAL(mature["details"][0]["category"].get_str(), "generate");
+    BOOST_CHECK_EQUAL(AmountFromValue(mature["amount"]), 6 * COIN);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -532,17 +532,17 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     const bool nativeDialogsDisabled = QApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, true);
     struct RestoreDialogs { bool disabled; ~RestoreDialogs() { QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, disabled); } } restoreDialogs{nativeDialogsDisabled};
-    bool exportedFromInfo = false;
+    bool copiedFromInfo = false;
+    bool folderPickerSeen = false;
     QTimer exportTimer;
     connect(&exportTimer, &QTimer::timeout, page, [&] {
         if (auto* dialog = page->findChild<MnInfoDialog*>(); dialog && dialog->isVisible()) {
             dialog->findChild<QPushButton*>("pushExport")->click();
+            copiedFromInfo = true;
         }
         if (auto* chooser = page->findChild<QFileDialog*>(); chooser && chooser->isVisible()) {
-            chooser->setDirectory(directory.path());
-            QMetaObject::invokeMethod(chooser, "accept", Qt::DirectConnection);
-            exportedFromInfo = true;
-            exportTimer.stop();
+            folderPickerSeen = true;
+            chooser->reject();
         }
     });
     exportTimer.start(10);
@@ -552,20 +552,35 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     });
     QApplication::clipboard()->setText("unchanged");
     QVERIFY(QMetaObject::invokeMethod(page, "onInfoMNClicked", Qt::DirectConnection));
-    QVERIFY(exportedFromInfo);
+    exportTimer.stop();
+    QVERIFY(copiedFromInfo);
+    QVERIFY(!folderPickerSeen);
     const auto exports = QDir(directory.path()).entryList({"olc-masternode-*"}, QDir::Dirs | QDir::NoDotAndDotDot);
-    QCOMPARE(exports.size(), 1);
+    QCOMPARE(exports.size(), 0);
+    const auto copiedConfig = QApplication::clipboard()->text();
+    QVERIFY(copiedConfig.contains("\npqoperatorconfig="));
+    QVERIFY(!copiedConfig.contains("pqoperatorcredentials="));
+    QVERIFY(!copiedConfig.contains("\ndatadir="));
+    struct ConfigArgs : ArgsManager { using ArgsManager::ReadConfigStream; } copiedArgs;
+    std::istringstream configStream(copiedConfig.toStdString());
+    copiedArgs.ReadConfigStream(configStream);
+    copiedArgs.SelectConfigNetwork(Params().NetworkIDString());
     mldsa44::Key infoKey;
-    QVERIFY2(pqwallet::LoadOperatorCredentials(QDir(directory.path()).filePath(exports.front()).toStdString(),
+    QVERIFY2(pqwallet::DecodeOperatorConfig(copiedArgs.GetArg("-pqoperatorconfig", ""),
         Params().NetworkIDString(), genesisHash, infoKey, reason), reason.c_str());
     QVERIFY(infoKey.GetPublicKey() == operatorKey);
-    QCOMPARE(QApplication::clipboard()->text(), PQWalletUI::masternodeConfig(uint256S("bb"), record.service));
-    QFile exportedConfig(QDir(directory.path()).filePath(exports.front() + "/organiclifecoin.conf"));
-    QVERIFY(exportedConfig.open(QIODevice::ReadOnly));
-    QCOMPARE(QString::fromUtf8(exportedConfig.readAll()), QApplication::clipboard()->text());
+    QCOMPARE(copiedArgs.GetArg("-pqoperatorid", ""), uint256S("bb").GetHex());
+    QCOMPARE(copiedArgs.GetArg("-externalip", ""), record.service.ToString());
     QCOMPARE(wallet.mapWallet.size(), size_t(2)); // Export neither spends nor copies controller keys.
     mldsa44::Key spendingKey;
-    QVERIFY(!wallet.GetPQKey(*pq::GetID(infoKey.GetPublicKey(), Params().NetworkIDString()), spendingKey, false));
+    QVERIFY(!wallet.GetPQKey(*pq::GetID(operatorKey, Params().NetworkIDString()), spendingKey, false));
+    // Declining the secret-export warning must leave the clipboard unchanged.
+    acceptTransaction = false;
+    QApplication::clipboard()->setText("keep-existing-clipboard");
+    exportTimer.start(10);
+    QVERIFY(QMetaObject::invokeMethod(page, "onInfoMNClicked", Qt::DirectConnection));
+    exportTimer.stop();
+    QCOMPARE(QApplication::clipboard()->text(), QString("keep-existing-clipboard"));
     QPersistentModelIndex selected = registryModel->index(0, MNModel::ALIAS, {});
     record.revoked = true;
     evoDb->Write(recordKey, record);

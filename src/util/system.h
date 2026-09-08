@@ -142,6 +142,9 @@ protected:
     std::map<std::string, std::vector<std::string>> m_config_args;
     std::string m_network;
     std::set<std::string> m_network_only_args;
+    fs::path m_config_file_path;
+    std::string m_config_file_contents;
+    bool m_rejected_command_line_secret{false};
 
     void ReadConfigStream(std::istream& stream);
 
@@ -179,6 +182,13 @@ public:
     * @return true if the argument has been set
     */
     bool IsArgSet(const std::string& strArg) const;
+
+    //! True when an option, including a negated option, was supplied on CLI.
+    bool IsArgSetOnCommandLine(const std::string& strArg) const;
+    bool HasRejectedCommandLineSecret() const { return m_rejected_command_line_secret; }
+
+    const fs::path& ConfigFilePath() const { return m_config_file_path; }
+    const std::string& ConfigFileContents() const { return m_config_file_contents; }
 
     /**
      * Return true if the argument was originally passed as a negated option,

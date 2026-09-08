@@ -59,7 +59,7 @@ class PQOperatorTest(PivxTestFramework):
 
         for args in [[credentials], [registration], [credentials, credentials, registration],
                      [credentials, registration, registration]]:
-            reject(enabled + args, "exactly once each")
+            reject(enabled + args, "exactly one PQ operator credential source")
         for invalid in ["", "0" * 64, "12", "g" * 64, "12" * 33, "0x" + identity]:
             reject(enabled + [credentials, "-pqoperatorid=" + invalid], "64 hexadecimal characters and nonzero")
         reject(self.base_args + [credentials, registration], "require scheduled test-chain PQ masternode activation")
@@ -78,6 +78,29 @@ class PQOperatorTest(PivxTestFramework):
                                                    "publickey": record[1:1313].hex()})
             assert_equal(node.getblockcount(), 0)
             self.stop_node(0)
+
+        # Inline credentials are config-file-only and must load the same key
+        # without creating or reading a credential directory.
+        inline_config = Path(node.datadir) / "inline-operator.conf"
+        inline_payload = (record + (b"*" * 32)).hex()
+        inline_config.write_text("disablewallet=1\nnuparams=pq_masternodes:1\n"
+                                f"pqoperatorid={identity}\n"
+                                f"pqoperatorconfig={inline_payload}\n" +
+                                (Path(node.datadir) / "pivx.conf").read_text())
+        set_credential_permissions(inline_config, 0o400)
+        inline_options = self.base_args + ["-conf=" + str(inline_config)]
+        self.start_node(0, inline_options)
+        assert_equal(node.getpqoperatorinfo(), {"configured": True, "registration": identity,
+                                               "publickey": record[1:1313].hex()})
+        self.stop_node(0)
+        set_credential_permissions(inline_config, 0o404)
+        reject(inline_options, "private owner-only config file")
+        set_credential_permissions(inline_config, 0o400)
+        reject(inline_options + [credentials], "exactly one PQ operator credential source")
+        for option in ["pqoperatorconfig", "nopqoperatorconfig", "test.pqoperatorconfig", "regtest.nopqoperatorconfig"]:
+            reject(self.base_args + ["-" + option + "=" + inline_payload, "-pqoperatorid=" + identity],
+                   "never on the command line")
+        assert inline_payload not in (Path(node.chain_path) / "debug.log").read_text()
 
         # A pending identity must still download/validate blocks using ordinary P2P.
         # Build PoW fixtures without wallet APIs so this also tests walletless nodes.

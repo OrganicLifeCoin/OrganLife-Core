@@ -374,6 +374,7 @@ void ArgsManager::ParseParameters(int argc, const char* const argv[])
 {
     LOCK(cs_args);
     m_override_args.clear();
+    m_rejected_command_line_secret = false;
 
     for (int i = 1; i < argc; i++) {
         std::string key(argv[i]);
@@ -395,6 +396,15 @@ void ArgsManager::ParseParameters(int argc, const char* const argv[])
         // Transform --foo to -foo
         if (key.length() > 1 && key[1] == '-')
             key.erase(0, 1);
+
+        // Inline operator credentials are never accepted from argv. Drop the
+        // value before option normalization so negation cannot log the secret.
+        const size_t option_index = key.find('.') == std::string::npos ? 1 : key.find('.') + 1;
+        const std::string option = key.substr(option_index);
+        if (option == "pqoperatorconfig" || option == "nopqoperatorconfig") {
+            m_rejected_command_line_secret = true;
+            continue;
+        }
 
         // Check for -nofoo
         if (InterpretNegatedOption(key, val)) {
@@ -428,6 +438,12 @@ bool ArgsManager::IsArgSet(const std::string& strArg) const
 {
     if (IsArgNegated(strArg)) return true; // special case
     return ArgsManagerHelper::GetArg(*this, strArg).first;
+}
+
+bool ArgsManager::IsArgSetOnCommandLine(const std::string& strArg) const
+{
+    LOCK(cs_args);
+    return m_override_args.find(strArg) != m_override_args.end();
 }
 
 bool ArgsManager::IsArgNegated(const std::string& strArg) const
@@ -951,9 +967,14 @@ void ArgsManager::ReadConfigFile(const std::string& confPath)
 
     fsbridge::ifstream stream(config_path);
 
+    m_config_file_path = config_path;
+    m_config_file_contents.clear();
+
     // ok to not have a config file
     if (stream.good()) {
-        ReadConfigStream(stream);
+        m_config_file_contents.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+        std::istringstream config_stream(m_config_file_contents);
+        ReadConfigStream(config_stream);
     }
 
     // If datadir is changed in .conf file:

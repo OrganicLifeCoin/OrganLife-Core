@@ -241,6 +241,26 @@ BOOST_AUTO_TEST_CASE(util_ParseParameters)
     BOOST_CHECK(testArgs.GetOverrideArgs()["-ccc"].back() == "multiple");
 }
 
+BOOST_AUTO_TEST_CASE(util_CommandLineArgs_are_separate_from_config)
+{
+    TestArgsManager testArgs;
+    const char *argv[] = {"ignored", "-pqoperatorconfig=secret", "-nopqoperatorcredentials"};
+    testArgs.ParseParameters(3, (char**)argv);
+    testArgs.ReadConfigString("pqoperatorconfig=config-secret\n");
+
+    BOOST_CHECK(testArgs.HasRejectedCommandLineSecret());
+    BOOST_CHECK(!testArgs.IsArgSetOnCommandLine("-pqoperatorconfig"));
+    BOOST_CHECK(testArgs.IsArgSetOnCommandLine("-pqoperatorcredentials"));
+    BOOST_CHECK(testArgs.GetArgs("-pqoperatorconfig").size() == 1);
+    for (const char* secret : {"-nopqoperatorconfig=secret", "--pqoperatorconfig=secret",
+                              "-test.pqoperatorconfig=secret", "-regtest.nopqoperatorconfig=secret"}) {
+        const char* args[] = {"ignored", secret};
+        testArgs.ParseParameters(2, args);
+        BOOST_CHECK(testArgs.HasRejectedCommandLineSecret());
+        BOOST_CHECK(testArgs.GetOverrideArgs().empty());
+    }
+}
+
 BOOST_AUTO_TEST_CASE(util_GetBoolArg)
 {
     TestArgsManager testArgs;

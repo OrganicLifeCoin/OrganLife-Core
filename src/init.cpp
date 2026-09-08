@@ -23,6 +23,7 @@
 #include "evo/evodb.h"
 #include "evo/governancevoteindex.h"
 #include "evo/pqmnauth.h"
+#include "wallet/pqkey.h"
 #include "pqanchors.h"
 #include "pqfinality.h"
 #include "fs.h"
@@ -559,6 +560,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageGroup("Debugging/Testing options:");
     strUsage += HelpMessageOpt("-uacomment=<cmt>", "Append comment to the user agent string");
     strUsage += HelpMessageOpt("-pqoperatorcredentials=<dir>", "Load operator credentials from a private absolute directory (scheduled test-chain PQ masternodes only; requires -disablewallet and -pqoperatorid). Credentials alone do not establish registry eligibility or finality.");
+    strUsage += HelpMessageOpt("-pqoperatorconfig=<hex>", "Load bounded inline PQ operator credentials from the config file only (requires -disablewallet and -pqoperatorid). Never pass this secret on the command line.");
     strUsage += HelpMessageOpt("-pqoperatorid=<txid>", "Registration identity for pending PQ operator credentials (64 hexadecimal characters, nonzero)");
     if (showDebug) {
         strUsage += HelpMessageOpt("-checkblockindex", strprintf("Do a full consistency check for mapBlockIndex, setBlockIndexCandidates, chainActive and mapBlocksUnlinked occasionally. Also sets -checkmempool (default: %u)", defaultChainParams->DefaultConsistencyChecks()));
@@ -1308,9 +1310,16 @@ bool AppInitMain()
     }
 
     assert(!pqOperator);
-    if (gArgs.IsArgSet("-pqoperatorcredentials") || gArgs.IsArgSet("-pqoperatorid")) {
-        if (gArgs.GetArgs("-pqoperatorcredentials").size() != 1 || gArgs.GetArgs("-pqoperatorid").size() != 1)
-            return UIError(_("Specify -pqoperatorcredentials and -pqoperatorid exactly once each."));
+    if (gArgs.HasRejectedCommandLineSecret())
+        return UIError(_("PQ operator inline credentials must be supplied in the config file, never on the command line."));
+    if (gArgs.IsArgSet("-pqoperatorcredentials") || gArgs.IsArgSet("-pqoperatorconfig") || gArgs.IsArgSet("-pqoperatorid")) {
+        if (gArgs.IsArgSetOnCommandLine("-pqoperatorconfig"))
+            return UIError(_("PQ operator inline credentials must be supplied in the config file, never on the command line."));
+        const auto credential_dirs = gArgs.GetArgs("-pqoperatorcredentials");
+        const auto inline_configs = gArgs.GetArgs("-pqoperatorconfig");
+        const auto ids = gArgs.GetArgs("-pqoperatorid");
+        if (ids.size() != 1 || (credential_dirs.size() + inline_configs.size()) != 1)
+            return UIError(_("Specify exactly one PQ operator credential source and one pqoperatorid."));
         const std::string id = gArgs.GetArg("-pqoperatorid", "");
         if (id.size() != 64 || !IsHex(id) || uint256S(id).IsNull())
             return UIError(_("PQ operator registration must be 64 hexadecimal characters and nonzero."));
@@ -1319,7 +1328,12 @@ bool AppInitMain()
             return UIError(_("PQ operator credentials require -disablewallet; use a separate controller wallet."));
 #endif
         std::string reason;
-        pqOperator = pqmnauth::LocalOperator::Load(gArgs.GetArg("-pqoperatorcredentials", ""), Params(), uint256S(id), reason);
+        if (!inline_configs.empty()) {
+            if (!pqwallet::IsPrivateOperatorConfigFile(gArgs.ConfigFilePath(), gArgs.ConfigFileContents()))
+                return UIError(_("PQ operator inline credentials require a private owner-only config file."));
+            pqOperator = pqmnauth::LocalOperator::LoadConfig(inline_configs.front(), Params(), uint256S(id), reason);
+        } else
+            pqOperator = pqmnauth::LocalOperator::Load(credential_dirs.front(), Params(), uint256S(id), reason);
         if (!pqOperator) return UIError(reason);
     }
 

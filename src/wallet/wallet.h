@@ -592,6 +592,8 @@ private:
 
     std::map<pq::KeyID, pqwallet::Record> m_pq_keys GUARDED_BY(cs_KeyStore);
     std::map<pq::KeyID, pqwallet::OperatorRecovery> m_pq_operator_recovery GUARDED_BY(cs_KeyStore);
+    bool PreparePQOperatorExport(const mldsa44::PublicKey& public_key, pqwallet::Record& record,
+                                 pqwallet::SecureBytes& wrapping, std::string& reason);
     bool CreatePQTransactionInternal(const std::vector<CTxOut>& outputs, uint8_t mode,
         const std::vector<unsigned char>& data, CTransactionRef& tx, CAmount& fee, std::string& reason,
         const CCoinControl* coin_control, bool subtract_fee,
@@ -730,6 +732,7 @@ public:
     // identity is returned only after an exclusive encrypted wallet snapshot.
     bool PreparePQOperator(const fs::path& backup, mldsa44::PublicKey& public_key, std::string& reason);
     bool ExportPQOperator(const mldsa44::PublicKey& public_key, const fs::path& directory, std::string& reason);
+    bool ExportPQOperatorConfig(const mldsa44::PublicKey& public_key, std::string& credential, std::string& reason);
     std::vector<mldsa44::PublicKey> GetPQOperators() const;
     bool LoadPQOperatorRecovery(const uint256& genesis, const pq::KeyID& id,
                                 const pqwallet::OperatorRecovery& recovery);

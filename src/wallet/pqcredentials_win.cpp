@@ -130,6 +130,17 @@ bool ReadWindowsOperatorCredentials(const std::wstring& directory,
     return success;
 }
 
+bool IsPrivateWindowsConfigFile(const std::wstring& path, const std::string& expected)
+{
+    if (expected.size() > 1024 * 1024 || !ValidPath(path) || !LocalNTFS(path)) return false;
+    std::vector<unsigned char> identity;
+    if (!CurrentUser(identity)) return false;
+    PSID user = reinterpret_cast<TOKEN_USER*>(identity.data())->User.Sid;
+    std::vector<unsigned char, secure_allocator<unsigned char>> actual(expected.size());
+    return Read(path, user, actual) &&
+           std::equal(actual.begin(), actual.end(), reinterpret_cast<const unsigned char*>(expected.data()));
+}
+
 bool WriteWindowsOperatorCredentials(const std::wstring& directory,
     Span<const unsigned char> record, Span<const unsigned char> wrappingKey,
     Span<const unsigned char> random)

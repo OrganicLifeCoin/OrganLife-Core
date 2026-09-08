@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstring>
 #include <streams.h>
+#include <support/cleanse.h>
 #include <utilstrencodings.h>
 #ifdef WIN32
 #include <wallet/pqcredentials_win.h>
@@ -241,6 +242,78 @@ bool LoadOperatorCredentials(const fs::path& directory, const std::string& netwo
         key.Clear();
     }
     return false;
+}
+
+std::string EncodeOperatorConfig(const Record& record, const SecureBytes& wrapping_key)
+{
+    constexpr size_t RECORD_SIZE = 1 + mldsa44::PUBLIC_KEY_SIZE + 24 + 48;
+    if (record.version != 2 || wrapping_key.size() != 32) return {};
+    CDataStream stream(SER_DISK, 0);
+    stream << record;
+    if (stream.size() != RECORD_SIZE) return {};
+    SecureBytes bytes(stream.begin(), stream.end());
+    bytes.insert(bytes.end(), wrapping_key.begin(), wrapping_key.end());
+    return HexStr(bytes);
+}
+
+bool DecodeOperatorConfig(const std::string& encoded, const std::string& network,
+                          const uint256& genesis, mldsa44::Key& key, std::string& reason)
+{
+    constexpr size_t RECORD_SIZE = 1 + mldsa44::PUBLIC_KEY_SIZE + 24 + 48;
+    constexpr size_t WRAPPING_KEY_SIZE = 32;
+    constexpr size_t ENCODED_SIZE = 2 * (RECORD_SIZE + WRAPPING_KEY_SIZE);
+    key.Clear();
+    reason = "Could not load inline private PQ operator credentials";
+    if (encoded.size() != ENCODED_SIZE || !IsHex(encoded)) return false;
+    for (const char c : encoded) {
+        if (c >= 'A' && c <= 'F') return false;
+    }
+    try {
+        std::vector<unsigned char> parsed = ParseHex(encoded);
+        SecureBytes bytes(parsed.begin(), parsed.end());
+        memory_cleanse(parsed.data(), parsed.size());
+        if (bytes.size() != RECORD_SIZE + WRAPPING_KEY_SIZE) return false;
+        const char* begin = reinterpret_cast<const char*>(bytes.data());
+        CDataStream stream(begin, begin + RECORD_SIZE, SER_DISK, 0);
+        Record record;
+        stream >> record;
+        if (!stream.empty()) return false;
+        SecureBytes wrapping_key(WRAPPING_KEY_SIZE);
+        std::copy(bytes.begin() + RECORD_SIZE, bytes.end(), wrapping_key.begin());
+        if (!DecryptOperatorKey(wrapping_key, record, network, genesis, key)) return false;
+        reason.clear();
+        return true;
+    } catch (const std::exception&) {
+        key.Clear();
+    }
+    return false;
+}
+
+bool IsPrivateOperatorConfigFile(const fs::path& path, const std::string& expected_contents)
+{
+    if (expected_contents.size() > 1024 * 1024) return false;
+#ifdef WIN32
+    return IsPrivateWindowsConfigFile(path.wstring(), expected_contents);
+#else
+    const auto native = path.native();
+    if (native.empty() || !path.is_absolute() || native.find('\0') != std::string::npos) return false;
+    Descriptor file(open(native.c_str(), O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK));
+    struct stat info;
+    if (file.fd < 0 || fstat(file.fd, &info) != 0 || !S_ISREG(info.st_mode) ||
+        info.st_nlink != 1 || info.st_size != static_cast<off_t>(expected_contents.size()) ||
+        !PrivateCredential(file.fd, info, false)) return false;
+    std::string actual(expected_contents.size(), '\0');
+    size_t offset = 0;
+    while (offset < actual.size()) {
+        const auto count = read(file.fd, actual.data() + offset, actual.size() - offset);
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) return false;
+        offset += count;
+    }
+    char extra;
+    if (read(file.fd, &extra, 1) != 0) return false;
+    return actual == expected_contents && fstat(file.fd, &info) == 0 && PrivateCredential(file.fd, info, false);
+#endif
 }
 
 bool EncryptOperatorRecovery(const SecureBytes& seed, const SecureBytes& master_key,

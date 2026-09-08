@@ -61,9 +61,10 @@ std::vector<mldsa44::PublicKey> CWallet::GetPQOperators() const
     return result;
 }
 
-bool CWallet::ExportPQOperator(const mldsa44::PublicKey& public_key, const fs::path& directory, std::string& reason)
+bool CWallet::PreparePQOperatorExport(const mldsa44::PublicKey& public_key, pqwallet::Record& record,
+                                      pqwallet::SecureBytes& wrapping, std::string& reason)
 {
-    reason.clear();
+    record = {}; wrapping.clear(); reason.clear();
     LOCK2(cs_wallet, cs_KeyStore);
     const auto fail = [&](const char* message) { reason = message; return false; };
     const auto& params = Params();
@@ -75,14 +76,33 @@ bool CWallet::ExportPQOperator(const mldsa44::PublicKey& public_key, const fs::p
     const auto found = id ? m_pq_operator_recovery.find(*id) : m_pq_operator_recovery.end();
     if (found == m_pq_operator_recovery.end() || found->second.backed != 1 || found->second.record.public_key != public_key)
         return fail("Unknown or unbacked PQ operator identity");
-    pqwallet::SecureBytes wrapping(32);
+    wrapping.resize(32);
     GetStrongRandBytes(wrapping.data(), wrapping.size());
-    pqwallet::Record record;
     const auto& genesis = params.GetConsensus().hashGenesisBlock;
     if (!pqwallet::RewrapOperatorRecovery(found->second, *id, vMasterKey, wrapping,
                                          params.NetworkIDString(), genesis, record))
         return fail("Could not prepare PQ operator credentials");
-    return pqwallet::WriteOperatorCredentials(directory, record, wrapping, params.NetworkIDString(), genesis, reason);
+    return true;
+}
+
+bool CWallet::ExportPQOperator(const mldsa44::PublicKey& public_key, const fs::path& directory, std::string& reason)
+{
+    pqwallet::Record record;
+    pqwallet::SecureBytes wrapping;
+    return PreparePQOperatorExport(public_key, record, wrapping, reason) &&
+        pqwallet::WriteOperatorCredentials(directory, record, wrapping, Params().NetworkIDString(),
+                                           Params().GetConsensus().hashGenesisBlock, reason);
+}
+
+bool CWallet::ExportPQOperatorConfig(const mldsa44::PublicKey& public_key, std::string& credential, std::string& reason)
+{
+    credential.clear();
+    pqwallet::Record record;
+    pqwallet::SecureBytes wrapping;
+    if (!PreparePQOperatorExport(public_key, record, wrapping, reason)) return false;
+    credential = pqwallet::EncodeOperatorConfig(record, wrapping);
+    if (credential.empty()) { reason = "Could not encode PQ operator credentials"; return false; }
+    return true;
 }
 
 bool CWallet::LoadPQOperatorRecovery(const uint256& genesis, const pq::KeyID& id,

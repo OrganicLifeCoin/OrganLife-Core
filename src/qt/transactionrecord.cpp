@@ -448,6 +448,23 @@ std::pair<bool, bool> areInputsAndOutputsFromAndToMe(const CWalletTx& wtx, Sapli
 std::vector<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet* wallet, const CWalletTx& wtx)
 {
     std::vector<TransactionRecord> parts;
+    if (wtx.IsCoinBase() && wtx.tx->nType != CTransaction::PQ) {
+        for (size_t i = 0; i < wtx.tx->vout.size(); ++i) {
+            const auto& output = wtx.tx->vout[i];
+            pq::KeyID id;
+            if (!pq::ExtractID(output.scriptPubKey, id) || !wallet->IsPQMine(output)) continue;
+            TransactionRecord sub(wtx.GetHash(), wtx.GetTxTime(), wtx.tx->GetTotalSize());
+            sub.type = classifyCoinbaseCredit(wtx.m_confirm.block_height, output.nValue);
+            sub.credit = output.nValue;
+            sub.idx = static_cast<int>(i);
+            sub.address = pq::EncodeAddress(id, Params().NetworkIDString());
+            parts.push_back(sub);
+        }
+        if (!parts.empty()) {
+            decomposeCreditTransaction(wallet, wtx, parts);
+            return parts;
+        }
+    }
     if (wtx.tx->nType == CTransaction::PQ) {
         CAmount pqCredit = 0;
         CAmount pqDebit = 0;

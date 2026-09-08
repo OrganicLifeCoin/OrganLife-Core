@@ -10,6 +10,7 @@ namespace pqwallet {
 // directory ancestors and service identity. Failure clears both output spans.
 bool ReadWindowsOperatorCredentials(const std::wstring& directory,
     Span<unsigned char> record, Span<unsigned char> wrappingKey);
+bool IsPrivateWindowsConfigFile(const std::wstring& path, const std::string& expected);
 // Exclusive same-parent publication after private creation, flush and readback.
 // Caller validates the encrypted record and supplies 16 fresh random bytes.
 bool WriteWindowsOperatorCredentials(const std::wstring& directory,

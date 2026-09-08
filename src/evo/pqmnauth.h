@@ -24,6 +24,8 @@ class LocalOperator {
 public:
     static std::unique_ptr<LocalOperator> Load(const fs::path& directory, const CChainParams& params,
                                               const uint256& id, std::string& reason);
+    static std::unique_ptr<LocalOperator> LoadConfig(const std::string& encoded, const CChainParams& params,
+                                                     const uint256& id, std::string& reason);
     const uint256& Registration() const { return registration; }
     const mldsa44::PublicKey& PublicKey() const { return key.GetPublicKey(); }
     // Peer authentication only, never arbitrary messages or key export.

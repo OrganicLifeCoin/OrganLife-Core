@@ -9,7 +9,11 @@
 #include "chartutils.h"
 #include "progressutils.h"
 #include "transactionrecord.h"
+#include "pqtransaction.h"
+#include "wallet/wallet.h"
+#include "wallet/walletutil.h"
 #include "validation.h"
+#include <QTemporaryDir>
 #include <QString>
 #include <vector>
 
@@ -134,6 +138,53 @@ void ChartUtilsTests::coinbaseCreditsAreClassifiedByRewardType()
     QVERIFY(TransactionRecord::classifyCoinbaseCredit(v6Height, mnReward) == TransactionRecord::MNReward);
     QVERIFY(TransactionRecord::classifyCoinbaseCredit(v6Height, mnReward + COIN) == TransactionRecord::BudgetPayment);
     QVERIFY(TransactionRecord::classifyCoinbaseCredit(v6Height, mnReward - COIN) == TransactionRecord::Generated);
+}
+
+void ChartUtilsTests::pqCoinbaseCreditIsClassifiedByRewardType()
+{
+    const auto oldNetwork = Params().NetworkIDString();
+    const auto oldDataDir = gArgs.GetArg("-datadir", "");
+    struct Restore {
+        std::string network, datadir;
+        ~Restore() { gArgs.ForceSetArg("-datadir", datadir); ClearDatadirCache(); SelectParams(network); ECC_Stop(); }
+    } restore{oldNetwork, oldDataDir};
+    ECC_Start();
+    ECCVerifyHandle verify;
+    SelectParams(CBaseChainParams::TESTNET);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_V6_0, 1000);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_POS, 50);
+
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    gArgs.ForceSetArg("-datadir", directory.path().toStdString());
+    ClearDatadirCache();
+    CWallet wallet("pq-transaction-record-test",
+                   WalletDatabase::Create(fs::path(directory.path().toStdString()) / "wallet"));
+    bool firstRun;
+    QCOMPARE(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+    CKey key;
+    key.MakeNewKey(true);
+    QVERIFY(wallet.AddKeyPubKey(key, key.GetPubKey()));
+    QVERIFY(wallet.EncryptWallet(SecureString("test-only")));
+    QVERIFY(wallet.Unlock(SecureString("test-only")));
+
+    std::string address;
+    QVERIFY(wallet.GeneratePQAddress(address));
+    pq::KeyID id;
+    QVERIFY(pq::DecodeAddress(address, Params().NetworkIDString(), id));
+    const CAmount reward = GetMasternodePayment(1000);
+    QVERIFY(reward > 0);
+
+    CMutableTransaction tx;
+    tx.vin.emplace_back();
+    tx.vout.emplace_back(reward, pq::GetScript(id));
+    CWalletTx wtx(&wallet, MakeTransactionRef(CTransaction(tx)));
+    wtx.m_confirm.block_height = 1000;
+    LOCK(wallet.cs_wallet);
+    const auto rows = TransactionRecord::decomposeTransaction(&wallet, wtx);
+    QCOMPARE(rows.size(), size_t(1));
+    QCOMPARE(rows.front().type, TransactionRecord::MNReward);
+    QCOMPARE(rows.front().credit, reward);
 }
 
 void ChartUtilsTests::progressLabelFormattingIsStable()

@@ -269,13 +269,23 @@ prepared keys and encrypted backups; these are not registered masternodes.
 Names are local UI preferences, not consensus data, and may need restoring after
 migrating the controller to another computer.
 
-The original information dialog exports the selected operator's two secret files,
-a non-secret `organiclifecoin.conf` and `README.txt` into a new private directory.
-Only the non-secret configuration is copied to the clipboard. The generated
-configuration isolates each operator's data and signing history, puts port settings
-in the correct network section, disables the wallet and binds RPC to loopback.
-It does not deploy or start a server, initialize signing history, or choose a
-finality checkpoint. Follow the first-start sequence below and the exported README.
+The information dialog copies a complete server configuration after full wallet
+unlock and explicit confirmation. There is no folder picker or credential-file
+transfer. The clipboard includes **secret operator credentials**, never controller
+spending keys. Paste it at the top of that node's config, replacing old operator
+settings, protect the file (Linux: owner-only `0600`), and restart the node.
+Clear clipboard history after pasting. Use one node/data directory per operator;
+the copied block preserves the existing data location and signing history,
+disables the wallet and binds RPC to loopback. It does not remotely start a
+server, initialize signing history, or choose a finality checkpoint. Preserve
+existing checkpoints; new operators still follow the finality first-start sequence below.
+
+`pqoperatorconfig` is config-file-only: exactly 2,834 lowercase hex characters
+encoding the authenticated network/genesis-bound operator record and an independent
+wrapping key. It replaces, and cannot be combined with, `pqoperatorcredentials`.
+The node checks private file ownership/ACLs and the exact configuration bytes;
+command-line secrets, ambiguous sources, wrong-chain records and malformed payloads
+are rejected. Both the controller and VPS need a version supporting this option.
 The advanced Operator keys dialog can create an identity after a verified encrypted recovery backup, or
 export a backed identity into a new private credential directory. Its two files
 are operator secrets, not wallet spending keys: securely transfer and seal both

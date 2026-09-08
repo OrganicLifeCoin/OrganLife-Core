@@ -20,6 +20,7 @@
 #include "net.h"
 #include "netbase.h"
 #include "policy/feerate.h"
+#include "pqaddress.h"
 #include "pqtransaction.h"
 #include "primitives/transaction.h"
 #include "rpc/server.h"
@@ -3389,6 +3390,18 @@ static void MaybePushAddress(UniValue & entry, const CTxDestination &dest)
         entry.pushKV("address", EncodeDestination(dest));
 }
 
+static CAmount GetPQCoinbaseCredit(const CWallet* pwallet, const CWalletTx& wtx)
+{
+    CAmount credit = 0;
+    if (!wtx.IsCoinBase() || wtx.tx->nType == CTransaction::PQ) return credit;
+    for (const CTxOut& output : wtx.tx->vout) {
+        pq::KeyID id;
+        if (!pq::ExtractID(output.scriptPubKey, id)) continue;
+        if (pwallet->IsPQMine(output)) credit += output.nValue;
+    }
+    return credit;
+}
+
 static bool ListCoinStakeTransaction(CWallet* const pwallet, const CWalletTx& wtx, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     if (!wtx.IsCoinStake()) {
@@ -3438,6 +3451,23 @@ static bool ListCoinStakeTransaction(CWallet* const pwallet, const CWalletTx& wt
 static void ListTransactions(CWallet* const pwallet, const CWalletTx& wtx, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter) EXCLUSIVE_LOCKS_REQUIRED(cs_main)
 {
     AssertLockHeld(cs_main);
+
+    if (wtx.IsCoinBase() && wtx.tx->nType != CTransaction::PQ &&
+        wtx.GetDepthInMainChain() >= nMinDepth && (filter & ISMINE_SPENDABLE_ALL)) {
+        for (size_t i = 0; i < wtx.tx->vout.size(); ++i) {
+            const CTxOut& output = wtx.tx->vout[i];
+            pq::KeyID id;
+            if (!pq::ExtractID(output.scriptPubKey, id) || !pwallet->IsPQMine(output)) continue;
+            UniValue pqEntry(UniValue::VOBJ);
+            pqEntry.pushKV("address", pq::EncodeAddress(id, Params().NetworkIDString()));
+            pqEntry.pushKV("category", wtx.GetDepthInMainChain() < 1 ? "orphan" :
+                           wtx.GetBlocksToMaturity() > 0 ? "immature" : "generate");
+            pqEntry.pushKV("amount", ValueFromAmount(output.nValue));
+            pqEntry.pushKV("vout", static_cast<int>(i));
+            if (fLong) WalletTxToJSON(wtx, pqEntry);
+            ret.push_back(pqEntry);
+        }
+    }
 
     if (ListCoinStakeTransaction(pwallet, wtx, nMinDepth, fLong, ret, filter)) {
         return;
@@ -3782,7 +3812,7 @@ UniValue gettransaction(const JSONRPCRequest& request)
     }
     const CWalletTx& wtx = it->second;
 
-    CAmount nCredit = wtx.GetCredit(filter);
+    CAmount nCredit = wtx.GetCredit(filter) + GetPQCoinbaseCredit(pwallet, wtx);
     CAmount nDebit = wtx.GetDebit(filter);
     CAmount nNet = nCredit - nDebit;
 

@@ -23,6 +23,7 @@ private Q_SLOTS:
     void chartRewardAggregationUsesCopiedRows();
     void cumulativeChartSeriesCarriesRewardsAcrossEmptyBuckets();
     void coinbaseCreditsAreClassifiedByRewardType();
+    void pqCoinbaseCreditIsClassifiedByRewardType();
     void progressLabelFormattingIsStable();
     void transactionQueueReloadThresholdWorks();
 };

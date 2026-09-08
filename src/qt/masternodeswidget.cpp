@@ -22,14 +22,16 @@
 #include <chainparams.h>
 #include <net.h>
 #include <netbase.h>
+#include <support/cleanse.h>
 #include <utilstrencodings.h>
+#include <QApplication>
+#include <QClipboard>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QDir>
 #include <QFileDialog>
 #include <QSettings>
-#include <QSaveFile>
 #include <QUuid>
 
 #define DECORATION_SIZE 65
@@ -651,57 +653,23 @@ void MasterNodesWidget::onInfoMNClicked()
         if (!dialog.exportMN || !controller || controller != walletModel) return;
         const auto current = mnModel->pqRecord(index);
         if (!current || current->first != entry->first || current->second.operatorKey != r.operatorKey) return;
-        const auto config = PQWalletUI::masternodeConfig(entry->first, r.service);
-        if (config.isEmpty()) { warn(tr("Masternode"), tr("Set a valid service address before exporting.")); return; }
-        if (!ask(tr("Remote Masternode Data"), tr("Export the operator files and copy the server configuration?\nThe files allow this server to operate the masternode, but cannot spend your coins. Transfer both files securely to the server.")) ||
+        if (PQWalletUI::masternodeConfig(entry->first, r.service).isEmpty()) {
+            warn(tr("Masternode"), tr("Set a valid service address before copying.")); return;
+        }
+        if (!ask(tr("Copy Masternode Configuration"), tr("Copy the complete server configuration, including secret operator credentials?\nPaste it into this masternode's VPS configuration and restart that node. Anyone with the copied text can operate this masternode, but cannot spend your coins. Keep the configuration private and clear your clipboard history after pasting.")) ||
             !controller || controller != walletModel) return;
         WalletModel::UnlockContext unlock(controller->requestUnlock());
         if (!unlock.isValid() || !controller || controller != walletModel) return;
-        const auto parent = QFileDialog::getExistingDirectory(this, tr("Choose a private folder for operator credentials"));
-        if (parent.isEmpty() || !controller || controller != walletModel) return;
-        const auto destination = QDir(parent).filePath("olc-masternode-" + QString::fromStdString(entry->first.GetHex()) + "-" +
-                                                       QUuid::createUuid().toString(QUuid::WithoutBraces));
-        std::string reason;
-        if (!controller->getWallet()->ExportPQOperator(r.operatorKey, destination.toStdString(), reason)) {
+        std::string credential, reason;
+        if (!controller->getWallet()->ExportPQOperatorConfig(r.operatorKey, credential, reason)) {
             warn(tr("Masternode"), QString::fromStdString(reason)); return;
         }
-        const QString instructions =
-            "OrganicLife masternode operator export (LOCAL transfer bundle)\n\n"
-            "olc-pq-operator-record and olc-pq-operator-key are BOTH SECRET.\n"
-            "They authorize this operator, not spending from your controller wallet.\n"
-            "Never transfer a wallet .dat backup or its passphrase to the VPS.\n\n"
-            "The local export folder is NOT the remote datadir. On the Linux VPS,\n"
-            "copy organiclifecoin.conf into the datadir named inside that file. Copy\n"
-            "ONLY olc-pq-operator-record and olc-pq-operator-key into the separate\n"
-            "pqoperatorcredentials directory named in the configuration. README.txt\n"
-            "stays here for reference. Do not point pqoperatorcredentials at this bundle.\n\n"
-            "Use a separate walletless daemon instance for this registration. Create the\n"
-            "absolute datadir in organiclifecoin.conf, owned by the daemon account (0700).\n"
-            "Copy the two secret files securely into its operator subdirectory (0700),\n"
-            "with files readable only by that account (0600). Keep the configuration\n"
-            "outside the secret directory and pass its absolute path with -conf.\n"
-            "Allow the configured P2P port, never expose the loopback RPC port.\n\n"
-            "FIRST START / FINALITY: Wait for registration confirmation. Sync a passive\n"
-            "node without pqoperatorcredentials/pqoperatorid first. If the network already\n"
-            "publishes certificates, use its externally approved pqbootstrap checkpoint\n"
-            "for this passive sync. Then start with operator credentials, temporarily\n"
-            "without pqbootstrap, and run organiclife-cli -conf=<absolute-config> initpqjournal\n"
-            "ONCE for this new identity. Restart with the network's approved checkpoint.\n"
-            "Do not invent a checkpoint or copy another operator's signing history.\n"
-            "Never delete or reset an existing journal or lock file. Preserve them\n"
-            "outside chainstate across upgrades. Registration alone is not proof that\n"
-            "the operator is online, receiving rewards or participating in finality.\n";
-        for (const auto& file : {std::make_pair(QString("organiclifecoin.conf"), config),
-                                 std::make_pair(QString("README.txt"), instructions)}) {
-            QSaveFile output(QDir(destination).filePath(file.first));
-            const auto bytes = file.second.toUtf8();
-            if (!output.open(QIODevice::WriteOnly) || output.write(bytes) != bytes.size() || !output.commit()) {
-                warn(tr("Masternode"), tr("The two secret operator files are complete in %1, but the configuration or instructions are incomplete. Nothing was copied to the clipboard. Retry Export to create a new complete bundle; keep this partial folder private.").arg(destination));
-                return;
-            }
-        }
-        GUIUtil::setClipboard(config);
-        inform(tr("Server configuration copied. Operator files, configuration and setup instructions saved in %1. Follow README.txt for the first server startup; keep wallet backups on the controller.").arg(destination));
+        const auto config = PQWalletUI::masternodeConfig(entry->first, r.service, QString::fromStdString(credential));
+        memory_cleanse(credential.data(), credential.size());
+        // Secret export belongs only in the explicit clipboard, not Linux's
+        // primary selection (which can be pasted accidentally by middle-click).
+        QApplication::clipboard()->setText(config, QClipboard::Clipboard);
+        inform(tr("Complete configuration copied. Paste it at the top of this masternode's private VPS configuration, replacing old operator settings, and restart the node. No credential files need to be transferred. Keep existing signing history and network checkpoint settings."));
         return;
     }
     WalletModel::UnlockContext ctx(walletModel->requestUnlock());

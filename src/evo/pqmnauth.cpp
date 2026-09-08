@@ -21,6 +21,20 @@ std::unique_ptr<LocalOperator> LocalOperator::Load(const fs::path& directory, co
     return result;
 }
 
+std::unique_ptr<LocalOperator> LocalOperator::LoadConfig(const std::string& encoded,
+                                                         const CChainParams& params,
+                                                         const uint256& id, std::string& reason)
+{
+    reason = "PQ operator credentials require scheduled test-chain PQ masternode activation";
+    const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
+    if (!pq::MasternodesActive(params, first)) return nullptr;
+    if (id.IsNull()) { reason = "PQ operator registration must be nonzero"; return nullptr; }
+    auto result = std::unique_ptr<LocalOperator>(new LocalOperator(id));
+    if (!pqwallet::DecodeOperatorConfig(encoded, params.NetworkIDString(),
+                                        params.GetConsensus().hashGenesisBlock, result->key, reason)) return nullptr;
+    return result;
+}
+
 namespace {
 bool Fail(std::string& reason, const char* error) { reason = error; return false; }
 bool ReadOperator(pqmn::Index& index, const uint256& id, uint32_t height,

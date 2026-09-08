@@ -15,7 +15,7 @@ QString backupSettingsKey(WalletModel* model);
 QString backupDirectory(WalletModel* model);
 bool ensureBackupDirectory(QWidget* parent, WalletModel* model, QString& directory);
 bool backupSnapshot(WalletModel* model, QString& directory);
-QString masternodeConfig(const uint256& registration, const CService& service);
+QString masternodeConfig(const uint256& registration, const CService& service, const QString& credential = {});
 }
 
 #endif

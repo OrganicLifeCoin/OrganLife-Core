@@ -61,6 +61,14 @@ bool RewrapOperatorRecovery(const OperatorRecovery& recovery, const pq::KeyID& e
 // Other platforms fail closed; no environment/config fallback or secret logging.
 bool LoadOperatorCredentials(const fs::path& directory, const std::string& network,
                              const uint256& genesis, mldsa44::Key& key, std::string& reason);
+// Bounded inline operator configuration: canonical lowercase hex of the fixed
+// v2 record followed by its independent 32-byte wrapping key.
+std::string EncodeOperatorConfig(const Record& record, const SecureBytes& wrapping_key);
+bool DecodeOperatorConfig(const std::string& encoded, const std::string& network,
+                          const uint256& genesis, mldsa44::Key& key, std::string& reason);
+// Verify the normal config file is an owner-only private regular file before
+// accepting an inline secret from its parsed contents.
+bool IsPrivateOperatorConfigFile(const fs::path& path, const std::string& expected_contents);
 // Atomically publish a new private credential directory inside a trusted private
 // parent. Never overwrite a destination. The pair is operator secret material:
 // transfer through a protected channel and seal both files on the operator host.
