@@ -263,7 +263,12 @@ BOOST_AUTO_TEST_CASE(util_CommandLineArgs_are_separate_from_config)
 
 BOOST_AUTO_TEST_CASE(util_ConfigFile_preserves_exact_line_endings)
 {
-    const auto path = GetDataDir() / "inline-config-crlf.conf";
+    struct RestoreDataDir {
+        std::string previous{gArgs.GetArg("-datadir", "")};
+        ~RestoreDataDir() { gArgs.ForceSetArg("-datadir", previous); ClearDatadirCache(); }
+    } restore;
+    const auto path = SetDataDir("config-crlf") / "inline-config-crlf.conf";
+    ClearDatadirCache();
     const std::string contents = "pqoperatorconfig=test-only\r\n";
     {
         fsbridge::ofstream file(path, std::ios::binary);
