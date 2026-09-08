@@ -71,6 +71,33 @@ uint256 GetWitnessesAndAnchors(CWallet& wallet,
 
 BOOST_FIXTURE_TEST_SUITE(sapling_wallet_tests, WalletRegTestingSetup)
 
+BOOST_AUTO_TEST_CASE(EmptyWalletWitnessCacheSurvivesDeepReorg)
+{
+    CWallet& wallet = m_wallet;
+    LOCK(wallet.cs_wallet);
+    setupWallet(wallet);
+    BOOST_REQUIRE(wallet.mapWallet.empty());
+    CBlock block;
+    CBlockIndex index(block);
+    SaplingMerkleTree tree;
+    const int depth = WITNESS_CACHE_SIZE + 2;
+    for (int height = 1; height <= depth; ++height) {
+        index.nHeight = height;
+        wallet.IncrementNoteWitnesses(&index, &block, tree);
+    }
+    BOOST_REQUIRE_EQUAL(wallet.GetSaplingScriptPubKeyMan()->nWitnessCacheSize, WITNESS_CACHE_SIZE);
+    for (int height = depth; height > 0; --height) {
+        index.nHeight = height;
+        BOOST_REQUIRE_NO_THROW(wallet.DecrementNoteWitnesses(&index));
+        BOOST_CHECK_GE(wallet.GetSaplingScriptPubKeyMan()->nWitnessCacheSize, 0);
+    }
+    BOOST_CHECK_EQUAL(wallet.GetSaplingScriptPubKeyMan()->nWitnessCacheSize, 0);
+    BOOST_CHECK(wallet.GetSaplingScriptPubKeyMan()->nWitnessCacheNeedsUpdate);
+    index.nHeight = 1;
+    wallet.IncrementNoteWitnesses(&index, &block, tree);
+    BOOST_CHECK_EQUAL(wallet.GetSaplingScriptPubKeyMan()->nWitnessCacheSize, 1);
+}
+
 BOOST_AUTO_TEST_CASE(SetSaplingNoteAddrsInCWalletTx) {
     auto consensusParams = Params().GetConsensus();
 

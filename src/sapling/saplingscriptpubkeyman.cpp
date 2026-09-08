@@ -491,8 +491,17 @@ void SaplingScriptPubKeyMan::DecrementNoteWitnesses(const CBlockIndex* pindex)
         return;
     }
 
+    bool hasNoteData = false;
     for (std::pair<const uint256, CWalletTx>& wtxItem : wallet->mapWallet) {
+        hasNoteData |= !wtxItem.second.mapSaplingNoteData.empty();
         ::DecrementNoteWitnesses(wtxItem.second.mapSaplingNoteData, nChainHeight, nWitnessCacheSize);
+    }
+    if (!hasNoteData) {
+        // PQ-only wallets have no witnesses to recover when a deep reorg
+        // exhausts this legacy cache. Never underflow its persisted counter.
+        nWitnessCacheSize = std::max<int64_t>(0, nWitnessCacheSize - 1);
+        nWitnessCacheNeedsUpdate = true;
+        return;
     }
     nWitnessCacheSize -= 1;
     nWitnessCacheNeedsUpdate = true;
