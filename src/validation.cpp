@@ -1312,6 +1312,8 @@ bool UndoWriteToDisk(const CBlockUndo& blockundo, FlatFilePos& pos, const uint25
     return true;
 }
 
+} // anon namespace
+
 bool UndoReadFromDisk(CBlockUndo& blockundo, const FlatFilePos& pos, const uint256& hashBlock)
 {
     // Open history file to read
@@ -1336,8 +1338,6 @@ bool UndoReadFromDisk(CBlockUndo& blockundo, const FlatFilePos& pos, const uint2
 
     return true;
 }
-
-} // anon namespace
 
 enum DisconnectResult
 {

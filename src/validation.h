@@ -39,6 +39,7 @@
 #include <vector>
 
 class CBlockIndex;
+class CBlockUndo;
 class CBlockTreeDB;
 class CBudgetManager;
 class CCoinsViewDB;
@@ -314,6 +315,7 @@ public:
 bool WriteBlockToDisk(const CBlock& block, FlatFilePos& pos);
 bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos);
 bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex);
+bool UndoReadFromDisk(CBlockUndo& blockundo, const FlatFilePos& pos, const uint256& hashBlock);
 
 
 /** Functions for validating blocks and updating the block tree */

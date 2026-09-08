@@ -38,7 +38,7 @@ public:
     CPivStake(const CTxOut& _from, const COutPoint& _outPointFrom, const CBlockIndex* _pindexFrom) :
             CStakeInput(_pindexFrom), outputFrom(_from), outpointFrom(_outPointFrom) {}
 
-    static CPivStake* NewPivStake(const CTxIn& txin, int nHeight, uint32_t nTime);
+    static CPivStake* NewPivStake(const CTxIn& txin, const CBlockIndex* pindexPrev, uint32_t nTime);
 
     const CBlockIndex* GetIndexFrom() const override;
     bool GetTxOutFrom(CTxOut& out) const override;

@@ -26,7 +26,6 @@ class PQPoSTest(PivxTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 2
         self.extra_args = [["-connect=0", "-dnsseed=0", "-discover=0", "-staking=0",
-                            "-whitelist=127.0.0.1",
                             "-createwalletbackups=0", "-acceptnonstdtxn=0",
                             "-nuparams=PoS:130", "-nuparams=PoS_v2:130"]
                            for _ in range(self.num_nodes)]
@@ -38,21 +37,35 @@ class PQPoSTest(PivxTestFramework):
         assert backup.is_file()
         return address
 
-    def mine(self, address, count=1):
+    def sync_mempools(self, nodes=None, wait=1, timeout=60, flush_scheduler=True):
+        peers = nodes or self.nodes
+
+        def relayed():
+            # Normal peers randomize inventory announcements using mock time.
+            # Let that clock advance instead of bypassing relay with a whitelist.
+            self.mocktime += 1
+            set_node_times(self.nodes, self.mocktime)
+            return len({tuple(sorted(node.getrawmempool())) for node in peers}) == 1
+
+        wait_until(relayed, timeout=timeout)
+        super().sync_mempools(peers, wait, timeout, flush_scheduler)
+
+    def mine(self, address, count=1, node_index=0, sync=True):
         hashes = []
         for _ in range(count):
             def produce():
                 self.mocktime += 60
                 set_node_times(self.nodes, self.mocktime)
                 try:
-                    hashes.extend(self.nodes[0].generatetoaddress(1, address))
+                    hashes.extend(self.nodes[node_index].generatetoaddress(1, address))
                     return True
                 except JSONRPCException as error:
                     if "Couldn't create new blocks" not in error.error["message"]:
                         raise
                     return False
             wait_until(produce, timeout=120)
-            self.sync_all()
+            if sync:
+                self.sync_all()
         return hashes
 
     def assert_pq_stake(self, blockhash):
@@ -106,6 +119,20 @@ class PQPoSTest(PivxTestFramework):
             node.reconsiderblock(second_stake)
         self.sync_all()
         assert_equal([node.listpqunspent() for node in self.nodes], snapshots)
+
+        # Rejoin a genuine network partition using ordinary peer validation:
+        # no whitelist, ban clearing, invalidation, or manual block submission.
+        self.mine(mining_address, 20)
+        self.disconnect_nodes(0, 1)
+        shorter_tip = self.mine(receive_address, node_index=1, sync=False)[0]
+        stronger_tip = self.mine(mining_address, 2, sync=False)[-1]
+        assert shorter_tip != stronger_tip
+        self.connect_nodes(0, 1)
+        self.sync_all()
+        for node in self.nodes:
+            assert_equal(node.getbestblockhash(), stronger_tip)
+            assert_equal(node.listbanned(), [])
+            assert node.getconnectioncount() > 0
 
 
 if __name__ == "__main__":

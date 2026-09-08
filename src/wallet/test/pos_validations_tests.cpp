@@ -10,9 +10,11 @@
 #include "coincontrol.h"
 #include "blocksignature.h"
 #include "consensus/merkle.h"
+#include "kernel.h"
 #include "masternode-payments.h"
 #include "primitives/block.h"
 #include "pqtransaction.h"
+#include "stakeinput.h"
 #include "test/util/blocksutil.h"
 #include "tiertwo/tiertwo_sync_state.h"
 #include "timedata.h"
@@ -242,7 +244,7 @@ COutPoint GetOutpointWithAmount(const CTransaction& tx, CAmount outpointValue)
     return {};
 }
 
-static bool IsSpentOnFork(const COutput& coin, std::initializer_list<std::shared_ptr<CBlock>> forkchain = {})
+static bool IsSpentOnFork(const COutput& coin, const std::vector<std::shared_ptr<CBlock>>& forkchain = {})
 {
     const COutPoint outpoint(coin.tx->GetHash(), coin.i);
     for (const auto& block : forkchain) {
@@ -255,7 +257,7 @@ static bool IsSpentOnFork(const COutput& coin, std::initializer_list<std::shared
 
 std::shared_ptr<CBlock> CreateBlockInternal(CWallet* pwalletMain, const std::vector<CMutableTransaction>& txns = {},
                                             CBlockIndex* customPrevBlock = nullptr,
-                                            std::initializer_list<std::shared_ptr<CBlock>> forkchain = {})
+                                            const std::vector<std::shared_ptr<CBlock>>& forkchain = {})
 {
     std::vector<CStakeableOutput> availableCoins;
     BOOST_CHECK(pwalletMain->StakeableCoins(&availableCoins));
@@ -325,6 +327,85 @@ BOOST_FIXTURE_TEST_CASE(stake_fixture_excludes_ordinary_fork_spends, TestPoSChai
     auto block = std::make_shared<CBlock>();
     block->vtx = {MakeTransactionRef(other), MakeTransactionRef(other), MakeTransactionRef(spend)};
     BOOST_CHECK(IsSpentOnFork(coin, {block}));
+}
+
+BOOST_FIXTURE_TEST_CASE(stake_created_on_side_branch_rejoins_without_invalidation, TestPoSChainSetup)
+{
+    CBlockIndex* split = WITH_LOCK(cs_main, return chainActive.Tip());
+    for (int i = 0; i < 21; ++i)
+        BOOST_REQUIRE(ProcessNewBlock(CreateBlockInternal(pwalletMain.get()), nullptr));
+    const uint256 activeTip = WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash());
+
+    std::string address;
+    BOOST_REQUIRE(pwalletMain->GeneratePQAddress(address));
+    const auto funding = CreateAndCommitTx(pwalletMain.get(), address, 9 * COIN);
+    const COutPoint outpoint = GetOutpointWithAmount(funding, 9 * COIN);
+    std::vector<std::shared_ptr<CBlock>> fork;
+    CBlockIndex* parent = split;
+    for (int i = 0; i < 21; ++i) {
+        auto block = CreateBlockInternal(pwalletMain.get(), i == 0 ?
+            std::vector<CMutableTransaction>{funding} : std::vector<CMutableTransaction>{}, parent, fork);
+        BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+        parent = mapBlockIndex.at(block->GetHash());
+        fork.push_back(block);
+    }
+    BOOST_REQUIRE_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), activeTip);
+    BOOST_REQUIRE(pcoinsTip->AccessCoin(outpoint).IsSpent());
+
+    // The next block stakes a mature output found only in the stored side branch.
+    auto block = CreateBlockInternal(pwalletMain.get(), {}, parent, fork);
+    CMutableTransaction stake(*block->vtx[1]);
+    stake.vin = {CTxIn(outpoint)};
+    stake.vout.resize(2);
+    stake.vout[1] = CTxOut(9 * COIN + GetBlockValue(parent->nHeight + 1, parent->nChainMinted),
+                          funding.vout[outpoint.n].scriptPubKey);
+    BOOST_REQUIRE(pwalletMain->SignCoinStake(stake));
+    block->vtx[1] = MakeTransactionRef(stake);
+    const auto origin = mapBlockIndex.at(fork.front()->GetHash());
+    CPivStake input(funding.vout[outpoint.n], outpoint, origin);
+    for (int attempts = 0; !CStakeKernel(parent, &input, block->nBits, block->nTime).CheckKernelHash(true); ++attempts) {
+        BOOST_REQUIRE_LT(attempts, 10000);
+        ++block->nTime;
+    }
+    block->hashMerkleRoot = BlockMerkleRoot(*block);
+    BOOST_REQUIRE(SignBlock(*block, *pwalletMain));
+    const auto load = [&](const COutPoint& point, const CBlockIndex* previous) {
+        return std::unique_ptr<CPivStake>(CPivStake::NewPivStake(CTxIn(point), previous, block->nTime));
+    };
+    BOOST_REQUIRE(load(outpoint, parent));
+    BOOST_CHECK(load(outpoint, parent)->GetIndexFrom() == origin);
+    BOOST_CHECK(!load(outpoint, mapBlockIndex.at(activeTip))); // sibling branch
+    BOOST_CHECK(!load(outpoint, split)); // future origin
+    BOOST_CHECK(!load(outpoint, origin)); // insufficient stake depth
+    BOOST_CHECK(!load(COutPoint(outpoint.hash, funding.vout.size()), parent));
+    BOOST_CHECK(!load(outpoint, nullptr));
+    std::string reason;
+    BOOST_REQUIRE_MESSAGE(CheckProofOfStake(*block, reason, parent), reason);
+    CBlock badSignature(*block);
+    CMutableTransaction badStake(stake);
+    badStake.extraPayload->back() ^= 1;
+    badSignature.vtx[1] = MakeTransactionRef(badStake);
+    BOOST_CHECK(!CheckProofOfStake(badSignature, reason, parent));
+    BOOST_CHECK(reason.find("PQ stake authorization fails") != std::string::npos);
+    BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), block->GetHash());
+    // Once connected, the bounds check must also cover the indexed fallback.
+    BOOST_CHECK(!load(COutPoint(outpoint.hash, funding.vout.size()), parent));
+}
+
+BOOST_FIXTURE_TEST_CASE(stake_common_ancestor_spent_on_active_chain_without_txindex, TestPoSChainSetup)
+{
+    const CBlockIndex* parent = WITH_LOCK(cs_main, return chainActive.Tip());
+    const auto block = CreateBlockInternal(pwalletMain.get());
+    BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
+    // A competing block may reuse this pre-split input. Its origin must not
+    // depend on an optional index or on still being unspent on the active tip.
+    const bool indexed = fTxIndex;
+    fTxIndex = false;
+    std::string reason;
+    const bool valid = CheckProofOfStake(*block, reason, parent);
+    fTxIndex = indexed;
+    BOOST_REQUIRE_MESSAGE(valid, reason);
 }
 
 BOOST_FIXTURE_TEST_CASE(created_on_fork_tests, TestPoSChainSetup)
