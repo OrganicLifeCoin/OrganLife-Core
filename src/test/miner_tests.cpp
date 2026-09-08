@@ -31,6 +31,34 @@
 
 BOOST_FIXTURE_TEST_SUITE(miner_tests, WalletRegTestingSetup)
 
+BOOST_AUTO_TEST_CASE(StakeWaitMillis_UsesAbsoluteAdjustedDeadline)
+{
+    constexpr int64_t MICROS_PER_SECOND = 1000000;
+
+    // A fractional clock reading must wait through the exact second boundary.
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(100, 99 * MICROS_PER_SECOND + 900000, 0, 5000), 100);
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(100, 100 * MICROS_PER_SECOND - 1, 0, 5000), 1);
+    // A deadline that is already reached or passed must not sleep.
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(100, 100 * MICROS_PER_SECOND, 0, 5000), 0);
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(100, 101 * MICROS_PER_SECOND, 0, 5000), 0);
+    // Long waits remain bounded, and adjusted-time offsets apply at sub-second precision.
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(1000, 99 * MICROS_PER_SECOND, 0, 5000), 5000);
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(100, 99 * MICROS_PER_SECOND + 900000, -1, 5000), 1100);
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(100, 99 * MICROS_PER_SECOND + 900000, 1, 5000), 0);
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(INT64_MAX, INT64_MIN, INT64_MAX, 5000), 5000);
+}
+
+BOOST_AUTO_TEST_CASE(StakeWaitMillis_DoesNotRetainFractionalSeedPhase)
+{
+    constexpr int64_t MICROS_PER_SECOND = 1000000;
+    constexpr int64_t nDeadline = 100;
+
+    // The old whole-second sleep at 99.9s woke at 100.9s; the absolute wait reaches 100.0s.
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(nDeadline, 99 * MICROS_PER_SECOND + 900000, 0, 5000), 100);
+    // A seed/block arrival at 100.2s is already after the same absolute deadline, not a new phase.
+    BOOST_CHECK_EQUAL(GetStakeWaitMillis(nDeadline, 100 * MICROS_PER_SECOND + 200000, 0, 5000), 0);
+}
+
 // Test suite for ancestor feerate transaction selection.
 // Implemented as an additional function, rather than a separate test case,
 // to allow reusing the blockchain created in CreateNewBlock_validity.

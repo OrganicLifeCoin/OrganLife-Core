@@ -88,6 +88,25 @@ std::unique_ptr<CBlockTemplate> CreateNewBlockWithScript(const CScript& coinbase
     return BlockAssembler(Params(), DEFAULT_PRINTPRIORITY).CreateNewBlock(coinbaseScript, pwallet, false);
 }
 
+int64_t GetStakeWaitMillis(const int64_t nNextStakeTime,
+                          const int64_t nNowMicros,
+                          const int64_t nAdjustedTimeOffset,
+                          const int64_t nMaxWaitMillis)
+{
+    if (nMaxWaitMillis <= 0) return 0;
+
+    constexpr __int128 MICROS_PER_SECOND = 1000000;
+    constexpr __int128 MICROS_PER_MILLISECOND = 1000;
+    const __int128 nDeadlineMicros = static_cast<__int128>(nNextStakeTime) * MICROS_PER_SECOND;
+    const __int128 nAdjustedNowMicros = static_cast<__int128>(nNowMicros) +
+                                        static_cast<__int128>(nAdjustedTimeOffset) * MICROS_PER_SECOND;
+    const __int128 nWaitMicros = nDeadlineMicros - nAdjustedNowMicros;
+    if (nWaitMicros <= 0) return 0;
+
+    const __int128 nWaitMillis = (nWaitMicros + MICROS_PER_MILLISECOND - 1) / MICROS_PER_MILLISECOND;
+    return nWaitMillis > nMaxWaitMillis ? nMaxWaitMillis : static_cast<int64_t>(nWaitMillis);
+}
+
 bool ProcessBlockFound(const std::shared_ptr<const CBlock>& pblock, CWallet& wallet, std::unique_ptr<CReserveKey>& reservekey)
 {
     LogPrint(BCLog::STAKING, "%s\n", pblock->ToString());
@@ -441,9 +460,11 @@ void BitcoinMiner(CWallet* pwallet, bool fProofOfStake)
 
             if (Params().IsTestnet() || Params().IsRegTestNet()) {
                 const int64_t nNextStakeTime = pindexPrev->GetBlockTime() + consensus.nTargetSpacing;
-                const int64_t nWaitSeconds = nNextStakeTime - GetAdjustedTime();
-                if (nWaitSeconds > 0) {
-                    MilliSleep(nWaitSeconds > 5 ? 5000 : nWaitSeconds * 1000);
+                const int64_t nWaitMillis = GetStakeWaitMillis(nNextStakeTime,
+                                                             GetTime<std::chrono::microseconds>().count(),
+                                                             GetTimeOffset(), 5000);
+                if (nWaitMillis > 0) {
+                    MilliSleep(nWaitMillis);
                     continue;
                 }
             }

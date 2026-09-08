@@ -39,6 +39,11 @@ bool RequiresNearTipStakingPeerEvidence(const CChainParams& params);
     void BitcoinMiner(CWallet* pwallet, bool fProofOfStake);
     void ThreadStakeMinter(CWallet* pwallet);
 
+    int64_t GetStakeWaitMillis(int64_t nNextStakeTime,
+                              int64_t nNowMicros,
+                              int64_t nAdjustedTimeOffset,
+                              int64_t nMaxWaitMillis);
+
     enum class StakerSlotWait {
         Wait,     // last attempt was made on the exact current slot: sleep and retry later
         Proceed,  // a new slot (or tip) is available: run a fresh kernel search

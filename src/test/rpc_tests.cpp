@@ -245,6 +245,24 @@ BOOST_AUTO_TEST_CASE(rpc_convert_creategovvotelock_verbose_flag)
     BOOST_CHECK(params[3].get_bool());
 }
 
+BOOST_AUTO_TEST_CASE(rpc_convert_createpqproposal_numbers)
+{
+    const UniValue params = RPCConvertValues("createpqproposal",
+            {"pq-governance-test", "https://example.org", "1", "40320", "pq-address", "10"});
+    BOOST_CHECK(params[0].isStr());
+    BOOST_CHECK(params[1].isStr());
+    BOOST_CHECK(params[4].isStr());
+    BOOST_CHECK(params[2].isNum());
+    BOOST_CHECK(params[3].isNum());
+    BOOST_CHECK(params[5].isNum());
+    const UniValue named = RPCConvertNamedValues("createpqproposal",
+            {"payments=1", "start=40320", "amount=10", "pq_address=pq-address"});
+    BOOST_CHECK(named["payments"].isNum());
+    BOOST_CHECK(named["start"].isNum());
+    BOOST_CHECK(named["amount"].isNum());
+    BOOST_CHECK(named["pq_address"].isStr());
+}
+
 BOOST_AUTO_TEST_CASE(rpc_ban)
 {
     BOOST_CHECK_NO_THROW(CallRPC(std::string("clearbanned")));
