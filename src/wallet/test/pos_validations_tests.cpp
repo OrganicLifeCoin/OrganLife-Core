@@ -332,7 +332,9 @@ BOOST_FIXTURE_TEST_CASE(stake_fixture_excludes_ordinary_fork_spends, TestPoSChai
 BOOST_FIXTURE_TEST_CASE(stake_created_on_side_branch_rejoins_without_invalidation, TestPoSChainSetup)
 {
     CBlockIndex* split = WITH_LOCK(cs_main, return chainActive.Tip());
-    for (int i = 0; i < 21; ++i)
+    // Keep the reference branch strictly heavier while testing side-branch
+    // input lookup; equal-work selection deliberately depends on header hashes.
+    for (int i = 0; i < 22; ++i)
         BOOST_REQUIRE(ProcessNewBlock(CreateBlockInternal(pwalletMain.get()), nullptr));
     const uint256 activeTip = WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash());
 
@@ -388,7 +390,12 @@ BOOST_FIXTURE_TEST_CASE(stake_created_on_side_branch_rejoins_without_invalidatio
     BOOST_CHECK(!CheckProofOfStake(badSignature, reason, parent));
     BOOST_CHECK(reason.find("PQ stake authorization fails") != std::string::npos);
     BOOST_REQUIRE(ProcessNewBlock(block, nullptr));
-    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), block->GetHash());
+    // The stake block ties the reference branch. Extend it once more so this
+    // provenance regression requires a rejoin independent of the tie winner.
+    fork.push_back(block);
+    auto extension = CreateBlockInternal(pwalletMain.get(), {}, mapBlockIndex.at(block->GetHash()), fork);
+    BOOST_REQUIRE(ProcessNewBlock(extension, nullptr));
+    BOOST_CHECK_EQUAL(WITH_LOCK(cs_main, return chainActive.Tip()->GetBlockHash()), extension->GetHash());
     // Once connected, the bounds check must also cover the indexed fallback.
     BOOST_CHECK(!load(COutPoint(outpoint.hash, funding.vout.size()), parent));
 }
