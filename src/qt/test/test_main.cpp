@@ -51,6 +51,8 @@ extern void noui_connect();
 int main(int argc, char *argv[])
 {
     SetupEnvironment();
+    if (!SetupNetworking())
+        return 1;
     SelectParams(CBaseChainParams::MAIN);
     bool fInvalid = false;
     Q_INIT_RESOURCE(organiclife);
