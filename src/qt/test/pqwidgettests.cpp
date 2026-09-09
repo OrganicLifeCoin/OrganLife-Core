@@ -686,6 +686,59 @@ void PQWidgetTests::actualWalletUnloadQuiescesModel()
     QVERIFY(guardedModel.isNull());
 }
 
+void PQWidgetTests::balancePollingDoesNotInvertChainLock()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto oldDataDir = gArgs.GetArg("-datadir", "");
+    const auto oldNetwork = Params().NetworkIDString();
+    struct RestoreEnvironment {
+        std::string datadir, network;
+        ~RestoreEnvironment()
+        {
+            gArgs.ForceSetArg("-datadir", datadir);
+            ClearDatadirCache();
+            SelectParams(network);
+        }
+    } restore{oldDataDir, oldNetwork};
+    SelectParams(CBaseChainParams::TESTNET);
+    gArgs.ForceSetArg("-datadir", directory.path().toStdString());
+    ClearDatadirCache();
+
+    CWallet wallet("pq-balance-lock",
+        WalletDatabase::Create(fs::path(directory.path().toStdString()) / "wallet"));
+    bool firstRun;
+    QCOMPARE(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+    OptionsModel options;
+    WalletModel model(&wallet, &options);
+    model.init();
+    model.setfForceCheckBalanceChanged(true);
+
+    QSemaphore completed;
+    std::thread poller;
+    bool result = true;
+    bool completedWhileChainLocked = false;
+    bool walletAvailable = false;
+    {
+        LOCK(cs_main);
+        poller = std::thread([&] {
+            result = model.processBalanceChangeInternal();
+            completed.release();
+        });
+        completedWhileChainLocked = completed.tryAcquire(1, 1000);
+        TRY_LOCK(wallet.cs_wallet, lockWallet);
+        walletAvailable = bool(lockWallet);
+    }
+    // Release cs_main before joining or asserting, so a regression fails rather than hangs.
+    poller.join();
+    QVERIFY(completedWhileChainLocked);
+    QVERIFY(walletAvailable);
+    QVERIFY(!result);
+    QVERIFY(model.hasForceCheckBalance());
+    QVERIFY(model.processBalanceChangeInternal());
+    QVERIFY(!model.hasForceCheckBalance());
+}
+
 void PQWidgetTests::standardReceiveUsesPQAddressAndBackup()
 {
     QTemporaryDir directory;

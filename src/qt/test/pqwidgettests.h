@@ -15,6 +15,7 @@ private Q_SLOTS:
     void masternodeControllerCancelsWithoutWrites();
     void seamlessWalletUsesStandardScreens();
     void actualWalletUnloadQuiescesModel();
+    void balancePollingDoesNotInvertChainLock();
     void standardReceiveUsesPQAddressAndBackup();
     void standardSendUsesPQBackupAndHistory();
     void chartPeriodsExistBeforeFirstReward();

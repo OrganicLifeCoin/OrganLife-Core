@@ -335,7 +335,9 @@ bool WalletModel::processBalanceChangeInternal()
     // there is no guarantee that the threadpool will execute the task right away.
     if (!fForceCheckBalanceChanged && m_cached_best_block_hash == blockHash) return false;
 
-    // Try to get lock only if needed
+    // Balance queries also take cs_main; keep the same chain-before-wallet order as block processing.
+    TRY_LOCK(cs_main, lockMain);
+    if (!lockMain) return false;
     TRY_LOCK(wallet->cs_wallet, lockWallet);
     if (!lockWallet) return false;
 
