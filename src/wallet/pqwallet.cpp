@@ -258,7 +258,7 @@ std::vector<COutput> CWallet::GetPQUnspent(bool include_locked, const CCoinContr
     LOCK2(cs_main, cs_wallet);
     std::vector<COutput> coins;
     if (!PQPaymentsActive()) return coins;
-    // ponytail: scan the existing wallet map; add an index only if measured wallet size warrants it.
+    // Scan the existing wallet map; add an index only if measured wallet size warrants it.
     for (const auto& item : mapWallet) {
         const auto& wtx = item.second;
         const auto* block = LookupBlockIndex(wtx.m_confirm.hashBlock);

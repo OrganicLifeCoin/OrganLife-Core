@@ -126,11 +126,14 @@ std::vector<unsigned char> AssociatedData(const Record& record, const std::strin
     if (genesis && genesis->IsNull()) return {};
     const char* domain = record.version == 3 ?
         (network == "regtest" ? "OLC/PQ/ML-DSA-44/regtest/operator-recovery/v1" :
-         network == "test" ? "OLC/PQ/ML-DSA-44/testnet/operator-recovery/v1" : nullptr) : genesis ?
+         network == "test" ? "OLC/PQ/ML-DSA-44/testnet/operator-recovery/v1" :
+         network == "main" ? "OLC/PQ/ML-DSA-44/mainnet/operator-recovery/v1" : nullptr) : genesis ?
         (network == "regtest" ? "OLC/PQ/ML-DSA-44/regtest/operator-seed/v1" :
-         network == "test" ? "OLC/PQ/ML-DSA-44/testnet/operator-seed/v1" : nullptr) :
+         network == "test" ? "OLC/PQ/ML-DSA-44/testnet/operator-seed/v1" :
+         network == "main" ? "OLC/PQ/ML-DSA-44/mainnet/operator-seed/v1" : nullptr) :
         (network == "regtest" ? "OLC/PQ/ML-DSA-44/regtest/seed/v1" :
-         network == "test" ? "OLC/PQ/ML-DSA-44/testnet/seed/v1" : nullptr);
+         network == "test" ? "OLC/PQ/ML-DSA-44/testnet/seed/v1" :
+         network == "main" ? "OLC/PQ/ML-DSA-44/mainnet/seed/v1" : nullptr);
     if (!domain) return {};
     std::vector<unsigned char> data(domain, domain + std::strlen(domain));
     data.push_back(record.version);

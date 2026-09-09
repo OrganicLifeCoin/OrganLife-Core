@@ -93,6 +93,9 @@ public:
     // runtime must reverify against its trusted committee and anchor.
     bool RecordProof(const pqquorum::Certificate& proof, std::string& reason);
     bool GetProof(uint32_t height, pqquorum::Certificate& proof) const;
+    // Refuse restoration into another provisional bootstrap context. Old
+    // height-only locks require a context-bound proof; no history is erased.
+    bool CheckContext(uint32_t height, const uint256& anchor, const uint256& committee, std::string& reason) const;
 
 private:
     static std::unique_ptr<Journal> Open(const fs::path& datadir, const uint256& genesis,

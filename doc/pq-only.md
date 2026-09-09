@@ -269,15 +269,19 @@ prepared keys and encrypted backups; these are not registered masternodes.
 Names are local UI preferences, not consensus data, and may need restoring after
 migrating the controller to another computer.
 
-The information dialog copies a complete server configuration after full wallet
-unlock and explicit confirmation. There is no folder picker or credential-file
-transfer. The clipboard includes **secret operator credentials**, never controller
-spending keys. Paste it at the top of that node's config, replacing old operator
-settings, protect the file (Linux: owner-only `0600`), and restart the node.
-Clear clipboard history after pasting. Use one node/data directory per operator;
-the copied block preserves the existing data location and signing history,
-disables the wallet and binds RPC to loopback. It does not remotely start a
-server, initialize signing history, or choose a finality checkpoint. Preserve
+The information dialog copies only three settings after full wallet unlock and
+explicit confirmation: `pqoperatorid`, `pqoperatorconfig` and `externalip` (IP:port).
+There is no folder picker or credential-file transfer. The clipboard includes
+**secret operator credentials**, never controller spending keys. The VPS must
+already run on the same network with `disablewallet=1` and a listening port that
+matches the registered service port. The copied lines do not change network,
+wallet, RPC, listening port or data directory settings.
+Remove old `pqoperatorid`, `pqoperatorconfig`, `pqoperatorcredentials` and
+`externalip` entries, then paste the three lines at the top of the existing config,
+before any network section. Protect the file (Linux: owner-only `0600`) and restart
+the node. Clear clipboard history after pasting. Use one node/data directory per
+operator and keep RPC private. Copying does not remotely start a server,
+initialize signing history, or choose a finality checkpoint. Preserve signing history and
 existing checkpoints; new operators still follow the finality first-start sequence below.
 
 `pqoperatorconfig` is config-file-only: exactly 2,834 lowercase hex characters
@@ -352,6 +356,39 @@ the full quorum. A single bounded future proposal can survive delivery before it
 round, but cannot advance a round by itself. Public-network, service-fairness,
 crash-recovery and cross-platform qualification remain incomplete. Do not use this
 opt-in mode with a value-bearing wallet.
+
+### Automatic initial finality for the mainnet candidate
+
+The mainnet candidate derives its first checkpoint from validated chain history.
+It does not need a copied `pqbootstrap` configuration. Mainnet launch, activation
+and release qualification are still separate requirements; this change does not
+enable public mainnet by itself. Existing testnet keeps its configured checkpoint.
+
+After both PQ registry and service activation, the first historical committee
+with 4–400 mature, non-revoked registrations and configured service endpoints
+becomes the provisional checkpoint. All eligible members participate, ordered
+by registration ID. Later registrations do not replace this initial committee.
+No eligible committee means no finality, not stopped staking or payments.
+
+Before the first valid quorum certificate, this checkpoint is not written as an
+irreversible anchor. A chain reorganization can change it. The first certificate
+must match its exact height, block hash and committee; existing durable anchor
+protection then applies. Lookup uses the existing committee history, with cost
+linear in committee changes. There is no additional persistent checkpoint index.
+
+Operator signing history is never reset automatically. If a reorganization
+changes a voting context that the operator already used, it refuses to reuse
+those votes or locks. A legacy lock without a context-bound proof also prevents
+signing. This can leave an individual operator unable to vote, while ordinary
+staking and payments continue. Never delete its journal to bypass the refusal;
+rotate the operator key through the controller if necessary.
+
+For isolated qualification, all nodes of a fresh regtest chain can use
+`-pqautobootstrap=1`. This flag cannot enable automatic bootstrap on testnet or
+disable it on mainnet. Combining automatic mode with `-pqbootstrap` is rejected.
+The functional scenarios `--automatic-bootstrap` and
+`--automatic-bootstrap --reindex` exercise the automatic policy without changing
+the running public testnet.
 
 The highest verified prevote quorum proof is saved in the existing journal and
 rechecked against the trusted committee after restart. Unpublished commit

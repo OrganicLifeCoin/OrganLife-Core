@@ -83,7 +83,7 @@ struct InboxItem {
 class Manager {
 public:
     static Manager& Get();
-    // Starts the driver when finality is configured (bootstrap present). A
+    // Starts the driver for automatic mainnet or a configured test checkpoint. A
     // corrupt journal fails closed with a reason; false never blocks startup
     // of ordinary PoS operation. Caller holds no locks; requires cs_main free.
     bool Start(std::string& reason);

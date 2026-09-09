@@ -136,30 +136,42 @@ void PQWidgetTests::masternodeServerConfiguration()
         wizard.findChild<QLineEdit*>("lineEditPort")->clear();
         QCOMPARE(wizard.service(), "8.8.8.8:" + QString::number(Params().GetDefaultPort()));
         for (const auto& endpoint : {"8.8.8.8:49736", "[2001:4860::8888]:49746"}) {
-            const auto config = PQWalletUI::masternodeConfig(id, LookupNumeric(endpoint));
-            QVERIFY(config.contains("disablewallet=1\n"));
-            QVERIFY(config.contains("pqoperatorid=" + QString::fromStdString(id.GetHex())));
-            QVERIFY(config.contains("pqoperatorcredentials=/var/lib/organiclifecoin/pq-"));
-            QVERIFY(config.contains(QString("externalip=") + endpoint));
-            const auto section = config.indexOf(network == CBaseChainParams::TESTNET ? "[test]" : "[regtest]");
-            QVERIFY(section > 0);
-            QVERIFY(config.indexOf("\nport=") > section);
-            QVERIFY(config.indexOf("\nrpcport=") > section);
-            QVERIFY(!config.contains("privatekey"));
-            QVERIFY(!config.contains("rpcpassword"));
+            const auto config = PQWalletUI::masternodeConfig(id, LookupNumeric(endpoint), "aabb");
+            QCOMPARE(config, QString("pqoperatorid=%1\npqoperatorconfig=aabb\nexternalip=%2\n")
+                .arg(QString::fromStdString(id.GetHex()), endpoint));
             struct ConfigArgs : ArgsManager { using ArgsManager::ReadConfigStream; } parsed;
-            std::istringstream stream(config.toStdString());
+            // Parser-only placeholders: existing checkpoint text must remain untouched.
+            const auto existing = QString("%1=1\ndisablewallet=1\nstaking=0\nserver=1\nlisten=1\n"
+                "datadir=/existing/node\npqbootstrap=existing-checkpoint\n[%2]\nport=%3\n"
+                "rpcport=50123\nrpcbind=127.0.0.1\nrpcallowip=127.0.0.1\nrpcpassword=existing-password\n")
+                .arg(network == CBaseChainParams::TESTNET ? "testnet" : "regtest",
+                     QString::fromStdString(network)).arg(LookupNumeric(endpoint).GetPort());
+            std::istringstream stream((config + existing).toStdString());
             parsed.ReadConfigStream(stream);
             parsed.SelectConfigNetwork(network);
+            QCOMPARE(parsed.GetChainName(), network);
+            QVERIFY(parsed.GetBoolArg("-disablewallet", false));
+            QVERIFY(!parsed.GetBoolArg("-staking", true));
+            QVERIFY(parsed.GetBoolArg("-server", false));
+            QVERIFY(parsed.GetBoolArg("-listen", false));
+            QCOMPARE(parsed.GetArg("-datadir", ""), std::string("/existing/node"));
+            QCOMPARE(parsed.GetArg("-pqbootstrap", ""), std::string("existing-checkpoint"));
             QCOMPARE(parsed.GetArg("-port", 0), int64_t(LookupNumeric(endpoint).GetPort()));
-            QCOMPARE(parsed.GetArg("-rpcport", 0), int64_t(LookupNumeric(endpoint).GetPort() + 1));
+            QCOMPARE(parsed.GetArg("-rpcport", 0), int64_t(50123));
+            QCOMPARE(parsed.GetArg("-rpcbind", ""), std::string("127.0.0.1"));
+            QCOMPARE(parsed.GetArg("-rpcallowip", ""), std::string("127.0.0.1"));
+            QCOMPARE(parsed.GetArg("-rpcpassword", ""), std::string("existing-password"));
             QCOMPARE(parsed.GetArg("-externalip", ""), std::string(endpoint));
+            QCOMPARE(parsed.GetArg("-pqoperatorid", ""), id.GetHex());
+            QCOMPARE(parsed.GetArg("-pqoperatorconfig", ""), std::string("aabb"));
         }
-        QVERIFY(PQWalletUI::masternodeConfig(uint256(), LookupNumeric("8.8.8.8:49736")).isEmpty());
-        QVERIFY(PQWalletUI::masternodeConfig(id, CService()).isEmpty());
+        QVERIFY(PQWalletUI::masternodeConfig(uint256(), LookupNumeric("8.8.8.8:49736"), "aabb").isEmpty());
+        QVERIFY(PQWalletUI::masternodeConfig(id, CService(), "aabb").isEmpty());
+        QVERIFY(PQWalletUI::masternodeConfig(id, LookupNumeric("8.8.8.8:0"), "aabb").isEmpty());
+        QVERIFY(PQWalletUI::masternodeConfig(id, LookupNumeric("8.8.8.8:49736"), {}).isEmpty());
     }
     SelectParams(CBaseChainParams::MAIN);
-    QVERIFY(PQWalletUI::masternodeConfig(id, LookupNumeric("8.8.8.8:49736")).isEmpty());
+    QVERIFY(PQWalletUI::masternodeConfig(id, LookupNumeric("8.8.8.8:49736"), "aabb").isEmpty());
 }
 
 void PQWidgetTests::masternodeControllerCancelsWithoutWrites_data()
@@ -558,7 +570,10 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     const auto exports = QDir(directory.path()).entryList({"olc-masternode-*"}, QDir::Dirs | QDir::NoDotAndDotDot);
     QCOMPARE(exports.size(), 0);
     const auto copiedConfig = QApplication::clipboard()->text();
+    QCOMPARE(copiedConfig.count('\n'), 3);
+    QVERIFY(copiedConfig.startsWith("pqoperatorid="));
     QVERIFY(copiedConfig.contains("\npqoperatorconfig="));
+    QVERIFY(copiedConfig.contains("\nexternalip="));
     QVERIFY(!copiedConfig.contains("pqoperatorcredentials="));
     QVERIFY(!copiedConfig.contains("\ndatadir="));
     struct ConfigArgs : ArgsManager { using ArgsManager::ReadConfigStream; } copiedArgs;

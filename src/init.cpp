@@ -1953,7 +1953,7 @@ bool AppInitMain()
         return false;
     }
 
-    // PQ finality runtime: started only when a pinned bootstrap is configured.
+    // PQ finality runtime: automatic on mainnet, configured on existing test chains.
     // It never gates ordinary PoS production. Stopped before credential or
     // EvoDB teardown in Shutdown().
     {

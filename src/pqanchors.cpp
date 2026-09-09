@@ -100,6 +100,12 @@ uint256 ID(uint32_t height, const uint256& blockHash, const uint256& committee)
     return hash.GetHash();
 }
 
+bool UsesAutomaticBootstrap(const CChainParams& params)
+{
+    return params.NetworkIDString() == CBaseChainParams::MAIN ||
+           (params.IsRegTestNet() && gArgs.GetBoolArg("-pqautobootstrap", false));
+}
+
 std::vector<pqquorum::Member> SelectCommittee(const pqmn::Index& index, uint32_t height, bool* belowMinimum)
 {
     AssertLockHeld(cs_main);
@@ -361,6 +367,7 @@ bool InitBootstrap(const CChainParams& params, std::string& reason)
         reason.clear();
         return true;
     }
+    if (UsesAutomaticBootstrap(params)) return Fail(reason, "pq-bootstrap-automatic-network");
     if (!params.IsTestChain()) {
         reason = "pq-bootstrap-test-chain-only";
         return false;
@@ -510,8 +517,49 @@ bool ValidateRecovery(const ChainState& state, const Store& store, const CBlockI
 
 bool ValidateBootstrap(const ChainState& state, const CBlockIndex* tip, std::string& reason)
 {
+    Bootstrap bootstrap;
+    return state.ResolveBootstrap(tip, bootstrap, reason);
+}
+
+bool ChainState::ResolveBootstrap(const CBlockIndex* tip, Bootstrap& out, std::string& reason) const
+{
     AssertLockHeld(cs_main);
     reason.clear();
+    out = {};
+    if (UsesAutomaticBootstrap(params)) {
+        const auto& upgrades = params.GetConsensus().vUpgrades;
+        const int registry = upgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
+        const int service = upgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight;
+        uint32_t cursor{0};
+        if (!tip || tip->nHeight < 0 || registry < 0 || service < 0 || !Read(Kind('M'), cursor)) return false;
+        const uint32_t first = std::max({1, registry, service});
+        uint64_t end = uint64_t(tip->nHeight) + 1;
+        Bootstrap result;
+        // Reuse canonical history, not a second persisted index that could
+        // become stale. Cost is linear in committee changes, not block count.
+        while (cursor) {
+            SnapshotEntry snapshot;
+            if (!Read(AtHeight('m', cursor), snapshot) || snapshot.prevHeight >= cursor ||
+                pqquorum::Commitment(snapshot.members) != snapshot.commitment ||
+                (!snapshot.members.empty() && (snapshot.commitment.IsNull() || snapshot.belowMinimum)))
+                return Fail(reason, "pq-bootstrap-candidate-state");
+            if (cursor <= uint32_t(tip->nHeight)) {
+                const uint32_t height = std::max(first, cursor);
+                if (!snapshot.members.empty() && height < end) {
+                    result.height = height;
+                    result.members = std::move(snapshot.members);
+                }
+                end = cursor;
+            }
+            cursor = snapshot.prevHeight;
+        }
+        if (!result.Configured()) return false;
+        const CBlockIndex* candidate = tip->GetAncestor(result.height);
+        if (!candidate) return Fail(reason, "pq-bootstrap-candidate-state");
+        out = std::move(result);
+        out.blockHash = candidate->GetBlockHash();
+        return true;
+    }
     const Bootstrap* bootstrap = GetBootstrap();
     if (!bootstrap || !tip) return false;
     // The pinned block must be an ancestor of the active chain at the pinned
@@ -525,10 +573,11 @@ bool ValidateBootstrap(const ChainState& state, const CBlockIndex* tip, std::str
     // at this height. Current registry state is not historical evidence, and
     // configuration must never manufacture or replace a chain snapshot.
     std::vector<pqquorum::Member> historical;
-    if (!state.CommitteeAt(bootstrap->height, historical))
+    if (!CommitteeAt(bootstrap->height, historical))
         return Fail(reason, "pq-bootstrap-snapshot-unavailable");
     if (pqquorum::Commitment(historical) != pqquorum::Commitment(bootstrap->members))
         return Fail(reason, "pq-bootstrap-snapshot-mismatch");
+    out = *bootstrap;
     return true;
 }
 

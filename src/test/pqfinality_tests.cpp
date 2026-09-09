@@ -77,6 +77,17 @@ BOOST_AUTO_TEST_CASE(inactive_status_clears_previous_snapshot)
     BOOST_CHECK(!member);
 }
 
+BOOST_AUTO_TEST_CASE(mainnet_runtime_waits_without_manual_bootstrap)
+{
+    std::string reason;
+    BOOST_REQUIRE(Params().NetworkIDString() == CBaseChainParams::MAIN);
+    BOOST_REQUIRE(!pqanchor::GetBootstrap());
+    const bool started = pqfinality::Manager::Get().Start(reason);
+    pqfinality::Manager::Get().Stop();
+    BOOST_CHECK(started);
+    BOOST_CHECK(reason.empty());
+}
+
 BOOST_AUTO_TEST_CASE(vote_requires_exact_local_context_and_voting_purpose)
 {
     std::array<mldsa44::Key, 4> keys;
@@ -152,6 +163,77 @@ struct ManagerTestAccess : BasicTestingSetup {
             height.anchor, height.height, height.committee);
     }
     void Advance(uint32_t round) { manager.AdvanceRound(height, round, 1000); }
+    void CheckAutomaticCandidate()
+    {
+        LOCK(cs_main);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_SERVICE, 1);
+        pqanchor::ChainState state(*evoDb, Params());
+        BOOST_REQUIRE(state.SetInitialCommittee(1, height.committee, reason));
+        std::array<CBlockIndex, 3> chain;
+        std::array<uint256, 3> hashes{uint256S("100"), uint256S("101"), uint256S("102")};
+        const auto* previous = chainActive.Tip();
+        struct RestoreTip { const CBlockIndex* tip; ~RestoreTip() { chainActive.SetTip(const_cast<CBlockIndex*>(tip)); } } restore{previous};
+        for (int i = 0; i < 3; ++i) {
+            chain[i].nHeight = i;
+            chain[i].phashBlock = &hashes[i];
+            chain[i].pprev = i ? &chain[i - 1] : nullptr;
+            chain[i].BuildSkip();
+        }
+        chainActive.SetTip(&chain[2]);
+        manager.Process();
+        BOOST_REQUIRE_EQUAL(manager.working.height, 2U);
+        const auto first = manager.working.anchor;
+        BOOST_CHECK_EQUAL(manager.working.anchorHash.GetHex(), hashes[1].GetHex());
+        // No certificate has made this provisional root irreversible.
+        hashes[1] = uint256S("201");
+        hashes[2] = uint256S("202");
+        manager.Process();
+        BOOST_CHECK(manager.working.anchor != first);
+        BOOST_CHECK(manager.working.localBlock == hashes[2]);
+    }
+
+    void CheckRestoreRejectsForeignVote()
+    {
+        const auto directory = SetDataDir("automatic-context-restore");
+        const auto genesis = Params().GetConsensus().hashGenesisBlock;
+        manager.journal = pqjournal::Journal::Initialize(directory, genesis, height.committee[0].registration,
+            keys[0].GetPublicKey(), reason);
+        BOOST_REQUIRE(manager.journal);
+        auto vote = SignedVote(0, 0).statement;
+        pqjournal::Journal::Signature signature;
+        BOOST_REQUIRE(manager.journal->GetOrSignVote(vote,
+            [&](const pqquorum::Statement&, pqjournal::Journal::Signature& out) { out.fill(42); return true; }, signature, reason));
+        height.anchor = uint256S("aabb");
+        BOOST_CHECK(!manager.RestoreProof(height, reason));
+        manager.journal.reset();
+        manager.journal = pqjournal::Journal::Load(directory, genesis, height.committee[0].registration,
+            keys[0].GetPublicKey(), reason);
+        BOOST_REQUIRE(manager.journal);
+        BOOST_CHECK(!manager.RestoreProof(height, reason));
+    }
+    void CheckRestoreRejectsUnboundLock()
+    {
+        const auto directory = SetDataDir("automatic-lock-restore");
+        const auto genesis = Params().GetConsensus().hashGenesisBlock;
+        manager.journal = pqjournal::Journal::Initialize(directory, genesis, height.committee[0].registration,
+            keys[0].GetPublicKey(), reason);
+        BOOST_REQUIRE(manager.journal);
+        BOOST_CHECK(manager.RestoreProof(height, reason));
+        BOOST_REQUIRE(manager.journal->RecordLock(height.height, 0, height.localBlock, reason));
+        BOOST_CHECK(!manager.RestoreProof(height, reason));
+        BOOST_CHECK_EQUAL(reason, "pq-journal-lock-context-unavailable");
+        manager.journal.reset();
+        manager.journal = pqjournal::Journal::Load(directory, genesis, height.committee[0].registration,
+            keys[0].GetPublicKey(), reason);
+        BOOST_REQUIRE(manager.journal);
+        BOOST_CHECK(!manager.RestoreProof(height, reason));
+        uint256 value;
+        uint32_t round = 1;
+        BOOST_REQUIRE(manager.journal->GetLock(height.height, value, round));
+        BOOST_CHECK(value == height.localBlock); // Refusal never destroys history.
+        BOOST_CHECK_EQUAL(round, 0U);
+    }
     uint32_t Round() { return height.round->currentRound(); }
     pqquorum::Certificate SignedVote(uint16_t member, uint32_t round,
                                     pqquorum::Purpose step = pqquorum::Purpose::PREVOTE)
@@ -507,6 +589,9 @@ struct ManagerTestAccess : BasicTestingSetup {
 }
 
 BOOST_FIXTURE_TEST_SUITE(pqfinality_round_tests, pqfinality::ManagerTestAccess)
+BOOST_AUTO_TEST_CASE(automatic_candidate_is_provisional) { CheckAutomaticCandidate(); }
+BOOST_AUTO_TEST_CASE(automatic_context_change_refuses_old_votes) { CheckRestoreRejectsForeignVote(); }
+BOOST_AUTO_TEST_CASE(automatic_context_refuses_unbound_lock) { CheckRestoreRejectsUnboundLock(); }
 BOOST_AUTO_TEST_CASE(idle_delay_tracks_only_unfinished_voting_steps)
 {
     CheckWakeDelay();

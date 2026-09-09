@@ -83,6 +83,36 @@ void CheckNetworkBoundInputs(const std::string& other_network)
 
 BOOST_FIXTURE_TEST_SUITE(pqtransaction_tests, PQSetup)
 
+BOOST_AUTO_TEST_CASE(mainnet_signature_contexts_are_separate)
+{
+    mldsa44::Key key;
+    BOOST_REQUIRE(key.Generate());
+    const std::vector<unsigned char> message{1, 2, 3};
+    for (const auto context : {pq::SignatureContext, pq::BlockSignatureContext, pq::GovernanceSignatureContext}) {
+        const auto main = context("main");
+        const auto test = context("test");
+        const auto regtest = context("regtest");
+        BOOST_REQUIRE(main);
+        BOOST_REQUIRE(test);
+        BOOST_REQUIRE(regtest);
+        const std::string value(main->begin(), main->end());
+        BOOST_CHECK(value != std::string(test->begin(), test->end()));
+        BOOST_CHECK(value != std::string(regtest->begin(), regtest->end()));
+        BOOST_CHECK(!context("unknown"));
+        std::vector<unsigned char> signature;
+        BOOST_REQUIRE(key.Sign(message, *main, signature));
+        BOOST_CHECK(mldsa44::Verify(key.GetPublicKey(), message, *main, signature));
+        BOOST_CHECK(!mldsa44::Verify(key.GetPublicKey(), message, *test, signature));
+        BOOST_CHECK(!mldsa44::Verify(key.GetPublicKey(), message, *regtest, signature));
+    }
+    const auto tx = *pq::SignatureContext("main");
+    const auto block = *pq::BlockSignatureContext("main");
+    const auto governance = *pq::GovernanceSignatureContext("main");
+    BOOST_CHECK(std::string(tx.begin(), tx.end()) != std::string(block.begin(), block.end()));
+    BOOST_CHECK(std::string(tx.begin(), tx.end()) != std::string(governance.begin(), governance.end()));
+    BOOST_CHECK(std::string(block.begin(), block.end()) != std::string(governance.begin(), governance.end()));
+}
+
 BOOST_AUTO_TEST_CASE(output_and_payload_formats)
 {
     pq::KeyID id{}; id.fill(0x42);
@@ -359,7 +389,7 @@ BOOST_AUTO_TEST_CASE(testnet_signature_has_independent_context_and_genesis)
     const auto actual_context = pq::SignatureContext("test");
     BOOST_REQUIRE(actual_context);
     BOOST_CHECK(std::equal(actual_context->begin(), actual_context->end(), test_context.begin(), test_context.end()));
-    for (const std::string network : {"main", "", "testnet", "unknown"}) BOOST_CHECK(!pq::SignatureContext(network));
+    for (const std::string network : {"", "testnet", "unknown"}) BOOST_CHECK(!pq::SignatureContext(network));
     const auto genesis = params->GetConsensus().hashGenesisBlock;
     BOOST_CHECK_EQUAL(genesis.GetHex(), "0000074a425b707b97fd4404f6e97f69e2fb627ee0c9e62a6800152f483a1886");
     for (int mutation = 0; mutation < 3; ++mutation) {

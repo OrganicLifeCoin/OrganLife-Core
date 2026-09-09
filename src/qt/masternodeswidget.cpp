@@ -653,10 +653,10 @@ void MasterNodesWidget::onInfoMNClicked()
         if (!dialog.exportMN || !controller || controller != walletModel) return;
         const auto current = mnModel->pqRecord(index);
         if (!current || current->first != entry->first || current->second.operatorKey != r.operatorKey) return;
-        if (PQWalletUI::masternodeConfig(entry->first, r.service).isEmpty()) {
+        if (entry->first.IsNull() || !r.service.IsValid() || !r.service.GetPort()) {
             warn(tr("Masternode"), tr("Set a valid service address before copying.")); return;
         }
-        if (!ask(tr("Copy Masternode Configuration"), tr("Copy the complete server configuration, including secret operator credentials?\nPaste it into this masternode's VPS configuration and restart that node. Anyone with the copied text can operate this masternode, but cannot spend your coins. Keep the configuration private and clear your clipboard history after pasting.")) ||
+        if (!ask(tr("Copy Masternode Configuration"), tr("Copy only the registration ID, secret operator credential and IP/port?\n\nUse an existing VPS node on the same network with disablewallet=1 and the registered listening port. Replace old pqoperatorid, pqoperatorconfig, pqoperatorcredentials and externalip entries; paste above any [network] section. Keep the config private (Linux: chmod 600), preserve signing history and checkpoint settings, and restart the node.\n\nAnyone with these credentials can operate this masternode, but cannot spend your coins. Clear clipboard history after pasting.")) ||
             !controller || controller != walletModel) return;
         WalletModel::UnlockContext unlock(controller->requestUnlock());
         if (!unlock.isValid() || !controller || controller != walletModel) return;
@@ -669,7 +669,7 @@ void MasterNodesWidget::onInfoMNClicked()
         // Secret export belongs only in the explicit clipboard, not Linux's
         // primary selection (which can be pasted accidentally by middle-click).
         QApplication::clipboard()->setText(config, QClipboard::Clipboard);
-        inform(tr("Complete configuration copied. Paste it at the top of this masternode's private VPS configuration, replacing old operator settings, and restart the node. No credential files need to be transferred. Keep existing signing history and network checkpoint settings."));
+        inform(tr("Three masternode settings copied. Paste into the existing private VPS configuration and restart that node."));
         return;
     }
     WalletModel::UnlockContext ctx(walletModel->requestUnlock());

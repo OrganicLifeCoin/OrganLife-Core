@@ -13,6 +13,17 @@
 
 
 namespace {
+struct AutomaticAnchorParams : CChainParams {
+    explicit AutomaticAnchorParams(int service = 20)
+    {
+        strNetworkID = CBaseChainParams::MAIN;
+        consensus = Params().GetConsensus();
+        consensus.vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight = 1;
+        consensus.vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight = service;
+    }
+    const CCheckpointData& Checkpoints() const override { return Params().Checkpoints(); }
+};
+
 struct AnchorSetup : BasicTestingSetup {
     std::array<mldsa44::Key, 15> keys;
     CCoinsView base;
@@ -35,6 +46,7 @@ struct AnchorSetup : BasicTestingSetup {
     ~AnchorSetup()
     {
         std::string reason;
+        gArgs.ForceSetArg("-pqautobootstrap", "0");
         gArgs.ForceSetArg("-pqbootstrap", "");
         pqanchor::InitBootstrap(Params(), reason);
         gArgs.ForceSetArg("-pqemergencycheckpoint", "");
@@ -157,6 +169,177 @@ struct AnchorSetup : BasicTestingSetup {
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(pqanchors_tests, AnchorSetup)
+
+BOOST_AUTO_TEST_CASE(automatic_bootstrap_regtest_override_is_network_scoped)
+{
+    gArgs.ForceSetArg("-pqautobootstrap", "1");
+    BOOST_CHECK(pqanchor::UsesAutomaticBootstrap(Params()));
+    BOOST_CHECK(!pqanchor::UsesAutomaticBootstrap(*CreateChainParams("test")));
+    gArgs.ForceSetArg("-pqautobootstrap", "0");
+    BOOST_CHECK(!pqanchor::UsesAutomaticBootstrap(Params()));
+    BOOST_CHECK(pqanchor::UsesAutomaticBootstrap(*CreateChainParams("main")));
+}
+
+BOOST_AUTO_TEST_CASE(automatic_bootstrap_rejects_a_manual_checkpoint)
+{
+    std::vector<pqquorum::Member> members;
+    for (size_t i = 0; i < 4; ++i)
+        members.push_back({uint256S(std::to_string(i + 1)), keys[i].GetPublicKey()});
+    gArgs.ForceSetArg("-pqautobootstrap", "1");
+    gArgs.ForceSetArg("-pqbootstrap", BootstrapSpec(20, uint256S("20"), members));
+    std::string reason;
+    BOOST_CHECK(!pqanchor::InitBootstrap(Params(), reason));
+    BOOST_CHECK(pqanchor::GetBootstrap() == nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(automatic_bootstrap_uses_history_without_configuration)
+{
+    LOCK(cs_main);
+    AutomaticAnchorParams params;
+    pqmn::Index index(*evoDb, Params());
+    pqanchor::ChainState state(*evoDb, params);
+    std::vector<CBlockIndex> chain;
+    std::vector<uint256> hashes;
+    MakeChain(chain, hashes, 60);
+    std::string reason;
+    gArgs.ForceSetArg("-pqbootstrap", "");
+    BOOST_REQUIRE(pqanchor::InitBootstrap(params, reason));
+    BOOST_CHECK(!pqanchor::ValidateBootstrap(state, &chain.back(), reason));
+    BOOST_CHECK(reason.empty());
+    RegisterFour(index, reason);
+    BOOST_REQUIRE(state.CaptureCommittee(index, 19, reason));
+    BOOST_CHECK(!pqanchor::ValidateBootstrap(state, &chain[19], reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 20, reason));
+    BOOST_CHECK(pqanchor::ValidateBootstrap(state, &chain.back(), reason));
+    // Reconstructing the view must not need a cached or configured checkpoint.
+    pqanchor::ChainState reopened(*evoDb, params);
+    BOOST_CHECK(pqanchor::ValidateBootstrap(reopened, &chain.back(), reason));
+    BOOST_CHECK(pqanchor::GetBootstrap() == nullptr);
+    // Rewinding before eligibility must forget the provisional candidate.
+    BOOST_REQUIRE(state.UndoBlock(20, std::nullopt, reason));
+    BOOST_CHECK(!pqanchor::ValidateBootstrap(state, &chain[19], reason));
+    BOOST_REQUIRE(state.UndoBlock(19, std::nullopt, reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 30, reason));
+    BOOST_CHECK(pqanchor::ValidateBootstrap(state, &chain.back(), reason));
+}
+
+BOOST_AUTO_TEST_CASE(automatic_bootstrap_waits_for_four_and_freezes_historical_members)
+{
+    LOCK(cs_main);
+    AutomaticAnchorParams params;
+    pqmn::Index index(*evoDb, Params());
+    pqanchor::ChainState state(*evoDb, params);
+    std::vector<CBlockIndex> chain;
+    std::vector<uint256> hashes;
+    MakeChain(chain, hashes, 60);
+    std::string reason;
+    pqanchor::Bootstrap root;
+    for (size_t i = 0; i < 3; ++i)
+        BOOST_REQUIRE(index.Apply(*FeeOnly(Registration(i, 51000 + i), i), view, 20, reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 20, reason));
+    BOOST_CHECK(!state.ResolveBootstrap(&chain.back(), root, reason));
+    BOOST_CHECK(reason.empty());
+    BOOST_REQUIRE(index.Apply(*FeeOnly(Registration(3, 51003), 3), view, 30, reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 30, reason));
+    BOOST_REQUIRE(state.ResolveBootstrap(&chain.back(), root, reason));
+    BOOST_CHECK_EQUAL(root.height, 30U);
+    BOOST_CHECK_EQUAL(root.members.size(), 4U);
+    const auto first = pqquorum::Commitment(root.members);
+    BOOST_REQUIRE(index.Apply(*FeeOnly(Registration(4, 51004), 4), view, 40, reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 40, reason));
+    BOOST_REQUIRE(state.ResolveBootstrap(&chain.back(), root, reason));
+    BOOST_CHECK_EQUAL(root.height, 30U);
+    BOOST_CHECK(pqquorum::Commitment(root.members) == first);
+    BOOST_CHECK(root.blockHash == hashes[30]);
+    // A same-height pre-certificate reorg changes the root, not its old cache.
+    hashes[30] = uint256S("123abc");
+    BOOST_REQUIRE(state.ResolveBootstrap(&chain.back(), root, reason));
+    BOOST_CHECK(root.blockHash == hashes[30]);
+}
+
+BOOST_AUTO_TEST_CASE(automatic_bootstrap_reopens_from_disk_and_undo_is_persistent)
+{
+    LOCK(cs_main);
+    AutomaticAnchorParams params;
+    pqmn::Index index(*evoDb, Params());
+    std::string reason;
+    RegisterFour(index, reason);
+    SetDataDir("automatic-bootstrap-disk");
+    std::vector<CBlockIndex> chain;
+    std::vector<uint256> hashes;
+    MakeChain(chain, hashes, 60);
+    {
+        CEvoDB disk(1 << 20, false, true);
+        auto transaction = disk.BeginTransaction();
+        pqanchor::ChainState state(disk, params);
+        BOOST_REQUIRE(state.CaptureCommittee(index, 20, reason));
+        transaction->Commit();
+        BOOST_REQUIRE(disk.CommitRootTransaction());
+    }
+    {
+        CEvoDB disk(1 << 20, false, false);
+        auto transaction = disk.BeginTransaction();
+        pqanchor::ChainState state(disk, params);
+        pqanchor::Bootstrap root;
+        BOOST_REQUIRE(state.ResolveBootstrap(&chain.back(), root, reason));
+        BOOST_CHECK_EQUAL(root.height, 20U);
+        BOOST_CHECK(root.blockHash == hashes[20]);
+        BOOST_REQUIRE(state.UndoBlock(20, std::nullopt, reason));
+        transaction->Commit();
+        BOOST_REQUIRE(disk.CommitRootTransaction());
+    }
+    {
+        CEvoDB disk(1 << 20, false, false);
+        pqanchor::ChainState state(disk, params);
+        pqanchor::Bootstrap root;
+        BOOST_CHECK(!state.ResolveBootstrap(&chain.back(), root, reason));
+        BOOST_REQUIRE(state.CaptureCommittee(index, 30, reason));
+        BOOST_REQUIRE(state.ResolveBootstrap(&chain.back(), root, reason));
+        BOOST_CHECK_EQUAL(root.height, 30U);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(automatic_bootstrap_skips_expired_pre_activation_committee)
+{
+    LOCK(cs_main);
+    AutomaticAnchorParams params(25);
+    pqmn::Index index(*evoDb, Params());
+    pqanchor::ChainState state(*evoDb, params);
+    std::string reason;
+    RegisterFour(index, reason);
+    BOOST_REQUIRE(state.CaptureCommittee(index, 20, reason));
+    pqmn::Payload revoke;
+    revoke.action = pqmn::Action::REVOKE;
+    revoke.sequence = 1;
+    for (const auto& member : pqanchor::SelectCommittee(index, 20))
+        if (member.operator_key == keys[1].GetPublicKey()) revoke.registration = member.registration;
+    BOOST_REQUIRE(index.Apply(*FeeOnly(revoke, 0), view, 21, reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 21, reason));
+    std::vector<CBlockIndex> chain;
+    std::vector<uint256> hashes;
+    MakeChain(chain, hashes, 60);
+    pqanchor::Bootstrap root;
+    BOOST_CHECK(!state.ResolveBootstrap(&chain.back(), root, reason));
+    BOOST_REQUIRE(index.Apply(*FeeOnly(Registration(4, 51004), 4), view, 30, reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 30, reason));
+    BOOST_REQUIRE(state.ResolveBootstrap(&chain.back(), root, reason));
+    BOOST_CHECK_EQUAL(root.height, 30U);
+    // Corrupt links cannot make a loop, silently skip history, or reuse output.
+    const auto key = std::make_pair(std::string("pqmn1m0000001e"), params.GetConsensus().hashGenesisBlock);
+    pqanchor::SnapshotEntry snapshot;
+    BOOST_REQUIRE(evoDb->Read(key, snapshot));
+    snapshot.belowMinimum = true;
+    evoDb->Write(key, snapshot);
+    BOOST_CHECK(!state.ResolveBootstrap(&chain.back(), root, reason));
+    BOOST_CHECK_EQUAL(reason, "pq-bootstrap-candidate-state");
+    BOOST_CHECK(!root.Configured());
+    snapshot.belowMinimum = false;
+    snapshot.prevHeight = 30;
+    evoDb->Write(key, snapshot);
+    BOOST_CHECK(!state.ResolveBootstrap(&chain.back(), root, reason));
+    BOOST_CHECK_EQUAL(reason, "pq-bootstrap-candidate-state");
+    BOOST_CHECK(!root.Configured());
+}
 
 BOOST_AUTO_TEST_CASE(committee_selection_requires_four_mature_configured)
 {

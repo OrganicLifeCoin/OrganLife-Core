@@ -394,7 +394,7 @@ bool CTxMemPool::GetPQMNClaims(const CTransaction& tx, const CCoinsViewCache& co
                    *pq::GetID(record.operatorKey, Params().NetworkIDString()), record.collateralKey};
     claims.service = record.service;
     if (mapNextTx.count(claims.collateral)) return fail("pqmn-collateral-spent-in-mempool");
-    // ponytail: scan compact pending claims, not transactions/signatures; add reverse
+    // Scan compact pending claims, not transactions/signatures; add reverse
     // key/service indexes only if measured relay traffic warrants their lifecycle cost.
     for (const auto& item : mapPQMN) {
         if (item.first == tx.GetHash()) continue;

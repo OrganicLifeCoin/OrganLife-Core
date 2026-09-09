@@ -77,7 +77,7 @@ UniValue initpqjournal(const JSONRPCRequest& request)
     if (request.fHelp || !request.params.empty())
         throw std::runtime_error("initpqjournal\n"
             "Initialize this configured walletless operator's finality journal for FIRST USE only.\n"
-            "Run without -pqbootstrap, then restart with the approved checkpoint. Existing or partial\n"
+            "Initialize before finality voting, then restart. Testnet also needs its approved checkpoint. Existing or partial\n"
             "state is never overwritten. Do not use after losing signing history or restoring an old\n"
             "backup: rotate the operator key through the controller instead. Returns true.\n");
     LOCK(cs_main);
@@ -117,7 +117,7 @@ UniValue getpqoperatorinfo(const JSONRPCRequest& request)
         result.pushKV("registration", pending->Registration().GetHex());
         result.pushKV("publickey", HexStr(pending->PublicKey()));
     }
-    if (pqanchor::GetBootstrap() && pending) {
+    if ((pqanchor::UsesAutomaticBootstrap(Params()) || pqanchor::GetBootstrap()) && pending) {
         // Narrowly typed journal introspection only; no key material.
         LOCK(cs_main);
         // Journal state is exposed through the finality status aggregate.

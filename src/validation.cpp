@@ -1784,26 +1784,31 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         if (!pqAnchors.CaptureCommittee(pqmn::Index(*evoDb, Params()), pindex->nHeight, reason))
             return state.DoS(100, false, REJECT_INVALID, reason);
         if (pq::IsFinality(*block.vtx[0])) {
-            if (!pqanchor::GetBootstrap())
+            const bool automatic = pqanchor::UsesAutomaticBootstrap(Params());
+            if (!automatic && !pqanchor::GetBootstrap())
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-inactive");
-            if (!pqanchor::ValidateBootstrap(pqAnchors, pindex->pprev, reason))
+            pqanchor::Bootstrap bootstrap;
+            if (!pqAnchors.ResolveBootstrap(pindex->pprev, bootstrap, reason)) {
+                if (automatic) {
+                    // Corrupt local evidence is not a peer fault. A certificate
+                    // before any eligible committee, however, has no valid root.
+                    if (!reason.empty()) return state.Error(reason);
+                    return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-no-anchor");
+                }
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-bootstrap");
+            }
             pqquorum::Certificate certificate;
             if (!pq::DecodeFinalityCertificate(*block.vtx[0], certificate))
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-certificate");
             pqanchor::Record parent;
             bool hasParent = pqAnchors.TipAnchor(parent);
             if (!hasParent) {
-                // Before any certificate-bearing block has connected, the
-                // parent anchor is the pinned bootstrap checkpoint itself.
-                const auto* bootstrap = pqanchor::GetBootstrap();
-                std::vector<pqquorum::Member> pinned;
-                if (!bootstrap || certificate.statement.height != bootstrap->height + 1 ||
-                    !pqAnchors.CommitteeAt(bootstrap->height, pinned))
+                // Never take the first trust root from the certificate itself.
+                if (certificate.statement.height != bootstrap.height + 1)
                     return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-no-anchor");
-                parent.height = bootstrap->height;
-                parent.blockHash = bootstrap->blockHash;
-                parent.committee = pqquorum::Commitment(pinned);
+                parent.height = bootstrap.height;
+                parent.blockHash = bootstrap.blockHash;
+                parent.committee = pqquorum::Commitment(bootstrap.members);
             }
             // No skipping: the certificate finalizes exactly the parent anchor + 1.
             if (certificate.statement.height != parent.height + 1)

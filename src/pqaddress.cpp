@@ -12,6 +12,7 @@ namespace pq {
 namespace {
 const char* AddressHRP(const std::string& network)
 {
+    if (network == "main") return "olcpq";
     if (network == "regtest") return "olcpqregtest";
     if (network == "test") return "olcpqtest";
     return nullptr;
@@ -21,7 +22,8 @@ const char* AddressHRP(const std::string& network)
 Optional<KeyID> GetID(const mldsa44::PublicKey& public_key, const std::string& network)
 {
     const char* domain = network == "regtest" ? "OLC/PQ/ML-DSA-44/regtest/address/v1" :
-                         network == "test" ? "OLC/PQ/ML-DSA-44/testnet/address/v1" : nullptr;
+                         network == "test" ? "OLC/PQ/ML-DSA-44/testnet/address/v1" :
+                         network == "main" ? "OLC/PQ/ML-DSA-44/mainnet/address/v1" : nullptr;
     if (!domain) return nullopt;
     KeyID id;
     CSHA256().Write(reinterpret_cast<const unsigned char*>(domain), std::strlen(domain))

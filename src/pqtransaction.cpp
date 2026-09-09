@@ -197,6 +197,8 @@ bool CheckContext(const CTransaction& tx, const CChainParams& params, int height
 
 Optional<Span<const unsigned char>> SignatureContext(const std::string& network)
 {
+    static const unsigned char mainnet[] = "OLC/PQ/ML-DSA-44/mainnet/tx/v1";
+    if (network == "main") return Span<const unsigned char>{mainnet, sizeof(mainnet) - 1};
     static const unsigned char regtest[] = "OLC/PQ/ML-DSA-44/regtest/tx/v1";
     static const unsigned char testnet[] = "OLC/PQ/ML-DSA-44/testnet/tx/v1";
     if (network == "regtest") return Span<const unsigned char>{regtest, sizeof(regtest) - 1};
@@ -206,6 +208,8 @@ Optional<Span<const unsigned char>> SignatureContext(const std::string& network)
 
 Optional<Span<const unsigned char>> BlockSignatureContext(const std::string& network)
 {
+    static const unsigned char mainnet[] = "OLC/PQ/ML-DSA-44/mainnet/block/v1";
+    if (network == "main") return Span<const unsigned char>{mainnet, sizeof(mainnet) - 1};
     static const unsigned char regtest[] = "OLC/PQ/ML-DSA-44/regtest/block/v1";
     static const unsigned char testnet[] = "OLC/PQ/ML-DSA-44/testnet/block/v1";
     if (network == "regtest") return Span<const unsigned char>{regtest, sizeof(regtest) - 1};
@@ -215,6 +219,8 @@ Optional<Span<const unsigned char>> BlockSignatureContext(const std::string& net
 
 Optional<Span<const unsigned char>> GovernanceSignatureContext(const std::string& network)
 {
+    static const unsigned char mainnet[] = "OLC/PQ/ML-DSA-44/mainnet/governance/v1";
+    if (network == "main") return Span<const unsigned char>{mainnet, sizeof(mainnet) - 1};
     static const unsigned char regtest[] = "OLC/PQ/ML-DSA-44/regtest/governance/v1";
     static const unsigned char testnet[] = "OLC/PQ/ML-DSA-44/testnet/governance/v1";
     if (network == "regtest") return Span<const unsigned char>{regtest, sizeof(regtest) - 1};

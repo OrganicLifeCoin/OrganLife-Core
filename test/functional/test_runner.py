@@ -224,6 +224,9 @@ EXTENDED_SCRIPTS = [
     # vv Tests less than 5m vv
     'feature_pq_finality_smoke.py --round-recovery',
     'feature_pq_finality_smoke.py --reindex',
+    'feature_pq_finality_smoke.py --automatic-bootstrap',
+    'feature_pq_finality_smoke.py --automatic-bootstrap --reindex',
+    'feature_pq_finality_smoke.py --automatic-bootstrap --crash-recovery',
     'feature_pq_finality_smoke.py --committee-transitions',
     'feature_pq_finality_smoke.py --collateral-spend',
     'feature_pq_finality_smoke.py --crash-recovery',

@@ -84,7 +84,7 @@ void Manager::GetStatus(bool& configured, bool& validatedOut, uint32_t& anchorHe
                         uint32_t& committeeSize, uint32_t& votingHeight, uint32_t& votingRound,
                         bool& hasLock, uint256& lockedValue, bool& isMember) const
 {
-    configured = pqanchor::GetBootstrap() != nullptr;
+    configured = pqanchor::UsesAutomaticBootstrap(Params()) || pqanchor::GetBootstrap() != nullptr;
     validatedOut = false;
     anchorHeight = 0;
     anchorHash.SetNull();
@@ -145,7 +145,7 @@ bool Manager::Start(std::string& reason)
 {
     reason.clear();
     if (started) return true;
-    if (!pqanchor::GetBootstrap()) return false; // finality inactive: not an error
+    if (!pqanchor::UsesAutomaticBootstrap(Params()) && !pqanchor::GetBootstrap()) return false;
     localOperator = GetPQOperator();
     if (localOperator) {
         journal = pqjournal::Journal::Load(GetDataDir(), Params().GetConsensus().hashGenesisBlock,
@@ -265,9 +265,10 @@ bool Manager::PendingCertificate(pqquorum::Certificate& out)
     AssertLockHeld(cs_main);
     if (!started) return false;
     pqanchor::ChainState state(*evoDb, Params());
-    const auto* bootstrap = pqanchor::GetBootstrap();
-    if (!bootstrap) return false;
-    const uint32_t mirror = std::max(state.TipHeight(), bootstrap->height);
+    pqanchor::Bootstrap bootstrap;
+    std::string reason;
+    if (!state.ResolveBootstrap(chainActive.Tip(), bootstrap, reason)) return false;
+    const uint32_t mirror = std::max(state.TipHeight(), bootstrap.height);
     // The durable store is also the publication queue. Reopening a node must
     // not lose a committed certificate that has not reached a carrier block.
     auto* store = GetPQAnchorStore();
@@ -402,6 +403,8 @@ bool Manager::RememberProof(Height& height, const pqquorum::Certificate& proof, 
 
 bool Manager::RestoreProof(Height& height, std::string& reason) const
 {
+    if (journal && pqanchor::UsesAutomaticBootstrap(Params()) &&
+        !journal->CheckContext(height.height, height.anchor, pqquorum::Commitment(height.committee), reason)) return false;
     pqquorum::Certificate proof;
     if (!journal || !journal->GetProof(height.height, proof)) return true;
     pqquorum::Statement expected;
@@ -570,14 +573,14 @@ bool Manager::RecordCommitment(Height& height, const pqquorum::Certificate& cert
         parentHash = parent.blockHash;
         parentCommittee = parent.committee;
     } else {
-        const auto* bootstrap = pqanchor::GetBootstrap();
-        if (!bootstrap || height.height != bootstrap->height + 1) {
+        pqanchor::Bootstrap bootstrap;
+        if (!state.ResolveBootstrap(chainActive.Tip(), bootstrap, reason) || height.height != bootstrap.height + 1) {
             reason = "pq-finality-commit-no-parent";
             return false;
         }
-        parentHeight = bootstrap->height;
-        parentHash = bootstrap->blockHash;
-        parentCommittee = pqquorum::Commitment(height.committee);
+        parentHeight = bootstrap.height;
+        parentHash = bootstrap.blockHash;
+        parentCommittee = pqquorum::Commitment(bootstrap.members);
     }
     // The committed value must be the local active-chain block and the
     // statement must name exactly the mirror parent anchor.
@@ -833,7 +836,7 @@ void Manager::DrainInbox(Height& height, int64_t now)
         }
         changedPrevotes.clear();
     };
-    // ponytail: declared signature work, not wall time; benchmark Drive and
+    // Bound declared signature work, not wall time; benchmark Drive and
     // storage separately before moving verification off the chain lock.
     for (size_t count = 0; count < MAX_INBOX_MESSAGES_PER_PASS && !inbox.empty() && !height.committed; ++count) {
         const auto& next = inbox.front();
@@ -878,16 +881,17 @@ int64_t Manager::Process()
         std::string reason;
         pqanchor::ChainState chainState(*evoDb, Params());
         // 1. Lazy bootstrap validation; failure keeps finality inactive.
-        const bool ok = pqanchor::ValidateBootstrap(chainState, chainActive.Tip(), reason);
-        // 2. Seed the durable store with the pinned bootstrap anchor a0 once.
+        pqanchor::Bootstrap bootstrap;
+        const bool ok = chainState.ResolveBootstrap(chainActive.Tip(), bootstrap, reason);
+        const bool automatic = pqanchor::UsesAutomaticBootstrap(Params());
+        // 2. Only an explicitly pinned checkpoint is irreversible before a
+        // certificate. An automatic candidate must remain reorgable.
         auto* store = GetPQAnchorStore();
-        if (ok && store && store->TipHeight() == 0) {
-            const auto* bootstrap = pqanchor::GetBootstrap();
+        if (ok && !automatic && store && store->TipHeight() == 0) {
             pqanchor::Record a0;
-            a0.height = bootstrap->height;
-            a0.blockHash = bootstrap->blockHash;
-            std::vector<pqquorum::Member> pinned;
-            if (chainState.CommitteeAt(bootstrap->height, pinned)) a0.committee = pqquorum::Commitment(pinned);
+            a0.height = bootstrap.height;
+            a0.blockHash = bootstrap.blockHash;
+            a0.committee = pqquorum::Commitment(bootstrap.members);
             if (a0.committee.IsNull() || !FlushStateToDisk() || !store->Write(a0, pqquorum::Certificate{}, reason)) {
                 LogPrintf("pqfinality: bootstrap anchor seeding failed: %s\n", reason);
                 return 5000; // Never start voting from an unpersisted checkpoint.
@@ -899,6 +903,12 @@ int64_t Manager::Process()
         bool hasAnchor = false;
         if (store && store->Tip(tipAnchor)) hasAnchor = true;
         else if (chainState.TipAnchor(tipAnchor)) hasAnchor = true;
+        else if (ok && automatic) {
+            tipAnchor.height = bootstrap.height;
+            tipAnchor.blockHash = bootstrap.blockHash;
+            tipAnchor.committee = pqquorum::Commitment(bootstrap.members);
+            hasAnchor = true;
+        }
         if (ok && hasAnchor && chainActive.Tip()) {
             const uint32_t votingHeight = tipAnchor.height + 1;
             const CBlockIndex* ancestor = chainActive.Tip()->GetAncestor(int(tipAnchor.height));
