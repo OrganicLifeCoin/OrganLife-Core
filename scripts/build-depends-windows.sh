@@ -195,7 +195,7 @@ build_depends() {
     cd "$DEPENDS_DIR"
     
     # Check if already built
-    if [ -f "$HOST/lib/libQt6Core.a" ]; then
+    if [ -f "$HOST/lib/libQt6Core.a" ] && [ -f "$HOST/lib/libwinpthread.a" ]; then
         log_info "Dependencies already built, skipping..."
         log_info "To rebuild, delete: rm -rf $HOST"
     else
@@ -215,6 +215,12 @@ build_depends() {
 # Configure the project
 configure_project() {
     log_step "Configuring project..."
+
+    # The system runtime lacks the TLS-destructor fix needed for Qt shutdown.
+    if [ ! -f "$DEPENDS_DIR/$HOST/lib/libwinpthread.a" ]; then
+        log_error "Missing patched winpthreads in depends. Rebuild Windows depends before compiling."
+        return 1
+    fi
     
     # Clean previous configure/build artifacts to avoid mixed toolchains
     log_info "Cleaning previous configuration..."

@@ -472,7 +472,7 @@ build_one() {
 check_arch() {
   local expected="$1"
   local bin="$2"
-  if ! file "$bin" | grep -Eq "Mach-O.*${expected}"; then
+  if ! lipo "$bin" -verify_arch "$expected"; then
     echo "ERROR: expected $expected binary: $bin" >&2
     file "$bin" || true
     exit 1
