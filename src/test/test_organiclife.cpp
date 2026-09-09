@@ -199,6 +199,10 @@ TestingSetup::TestingSetup(const std::string& chainName) : BasicTestingSetup(cha
             bool ok = ActivateBestChain(state);
             BOOST_CHECK(ok);
         }
+        // Finish genesis callbacks before tests may replace their network parameters.
+        SyncWithValidationInterfaceQueue();
+        // The synchronization barrier itself may still be returning.
+        BOOST_CHECK_LE(GetMainSignals().CallbacksPending(), 1U);
         nScriptCheckThreads = 3;
         for (int i=0; i < nScriptCheckThreads-1; i++)
             threadGroup.create_thread(&ThreadScriptCheck);
