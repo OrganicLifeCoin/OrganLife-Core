@@ -649,7 +649,13 @@ BOOST_AUTO_TEST_CASE(util_GetChainName)
     BOOST_CHECK_THROW(test_args.GetChainName(), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(util_autogen_conf_defaults_to_testnet_and_staking)
+BOOST_AUTO_TEST_CASE(util_version_display_and_storage_compatibility)
+{
+    BOOST_CHECK_EQUAL(FormatVersionFriendly(), "1.1.0");
+    BOOST_CHECK_GE(CLIENT_VERSION, 1011300);
+}
+
+BOOST_AUTO_TEST_CASE(util_autogen_conf_defaults_to_mainnet_and_staking)
 {
     SetDataDir("autogen_conf_mainnet_defaults");
     ClearDatadirCache();
@@ -669,7 +675,13 @@ BOOST_AUTO_TEST_CASE(util_autogen_conf_defaults_to_testnet_and_staking)
                                    std::istreambuf_iterator<char>());
 
     BOOST_CHECK_NE(conf_content.find("staking=1"), std::string::npos);
-    BOOST_CHECK_NE(conf_content.find("testnet=1"), std::string::npos);
+    BOOST_CHECK(!gArgs.GetBoolArg("-testnet", false));
+    BOOST_CHECK_EQUAL(gArgs.GetChainName(), "main");
+
+    TestArgsManager explicit_testnet;
+    const char* argv_testnet[] = {"cmd", "-testnet"};
+    explicit_testnet.ParseParameters(2, (char**)argv_testnet);
+    BOOST_CHECK_EQUAL(explicit_testnet.GetChainName(), "test");
 }
 
 BOOST_AUTO_TEST_CASE(util_FormatMoney)

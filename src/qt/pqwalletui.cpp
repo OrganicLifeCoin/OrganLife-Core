@@ -18,7 +18,7 @@
 
 QString PQWalletUI::masternodeConfig(const uint256& registration, const CService& service, const QString& credential)
 {
-    if (!Params().IsTestChain() || registration.IsNull() || !service.IsValid() || !service.GetPort() || credential.isEmpty()) return {};
+    if (!Params().SupportsPQ() || registration.IsNull() || !service.IsValid() || !service.GetPort() || credential.isEmpty()) return {};
     return QString("pqoperatorid=%1\npqoperatorconfig=%2\nexternalip=%3\n")
         .arg(QString::fromStdString(registration.GetHex()), credential,
              QString::fromStdString(service.ToString()));
@@ -39,7 +39,7 @@ QString PQWalletUI::backupDirectory(WalletModel* model)
 
 bool PQWalletUI::ensureBackupDirectory(QWidget* parent, WalletModel* model, QString& directory)
 {
-    if (!model || !Params().IsTestChain()) return false;
+    if (!model || !Params().SupportsPQ()) return false;
     if (directory.isEmpty()) directory = backupDirectory(model);
     if (!directory.isEmpty()) return true;
     const QString settingsKey = backupSettingsKey(model);
@@ -53,7 +53,7 @@ bool PQWalletUI::ensureBackupDirectory(QWidget* parent, WalletModel* model, QStr
 
 bool PQWalletUI::backupSnapshot(WalletModel* model, QString& directory)
 {
-    if (!model || !Params().IsTestChain()) return false;
+    if (!model || !Params().SupportsPQ()) return false;
     if (model->getEncryptionStatus() == WalletModel::Unencrypted || directory.isEmpty()) return false;
     const QString filename = QDir(directory).filePath("olc-pq-" +
         QString::fromStdString(Params().NetworkIDString()) + "-" +

@@ -162,7 +162,7 @@ BOOST_FIXTURE_TEST_CASE(block_value_accepts_mainnet_budget_window_during_initial
     BOOST_REQUIRE(nHeight % Params().GetConsensus().nBudgetCycleBlocks < 100);
 
     BOOST_CHECK(IsBlockValueValid(nHeight, nExpectedRet, nBlockReward, nBudgetAmtRet));
-    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward + Params().GetConsensus().nBudgetCycleAmount);
+    BOOST_CHECK_EQUAL(nExpectedRet, nBlockReward);
 
     nExpectedRet = nBlockReward;
     nBudgetAmtRet = 0;

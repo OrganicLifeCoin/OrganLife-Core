@@ -1,257 +1,366 @@
-OrganicLife Core
-==============
+# OrganicLife Core
 
-Node daemon and Qt wallet for the OrganicLife Coin (OLC) network (PIVX/Bitcoin lineage).
+OrganicLife Core provides the node software and desktop wallet for OrganicLife Coin (OLC).
+The project uses post-quantum (PQ) signatures for payments, staking, masternodes, and governance.
+Its code comes from PIVX and Bitcoin.
 
-Binaries
---------
+## Network status
 
-- `organiclifed` - Full node daemon
-- `organiclife-cli` - RPC command-line client  
-- `organiclife-tx` - Transaction utility
-- `organiclife-qt` - Qt GUI wallet
+This README describes the v1.1.0 fresh-mainnet launch and the existing PQ testnet.
+Mainnet launch is scheduled for 2026-09-16 14:00 UTC (16:00 Europe/Prague).
+The node can start before launch for wallet and operator preparation.
+It must not accept or create mainnet blocks before launch time.
+Testnet keeps its existing pinned checkpoint.
+No public mainnet peer endpoint is verified in this source tree.
+Use manual peer bootstrapping until an approved seed endpoint exists.
 
-Mainnet Parameters
-------------------
+## Post-quantum security
 
-| Parameter | Value |
-|--------|--------|
+ML-DSA-44 signatures authorize coin transfers and staking.
+Operators use ML-DSA-44 to sign masternode messages and finality votes.
+Governance votes also use ML-DSA-44.
+
+PQ addresses use Bech32m with a version-1, 32-byte commitment to the public key.
+The commitment binds the address to its network.
+Mainnet addresses use `olcpq`, testnet addresses use `olcpqtest`, and regtest
+addresses use `olcpqregtest`.
+
+ML-DSA is a signature algorithm, not a hash function or an encryption algorithm.
+Transaction identifiers, block identifiers, and Merkle trees retain their 256-bit hash functions.
+Wallet encryption protects private keys at rest.
+
+The active PQ profile does not accept legacy coin transfers or legacy staking.
+It does not provide legacy wallet compatibility, shielded payments, multisig, or delegated staking.
+A successful test suite is not cryptographic certification.
+
+## Mainnet parameters
+
+| Parameter | v1.1.0 mainnet configuration |
+| --- | --- |
 | Ticker | `OLC` |
-| Genesis timestamp | `2026-08-02 12:00:00 UTC` |
-| Genesis block hash | `0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e` |
-| Address prefixes | P2PKH starts with `o`, script `g`, staking `f` |
-| P2P / RPC ports | `43721` / `43723` (testnet `49716` / `49718`) |
-| BIP44 coin type | `5150` |
-| Target block spacing | `2 minutes` |
-| Supply cap | `777,777,777 OLC` |
-| Height-1 reward | `264,444,444.18 OLC`, paid to the miner of block 1 |
-| PoS activation | Height `10,081` (about `14 days` after genesis) |
-| Block subsidy | `10 OLC` until the cap is reached |
+| Genesis launch time | `2026-09-16 14:00:00 UTC` |
+| Genesis block hash | `0000091cf3aeeed50f65d6e640a35029d7b541b4e42950232385b13e88a12fdb` |
+| Target block interval | `2 minutes` |
+| Maximum supply | `777,777,777 OLC` |
+| Block-1 reward | `264,444,444.18 OLC`, paid to the miner selected by block 1 |
+| PQ registry and service activation | Height `1` |
+| PoS activation | Height `10,081` |
+| Block subsidy | `10 OLC`, subject to the supply cap |
 | Masternode collateral | `4,000 OLC` |
-| Post-PoS reward split | `4` to the staker, `6` to the masternode |
-| Governance cycle | `10,080` blocks (`14 days`) |
+| Normal reward after PoS activation | `4 OLC` for the staker and `6 OLC` for one eligible masternode |
+| Governance cycle | `10,080` blocks, approximately `14 days` |
+| Budget per governance cycle | `27,777.5 OLC`, subject to the supply cap |
+| P2P port | `43721` |
+| RPC port | `43723` |
 
-Mainnet and testnet supply are capped in consensus at `777,777,777 OLC`, inclusive of the
-height-1 reward, ordinary subsidies, masternode rewards, and governance payments. The
-height-1 reward has no predetermined recipient: the valid block template pays whoever
-mines block 1. Transaction fees are paid to miners during the PoW bootstrap phase and
-burned once PoS is active. Post-v5.5 governance cycles can allocate up to `55,555 OLC`
-per month (two 14-day cycles), subject to the same hard supply cap.
+The supply cap includes the block-1 reward, ordinary block rewards, masternode rewards, and governance payments.
+The miner of block 1 receives the block-1 reward through the PQ address selected
+by that miner. The configuration does not assign this reward to a fixed address.
 
-Early-network quorum policy
----------------------------
+Miners receive transaction fees during the Proof of Work (PoW) phase.
+After Proof of Stake (PoS) starts, the network burns transaction fees.
+Block intervals are targets, not fixed schedules.
 
-Mainnet and testnet intentionally use `LLMQ_TEST` for ChainLocks during early rollout:
-3 members, a minimum of 2 participants, and a threshold of 2. The larger
-`LLMQ_50_60` definition remains available but is not selected; its configured size is
-50, minimum size 40, and signing threshold 30.
+## Wallet
 
-Height `100,000` is a review point, not an automatic activation. The project can assess
-the observed masternode population there and choose an appropriate quorum in a future
-explicit network upgrade. A spork does not automatically switch quorum type when a
-participant count is reached, and no automatic one-way switch is currently configured.
+The Qt wallet uses the normal Dashboard, Send, Receive, and transaction-history screens.
+PQ payments do not require a separate wallet screen.
+The wallet also provides coin control and shows immature rewards.
 
-Peer discovery before seed VPS hosts are available
----------------------------------------------------
+Each receive key and change key has an independent ML-DSA-44 seed.
+The encrypted wallet stores these seeds.
+A legacy private-key export or a BIP32 seed cannot replace a PQ wallet backup.
 
-This source tree intentionally has no mainnet or testnet DNS/fixed seeds yet. Early
-testnet nodes must be given at least one reachable peer with `addnode=` or `-addnode`.
-See [doc/seeders.md](doc/seeders.md). DNS and fixed seeds can be added after the VPS
-listeners exist, without inventing placeholder production endpoints.
+Address creation and payments require a new encrypted wallet snapshot.
+The wallet completes this snapshot before it shows a new address or sends a payment.
+The Send screen accepts one recipient per transaction.
 
-Masternodes (deterministic, since v1.1.0)
------------------------------------------
+### Prepare the wallet
 
-OrganicLife uses deterministic masternodes (DMN) exclusively — the legacy broadcast-based
-masternode system was removed. DMNs activate at genesis and are registered on-chain via
-`protx` transactions; the 4,000 OLC collateral is embedded in the registration transaction.
+1. Encrypt the wallet.
+2. Select a private directory for automatic wallet backups.
+3. Fully unlock the wallet before you create an address or send a payment.
+4. Use the Receive screen to create an address.
+5. Use the Send screen to send coins.
+6. For staking without payment access, unlock the wallet for staking only.
 
-Controller wallet setup (CLI):
+CAUTION: Keep an independent copy of your wallet backup.
+Loss of the private keys can prevent access to your coins.
+
+### Wallet RPCs
+
+| Command | Purpose |
+| --- | --- |
+| `getnewpqaddress` | Create a receive address with a new wallet backup |
+| `listpqaddresses` | List PQ addresses |
+| `listpqunspent` | List unspent PQ outputs |
+| `sendpqtoaddress` | Send a PQ payment with a new wallet backup |
+| `backupwallet` | Save a wallet backup |
+| `getstakingstatus` | Show the staking status |
+
+Use `organiclife-cli help COMMAND` for the arguments of each command.
+
+## Masternodes
+
+A masternode uses two separate roles.
+The controller wallet holds the collateral and controls the funds.
+The VPS runs the operator without a wallet.
+Its credentials cannot spend the coins in the controller wallet.
+
+Each masternode requires `4,000 OLC` in collateral.
+Registration records the operator identity, service address, and payment address on the chain.
+The controller creates the keys and collateral transaction through the wallet dialog.
+
+### Create a masternode
+
+The PQ wallet provides this workflow on mainnet and testnet.
+
+1. Open the Masternodes screen in the controller wallet.
+2. Select **Create Masternode**.
+3. Enter a name.
+4. Enter the numeric VPS IP address and service port.
+5. Fully unlock the wallet.
+6. If the wallet requests a backup directory, select a private directory.
+7. Review the collateral, transaction fee, and backup destination.
+8. Approve the registration transaction.
+9. Wait for the registration to appear in a block.
+10. Open the masternode information dialog.
+11. Copy the server configuration to the clipboard.
+12. Paste the text at the top of the private VPS configuration file.
+13. Replace the old operator configuration for that node.
+14. Restrict file access to the node account.
+15. Restart the VPS node.
+16. Clear the clipboard history.
+
+The copied text contains only `pqoperatorid`, `pqoperatorconfig`, and `externalip`.
+Keep the existing `disablewallet=1` setting and use the correct network and port.
+This workflow does not require a separate credential-file transfer.
+It does require an installed node and a reachable service port.
+
+CAUTION: Keep operator credentials private.
+Anyone with these credentials can operate the masternode.
+
+CAUTION: Preserve the existing signing journal and checkpoint configuration.
+An old journal backup can permit conflicting signatures.
+
+Use one node instance and one data directory for each masternode.
+Keep the collateral wallet off the VPS.
+
+### Rewards and service
+
+The network allocates one `6 OLC` masternode reward per eligible block, subject to the supply cap.
+One selected masternode receives the whole reward.
+The next selection advances through the eligible operators.
+The reward is not `6 OLC` for every masternode in every block.
+
+Signed service heartbeats establish recent activity for reward eligibility.
+Registration alone does not guarantee payment.
+Collateral maturity, service eligibility, and the consensus payment rules still apply.
+
+## Finality
+
+The PQ finality protocol uses signed votes from a registered operator committee.
+A committee needs at least four members.
+A four-member committee needs three signatures for a quorum.
+
+Mainnet derives its first finality bootstrap from chain history after registry and
+service activation. The initial committee requires at least four eligible operators.
+Testnet keeps its configured checkpoint. Finality requires the correct historical committee.
+Operator credentials alone do not grant voting authority.
+Nodes retain finalized checkpoints and reject branches that conflict with them.
+
+If voting becomes unavailable, finality can stop while staking and payments continue.
+This separation prevents a missing finality quorum from blocking otherwise valid blocks.
+It does not guarantee progress without eligible stakers or network connectivity.
+
+CAUTION: Do not delete signing history to restart an operator.
+A restart must preserve earlier votes and locks.
+
+## Governance
+
+Governance proposals and votes form part of the chain state.
+Coin holders lock PQ coins and authorize votes with ML-DSA-44.
+The network ranks proposals by net locked-coin votes within the cycle budget.
+
+PoS blocks include the selected treasury payments.
+Chain replay reconstructs proposals, vote locks, votes, and payments.
+The PQ path does not use legacy BLS masternode votes or proposal broadcasts.
+
+| Command | Purpose |
+| --- | --- |
+| `createpqproposal` | Create a proposal with a PQ payment address |
+| `creategovvotelock` | Lock coins for a proposal vote |
+| `castgovvote` | Cast a yes or no vote |
+| `listgovlocks` | List governance coin locks |
+| `getgovvotestatus` | Show the vote status |
+| `getnextsuperblock` | Show the next treasury payment height |
+| `getbudgetinfo` | Show budget information |
+
+## Programs
+
+| Program | Purpose |
+| --- | --- |
+| `organiclifed` | Node daemon |
+| `organiclife-cli` | RPC command-line client |
+| `organiclife-tx` | Transaction utility |
+| `organiclife-qt` | Desktop wallet |
+
+## Build from source
+
+Read the build guide for your operating system before you install dependencies.
+
+- [General build guide](doc/build-easy.md)
+- [Linux](doc/build-linux.md)
+- [macOS](doc/build-macos.md)
+- [Windows and WSL](doc/build-windows.md)
+- [Unix](doc/build-unix.md)
+
+### Download the source
 
 ```bash
-# 1. generate the key set (owner/voting keys are stored in the wallet)
-organiclife-cli createmasternodekey dmn mn1
-# 2. add the returned confLine to masternode.conf:  alias IP:port operator_bls_key
-# 3. register the masternode (embeds and locks the collateral)
-organiclife-cli startmasternode alias false mn1
+git clone https://github.com/OrganicLifeCoin/OrganLife-Core.git OrganicLifeCoin
+cd OrganicLifeCoin
 ```
 
-VPS setup: run the daemon with `-mnoperatorprivatekey=<operator_bls_key>` (one line in
-organiclife.conf). No collateral txid/output index is needed in masternode.conf — the
-collateral is created and locked by the registration itself.
-
-Quick Start
------------
-
-For most users:
+### Build a development wallet
 
 ```bash
-git clone <repository-url>
-cd OrganicLifeCoin
-./build-depends.sh
+./build.sh
+```
+
+The development script uses vcpkg and writes its output to `build/`.
+
+### Build with static dependencies
+
+```bash
+./scripts/build-depends.sh --jobs 2
+```
+
+The depends script writes the daemon and command-line programs to `src/`.
+It writes the Qt wallet to `src/qt/`.
+
+| Script | Purpose |
+| --- | --- |
+| `build.sh` | Development build |
+| `scripts/build-depends.sh` | Build with static dependencies |
+| `scripts/build-depends-aarch64.sh` | ARM64 cross-build |
+| `scripts/build-depends-windows.sh` | Windows cross-build |
+| `scripts/build_all.sh` | Create Linux and Windows release packages |
+| `scripts/build_mac.sh` | Create universal macOS packages |
+
+The Linux and Windows packaging script writes packages to `dist/`.
+Cross-builds require the target toolchains and dependencies.
+A successful cross-build does not replace runtime tests on the target platform.
+
+Use `--help` for the supported flags of a build script.
+
+## Run a node
+
+Mainnet uses the default network and starts on P2P port `43721` and RPC port `43723`.
+The testnet uses P2P port `49716` and RPC port `49718`.
+It includes the seed addresses `2.29.11.56` and `2.29.14.202`.
+Mainnet has no verified seed addresses in this source tree.
+Supply a reachable mainnet peer with `-addnode=<mainnet-peer>:43721` when needed.
+
+### Desktop wallet
+
+For the mainnet depends build, run:
+
+```bash
 ./src/qt/organiclife-qt
 ```
 
-Build Scripts
--------------
-
-Two build methods are available:
-
-| Script | Type | Use Case | Output |
-|--------|------|----------|--------|
-| `build-depends.sh` | Static/Release | Production builds, distribution | `src/` |
-| `build.sh` | Dynamic/Dev | Development, faster iteration | `build/` |
-
-**Use `build-depends.sh`** for production wallets (static linking, portable binaries).
-**Use `build.sh`** for development work (faster builds, uses shared libraries).
-
-Build Options
--------------
-
-Both scripts support:
+For testnet, run:
 
 ```bash
---no-gui       # Daemon only (faster)
---debug        # Debug build
---clean        # Clean rebuild
---jobs N       # Parallel jobs (default: auto)
+./src/qt/organiclife-qt -testnet
 ```
 
-Examples:
+For the mainnet development build, run:
 
 ```bash
-./build-depends.sh --no-gui           # Daemon only
-./build-depends.sh --jobs 2           # Limit to 2 jobs (low RAM)
-./build.sh --debug                    # Debug build
+./build/organiclife-qt
 ```
 
-Prerequisites
--------------
+For testnet, run:
 
-macOS:
 ```bash
-xcode-select --install
-brew install autoconf automake libtool pkg-config cmake
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
+./build/organiclife-qt -testnet
 ```
 
-Ubuntu/Debian:
-```bash
-sudo apt-get install build-essential git autoconf automake libtool pkg-config python3 curl cmake ninja-build
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-```
+### Daemon
 
-Fedora:
-```bash
-sudo dnf install gcc-c++ git autoconf automake libtool pkgconfig python3 curl cmake ninja-build
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-```
+Run the mainnet daemon:
 
-See `doc/build-*.md` for detailed OS-specific instructions.
-
-Running
--------
-
-GUI wallet:
-```bash
-./src/qt/organiclife-qt          # build-depends.sh output
-./build/organiclife-qt           # build.sh output
-```
-
-Daemon:
 ```bash
 ./src/organiclifed -daemon
-./src/organiclife-cli getblockchaininfo
-./src/organiclife-cli stop
 ```
 
-Testnet:
+Run the testnet daemon explicitly with `-testnet`:
+
 ```bash
 ./src/organiclifed -testnet -daemon
 ```
 
-Data Directory
---------------
+Read mainnet chain information:
 
-- macOS: `~/Library/Application Support/OrganicLife`
-- Linux: `~/.organiclifecoin`
-
-Backup `wallet.dat` - it contains your private keys.
-
-Troubleshooting
----------------
-
-**"command not found: cargo"**
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
+./src/organiclife-cli getblockchaininfo
 ```
 
-**Out of memory**
+Read testnet chain information explicitly:
+
 ```bash
-./build-depends.sh --jobs 2
+./src/organiclife-cli -testnet getblockchaininfo
 ```
 
-**macOS: "Berkeley DB not found" (build.sh only)**
+Stop the testnet daemon:
+
 ```bash
-brew install berkeley-db@4
+./src/organiclife-cli -testnet stop
 ```
 
-**Clean rebuild**
+### Configuration and backups
+
+The configuration file is `organiclifecoin.conf`.
+
+| System | Default data directory |
+| --- | --- |
+| Linux | `~/.organiclifecoin` |
+| macOS | `~/Library/Application Support/OrganicLife` |
+| Windows | `%APPDATA%\OrganicLifeCoin` |
+
+Testnet stores its network data in the `testnet` subdirectory.
+Use separate data directories, wallets, and keys for mainnet and testnet.
+The `-datadir` argument selects a different data directory.
+
+CAUTION: Do not expose the RPC port to the public internet.
+RPC access can control the node and wallet.
+
+CAUTION: Do not copy a live wallet database as a recovery backup.
+Use the wallet backup function.
+
+## Tests
+
+After a test-enabled build, run the core tests:
+
 ```bash
-./build-depends.sh --clean
+./src/test/test_organiclife
 ```
 
-**"block index lacks cumulative issuance data"**
+Run the Qt tests:
 
-The hard-cap implementation stores cumulative issuance in every block index entry.
-Development datadirs created by an older binary must be rebuilt once with `-reindex`.
-
-Advanced Build
---------------
-
-CMake directly:
 ```bash
-cmake -B build
-cmake --build build -j 8
+QT_QPA_PLATFORM=offscreen ./src/qt/test/test_organiclife-qt
 ```
 
-With presets (CMake 3.14+):
-```bash
-cmake --preset=vcpkg
-cmake --build --preset=vcpkg -j 8
-```
+The functional tests use disposable local nodes.
 
-Manual autotools:
-```bash
-HOST="$(./depends/config.guess)"
-make -C depends -j"$(nproc)" HOST="$HOST"
-./autogen.sh
-CONFIG_SITE="$(pwd)/depends/$HOST/share/config.site" ./configure
-make -j"$(nproc)"
-```
+Read [the functional test guide](test/functional/README.md) for the test runner.
+Read [the PQ implementation notes](doc/pq-only.md) for protocol details and historical activation stages.
 
-Documentation
--------------
+## License
 
-- `doc/build-easy.md` - Detailed build guide
-- `doc/build-macos.md` - macOS specific instructions
-- `doc/build-linux.md` - Linux specific instructions  
-- `doc/build-windows.md` - Windows (WSL) instructions
-- `doc/build-unix.md` - Traditional Unix build
+The project uses the MIT License.
 
-Qt Versions
------------
-
-Both build scripts use Qt6 by default. Qt5 is supported via manual configure:
-```bash
-./configure --with-gui=qt5
-```
-
-License
--------
-
-MIT License. See `COPYING`.
+Read [COPYING](COPYING) for the license text.

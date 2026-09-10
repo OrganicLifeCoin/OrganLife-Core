@@ -51,6 +51,9 @@ class PQOnlyTest(PivxTestFramework):
         assert_equal(len(blocks), 101)
         self.sync_all()
         assert miner.listpqunspent()
+        template = miner.getblocktemplate()
+        assert_equal(template["height"], 102)
+        assert template["coinbasevalue"] > 0
         assert_equal(miner.getbalance(), first_reward)
         assert_equal(miner.getbalance(102), 0)
         assert_equal(miner.getwalletinfo()["balance"], first_reward)

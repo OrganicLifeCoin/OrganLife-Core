@@ -119,7 +119,7 @@ bool CheckStructure(const CTransaction& tx, const CChainParams& params, std::str
 {
     reason.clear();
     if (tx.nType != CTransaction::PQ) return true;
-    if (!params.IsTestChain()) return Fail(reason, "bad-pq-network");
+    if (!params.SupportsPQ()) return Fail(reason, "bad-pq-network");
     Payload payload;
     if (tx.nVersion != 3 || tx.sapData || !DecodePayload(tx, payload)) return Fail(reason, "bad-pq-payload");
     // A finality commit certificate is carried ONLY in the coinbase envelope.
@@ -152,14 +152,14 @@ bool CheckStructure(const CTransaction& tx, const CChainParams& params, std::str
 
 bool PaymentsActive(const CChainParams& params, int height)
 {
-    return height >= 0 && params.IsTestChain() &&
+    return height >= 0 && params.SupportsPQ() &&
         params.GetConsensus().NetworkUpgradeActive(height, Consensus::UPGRADE_PQ);
 }
 
 bool MasternodesActive(const CChainParams& params, int height)
 {
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
-    return params.IsTestChain() && first > 0 && height >= first && PaymentsActive(params, first);
+    return params.SupportsPQ() && first > 0 && height >= first && PaymentsActive(params, first);
 }
 
 bool CheckContext(const CTransaction& tx, const CChainParams& params, int height, std::string& reason)
@@ -264,7 +264,7 @@ bool VerifyInputs(const CTransaction& tx, const std::vector<CTxOut>& prevouts,
     if (!CheckStructure(tx, params, reason)) return false;
     if (prevouts.size() != tx.vin.size()) return Fail(reason, "bad-pq-prevout-count");
     if (tx.nType != CTransaction::PQ) {
-        if (params.IsTestChain()) {
+        if (params.SupportsPQ()) {
             for (const auto& out : prevouts)
                 if (HasMarker(out.scriptPubKey)) return Fail(reason, "bad-pq-spend-type");
         }

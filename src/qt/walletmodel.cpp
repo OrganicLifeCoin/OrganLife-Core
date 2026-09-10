@@ -235,7 +235,7 @@ void WalletModel::applyHiddenTransactions()
 
 CAmount WalletModel::getBalance(const CCoinControl* coinControl, bool fIncludeDelegated, bool fUnlockedOnly, bool fIncludeShielded) const
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         CAmount balance = 0;
         for (const COutput& out : wallet->GetPQUnspent(!fUnlockedOnly, coinControl)) {
             if (!coinControl || !coinControl->HasSelected() || coinControl->IsSelected(COutPoint(out.tx->GetHash(), out.i)))
@@ -489,7 +489,7 @@ void WalletModel::updateWatchOnlyFlag(bool fHaveWatchonly)
 
 bool WalletModel::validateAddress(const QString& address)
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         pq::KeyID id;
         return pq::DecodeAddress(address.toStdString(), Params().NetworkIDString(), id);
     }
@@ -503,13 +503,13 @@ bool WalletModel::validateAddress(const QString& address)
 
 bool WalletModel::validateAddress(const QString& address, bool fStaking)
 {
-    if (Params().IsTestChain()) return !fStaking && validateAddress(address);
+    if (Params().SupportsPQ()) return !fStaking && validateAddress(address);
     return IsValidDestinationString(address.toStdString(), fStaking);
 }
 
 bool WalletModel::validateAddress(const QString& address, bool fStaking, bool& isShielded)
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         isShielded = false;
         return !fStaking && validateAddress(address);
     }
@@ -566,7 +566,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
         return StakingOnlyUnlocked;
     }
 
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         if (recipients.size() != 1) return TransactionCreationFailed;
         const SendCoinsRecipient& recipient = recipients.front();
         if (!validateAddress(recipient.address)) return InvalidAddress;
@@ -1261,7 +1261,7 @@ void WalletModel::listAvailableNotes(std::map<ListCoinsKey, std::vector<ListCoin
 // AvailableCoins + LockedCoins grouped by wallet address (put change in one group with wallet address)
 void WalletModel::listCoins(std::map<ListCoinsKey, std::vector<ListCoinsValue>>& mapCoins) const
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         LOCK2(cs_main, wallet->cs_wallet);
         for (const auto& out : wallet->GetPQUnspent(true)) {
             pq::KeyID id;

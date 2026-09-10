@@ -66,6 +66,10 @@ struct RegisteredTestnetWallet : RegisteredWallet {
     RegisteredTestnetWallet() : RegisteredWallet(CBaseChainParams::TESTNET) {}
 };
 
+struct RegisteredMainnetWallet : RegisteredWallet {
+    RegisteredMainnetWallet() : RegisteredWallet(CBaseChainParams::MAIN) {}
+};
+
 void CheckWrongNetworkLoad(CWallet& wallet, const std::string& other_network)
 {
     const auto network = Params().NetworkIDString();
@@ -75,6 +79,42 @@ void CheckWrongNetworkLoad(CWallet& wallet, const std::string& other_network)
     SelectParams(network);
 }
 } // namespace
+
+BOOST_FIXTURE_TEST_SUITE(pqmainnet_wallet_tests, RegisteredMainnetWallet)
+
+BOOST_AUTO_TEST_CASE(mainnet_backed_addresses_and_operator_credentials)
+{
+    EncryptTestWallet(m_wallet);
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
+    const auto backup = GetDataDir() / "mainnet-address.dat";
+    const auto created = CallRPC("getnewpqaddress " + backup.string());
+    const auto address = created["address"].get_str();
+    BOOST_CHECK_EQUAL(address.substr(0, 7), "olcpq1p");
+    BOOST_CHECK(created["payable"].get_bool());
+    BOOST_CHECK(fs::is_regular_file(backup));
+    pq::KeyID id, wrongNetwork;
+    BOOST_REQUIRE(pq::DecodeAddress(address, "main", id));
+    BOOST_CHECK(!pq::DecodeAddress(address, "test", wrongNetwork));
+    BOOST_CHECK(!pq::DecodeAddress(address, "regtest", wrongNetwork));
+    mldsa44::Key key;
+    BOOST_CHECK(m_wallet.GetPQKey(id, key, false));
+    BOOST_CHECK(m_wallet.IsPQMine(CTxOut(COIN, pq::GetScript(id))));
+
+    mldsa44::PublicKey operatorKey{};
+    std::string reason, credential;
+    BOOST_REQUIRE_MESSAGE(m_wallet.PreparePQOperator(GetDataDir() / "mainnet-operator.dat", operatorKey, reason), reason);
+    BOOST_REQUIRE_MESSAGE(m_wallet.ExportPQOperatorConfig(operatorKey, credential, reason), reason);
+    mldsa44::Key imported;
+    BOOST_REQUIRE(pqwallet::DecodeOperatorConfig(credential, "main", Params().GetConsensus().hashGenesisBlock, imported, reason));
+    BOOST_CHECK(imported.GetPublicKey() == operatorKey);
+    BOOST_CHECK(!pqwallet::DecodeOperatorConfig(credential, "test", Params().GetConsensus().hashGenesisBlock, imported, reason));
+    BOOST_REQUIRE(m_wallet.Lock());
+    BOOST_CHECK_EQUAL(CallRPC("listpqaddresses")["addresses"].size(), 1U);
+    BOOST_CHECK(!m_wallet.GetPQKey(id, key, true));
+    BOOST_CHECK(!m_wallet.ExportPQOperatorConfig(operatorKey, credential, reason));
+}
+
+BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_FIXTURE_TEST_SUITE(pqwallet_tests, RegisteredWallet)
 
@@ -125,11 +165,7 @@ BOOST_AUTO_TEST_CASE(operator_identity_requires_verified_recovery_snapshot)
     BOOST_REQUIRE(m_wallet.Unlock(NEW_PASSPHRASE));
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     BOOST_CHECK(!m_wallet.PreparePQOperator(GetDataDir() / "disabled.dat", public_key, reason));
-    SelectParams(CBaseChainParams::MAIN);
-    BOOST_CHECK(!m_wallet.PreparePQOperator(GetDataDir() / "mainnet.dat", public_key, reason));
-    BOOST_CHECK(public_key == mldsa44::PublicKey{});
-    BOOST_CHECK(m_wallet.GetPQOperators().empty());
-    SelectParams(CBaseChainParams::REGTEST);
+    CheckWrongNetworkLoad(m_wallet, CBaseChainParams::MAIN);
 }
 
 BOOST_AUTO_TEST_CASE(operator_export_cannot_bypass_controller_authorization)
@@ -164,13 +200,13 @@ BOOST_AUTO_TEST_CASE(operator_export_cannot_bypass_controller_authorization)
     BOOST_CHECK(reason.find("Unknown or unbacked") != std::string::npos);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     denied(public_key);
-    BOOST_CHECK(reason.find("scheduled test-chain") != std::string::npos);
+    BOOST_CHECK(reason.find("scheduled masternodes") != std::string::npos);
     SelectParams(CBaseChainParams::TESTNET);
     denied(public_key);
     BOOST_CHECK(reason.find("Unknown or unbacked") != std::string::npos);
     SelectParams(CBaseChainParams::MAIN);
     denied(public_key);
-    BOOST_CHECK(reason.find("scheduled test-chain") != std::string::npos);
+    BOOST_CHECK(reason.find("Unknown or unbacked") != std::string::npos);
     SelectParams(CBaseChainParams::REGTEST);
     BOOST_CHECK(!fs::exists(destination));
 }
@@ -353,9 +389,6 @@ BOOST_AUTO_TEST_CASE(encryption_lock_staking_and_network_gates)
     SelectParams(CBaseChainParams::MAIN);
     BOOST_CHECK(!m_wallet.GetPQKey(address, key));
     BOOST_CHECK(!key.IsValid());
-    std::string rejected;
-    BOOST_CHECK(!m_wallet.GeneratePQAddress(rejected));
-    BOOST_CHECK(m_wallet.GetPQAddresses().empty());
     SelectParams(CBaseChainParams::REGTEST);
 }
 
@@ -514,10 +547,6 @@ BOOST_AUTO_TEST_CASE(rpc_addresses_use_only_the_pq_payment_path)
     BOOST_CHECK_EQUAL(listed["addresses"][0].get_str(), address);
     BOOST_CHECK(listed["payable"].get_bool());
     BOOST_CHECK_THROW(CallPQRPC("getnewpqaddress"), std::runtime_error);
-    SelectParams(CBaseChainParams::MAIN);
-    BOOST_CHECK_THROW(CallPQRPC("getnewpqaddress"), std::runtime_error);
-    BOOST_CHECK_THROW(CallRPC("listpqaddresses"), std::runtime_error);
-    SelectParams(CBaseChainParams::REGTEST);
 }
 
 BOOST_AUTO_TEST_CASE(rpc_address_creation_requires_a_successful_backup)
@@ -619,10 +648,6 @@ BOOST_AUTO_TEST_CASE(payment_rpc_activation_and_unlock_gates)
     BOOST_CHECK_THROW(CallPQRPC(call), std::runtime_error);
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, false));
     BOOST_CHECK_THROW(CallRPC("listpqunspent unexpected"), std::runtime_error);
-    SelectParams(CBaseChainParams::MAIN);
-    BOOST_CHECK_THROW(CallRPC("listpqunspent"), std::runtime_error);
-    BOOST_CHECK_THROW(CallPQRPC("sendpqtoaddress " + address + " 1"), std::runtime_error);
-    SelectParams(CBaseChainParams::REGTEST);
 }
 
 BOOST_AUTO_TEST_CASE(pq_relevance_is_separate_from_ordinary_coin_selection)
@@ -976,7 +1001,7 @@ BOOST_AUTO_TEST_CASE(finality_status_is_available_without_claiming_activation)
     BOOST_CHECK(!status["validated"].get_bool());
     BOOST_CHECK(!status["member"].get_bool());
     SelectParams(CBaseChainParams::MAIN);
-    BOOST_CHECK_THROW(CallRPC("getpqfinalityinfo"), std::runtime_error);
+    BOOST_CHECK_NO_THROW(CallRPC("getpqfinalityinfo"));
     SelectParams(CBaseChainParams::TESTNET);
 }
 

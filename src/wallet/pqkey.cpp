@@ -213,7 +213,7 @@ bool LoadOperatorCredentials(const fs::path& directory, const std::string& netwo
 {
     key.Clear(); reason = "Could not load private PQ operator credentials";
     try {
-        if ((network != "test" && network != "regtest") || genesis.IsNull()) return false;
+        if ((network != "main" && network != "test" && network != "regtest") || genesis.IsNull()) return false;
         SecureBytes wrapping_key, encoded;
         constexpr size_t RECORD_SIZE = 1 + mldsa44::PUBLIC_KEY_SIZE + 24 + 48;
 #ifdef WIN32

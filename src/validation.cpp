@@ -133,12 +133,12 @@ struct CBlockIndexWorkComparator {
         if (pa->nChainWork > pb->nChainWork) return false;
         if (pa->nChainWork < pb->nChainWork) return true;
 
-        // Test-chain stakers can extend equal-work branches in every slot.
+        // PQ stakers can extend equal-work branches in every slot.
         // Local arrival order leaves them split indefinitely: prefer the lower
         // numeric header hash, also after restart. Use one network-wide rule
         // (not mutable body flags or per-candidate activation) to keep this a
         // strict ordering. Saved-anchor and full-block checks still apply.
-        if (Params().IsTestChain())
+        if (Params().SupportsPQ())
             return UintToArith256(pb->GetBlockHash()) < UintToArith256(pa->GetBlockHash());
 
         // ... then by earliest time received, ...
@@ -1210,7 +1210,7 @@ bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsVi
             if (!pq::VerifyInputs(tx, prevouts, Params(), reason))
                 return state.DoS(100, false, REJECT_INVALID, reason);
             return true;
-        } else if (Params().IsTestChain()) {
+        } else if (Params().SupportsPQ()) {
             for (const auto& input : tx.vin) {
                 if (pq::HasMarker(inputs.AccessCoin(input.prevout).out.scriptPubKey))
                     return state.DoS(100, false, REJECT_INVALID, "bad-pq-spend-type");
@@ -2605,7 +2605,7 @@ static bool ActivateBestChainStep(CValidationState& state, CBlockIndex* pindexMo
         // If any blocks were disconnected, disconnectpool may be non empty.  Add
         // any disconnected transactions back to the mempool.
         UpdateMempoolForReorg(disconnectpool, true);
-    } else if (Params().IsTestChain() && pindexOldTip &&
+    } else if (Params().SupportsPQ() && pindexOldTip &&
                pindexOldTip->nHeight + 1 < pq_activation_height && chainActive.Height() + 1 >= pq_activation_height) {
         // Activation invalidates every pending non-PQ transaction and its descendants.
         mempool.removeForReorg(pcoinsTip.get(), chainActive.Height() + 1, STANDARD_LOCKTIME_VERIFY_FLAGS);
@@ -3263,6 +3263,19 @@ static const CBlockIndex* GetLastCheckpoint() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     return nullptr;
 }
 
+static bool CheckLaunchTime(const CBlockHeader& block, CValidationState& state)
+{
+    const auto& consensus = Params().GetConsensus();
+    if (!consensus.nLaunchTime || block.GetHash() == consensus.hashGenesisBlock) return true;
+    // Use the local clock, not a peer-adjusted clock that could advance launch.
+    // Temporal refusal carries no peer penalty and must not poison block history.
+    if (GetTime() < consensus.nLaunchTime)
+        return state.Invalid(false, REJECT_INVALID, "mainnet-not-launched");
+    if (block.GetBlockTime() < consensus.nLaunchTime)
+        return state.DoS(100, false, REJECT_INVALID, "time-before-launch");
+    return true;
+}
+
 bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& state, CBlockIndex* const pindexPrev)
 {
     AssertLockHeld(cs_main);
@@ -3272,6 +3285,8 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
 
     if (hash == consensus.hashGenesisBlock)
         return true;
+
+    if (!CheckLaunchTime(block, state)) return false;
 
     assert(pindexPrev);
 
@@ -3396,6 +3411,7 @@ static bool GetPrevIndex(const CBlock& block, CBlockIndex** pindexPrevRet, CVali
 bool AcceptBlockHeader(const CBlock& block, CValidationState& state, CBlockIndex** ppindex, CBlockIndex* pindexPrev)
 {
     AssertLockHeld(cs_main);
+    if (!CheckLaunchTime(block, state)) return false;
     // Check for duplicate
     const uint256& hash = block.GetHash();
     CBlockIndex* pindex = LookupBlockIndex(hash);

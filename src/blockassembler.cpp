@@ -276,6 +276,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
                                                bool stopPoSOnNewBlock,
                                                bool fIncludeQfc)
 {
+    if (GetTime() < chainparams.GetConsensus().nLaunchTime) return nullptr;
     resetBlock();
 
     pblocktemplate.reset(new CBlockTemplate());

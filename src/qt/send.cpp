@@ -175,7 +175,7 @@ SendWidget::SendWidget(OrganicLifeGUI* parent) :
     setCssProperty(ui->labelTitle, "screen-header-title");
     ui->labelTitle->setFont(fontLight);
     setCssProperty(ui->labelSubtitle1, "screen-header-subtitle");
-    if (Params().IsTestChain()) ui->labelSubtitle1->setText(tr("Choose a recipient, review the details, and send OLC."));
+    if (Params().SupportsPQ()) ui->labelSubtitle1->setText(tr("Choose a recipient, review the details, and send OLC."));
     ui->labelSubtitle1->setWordWrap(true);
     ui->labelSubtitle1->setMaximumWidth(QWIDGETSIZE_MAX);
 
@@ -277,7 +277,7 @@ void SendWidget::refreshAmounts()
     CAmount totalAmount = 0;
     CAmount delegatedBalance = 0;
     QString titleTotalRemaining;
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         totalAmount = walletModel->getUnlockedBalance(coinControlDialog->coinControl) - total;
         titleTotalRemaining = coinControlDialog->coinControl->HasSelected()
             ? tr("Selected coins remaining") : tr("Available remaining");
@@ -306,7 +306,7 @@ void SendWidget::refreshAmounts()
         titleTotalRemaining = tr("Unlocked remaining");
     }
 
-    QString type = Params().IsTestChain() ? QString() : (isTransparent ? "transparent" : "shielded");
+    QString type = Params().SupportsPQ() ? QString() : (isTransparent ? "transparent" : "shielded");
     QString labelAmountRemaining = GUIUtil::formatBalance( totalAmount, nDisplayUnit, false) + " " + type;
     QMetaObject::invokeMethod(this, "updateAmounts", Qt::QueuedConnection,
                               Q_ARG(QString, titleTotalRemaining),
@@ -339,7 +339,7 @@ void SendWidget::loadClientModel()
 void SendWidget::loadWalletModel()
 {
     if (walletModel) {
-        const bool pqMode = Params().IsTestChain();
+        const bool pqMode = Params().SupportsPQ();
         pqBackupDirectory = pqMode ? PQWalletUI::backupDirectory(walletModel) : QString();
         ui->pushLeft->setVisible(!pqMode);
         ui->pushRight->setVisible(!pqMode);
@@ -467,7 +467,7 @@ void SendWidget::clearEntries()
 
 void SendWidget::addEntry()
 {
-    if (walletModel && Params().IsTestChain() && !entries.isEmpty()) return;
+    if (walletModel && Params().SupportsPQ() && !entries.isEmpty()) return;
     if (entries.isEmpty()) {
         createEntry();
     } else {
@@ -492,7 +492,7 @@ SendMultiRow* SendWidget::createEntry()
     SendMultiRow *sendMultiRow = new SendMultiRow(window, this);
     if (this->walletModel) {
         sendMultiRow->setWalletModel(this->walletModel);
-        sendMultiRow->setPQMode(Params().IsTestChain());
+        sendMultiRow->setPQMode(Params().SupportsPQ());
     }
     entries.append(sendMultiRow);
     ui->scrollAreaWidgetContents->layout()->addWidget(sendMultiRow);
@@ -504,7 +504,7 @@ SendMultiRow* SendWidget::createEntry()
 
 void SendWidget::onAddEntryClicked()
 {
-    if (Params().IsTestChain()) return;
+    if (Params().SupportsPQ()) return;
     // Check prev valid entries before add a new one.
     for (SendMultiRow* entry : entries) {
         if (!entry || !entry->validate()) {
@@ -535,7 +535,7 @@ void SendWidget::setFocusOnLastEntry()
 
 void SendWidget::showHideCheckBoxDelegations(CAmount delegationBalance)
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         ui->checkBoxDelegations->setVisible(false);
         return;
     }
@@ -610,7 +610,7 @@ void SendWidget::ProcessSend(QList<SendCoinsRecipient>& recipients, bool hasShie
     }
 
     QPointer<WalletModel> operationWallet(walletModel);
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         if (!PQWalletUI::ensureBackupDirectory(this, operationWallet, pqBackupDirectory) ||
             operationWallet.isNull() || walletModel != operationWallet) return;
     }
@@ -633,11 +633,11 @@ void SendWidget::ProcessSend(QList<SendCoinsRecipient>& recipients, bool hasShie
     }
     ptrModelTx = new WalletModelTransaction(recipients);
     ptrModelTx->useV2 = isShieldedTx;
-    if (Params().IsTestChain()) beginPQPreparation();
+    if (Params().SupportsPQ()) beginPQPreparation();
 
     // PQ work stays on the GUI thread so a wallet cannot be unloaded while its
     // model is being used. Legacy transactions retain their existing worker.
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         const OperationResult result = prepareTransparent(ptrModelTx);
         processingResult = bool(result);
         if (!result) processingResultError = tr(result.getError().c_str());
@@ -721,7 +721,7 @@ bool SendWidget::sendFinalStep()
     dialog->adjustSize();
     openDialogWithOpaqueBackgroundY(dialog, window, 3, 15);
 
-    if (Params().IsTestChain() &&
+    if (Params().SupportsPQ() &&
         (pqPreparationWallet.isNull() || walletModel != pqPreparationWallet)) {
         showSendBlockingError(this, tr("The active wallet changed. The transaction was not sent."));
         dialog->deleteLater();
@@ -740,7 +740,7 @@ bool SendWidget::sendFinalStep()
                 return false;
             }
         }
-        if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
             if (!PQWalletUI::backupSnapshot(walletModel, pqBackupDirectory)) {
                 showSendBlockingError(this,
                     tr("The encrypted wallet backup could not be saved. The payment was not sent."));
@@ -752,7 +752,7 @@ bool SendWidget::sendFinalStep()
             pqAddressesBeforePrepare.clear();
         }
         sendCoinsStatus = WalletModel::SendCoinsReturn(WalletModel::TransactionCommitFailed);
-        if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
             sendCoinsStatus = walletModel->sendCoins(*ptrModelTx);
         } else {
             // Keep the established responsive worker for legacy transactions.
@@ -836,7 +836,7 @@ void SendWidget::onError(QString error, int type)
 
 void SendWidget::tryRefreshAmounts()
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         refreshAmounts();
         return;
     }
@@ -847,7 +847,7 @@ void SendWidget::tryRefreshAmounts()
 
 void SendWidget::updateEntryLabels(const QList<SendCoinsRecipient>& recipients)
 {
-    if (Params().IsTestChain()) return;
+    if (Params().SupportsPQ()) return;
     for (const SendCoinsRecipient& rec : recipients) {
         QString label = rec.label;
         if (!label.isNull()) {
@@ -906,7 +906,7 @@ void SendWidget::onChangeAddressClicked()
     QPointer<WalletModel> operationWallet(walletModel);
     showHideOp(true);
     SendChangeAddressDialog* dialog = new SendChangeAddressDialog(window, walletModel, isTransparent);
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         dialog->setAddress(QString::fromStdString(coinControlDialog->coinControl->destPQChange));
         if (openDialogWithOpaqueBackgroundY(dialog, window, 3, 5) && operationWallet && walletModel == operationWallet) {
             const QString address = dialog->getAddress();

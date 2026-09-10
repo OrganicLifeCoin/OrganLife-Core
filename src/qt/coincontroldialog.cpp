@@ -516,7 +516,7 @@ TotalAmounts CoinControlDialog::getTotals() const
     std::vector<OutPointWrapper> vCoinControl;
     coinControl->ListSelected(vCoinControl);
 
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         CMutableTransaction estimate;
         estimate.nVersion = CTransaction::SAPLING;
         estimate.nType = CTransaction::PQ;
@@ -635,12 +635,12 @@ void CoinControlDialog::updateLabels()
     if (!model)
         return;
 
-    ui->labelTitle->setText(Params().IsTestChain() ? tr("Coin Control · select up to two coins") : fSelectTransparent ?
+    ui->labelTitle->setText(Params().SupportsPQ() ? tr("Coin Control · select up to two coins") : fSelectTransparent ?
             "Select OrganicLife Outputs to Spend" :
             "Select Shielded OrganicLife to Spend");
 
     const TotalAmounts& t = getTotals();
-    ui->pushButtonOk->setEnabled(!Params().IsTestChain() || t.nQuantity <= pq::MAX_INPUTS);
+    ui->pushButtonOk->setEnabled(!Params().SupportsPQ() || t.nQuantity <= pq::MAX_INPUTS);
 
     // update SelectAll button state
     // if inputs selected > inputs unselected, set checked (label "Unselect All")

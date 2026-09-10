@@ -80,6 +80,7 @@ public:
     int LLMQConnectionRetryTimeout() const { return nLLMQConnectionRetryTimeout; }
     /** If this chain is exclusively used for testing */
     bool IsTestChain() const { return IsTestnet() || IsRegTestNet(); }
+    bool SupportsPQ() const { return strNetworkID == "main" || IsTestChain(); }
     /** Make miner wait to have peers to avoid wasting work */
     bool MiningRequiresPeers() const { return !IsRegTestNet(); }
     /** Headers first syncing is disabled */

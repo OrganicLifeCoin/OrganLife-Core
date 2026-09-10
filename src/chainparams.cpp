@@ -172,12 +172,12 @@ static Consensus::LLMQParams llmq400_85 = {
  * + Contains no strange transactions
  */
 static MapCheckpoints mapCheckpoints = {
-    {0, uint256S("0x0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e")},
+    {0, uint256S("0x0000091cf3aeeed50f65d6e640a35029d7b541b4e42950232385b13e88a12fdb")},
 };
 
 static const CCheckpointData data = {
     &mapCheckpoints,
-    1785672000, // * UNIX timestamp of genesis checkpoint block (0)
+    1789567200, // * UNIX timestamp of genesis checkpoint block (0)
     0,          // * total number of transactions between genesis and last checkpoint
     1800        // * estimated number of transactions per day after checkpoint
 };
@@ -206,10 +206,11 @@ public:
     {
         strNetworkID = "main";
 
-        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin Genesis 2026-08-02", 1785672000, 490347, 0x1e0ffff0, 1, 0 * COIN);
+        consensus.nLaunchTime = 1789567200; // 2026-09-16 14:00 UTC
+        genesis = CreateOrganicLifeGenesisBlock("OrganicLife Coin PQ Mainnet Genesis 2026-09-16 14:00 UTC", consensus.nLaunchTime, 1358462, 0x1e0ffff0, 1, 0 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e"));
-        assert(genesis.hashMerkleRoot == uint256S("0x33f4424ac84d7e801d2b09fc982a24c9228747a3f01f7402029a4664f1e63a44"));
+        assert(consensus.hashGenesisBlock == uint256S("0x0000091cf3aeeed50f65d6e640a35029d7b541b4e42950232385b13e88a12fdb"));
+        assert(genesis.hashMerkleRoot == uint256S("0xe4f8e329c7db11bdfbb7b2e6716f8d1ca8d1ff8c41e186135c873987e15ce8fc"));
 
         consensus.fPowAllowMinDifficultyBlocks = false;
         consensus.fPowNoRetargeting = false;
@@ -269,9 +270,9 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_V5_6].nActivationHeight          = 10081;
         consensus.vUpgrades[Consensus::UPGRADE_V6_0].nActivationHeight          = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
         consensus.vUpgrades[Consensus::UPGRADE_V6_1_GOV].nActivationHeight      = Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
-        consensus.vUpgrades[Consensus::UPGRADE_PQ].nActivationHeight           = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-        consensus.vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-        consensus.vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_PQ].nActivationHeight           = 1;
+        consensus.vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight = 1;
+        consensus.vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight = 1;
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.

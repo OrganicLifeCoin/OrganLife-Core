@@ -559,7 +559,7 @@ std::string HelpMessage(HelpMessageMode mode)
 
     strUsage += HelpMessageGroup("Debugging/Testing options:");
     strUsage += HelpMessageOpt("-uacomment=<cmt>", "Append comment to the user agent string");
-    strUsage += HelpMessageOpt("-pqoperatorcredentials=<dir>", "Load operator credentials from a private absolute directory (scheduled test-chain PQ masternodes only; requires -disablewallet and -pqoperatorid). Credentials alone do not establish registry eligibility or finality.");
+    strUsage += HelpMessageOpt("-pqoperatorcredentials=<dir>", "Load operator credentials from a private absolute directory (scheduled PQ masternodes only; requires -disablewallet and -pqoperatorid). Credentials alone do not establish registry eligibility or finality.");
     strUsage += HelpMessageOpt("-pqoperatorconfig=<hex>", "Load bounded inline PQ operator credentials from the config file only (requires -disablewallet and -pqoperatorid). Never pass this secret on the command line.");
     strUsage += HelpMessageOpt("-pqoperatorid=<txid>", "Registration identity for pending PQ operator credentials (64 hexadecimal characters, nonzero)");
     if (showDebug) {
@@ -1265,9 +1265,6 @@ bool AppInitSanityChecks()
 
 bool AppInitMain()
 {
-    if (!Params().IsTestChain()) {
-        return UIError(_("Mainnet is disabled in this pre-launch PQ-only build. Use testnet or regtest."));
-    }
     // ********************************************************* Step 4a: application initialization
     // After daemonization get the data directory lock again and hold on to it until exit
     // This creates a slight window for a race condition to happen, however this condition is harmless: it
@@ -1434,7 +1431,7 @@ bool AppInitMain()
     }
 
     // format user agent, check total size
-    strSubVersion = FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, uacomments);
+    strSubVersion = FormatSubVersion(CLIENT_NAME, CLIENT_DISPLAY_VERSION, uacomments);
     if (strSubVersion.size() > MAX_SUBVERSION_LENGTH) {
         return UIError(strprintf(_("Total length of network version string (%i) exceeds maximum length (%i). Reduce the number or size of %s."),
             strSubVersion.size(), MAX_SUBVERSION_LENGTH, "-uacomment"));
@@ -1712,7 +1709,10 @@ bool AppInitMain()
                     uiInterface.InitMessage(_("Verifying blocks..."));
                     CBlockIndex *tip = chainActive.Tip();
                     RPCNotifyBlockChange(true, tip);
-                    if (tip && tip->nTime > GetAdjustedTime() + 2 * 60 * 60) {
+                    const auto& consensus = Params().GetConsensus();
+                    const bool scheduledGenesis = tip && tip->nHeight == 0 && consensus.nLaunchTime > 0 &&
+                        tip->GetBlockHash() == consensus.hashGenesisBlock;
+                    if (tip && !scheduledGenesis && tip->nTime > GetAdjustedTime() + 2 * 60 * 60) {
                         strLoadError = _("The block database contains a block which appears to be from the future. "
                                          "This may be due to your computer's date and time being set incorrectly. "
                                          "Only rebuild the block database if you are sure that your computer's date and time are correct");

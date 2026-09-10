@@ -8,10 +8,12 @@
 #include "test/test_organiclife.h"
 
 #include "blocksignature.h"
+#include "blockassembler.h"
 #include "miner.h"
 #include "net.h"
 #include "pqtransaction.h"
 #include "primitives/transaction.h"
+#include "rpc/server.h"
 #include "spork.h"
 #include "streams.h"
 #include "validation.h"
@@ -21,11 +23,15 @@
 #include <algorithm>
 #include <vector>
 
+#ifdef ENABLE_MINING_RPC
+UniValue getblocktemplate(const JSONRPCRequest& request);
+#endif
+
 BOOST_FIXTURE_TEST_SUITE(main_tests, TestingSetup)
 
 CBlock CreateDummyBlockWithSignature(const mldsa44::Key& stakingKey)
 {
-    const auto id = *pq::GetID(stakingKey.GetPublicKey(), "regtest");
+    const auto id = *pq::GetID(stakingKey.GetPublicKey(), Params().NetworkIDString());
     CMutableTransaction txCoinStake;
     txCoinStake.nVersion = CTransaction::SAPLING;
     txCoinStake.nType = CTransaction::PQ;
@@ -86,6 +92,19 @@ BOOST_AUTO_TEST_CASE(block_signature_test)
     BOOST_CHECK(!TestBlockSignature(block));
     SelectParams(CBaseChainParams::MAIN);
     BOOST_CHECK(!TestBlockSignature(block));
+}
+
+BOOST_AUTO_TEST_CASE(mainnet_pq_block_signature_test)
+{
+    mldsa44::Key stakingKey;
+    BOOST_REQUIRE(stakingKey.Generate());
+    const auto block = CreateDummyBlockWithSignature(stakingKey);
+    BOOST_CHECK(CheckBlockSignature(block));
+    SelectParams(CBaseChainParams::TESTNET);
+    BOOST_CHECK(!CheckBlockSignature(block));
+    SelectParams(CBaseChainParams::REGTEST);
+    BOOST_CHECK(!CheckBlockSignature(block));
+    SelectParams(CBaseChainParams::MAIN);
 }
 
 BOOST_AUTO_TEST_CASE(subsidy_limit_test)
@@ -256,14 +275,82 @@ BOOST_AUTO_TEST_CASE(mainnet_genesis_retime_lock_test)
 {
     SelectParams(CBaseChainParams::MAIN);
 
-    BOOST_CHECK_EQUAL(Params().GenesisBlock().nTime, 1785672000U);
+    BOOST_CHECK_EQUAL(Params().GenesisBlock().nTime, 1789567200U);
     BOOST_CHECK_EQUAL(Params().GetConsensus().hashGenesisBlock,
-                      uint256S("0x0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e"));
+                      uint256S("0x0000091cf3aeeed50f65d6e640a35029d7b541b4e42950232385b13e88a12fdb"));
     BOOST_CHECK_EQUAL(Params().GenesisBlock().hashMerkleRoot,
-                      uint256S("0x33f4424ac84d7e801d2b09fc982a24c9228747a3f01f7402029a4664f1e63a44"));
+                      uint256S("0xe4f8e329c7db11bdfbb7b2e6716f8d1ca8d1ff8c41e186135c873987e15ce8fc"));
     BOOST_CHECK_EQUAL(Params().Checkpoints().mapCheckpoints->at(0), Params().GetConsensus().hashGenesisBlock);
     BOOST_CHECK_EQUAL(Params().GetConsensus().nTargetSpacing, 2 * 60);
     BOOST_CHECK_EQUAL(Params().GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight, 10081);
+}
+
+BOOST_AUTO_TEST_CASE(mainnet_launch_header_retry_test)
+{
+    const int64_t launch = 1789567200;
+    struct ResetTime { ~ResetTime() { SetMockTime(0); } } reset;
+    LOCK(cs_main);
+    auto* genesis = chainActive.Genesis();
+    BOOST_REQUIRE(genesis);
+    CBlock block;
+    block.nVersion = 8;
+    block.hashPrevBlock = genesis->GetBlockHash();
+    block.nBits = Params().GenesisBlock().nBits;
+    block.nTime = launch + 1;
+
+    SetMockTime(launch - 1);
+    CValidationState genesisState;
+    BOOST_CHECK(AcceptBlockHeader(Params().GenesisBlock(), genesisState));
+    CValidationState early;
+    BOOST_CHECK(!AcceptBlockHeader(block, early));
+    BOOST_CHECK_EQUAL(early.GetRejectReason(), "mainnet-not-launched");
+    BOOST_CHECK_EQUAL(early.GetDoSScore(), 0);
+    BOOST_CHECK(!LookupBlockIndex(block.GetHash()));
+
+    SetMockTime(launch);
+    CValidationState onTime;
+    BOOST_REQUIRE(AcceptBlockHeader(block, onTime));
+    BOOST_CHECK(!(LookupBlockIndex(block.GetHash())->nStatus & BLOCK_FAILED_MASK));
+    SetMockTime(launch + 1);
+    CValidationState after;
+    BOOST_CHECK(AcceptBlockHeader(block, after));
+
+    // Cached headers cannot bypass the wall-clock gate after a clock correction.
+    SetMockTime(launch - 1);
+    CValidationState cached;
+    BOOST_CHECK(!AcceptBlockHeader(block, cached));
+    BOOST_CHECK_EQUAL(cached.GetRejectReason(), "mainnet-not-launched");
+    BOOST_CHECK(!(LookupBlockIndex(block.GetHash())->nStatus & BLOCK_FAILED_MASK));
+    SetMockTime(launch);
+    CValidationState retry;
+    BOOST_CHECK(AcceptBlockHeader(block, retry));
+
+    block.nTime = launch - 1;
+    CValidationState oldTimestamp;
+    BOOST_CHECK(!ContextualCheckBlockHeader(block, oldTimestamp, genesis));
+    BOOST_CHECK_EQUAL(oldTimestamp.GetRejectReason(), "time-before-launch");
+}
+
+#ifdef ENABLE_MINING_RPC
+BOOST_AUTO_TEST_CASE(mainnet_prelaunch_template_rpc_explains_wait)
+{
+    struct ResetTime { ~ResetTime() { SetMockTime(0); } } reset;
+    SetMockTime(Params().GetConsensus().nLaunchTime - 1);
+    JSONRPCRequest request;
+    request.params = UniValue(UniValue::VARR);
+    BOOST_CHECK_EXCEPTION(getblocktemplate(request), UniValue, [](const UniValue& error) {
+        return error["message"].get_str() == "Mainnet launches on 2026-09-16 at 14:00 UTC";
+    });
+}
+#endif
+
+BOOST_AUTO_TEST_CASE(mainnet_prelaunch_templates_disabled_test)
+{
+    struct ResetTime { ~ResetTime() { SetMockTime(0); } } reset;
+    SetMockTime(1789567199);
+    // Skip block-validity checks to prove the assembler itself enforces launch.
+    BOOST_CHECK(!BlockAssembler(Params(), DEFAULT_PRINTPRIORITY).CreateNewBlock(
+        CScript() << OP_TRUE, nullptr, false, nullptr, true, false));
 }
 
 BOOST_AUTO_TEST_CASE(mainnet_message_start_isolated_from_retired_chain_test)

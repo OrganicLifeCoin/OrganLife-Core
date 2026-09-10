@@ -34,7 +34,7 @@ struct UpgradesTest : public TestingSetup
 
 BOOST_FIXTURE_TEST_SUITE(network_upgrades_tests, UpgradesTest)
 
-BOOST_AUTO_TEST_CASE(pq_upgrade_defaults_are_explicit_and_mainnet_remains_disabled)
+BOOST_AUTO_TEST_CASE(pq_upgrade_defaults_are_explicit)
 {
     unsigned int pq_index = Consensus::MAX_NETWORK_UPGRADES;
     for (unsigned int i = 0; i < Consensus::MAX_NETWORK_UPGRADES; ++i)
@@ -42,8 +42,7 @@ BOOST_AUTO_TEST_CASE(pq_upgrade_defaults_are_explicit_and_mainnet_remains_disabl
     BOOST_REQUIRE(pq_index < Consensus::MAX_NETWORK_UPGRADES);
     for (const auto& network : {CBaseChainParams::MAIN, CBaseChainParams::TESTNET, CBaseChainParams::REGTEST}) {
         const auto params = CreateChainParams(network);
-        const int expected = network == CBaseChainParams::MAIN ? Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT :
-            network == CBaseChainParams::TESTNET ? 1 : Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
+        const int expected = network == CBaseChainParams::REGTEST ? Consensus::NetworkUpgrade::ALWAYS_ACTIVE : 1;
         BOOST_CHECK_EQUAL(params->GetConsensus().vUpgrades[pq_index].nActivationHeight, expected);
     }
 }

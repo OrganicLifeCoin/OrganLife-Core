@@ -45,11 +45,14 @@
 #include <string>
 #include <vector>
 
-static const int CLIENT_VERSION =
+static constexpr int CLIENT_DISPLAY_VERSION =
     1000000 * CLIENT_VERSION_MAJOR  ///
     + 10000 * CLIENT_VERSION_MINOR  ///
     + 100 * CLIENT_VERSION_REVISION ///
     + 1 * CLIENT_VERSION_BUILD;
+
+// Keep disk and wallet serialization compatibility monotonic across releases.
+static constexpr int CLIENT_VERSION = CLIENT_DISPLAY_VERSION < 1011300 ? 1011300 : CLIENT_DISPLAY_VERSION;
 
 extern const std::string CLIENT_NAME;
 extern const std::string CLIENT_BUILD;

@@ -587,6 +587,9 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
     if (strMode != "template")
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
 
+    if (GetTime() < Params().GetConsensus().nLaunchTime)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Mainnet launches on 2026-09-16 at 14:00 UTC");
+
     if(!g_connman)
         throw JSONRPCError(RPC_CLIENT_P2P_DISABLED, "Error: Peer-to-peer functionality missing or disabled");
 
@@ -658,7 +661,9 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
             pblocktemplate.release();
             pblocktemplate = nullptr;
         }
-        CScript scriptDummy = CScript() << OP_TRUE;
+        // Miners replace this placeholder with their own payout destination.
+        CScript scriptDummy = pq::PaymentsActive(Params(), pindexPrevNew->nHeight + 1) ?
+            pq::GetScript(pq::KeyID{}) : CScript() << OP_TRUE;
         pblocktemplate = BlockAssembler(Params(), DEFAULT_PRINTPRIORITY).CreateNewBlock(scriptDummy, pwallet, false);
         if (!pblocktemplate)
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");

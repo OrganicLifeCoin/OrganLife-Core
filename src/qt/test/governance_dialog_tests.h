@@ -149,7 +149,7 @@ private Q_SLOTS:
     void dashboardWidgetHeaderRemainsExpandableWithScaledFonts();
     void dashboardWidgetMergesRewardStatsAndChartIntoSidebarModule();
     void dashboardWidgetRestoresTransactionListVisibilityAfterWalletSwitch();
-    void masternodeWidgetRefreshesWhenModelLoadsConfiguredMasternodes();
+    void masternodeWidgetDoesNotExposeLegacyConfiguredMasternodes();
     void dashboardWidgetUsesSelfDescribingRewardTiles();
     void dashboardWidgetPrioritizesChartHeightWithProminentRewardMarkers();
     void dashboardChartPeriodControlsStayInsideAnalyticsCard();

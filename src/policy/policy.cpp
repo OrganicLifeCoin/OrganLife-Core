@@ -35,7 +35,7 @@ CAmount GetDustThreshold(const CTxOut& txout, const CFeeRate& dustRelayFeeIn)
     size_t nSize = GetSerializeSize(txout, 0);
     pq::KeyID id;
     // Include the fixed authorization payload in a PQ output's future spend cost.
-    nSize += Params().IsTestChain() && pq::ExtractID(txout.scriptPubKey, id) ?
+    nSize += Params().SupportsPQ() && pq::ExtractID(txout.scriptPubKey, id) ?
         (32 + 4 + 1 + 4 + pq::AUTH_SIZE + 3) : (32 + 4 + 1 + 107 + 4);
     return dustRelayFeeIn.GetFee(nSize);
 }
@@ -170,7 +170,7 @@ bool IsStandardTx(const CTransactionRef& tx, int nBlockHeight, std::string& reas
     txnouttype whichType;
     for (const CTxOut& txout : tx->vout) {
         pq::KeyID pq_id;
-        if (Params().IsTestChain() && tx->nType == CTransaction::PQ && pq::ExtractID(txout.scriptPubKey, pq_id)) {
+        if (Params().SupportsPQ() && tx->nType == CTransaction::PQ && pq::ExtractID(txout.scriptPubKey, pq_id)) {
             if (IsDust(txout, dustRelayFee)) { reason = "dust"; return false; }
             continue;
         }
@@ -213,7 +213,7 @@ bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs)
         // get the scriptPubKey corresponding to this input:
         const CScript& prevScript = prev.scriptPubKey;
         pq::KeyID pq_id;
-        if (Params().IsTestChain() && tx.nType == CTransaction::PQ && pq::ExtractID(prevScript, pq_id)) continue;
+        if (Params().SupportsPQ() && tx.nType == CTransaction::PQ && pq::ExtractID(prevScript, pq_id)) continue;
         if (!Solver(prevScript, whichType, vSolutions))
             return false;
 

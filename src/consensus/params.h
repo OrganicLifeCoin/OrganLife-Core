@@ -171,6 +171,7 @@ struct LLMQParams {
  */
 struct Params {
     uint256 hashGenesisBlock;
+    int64_t nLaunchTime{0};
     bool fPowAllowMinDifficultyBlocks;
     bool fPowNoRetargeting;
     uint256 powLimit;

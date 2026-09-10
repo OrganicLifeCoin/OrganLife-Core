@@ -21,7 +21,7 @@ bool CWallet::PreparePQOperator(const fs::path& backup, mldsa44::PublicKey& publ
     const auto fail = [&](const char* message) { reason = message; return false; };
     const auto& params = Params();
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
-    if (!pq::MasternodesActive(params, first)) return fail("PQ operator recovery requires scheduled test-chain masternodes");
+    if (!pq::MasternodesActive(params, first)) return fail("PQ operator recovery requires scheduled masternodes");
     if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
         return fail("PQ operator recovery requires an encrypted, fully unlocked wallet");
     const auto& genesis = params.GetConsensus().hashGenesisBlock;
@@ -55,7 +55,7 @@ std::vector<mldsa44::PublicKey> CWallet::GetPQOperators() const
 {
     LOCK(cs_KeyStore);
     std::vector<mldsa44::PublicKey> result;
-    if (!Params().IsTestChain()) return result;
+    if (!Params().SupportsPQ()) return result;
     for (const auto& entry : m_pq_operator_recovery)
         if (entry.second.backed) result.push_back(entry.second.record.public_key);
     return result;
@@ -69,7 +69,7 @@ bool CWallet::PreparePQOperatorExport(const mldsa44::PublicKey& public_key, pqwa
     const auto fail = [&](const char* message) { reason = message; return false; };
     const auto& params = Params();
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
-    if (!pq::MasternodesActive(params, first)) return fail("PQ operator export requires scheduled test-chain masternodes");
+    if (!pq::MasternodesActive(params, first)) return fail("PQ operator export requires scheduled masternodes");
     if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
         return fail("PQ operator export requires an encrypted, fully unlocked wallet");
     const auto id = pq::GetID(public_key, params.NetworkIDString());
@@ -110,7 +110,7 @@ bool CWallet::LoadPQOperatorRecovery(const uint256& genesis, const pq::KeyID& id
 {
     LOCK(cs_KeyStore);
     const auto expected = pq::GetID(recovery.record.public_key, Params().NetworkIDString());
-    if (!Params().IsTestChain() || genesis != Params().GetConsensus().hashGenesisBlock ||
+    if (!Params().SupportsPQ() || genesis != Params().GetConsensus().hashGenesisBlock ||
         recovery.record.version != 3 || recovery.backed > 1 || !expected || *expected != id ||
         m_pq_keys.count(id) || m_pq_operator_recovery.count(id) || !SetCrypted()) return false;
     m_pq_operator_recovery.emplace(id, recovery);
@@ -121,7 +121,7 @@ bool CWallet::GeneratePQAddress(std::string& address)
 {
     address.clear();
     LOCK2(cs_wallet, cs_KeyStore);
-    if (!Params().IsTestChain() || !IsCrypted() || IsLocked() || fWalletUnlockStaking) return false;
+    if (!Params().SupportsPQ() || !IsCrypted() || IsLocked() || fWalletUnlockStaking) return false;
     pqwallet::SecureBytes seed(mldsa44::SEED_SIZE);
     GetStrongRandBytes(seed.data(), seed.size());
     pqwallet::Record record;
@@ -147,7 +147,7 @@ std::vector<std::string> CWallet::GetPQAddresses() const
 {
     LOCK(cs_KeyStore);
     std::vector<std::string> addresses;
-    if (!Params().IsTestChain()) return addresses;
+    if (!Params().SupportsPQ()) return addresses;
     for (const auto& entry : m_pq_keys) addresses.push_back(pq::EncodeAddress(entry.first, Params().NetworkIDString()));
     return addresses;
 }
@@ -164,7 +164,7 @@ bool CWallet::GetPQKey(const pq::KeyID& id, mldsa44::Key& key, bool staking) con
 {
     key.Clear();
     LOCK2(cs_wallet, cs_KeyStore);
-    if (!Params().IsTestChain() || !IsCrypted() || IsLocked() || (!staking && fWalletUnlockStaking)) return false;
+    if (!Params().SupportsPQ() || !IsCrypted() || IsLocked() || (!staking && fWalletUnlockStaking)) return false;
     const auto entry = m_pq_keys.find(id);
     return entry != m_pq_keys.end() && pqwallet::DecryptKey(vMasterKey, entry->second, Params().NetworkIDString(), key);
 }
@@ -173,7 +173,7 @@ bool CWallet::LoadPQKey(const pq::KeyID& id, const pqwallet::Record& record)
 {
     LOCK(cs_KeyStore);
     const auto expected_id = pq::GetID(record.public_key, Params().NetworkIDString());
-    if (!Params().IsTestChain() || record.version != 1 || !expected_id || id != *expected_id ||
+    if (!Params().SupportsPQ() || record.version != 1 || !expected_id || id != *expected_id ||
         m_pq_keys.count(id) || m_pq_operator_recovery.count(id) || !SetCrypted()) return false;
     m_pq_keys.emplace(id, record);
     return true;
@@ -189,7 +189,7 @@ bool CWallet::IsPQMine(const CTxOut& output) const
 {
     LOCK(cs_KeyStore);
     pq::KeyID id;
-    return Params().IsTestChain() && pq::ExtractID(output.scriptPubKey, id) && m_pq_keys.count(id);
+    return Params().SupportsPQ() && pq::ExtractID(output.scriptPubKey, id) && m_pq_keys.count(id);
 }
 
 bool CWallet::InvolvesPQ(const CTransaction& tx) const

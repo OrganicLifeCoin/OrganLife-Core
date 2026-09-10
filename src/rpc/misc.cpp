@@ -115,7 +115,7 @@ UniValue getinfo(const JSONRPCRequest& request)
     GetProxy(NET_IPV4, proxy);
 
     UniValue obj(UniValue::VOBJ);
-    obj.pushKV("version", CLIENT_VERSION);
+    obj.pushKV("version", CLIENT_DISPLAY_VERSION);
     obj.pushKV("protocolversion", PROTOCOL_VERSION);
     obj.pushKV("services", services);
 #ifdef ENABLE_WALLET

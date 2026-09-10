@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(structure_network_and_legacy_boundaries)
     auto tx=Transfer(id,p);
     std::string why;
     BOOST_REQUIRE(pq::CheckStructure(tx,Params(),why));
-    BOOST_CHECK(!pq::CheckStructure(tx,*CreateChainParams(CBaseChainParams::MAIN),why));
+    BOOST_CHECK(pq::CheckStructure(tx,*CreateChainParams(CBaseChainParams::MAIN),why));
     BOOST_CHECK(pq::CheckStructure(tx,*CreateChainParams(CBaseChainParams::TESTNET),why));
     for (int mutation=0; mutation<8; ++mutation) {
         auto bad=tx;
@@ -331,10 +331,14 @@ BOOST_AUTO_TEST_CASE(reset_testnet_has_fresh_identity_and_active_payments)
     BOOST_CHECK(!test->GetConsensus().NetworkUpgradeActive(39, Consensus::UPGRADE_POS));
     BOOST_CHECK(test->GetConsensus().NetworkUpgradeActive(40, Consensus::UPGRADE_POS));
     BOOST_CHECK_EQUAL(main->GetConsensus().hashGenesisBlock.GetHex(),
-        "0000012e114f3ce58cd05631b29091dc543db22061f852dc50b26967d082de6e");
+        "0000091cf3aeeed50f65d6e640a35029d7b541b4e42950232385b13e88a12fdb");
     BOOST_CHECK_EQUAL(main->GetConsensus().vUpgrades[Consensus::UPGRADE_POS].nActivationHeight, 10081);
-    BOOST_CHECK(!pq::PaymentsActive(*main, 1));
-    BOOST_CHECK(!pq::PaymentsActive(*main, 1000000));
+    BOOST_CHECK(!pq::PaymentsActive(*main, 0));
+    BOOST_CHECK(pq::PaymentsActive(*main, 1));
+    BOOST_CHECK(pq::PaymentsActive(*main, 1000000));
+    BOOST_CHECK(!pq::MasternodesActive(*main, 0));
+    BOOST_CHECK(pq::MasternodesActive(*main, 1));
+    BOOST_CHECK_EQUAL(main->GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight, 1);
 }
 
 BOOST_AUTO_TEST_CASE(pq_activation_requires_pq_rewards_and_transfers)
@@ -371,7 +375,8 @@ BOOST_AUTO_TEST_CASE(pq_activation_requires_pq_rewards_and_transfers)
     BOOST_CHECK_EQUAL(reason, "bad-pq-only-transaction");
 
     const auto mainnet = CreateChainParams(CBaseChainParams::MAIN);
-    BOOST_CHECK(pq::CheckContext(CTransaction(ordinary), *mainnet, 1000000, reason));
+    BOOST_CHECK(!pq::CheckContext(CTransaction(ordinary), *mainnet, 1, reason));
+    BOOST_CHECK_EQUAL(reason, "bad-pq-only-transaction");
 }
 
 BOOST_AUTO_TEST_CASE(testnet_signature_has_independent_context_and_genesis)
@@ -580,7 +585,7 @@ BOOST_AUTO_TEST_CASE(activation_boundaries_and_prerequisites)
         auto params = CreateChainParams(network);
         params->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 20);
         for (int height : {19, 20, 21}) {
-            const bool active = network != CBaseChainParams::MAIN && height >= 20;
+            const bool active = height >= 20;
             BOOST_CHECK_EQUAL(pq::PaymentsActive(*params, height), active);
             CValidationState state;
             BOOST_CHECK_EQUAL(ContextualCheckTransaction(MakeTransactionRef(tx), state, *params, height, true, false), active);

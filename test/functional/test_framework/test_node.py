@@ -58,7 +58,7 @@ class TestNode():
         self.index = i
         self.datadir = os.path.join(dirname, "node" + str(i))
         self.chain = chain
-        self.chain_path = os.path.join(self.datadir, "testnet" if chain == "test" else chain)
+        self.chain_path = os.path.join(self.datadir, {"main": "", "test": "testnet"}.get(chain, chain))
         self.rpchost = rpchost
         self.rpc_timeout = timewait
         if binary is None:

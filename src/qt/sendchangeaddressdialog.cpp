@@ -78,7 +78,7 @@ void SendChangeAddressDialog::reset()
 void SendChangeAddressDialog::accept()
 {
     if (!walletModel) return;
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         if (getAddress().isEmpty() || walletModel->validateAddress(getAddress())) QDialog::accept();
         else inform(tr("Enter a valid address for this network"));
         return;

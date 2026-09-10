@@ -75,6 +75,7 @@ BASE_SCRIPTS= [
     'p2p_invalid_block.py',                     # ~ 213 sec
     'feature_reindex.py',                       # ~ 205 sec
     'feature_pq_only.py',
+    'feature_pq_mainnet.py',
     'feature_pq_governance.py',
     'feature_pq_governance.py --pq-masternode',
     'feature_pq_startup.py',

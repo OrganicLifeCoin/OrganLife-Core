@@ -2274,7 +2274,7 @@ CAmount CWallet::GetColdStakingBalance() const
 
 CAmount CWallet::GetStakingBalance(const bool fIncludeColdStaking) const
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         CAmount total = 0;
         for (const auto& coin : GetPQUnspent()) {
             if (coin.nDepth >= Params().GetConsensus().nStakeMinDepth) total += coin.Value();

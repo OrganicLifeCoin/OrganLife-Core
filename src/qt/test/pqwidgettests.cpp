@@ -79,6 +79,7 @@
 void PQWidgetTests::masternodeControllerNavigation_data()
 {
     QTest::addColumn<QString>("network");
+    QTest::newRow("mainnet") << QString::fromStdString(CBaseChainParams::MAIN);
     QTest::newRow("regtest") << QString::fromStdString(CBaseChainParams::REGTEST);
     QTest::newRow("testnet") << QString::fromStdString(CBaseChainParams::TESTNET);
 }
@@ -113,7 +114,7 @@ void PQWidgetTests::masternodeRegistryFailsClosed()
     const auto oldNetwork = Params().NetworkIDString();
     struct Restore { std::string network; ~Restore() { masternodeConfig.clear(); SelectParams(network); } } restore{oldNetwork};
     masternodeConfig.add("obsolete", "127.0.0.1:51476", "legacy-secret", "aa", "0");
-    for (const auto& network : {CBaseChainParams::REGTEST, CBaseChainParams::TESTNET}) {
+    for (const auto& network : {CBaseChainParams::MAIN, CBaseChainParams::REGTEST, CBaseChainParams::TESTNET}) {
         SelectParams(network);
         MNModel model(nullptr);
         model.updateMNList();
@@ -128,24 +129,32 @@ void PQWidgetTests::masternodeServerConfiguration()
     const auto oldNetwork = Params().NetworkIDString();
     struct Restore { std::string network; ~Restore() { SelectParams(network); } } restore{oldNetwork};
     const auto id = uint256S("aabbcc");
-    for (const auto& network : {CBaseChainParams::REGTEST, CBaseChainParams::TESTNET}) {
+    for (const auto& network : {CBaseChainParams::MAIN, CBaseChainParams::REGTEST, CBaseChainParams::TESTNET}) {
         SelectParams(network);
         MNModel model(nullptr);
         MasterNodeWizardDialog wizard(nullptr, &model);
         wizard.findChild<QLineEdit*>("lineEditIpAddress")->setText("8.8.8.8");
         wizard.findChild<QLineEdit*>("lineEditPort")->clear();
         QCOMPARE(wizard.service(), "8.8.8.8:" + QString::number(Params().GetDefaultPort()));
-        for (const auto& endpoint : {"8.8.8.8:49736", "[2001:4860::8888]:49746"}) {
+        const auto endpoints = network == CBaseChainParams::MAIN ?
+            std::vector<const char*> {"8.8.8.8:43736", "[2001:4860::8888]:43746"} :
+            std::vector<const char*> {"8.8.8.8:49736", "[2001:4860::8888]:49746"};
+        for (const auto& endpoint : endpoints) {
             const auto config = PQWalletUI::masternodeConfig(id, LookupNumeric(endpoint), "aabb");
             QCOMPARE(config, QString("pqoperatorid=%1\npqoperatorconfig=aabb\nexternalip=%2\n")
                 .arg(QString::fromStdString(id.GetHex()), endpoint));
             struct ConfigArgs : ArgsManager { using ArgsManager::ReadConfigStream; } parsed;
             // Parser-only placeholders: existing checkpoint text must remain untouched.
-            const auto existing = QString("%1=1\ndisablewallet=1\nstaking=0\nserver=1\nlisten=1\n"
-                "datadir=/existing/node\npqbootstrap=existing-checkpoint\n[%2]\nport=%3\n"
-                "rpcport=50123\nrpcbind=127.0.0.1\nrpcallowip=127.0.0.1\nrpcpassword=existing-password\n")
-                .arg(network == CBaseChainParams::TESTNET ? "testnet" : "regtest",
-                     QString::fromStdString(network)).arg(LookupNumeric(endpoint).GetPort());
+            const auto existing = network == CBaseChainParams::MAIN ?
+                QString("disablewallet=1\nstaking=0\nserver=1\nlisten=1\n"
+                        "datadir=/existing/node\npqbootstrap=existing-checkpoint\nport=%1\n"
+                        "rpcport=50123\nrpcbind=127.0.0.1\nrpcallowip=127.0.0.1\nrpcpassword=existing-password\n")
+                    .arg(LookupNumeric(endpoint).GetPort()) :
+                QString("%1=1\ndisablewallet=1\nstaking=0\nserver=1\nlisten=1\n"
+                        "datadir=/existing/node\npqbootstrap=existing-checkpoint\n[%2]\nport=%3\n"
+                        "rpcport=50123\nrpcbind=127.0.0.1\nrpcallowip=127.0.0.1\nrpcpassword=existing-password\n")
+                    .arg(network == CBaseChainParams::TESTNET ? "testnet" : "regtest",
+                         QString::fromStdString(network)).arg(LookupNumeric(endpoint).GetPort());
             std::istringstream stream((config + existing).toStdString());
             parsed.ReadConfigStream(stream);
             parsed.SelectConfigNetwork(network);
@@ -165,13 +174,17 @@ void PQWidgetTests::masternodeServerConfiguration()
             QCOMPARE(parsed.GetArg("-pqoperatorid", ""), id.GetHex());
             QCOMPARE(parsed.GetArg("-pqoperatorconfig", ""), std::string("aabb"));
         }
-        QVERIFY(PQWalletUI::masternodeConfig(uint256(), LookupNumeric("8.8.8.8:49736"), "aabb").isEmpty());
+        QVERIFY(PQWalletUI::masternodeConfig(uint256(), LookupNumeric(endpoints[0]), "aabb").isEmpty());
         QVERIFY(PQWalletUI::masternodeConfig(id, CService(), "aabb").isEmpty());
         QVERIFY(PQWalletUI::masternodeConfig(id, LookupNumeric("8.8.8.8:0"), "aabb").isEmpty());
         QVERIFY(PQWalletUI::masternodeConfig(id, LookupNumeric("8.8.8.8:49736"), {}).isEmpty());
     }
     SelectParams(CBaseChainParams::MAIN);
-    QVERIFY(PQWalletUI::masternodeConfig(id, LookupNumeric("8.8.8.8:49736"), "aabb").isEmpty());
+    const auto mainConfig = PQWalletUI::masternodeConfig(id, LookupNumeric("8.8.8.8:43736"), "aabb");
+    QCOMPARE(mainConfig, QString("pqoperatorid=%1\npqoperatorconfig=aabb\nexternalip=8.8.8.8:43736\n")
+        .arg(QString::fromStdString(id.GetHex())));
+    QVERIFY(!mainConfig.contains("testnet"));
+    QVERIFY(!mainConfig.contains("regtest"));
 }
 
 void PQWidgetTests::masternodeControllerCancelsWithoutWrites_data()
@@ -626,6 +639,61 @@ void PQWidgetTests::seamlessWalletUsesStandardScreens()
         QVERIFY(!mainWindow.findChild<QWidget*>("btnPQ"));
     }
     SelectParams(oldNetwork);
+}
+
+void PQWidgetTests::mainnetPQWalletFlowAndBackup()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto oldDataDir = gArgs.GetArg("-datadir", "");
+    const auto oldNetwork = Params().NetworkIDString();
+    struct RestoreEnvironment {
+        std::string datadir, network;
+        ~RestoreEnvironment()
+        {
+            gArgs.ForceSetArg("-datadir", datadir);
+            ClearDatadirCache();
+            SelectParams(network);
+            ECC_Stop();
+        }
+    } restore{oldDataDir, oldNetwork};
+    ECC_Start();
+    InitSignatureCache();
+    ECCVerifyHandle verify;
+    SelectParams(CBaseChainParams::MAIN);
+    gArgs.ForceSetArg("-datadir", directory.path().toStdString());
+    ClearDatadirCache();
+
+    CWallet wallet("pq-mainnet-ui", WalletDatabase::Create(fs::path(directory.path().toStdString()) / "wallet"));
+    bool firstRun;
+    QCOMPARE(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+    CKey key;
+    key.MakeNewKey(true);
+    QVERIFY(wallet.AddKeyPubKey(key, key.GetPubKey()));
+    QVERIFY(wallet.EncryptWallet(SecureString("pq-mainnet-passphrase")));
+    QVERIFY(wallet.Unlock(SecureString("pq-mainnet-passphrase")));
+    OptionsModel options;
+    WalletModel model(&wallet, &options);
+    model.init();
+
+    const QString backupPath = directory.path() + "/backups";
+    QVERIFY(QDir().mkdir(backupPath));
+    QSettings().setValue(PQWalletUI::backupSettingsKey(&model), backupPath);
+
+    std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
+    QVERIFY(networkStyle);
+    OrganicLifeGUI mainWindow(networkStyle.get());
+    ReceiveWidget page(&mainWindow);
+    page.setWalletModel(&model);
+    page.onNewAddressClicked();
+
+    auto* addressLabel = page.findChild<QLabel*>("labelAddress");
+    QVERIFY(addressLabel);
+    QVERIFY(addressLabel->text().startsWith("olcpq1"));
+    QCOMPARE(wallet.GetPQAddresses().size(), size_t(1));
+    QCOMPARE(QDir(backupPath).entryList({"*.dat"}, QDir::Files).size(), 1);
+    QVERIFY(!page.findChild<QWidget*>("btnRequest")->isHidden());
+    QSettings().remove(PQWalletUI::backupSettingsKey(&model));
 }
 
 void PQWidgetTests::actualWalletUnloadQuiescesModel()

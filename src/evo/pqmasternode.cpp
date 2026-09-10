@@ -344,7 +344,7 @@ bool Index::Process(const CTransaction& tx, const CCoinsViewCache& view, uint32_
 {
     AssertLockHeld(cs_main);
     reason.clear();
-    if (!params.IsTestChain() || height == 0 || tx.IsCoinBase() || tx.nType != CTransaction::PQ)
+    if (!params.SupportsPQ() || height == 0 || tx.IsCoinBase() || tx.nType != CTransaction::PQ)
         return Fail(reason, "bad-pqmn-context");
     const uint256 txid = tx.GetHash();
     if (db.Exists(std::make_pair(Prefix('u'), txid))) return Fail(reason, "bad-pqmn-already-applied");
@@ -493,7 +493,7 @@ bool Index::ConnectBlock(const CBlock& block, const CBlockIndex& index, CCoinsVi
     AssertLockHeld(cs_main);
     reason.clear();
     if (reward < 0) return Fail(reason, "bad-pqmn-negative-reward");
-    if (!params.IsTestChain() || !BlockContext(block, index, firstHeight)) return Fail(reason, "bad-pqmn-block-context");
+    if (!params.SupportsPQ() || !BlockContext(block, index, firstHeight)) return Fail(reason, "bad-pqmn-block-context");
     if (!view.GetHeadBlocks().empty() || view.GetBestBlock() != block.hashPrevBlock || !db.VerifyBestBlock(block.hashPrevBlock))
         return Fail(reason, "bad-pqmn-chain-tip");
     uint256 best; int first{0};
@@ -580,7 +580,7 @@ bool Index::DisconnectBlock(const CBlock& block, const CBlockIndex& index, const
 {
     AssertLockHeld(cs_main);
     reason.clear();
-    if (!params.IsTestChain() || !BlockContext(block, index, firstHeight)) return Fail(reason, "bad-pqmn-block-context");
+    if (!params.SupportsPQ() || !BlockContext(block, index, firstHeight)) return Fail(reason, "bad-pqmn-block-context");
     uint256 best; int first{0};
     if (!view.GetHeadBlocks().empty() || view.GetBestBlock() != index.GetBlockHash() || !db.VerifyBestBlock(index.GetBlockHash()))
         return Fail(reason, "bad-pqmn-chain-tip");
