@@ -1577,8 +1577,8 @@ bool IsAllowedBySavedAnchor(const CBlockIndex* candidate) EXCLUSIVE_LOCKS_REQUIR
         const auto* ancestor = FinalityAncestor(anchored, candidate->nHeight);
         return ancestor && ancestor->GetBlockHash() == candidate->GetBlockHash();
     }
-    // Full reindex may not have loaded the future anchor header yet. Leave
-    // historical-prefix validation and reconciliation to ConnectBlock/startup.
+    // Retain provisional candidates during full reindex. Fork selection waits
+    // for the saved anchor header before activating any non-genesis block.
     return true;
 }
 
@@ -2438,6 +2438,18 @@ bool static ConnectTip(CValidationState& state, CBlockIndex* pindexNew, const st
  */
 static CBlockIndex* FindMostWorkChain()
 {
+    pqanchor::Record anchor;
+    const auto* store = GetPQAnchorStore();
+    if ((fReindex || fImporting) && store && store->Tip(anchor) &&
+        !LookupBlockIndex(anchor.blockHash)) {
+        // Block files can interleave competing historical branches. Retain
+        // candidates until their ancestry is known, including the final import
+        // activation after fReindex is cleared. Genesis must still initialize
+        // the coin database so an incomplete import can shut down safely.
+        auto* genesis = LookupBlockIndex(Params().GetConsensus().hashGenesisBlock);
+        return !chainActive.Tip() && genesis && setBlockIndexCandidates.count(genesis) ? genesis : nullptr;
+    }
+
     do {
         CBlockIndex* pindexNew = nullptr;
 

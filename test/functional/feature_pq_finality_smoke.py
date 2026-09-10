@@ -462,6 +462,32 @@ class PQFinalitySmokeTest(PivxTestFramework):
             assert controller.verifychain(4)
         self.log.info("A longer conflicting fork did not stop finality, block production, restart or reindex")
 
+        # An incomplete block-file replay must fail startup reconciliation, not
+        # activate the competing prefix after the reindex flag is cleared.
+        anchor_raw = bytes.fromhex(controller.getblock(controller.getblockhash(initial + 4), 0))
+        self.stop_node(0)
+        removed = False
+        for block_file in sorted((Path(controller.datadir) / "regtest" / "blocks").glob("blk*.dat")):
+            contents = block_file.read_bytes()
+            offset = contents.find(anchor_raw)
+            if offset < 0:
+                continue
+            assert offset >= 8
+            assert_equal(int.from_bytes(contents[offset - 4:offset], "little"), len(anchor_raw))
+            block_file.write_bytes(contents[:offset - 8] + contents[offset + len(anchor_raw):])
+            removed = True
+            break
+        assert removed
+        debug_log = Path(controller.chain_path) / "debug.log"
+        log_start = debug_log.stat().st_size
+        controller.assert_start_raises_init_error(
+            self.extra_args[0] + ["-reindex"],
+            "PQ finalized anchor.*is not an ancestor of the active chain",
+            ErrorMatch.PARTIAL_REGEX)
+        replay_log = debug_log.read_bytes()[log_start:].decode("utf-8")
+        assert "Failed to connect best block" not in replay_log
+        assert "PQ finalized anchor header unavailable" not in replay_log
+
     def certified_fork(self, initial, longer_tip):
         controller, isolated = self.nodes[0], self.nodes[4]
         target = controller.getblockhash(initial + 1)
