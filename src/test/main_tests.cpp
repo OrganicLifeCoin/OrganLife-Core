@@ -9,6 +9,7 @@
 
 #include "blocksignature.h"
 #include "blockassembler.h"
+#include "checkpoints.h"
 #include "miner.h"
 #include "net.h"
 #include "pqtransaction.h"
@@ -379,6 +380,32 @@ BOOST_AUTO_TEST_CASE(testnet_staking_peer_threshold_test)
     BOOST_CHECK(!RequiresNearTipStakingPeerEvidence(Params()));
 
     SelectParams(CBaseChainParams::MAIN);
+}
+
+BOOST_AUTO_TEST_CASE(mainnet_bootstrap_seed_policy_test)
+{
+    SelectParams(CBaseChainParams::MAIN);
+
+    BOOST_CHECK_EQUAL(Params().GetDefaultPort(), 43721);
+    BOOST_CHECK(Params().FixedSeeds().empty());
+    BOOST_REQUIRE_EQUAL(Params().DNSSeeds().size(), 2);
+    BOOST_CHECK_EQUAL(Params().DNSSeeds()[0].host, "2.29.11.56");
+    BOOST_CHECK_EQUAL(Params().DNSSeeds()[1].host, "2.29.14.202");
+}
+
+BOOST_AUTO_TEST_CASE(verification_progress_handles_future_blocks)
+{
+    SelectParams(CBaseChainParams::MAIN);
+    CBlockIndex genesis(Params().GenesisBlock());
+    genesis.nChainTx = 1;
+    CBlockIndex future;
+    future.nChainTx = Params().Checkpoints().nTransactionsLastCheckpoint + 1;
+    future.nTime = GetTime() + 86400;
+    for (bool sigchecks : {false, true}) {
+        const double progress = Checkpoints::GuessVerificationProgress(&genesis, sigchecks);
+        BOOST_CHECK(progress >= 0.0 && progress <= 1.0);
+        BOOST_CHECK_EQUAL(Checkpoints::GuessVerificationProgress(&future, sigchecks), 1.0);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(testnet_bootstrap_seed_policy_test)

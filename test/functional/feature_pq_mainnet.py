@@ -22,6 +22,7 @@ class PQMainnetTest(PivxTestFramework):
         node = self.nodes[0]
         genesis = "0000091cf3aeeed50f65d6e640a35029d7b541b4e42950232385b13e88a12fdb"
         assert_equal(node.getblockchaininfo()["chain"], "main")
+        assert 0 <= node.getblockchaininfo()["verificationprogress"] <= 1
         assert_equal(node.getblockcount(), 0)
         assert_equal(node.getbestblockhash(), genesis)
         assert_equal(node.getnetworkinfo()["version"], 1010000)

@@ -11,8 +11,7 @@ Mainnet launch is scheduled for 2026-09-16 14:00 UTC (16:00 Europe/Prague).
 The node can start before launch for wallet and operator preparation.
 It must not accept or create mainnet blocks before launch time.
 Testnet keeps its existing pinned checkpoint.
-No public mainnet peer endpoint is verified in this source tree.
-Use manual peer bootstrapping until an approved seed endpoint exists.
+Mainnet includes two bootstrap peers on port `43721`.
 
 ## Post-quantum security
 
@@ -252,15 +251,17 @@ The Linux and Windows packaging script writes packages to `dist/`.
 Cross-builds require the target toolchains and dependencies.
 A successful cross-build does not replace runtime tests on the target platform.
 
+The v1.1.0 macOS packages are unsigned and do not have Apple notarization.
+macOS can block the first launch of these packages.
+
 Use `--help` for the supported flags of a build script.
 
 ## Run a node
 
 Mainnet uses the default network and starts on P2P port `43721` and RPC port `43723`.
 The testnet uses P2P port `49716` and RPC port `49718`.
-It includes the seed addresses `2.29.11.56` and `2.29.14.202`.
-Mainnet has no verified seed addresses in this source tree.
-Supply a reachable mainnet peer with `-addnode=<mainnet-peer>:43721` when needed.
+Both networks include the seed addresses `2.29.11.56` and `2.29.14.202` on their separate P2P ports.
+The mainnet and testnet services use separate data directories.
 
 ### Desktop wallet
 

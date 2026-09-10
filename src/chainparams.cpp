@@ -285,9 +285,8 @@ public:
         pchMessageStart[3] = 0x8a;
         nDefaultPort = 43721;
 
-        // Seed nodes (bootstrap). TODO(launch): add OrganicLife seed nodes here,
-        // e.g. vSeeds.emplace_back("seed.organiclifecoin.example", true);
-        // and/or direct IP seeds: vSeeds.emplace_back("1.2.3.4");
+        vSeeds.emplace_back("2.29.11.56");
+        vSeeds.emplace_back("2.29.14.202");
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1, 115);   // addresses start with 'o'
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1, 98);    // addresses start with 'g'
@@ -299,8 +298,7 @@ public:
         // BIP44 coin type is from https://github.com/satoshilabs/slips/blob/master/slip-0044.md
         base58Prefixes[EXT_COIN_TYPE] = {0x80, 0x00, 0x14, 0x1E}; // 5150 (unassigned in SLIP-0044 at time of writing)
 
-        // Fixed seeds for OrganicLife mainnet (BIP155 format: networkID, length, IP, port)
-        // TODO(launch): add fixed seeds once public listeners exist.
+        // Bootstrap peers above use the mainnet default port.
         vFixedSeeds = {};
 
         // Reject non-standard transactions by default
@@ -324,7 +322,6 @@ public:
 
         nLLMQConnectionRetryTimeout = 60;
 
-        // Mainnet V4 is activated at height 10081, use test-sized quorum type for early network rollout.
         consensus.llmqTypeChainLocks = Consensus::LLMQ_TEST;
 
         // Tier two

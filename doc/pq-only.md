@@ -16,12 +16,12 @@ payments, delegation, WIF, and BIP32 seeds are not accepted.
 - P2P and RPC ports: `43721` and `43723`.
 - PQ registry and service activation: height 1.
 - PoS activation: height 10,081.
-- No public seed endpoint is verified in this source tree.
+- Bootstrap peers: `2.29.11.56:43721` and `2.29.14.202:43721`.
 
 The daemon can start before genesis for wallet and operator preparation. It must
-not accept or create a non-genesis mainnet block before the launch time. Supply
-a reachable peer with `-addnode=<mainnet-peer>:43721` when manual bootstrapping
-is required. Never use a testnet peer for mainnet.
+not accept or create a non-genesis mainnet block before the launch time.
+Mainnet and testnet use separate services and data directories on the bootstrap hosts.
+Never use a testnet peer for mainnet.
 
 The block-1 reward is `264,444,444.18 OLC`. The miner selected for block 1
 chooses the PQ payout address. The chain does not assign this reward to a fixed
