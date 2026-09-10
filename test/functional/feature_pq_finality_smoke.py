@@ -336,7 +336,21 @@ class PQFinalitySmokeTest(PivxTestFramework):
         for flag in [None, "-reindex-chainstate", "-reindex"]:
             args = ([a for a in self.extra_args[0] if not a.startswith("-pqemergencycheckpoint=")] + [flag]
                     if flag else self.extra_args[0])
-            self.restart_node(0, args)
+            self.stop_node(0)
+            if flag == "-reindex":
+                # Block-file order need not match chain order. Exercise PoS
+                # replay with children before parents, including genesis last.
+                for block_file in sorted((Path(controller.chain_path) / "blocks").glob("blk*.dat")):
+                    contents = block_file.read_bytes()
+                    magic, offset, records = contents[:4], 0, []
+                    while contents[offset:offset + 4] == magic:
+                        size = int.from_bytes(contents[offset + 4:offset + 8], "little")
+                        assert size >= 80 and offset + 8 + size <= len(contents)
+                        records.append(contents[offset:offset + 8 + size])
+                        offset += 8 + size
+                    assert records
+                    block_file.write_bytes(b"".join(reversed(records)))
+            self.start_node(0, args)
             assert controller.getpqfinalityinfo()["anchor_height"] >= checkpoint
             assert_raises_rpc_error(-20, "PQ finalized anchor", controller.invalidateblock, checkpoint_hash)
             controller.walletpassphrase("finality-smoke", 99999)
@@ -346,6 +360,7 @@ class PQFinalitySmokeTest(PivxTestFramework):
         old = controller.getpqfinalityinfo()["anchor_height"]
         self.mine()
         wait_until(lambda: controller.getpqfinalityinfo()["anchor_height"] > old, timeout=45)
+        self.assert_missing_anchor_reindex_refused()
 
     def service_heartbeats(self, root, registrations, address):
         controller = self.nodes[0]
@@ -461,10 +476,13 @@ class PQFinalitySmokeTest(PivxTestFramework):
             assert_equal(controller.getblockhash(initial + 3), saved["anchor_hash"])
             assert controller.verifychain(4)
         self.log.info("A longer conflicting fork did not stop finality, block production, restart or reindex")
+        self.assert_missing_anchor_reindex_refused()
 
+    def assert_missing_anchor_reindex_refused(self):
         # An incomplete block-file replay must fail startup reconciliation, not
         # activate the competing prefix after the reindex flag is cleared.
-        anchor_raw = bytes.fromhex(controller.getblock(controller.getblockhash(initial + 4), 0))
+        controller = self.nodes[0]
+        anchor_raw = bytes.fromhex(controller.getblock(controller.getpqfinalityinfo()["anchor_hash"], 0))
         self.stop_node(0)
         removed = False
         for block_file in sorted((Path(controller.datadir) / "regtest" / "blocks").glob("blk*.dat")):
@@ -480,13 +498,17 @@ class PQFinalitySmokeTest(PivxTestFramework):
         assert removed
         debug_log = Path(controller.chain_path) / "debug.log"
         log_start = debug_log.stat().st_size
+        # Check durable protection without reapplying a one-time recovery
+        # approval, whose own ancestry check would reject the missing block first.
+        args = [a for a in self.extra_args[0] if not a.startswith("-pqemergencycheckpoint=")]
         controller.assert_start_raises_init_error(
-            self.extra_args[0] + ["-reindex"],
+            args + ["-reindex"],
             "PQ finalized anchor.*is not an ancestor of the active chain",
             ErrorMatch.PARTIAL_REGEX)
         replay_log = debug_log.read_bytes()[log_start:].decode("utf-8")
         assert "Failed to connect best block" not in replay_log
         assert "PQ finalized anchor header unavailable" not in replay_log
+        assert "stake input initialization failed" not in replay_log
 
     def certified_fork(self, initial, longer_tip):
         controller, isolated = self.nodes[0], self.nodes[4]

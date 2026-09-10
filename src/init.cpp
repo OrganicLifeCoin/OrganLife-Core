@@ -724,17 +724,32 @@ void ThreadImport(const std::vector<fs::path>& vImportFiles)
 
     // -reindex
     if (fReindex) {
-        int nFile = 0;
-        while (true) {
-            FlatFilePos pos(nFile, 0);
-            if (!fs::exists(GetBlockPosFilename(pos)))
-                break; // No block files left to reindex
-            FILE* file = OpenBlockFile(pos, true);
-            if (!file)
-                break; // This error is logged in OpenBlockFile
-            LogPrintf("Reindexing block file blk%05u.dat...\n", (unsigned int)nFile);
-            LoadExternalBlockFile(file, &pos);
-            nFile++;
+        pqanchor::Record anchor;
+        const bool anchored = pqAnchorStore && pqAnchorStore->Tip(anchor);
+        // Resolve finalized ancestry before replaying coins. PoS admission needs
+        // the active parent's UTXOs, so merely deferring activation until the
+        // last saved anchor arrives would prevent long PoS histories replaying.
+        for (int pass = anchored ? 0 : 1; pass < 2; ++pass) {
+            const bool headersOnly = pass == 0;
+            int nFile = 0;
+            while (true) {
+                FlatFilePos pos(nFile, 0);
+                if (!fs::exists(GetBlockPosFilename(pos)))
+                    break; // No block files left to reindex
+                FILE* file = OpenBlockFile(pos, true);
+                if (!file)
+                    break; // This error is logged in OpenBlockFile
+                LogPrintf("Reindexing %s file blk%05u.dat...\n",
+                          headersOnly ? "header" : "block", (unsigned int)nFile);
+                LoadExternalBlockFile(file, &pos, headersOnly);
+                nFile++;
+            }
+            if (headersOnly) {
+                LOCK(cs_main);
+                // Missing ancestry must reach startup reconciliation without
+                // attempting PoS validation against a genesis-only coin view.
+                if (!LookupBlockIndex(anchor.blockHash)) break;
+            }
         }
         pblocktree->WriteReindexing(false);
         fReindex = false;

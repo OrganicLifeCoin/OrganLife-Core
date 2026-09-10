@@ -4336,8 +4336,9 @@ bool LoadGenesisBlock()
 }
 
 
-bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
+bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp, bool headersOnly)
 {
+    assert(!headersOnly || (fReindex && dbp));
     // Map of disk positions for blocks with unknown parent (only used for reindex)
     static std::multimap<uint256, FlatFilePos> mapBlocksUnknownParent;
     int64_t nStart = GetTimeMillis();
@@ -4345,6 +4346,19 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
     // Block checked event listener
     BlockStateCatcherWrapper stateCatcher(UINT256_ZERO);
     stateCatcher.registerEvent();
+
+    const auto process = [&](const std::shared_ptr<const CBlock>& block, const FlatFilePos* pos) {
+        if (!headersOnly || block->GetHash() == Params().GetConsensus().hashGenesisBlock)
+            return ProcessNewBlock(block, pos);
+        LOCK(cs_main);
+        CValidationState state;
+        // The full block commits the stake metadata used by its index. Check
+        // that commitment, but leave kernel/UTXO validation to the body pass.
+        // Header-only entries are never marked as having transaction data.
+        if (!CheckBlock(*block, state) || !AcceptBlockHeader(*block, state))
+            return error("%s: header import failed: %s", __func__, FormatStateMessage(state));
+        return true;
+    };
 
     int nLoaded = 0;
     try {
@@ -4390,7 +4404,9 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
                 {
                     LOCK(cs_main);
                     // detect out of order blocks, and store them for later
-                    if (hash != Params().GetConsensus().hashGenesisBlock && !LookupBlockIndex(block.hashPrevBlock)) {
+                    const auto* parent = LookupBlockIndex(block.hashPrevBlock);
+                    if (hash != Params().GetConsensus().hashGenesisBlock &&
+                        (!parent || (dbp && !headersOnly && !(parent->nStatus & BLOCK_HAVE_DATA)))) {
                         LogPrint(BCLog::REINDEX, "%s: Out of order block %s, parent %s not known\n", __func__,
                                 hash.ToString(), block.hashPrevBlock.ToString());
                         if (dbp)
@@ -4405,7 +4421,7 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
                 if (!pindex || (pindex->nStatus & BLOCK_HAVE_DATA) == 0) {
                     std::shared_ptr<const CBlock> block_ptr = std::make_shared<const CBlock>(block);
                     stateCatcher.get().setBlockHash(block_ptr->GetHash());
-                    if (ProcessNewBlock(block_ptr, dbp)) {
+                    if (process(block_ptr, dbp)) {
                         nLoaded++;
                     }
                     if (stateCatcher.get().stateErrorFound()) {
@@ -4428,7 +4444,7 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
                             LogPrint(BCLog::REINDEX, "%s: Processing out of order child %s of %s\n", __func__, block.GetHash().ToString(),
                                 head.ToString());
                             std::shared_ptr<const CBlock> block_ptr = std::make_shared<const CBlock>(block);
-                            if (ProcessNewBlock(block_ptr, &it->second)) {
+                            if (process(block_ptr, &it->second)) {
                                 nLoaded++;
                                 queue.emplace_back(block.GetHash());
                             }
@@ -4445,7 +4461,8 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
         AbortNode(std::string("System error: ") + e.what());
     }
     if (nLoaded > 0)
-        LogPrintf("Loaded %i blocks from external file in %dms\n", nLoaded, GetTimeMillis() - nStart);
+        LogPrintf("Loaded %i %s from external file in %dms\n", nLoaded,
+                  headersOnly ? "headers" : "blocks", GetTimeMillis() - nStart);
     return nLoaded > 0;
 }
 
