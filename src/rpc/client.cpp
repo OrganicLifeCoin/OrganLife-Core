@@ -28,6 +28,7 @@ public:
  * @note Parameter indexes start from 0.
  */
 static const CRPCConvertParam vRPCConvertParams[] = {
+    { "preparepqstake", 0, "outpoints" },
     { "addmultisigaddress", 0, "nrequired" },
     { "addmultisigaddress", 1, "keys" },
     { "addpeeraddress", 1, "port" },

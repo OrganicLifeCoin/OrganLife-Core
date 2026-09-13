@@ -274,7 +274,9 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
                                                bool fTestValidity,
                                                CBlockIndex* prevBlock,
                                                bool stopPoSOnNewBlock,
-                                               bool fIncludeQfc)
+                                               bool fIncludeQfc,
+                                               const CTransactionRef& externalCoinstake,
+                                               uint32_t externalStakeTime)
 {
     resetBlock();
 
@@ -298,7 +300,25 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     }
 
     // Depending on the tip height, try to find a coinstake who solves the block or create a coinbase tx.
-    if (!(fProofOfStake ? SolveProofOfStake(pblock, pindexPrev, pwallet, availableCoins, stopPoSOnNewBlock)
+    if (externalCoinstake) {
+        // Only the bounded external-staking RPC may request an unsigned block.
+        // Submission still passes normal consensus and signature validation.
+        if (!Params().IsTestChain() || !fProofOfStake || pwallet || fTestValidity || externalStakeTime == 0)
+            throw std::runtime_error("Invalid external coinstake request");
+        CMutableTransaction coinstake(*externalCoinstake);
+        CMutableTransaction coinbase = NewCoinbase(nHeight);
+        if (!FillPQMasternodePayment(coinbase, &coinstake, pindexPrev))
+            throw std::runtime_error("Unable to determine PQ masternode payment");
+        AttachFinalityCertificate(coinbase);
+        CScript payee;
+        CAmount amount{0};
+        uint256 proposal;
+        if (g_budgetman.GetPQPayment(nHeight, payee, amount, proposal))
+            coinstake.vout.emplace_back(amount, payee);
+        pblock->vtx.emplace_back(MakeTransactionRef(coinbase));
+        pblock->vtx.emplace_back(MakeTransactionRef(coinstake));
+        pblock->nTime = externalStakeTime;
+    } else if (!(fProofOfStake ? SolveProofOfStake(pblock, pindexPrev, pwallet, availableCoins, stopPoSOnNewBlock)
                         : CreateCoinbaseTx(pblock, scriptPubKeyIn, pindexPrev))) {
         return nullptr;
     }
@@ -359,7 +379,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     if (fProofOfStake) { // this is only for PoS because the IncrementExtraNonce does it for PoW
         pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
         LogPrintf("CPUMiner : proof-of-stake block found %s \n", pblock->GetHash().GetHex());
-        if (!SignBlock(*pblock, *pwallet)) {
+        if (!externalCoinstake && !SignBlock(*pblock, *pwallet)) {
             LogPrintf("%s: Signing new block with UTXO key failed \n", __func__);
             return nullptr;
         }

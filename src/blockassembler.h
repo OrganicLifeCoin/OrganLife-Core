@@ -170,7 +170,9 @@ public:
                                    bool fTestValidity = true,
                                    CBlockIndex* prevBlock = nullptr,
                                    bool stopPoSOnNewBlock = true,
-                                   bool fIncludeQfc = true);
+                                   bool fIncludeQfc = true,
+                                   const CTransactionRef& externalCoinstake = nullptr,
+                                   uint32_t externalStakeTime = 0);
 
 private:
     // utility functions

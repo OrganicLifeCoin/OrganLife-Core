@@ -12,6 +12,13 @@
 
 #include "amount.h"
 #include "blockassembler.h"
+#include "blocksignature.h"
+#include "coins.h"
+#include "evo/governancevoteindex.h"
+#include "evo/pqmasternode.h"
+#include "kernel.h"
+#include "pow.h"
+#include "timedata.h"
 #include "chainparams.h"
 #include "core_io.h"
 #include "key_io.h"
@@ -744,6 +751,105 @@ UniValue getblocktemplate(const JSONRPCRequest& request)
 }
 #endif // ENABLE_MINING_RPC
 
+UniValue preparepqstake(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() != 1)
+        throw std::runtime_error("preparepqstake outpoints\nPrepare a PQ staking block for external signing on test chains.\n"
+                                 "outpoints: array of up to 128 {txid, vout} objects. No keys are accepted.\n"
+                                 "Returns eligible count and a short-lived unsigned template when a kernel wins.\n");
+    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "External staking is test-chain only");
+    const UniValue& inputs = request.params[0];
+    if (!inputs.isArray() || inputs.size() > 128)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Expected at most 128 outpoints");
+    std::set<COutPoint> outpoints;
+    for (const auto& input : inputs.getValues()) {
+        if (!input.isObject() || input.getKeys().size() != 2 || !input["txid"].isStr() || !input["vout"].isNum())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid stake outpoint");
+        const int64_t vout = input["vout"].get_int64();
+        if (vout < 0 || vout > UINT32_MAX)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid stake output index");
+        if (!outpoints.emplace(ParseHashV(input["txid"], "txid"), static_cast<uint32_t>(vout)).second)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Duplicate stake outpoint");
+    }
+    LOCK(cs_main);
+    const auto* previous = chainActive.Tip();
+    if (!previous) throw JSONRPCError(RPC_MISC_ERROR, "Chain tip is unavailable");
+    const auto& consensus = Params().GetConsensus();
+    const int height = previous->nHeight + 1;
+    if (!pq::PaymentsActive(Params(), height) || !consensus.NetworkUpgradeActive(height, Consensus::UPGRADE_POS))
+        throw JSONRPCError(RPC_MISC_ERROR, "PQ proof of stake is not active");
+    const int64_t blockTime = GetNextPoSBlockTime(previous, !Params().IsRegTestNet());
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("tip", previous->GetBlockHash().GetHex());
+    result.pushKV("height", height);
+    result.pushKV("server_time", GetAdjustedTime());
+    unsigned eligible = 0;
+    CTransactionRef winner;
+    CTransactionRef origin;
+    for (const auto& outpoint : outpoints) {
+        if (blockTime == 0) break;
+        const Coin& coin = pcoinsTip->AccessCoin(outpoint);
+        pq::KeyID id;
+        if (coin.IsSpent() || coin.out.nValue <= 0 || !pq::ExtractID(coin.out.scriptPubKey, id) ||
+            ((coin.IsCoinBase() || coin.IsCoinStake()) && height - coin.nHeight < consensus.nCoinbaseMaturity) ||
+            mempool.isSpent(outpoint)) continue;
+        const auto* from = chainActive[coin.nHeight];
+        if (!from || !consensus.HasStakeMinAgeOrDepth(height, blockTime, from->nHeight, from->nTime)) continue;
+        CGovVoteLockRecord governanceLock;
+        if (governanceVoteIndex && governanceVoteIndex->GetLockRecord(outpoint, governanceLock) &&
+            height < static_cast<int>(governanceLock.unlockHeight)) continue;
+        if (pq::MasternodesActive(Params(), height)) {
+            if (!evoDb) throw JSONRPCError(RPC_MISC_ERROR, "PQ registry is unavailable");
+            uint256 registration;
+            if (mempool.IsPQMNCollateral(outpoint) || pqmn::Index(*evoDb, Params()).FindCollateral(outpoint, registration)) continue;
+        }
+        ++eligible;
+        if (winner) continue;
+        CPivStake stake(coin.out, outpoint, from);
+        CBlockHeader header;
+        header.nTime = blockTime;
+        const unsigned bits = GetNextWorkRequired(previous, &header);
+        if (!CStakeKernel(previous, &stake, bits, blockTime).CheckKernelHash(true)) continue;
+        uint256 originBlock;
+        if (!GetTransaction(outpoint.hash, origin, originBlock, true)) continue;
+        const CAmount reward = GetBlockValue(height, previous->nChainMinted);
+        if (!consensus.MoneyRange(coin.out.nValue) || reward > consensus.nMaxMoneyOut - coin.out.nValue) continue;
+        CMutableTransaction coinstake;
+        coinstake.nVersion = 3;
+        coinstake.nType = CTransaction::PQ;
+        coinstake.sapData = nullopt;
+        coinstake.vin.emplace_back(outpoint);
+        coinstake.vout.emplace_back(0, CScript());
+        coinstake.vout.emplace_back(coin.out.nValue + reward, coin.out.scriptPubKey);
+        pq::Payload payload;
+        payload.mode = pq::STAKE;
+        payload.authorizations.resize(1);
+        coinstake.extraPayload = pq::EncodePayload(payload);
+        winner = MakeTransactionRef(coinstake);
+    }
+    result.pushKV("eligible", static_cast<int>(eligible));
+    if (!winner) { result.pushKV("template", NullUniValue); return result; }
+    auto assembled = BlockAssembler(Params(), DEFAULT_PRINTPRIORITY).CreateNewBlock(
+        CScript(), nullptr, true, nullptr, false, false, nullptr, true, true, winner, blockTime);
+    if (!assembled) { result.pushKV("template", NullUniValue); return result; }
+    UniValue prepared(UniValue::VOBJ);
+    prepared.pushKV("version", 1);
+    prepared.pushKV("network", Params().IsRegTestNet() ? "regtest" : "testnet");
+    prepared.pushKV("genesis", consensus.hashGenesisBlock.GetHex());
+    prepared.pushKV("tip", previous->GetBlockHash().GetHex());
+    prepared.pushKV("height", height);
+    prepared.pushKV("expires", GetAdjustedTime() + 30);
+    CDataStream encoded(SER_NETWORK, PROTOCOL_VERSION);
+    encoded << assembled->block.GetBlockHeader();
+    prepared.pushKV("header", HexStr(encoded));
+    prepared.pushKV("previous_transaction", EncodeHexTx(*origin));
+    UniValue transactions(UniValue::VARR);
+    for (const auto& tx : assembled->block.vtx) transactions.push_back(EncodeHexTx(*tx));
+    prepared.pushKV("transactions", transactions);
+    result.pushKV("template", prepared);
+    return result;
+}
+
 UniValue submitblock(const JSONRPCRequest& request)
 {
     if (request.fHelp || request.params.size() < 1 || request.params.size() > 2)
@@ -802,6 +908,35 @@ UniValue submitblock(const JSONRPCRequest& request)
             return "inconclusive";
     }
     return BIP22ValidationResult(sc.get().state);
+}
+
+UniValue submitpqstake(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() != 1)
+        throw std::runtime_error("submitpqstake hexdata\nSubmit an externally signed PQ staking block on a test chain.\n");
+    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "External staking is test-chain only");
+    if (!request.params[0].isStr() || request.params[0].get_str().size() > 4000000)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Staking block exceeds request limit");
+    CBlock block;
+    if (!DecodeHexBlk(block, request.params[0].get_str()) || !block.IsProofOfStake() ||
+        !CheckBlockSignature(block))
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid PQ stake block or signature");
+    {
+        LOCK(cs_main);
+        const auto* previous = chainActive.Tip();
+        if (!previous || block.hashPrevBlock != previous->GetBlockHash())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Stale staking tip");
+        if (!pq::PaymentsActive(Params(), previous->nHeight + 1))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "PQ staking is not active");
+        pq::Payload payload;
+        if (!pq::DecodePayload(*block.vtx[1], payload) || payload.mode != pq::STAKE)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Not a PQ coinstake");
+    }
+    const UniValue accepted = submitblock(request);
+    if (!accepted.isNull()) throw JSONRPCError(RPC_VERIFY_REJECTED, accepted.write());
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("hash", block.GetHash().GetHex());
+    return result;
 }
 
 UniValue estimatefee(const JSONRPCRequest& request)
@@ -888,6 +1023,8 @@ static const CRPCCommand commands[] =
     { "hidden",             "generatetoaddress",      &generatetoaddress,      true,  {"nblocks","address"} },
 #endif
     { "hidden",             "submitblock",            &submitblock,            true,  {"hexdata","parameters"} },
+    { "mining",             "preparepqstake",         &preparepqstake,         true,  {"outpoints"} },
+    { "mining",             "submitpqstake",          &submitpqstake,          true,  {"hexdata"} },
 #ifdef ENABLE_MINING_RPC
     { "hidden",             "getblocktemplate",       &getblocktemplate,       true,  {"template_request"} },
     { "hidden",             "getnetworkhashps",       &getnetworkhashps,       true,  {"nblocks","height"} },
