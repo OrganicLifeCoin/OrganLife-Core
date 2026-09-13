@@ -98,18 +98,16 @@ make_zip() {
 }
 
 copy_windows_installer() {
-  local version installer_expected installer_found
+  local version installer_expected installer_found=""
   version="$(get_client_package_version "$REPO_ROOT/configure.ac")"
   installer_expected="OrganicLifeCoin-${version}-win64-setup.exe"
 
   if [ -f "$REPO_ROOT/$installer_expected" ]; then
     installer_found="$REPO_ROOT/$installer_expected"
-  else
-    installer_found=$(ls -t "$REPO_ROOT"/organiclife-*-win64-setup.exe 2>/dev/null | head -n 1 || true)
   fi
 
   if [ -z "$installer_found" ]; then
-    echo "missing windows installer (make deploy did not produce organiclife-*-win64-setup.exe)" >&2
+    echo "missing windows installer: expected $installer_expected" >&2
     exit 1
   fi
 

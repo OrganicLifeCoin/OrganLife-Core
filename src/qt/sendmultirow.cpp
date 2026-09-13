@@ -208,7 +208,7 @@ bool SendMultiRow::validate()
 
     // Reject dust outputs:
     bool isDust = false;
-    if (retval && Params().IsTestChain()) {
+    if (retval && Params().SupportsPQ()) {
         pq::KeyID id;
         isDust = !pq::DecodeAddress(address.toStdString(), Params().NetworkIDString(), id) ||
                  IsDust(CTxOut(value, pq::GetScript(id)), dustRelayFee);
@@ -228,7 +228,7 @@ SendCoinsRecipient SendMultiRow::getValue()
     recipient.address = getAddress();
     recipient.label = ui->lineEditDescription->text();
     recipient.amount = getAmountValue();
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         recipient.isShieldedAddr = false;
         recipient.fSubtractFee = getSubtractFeeFromAmount();
     } else {

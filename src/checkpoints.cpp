@@ -11,6 +11,7 @@
 #include "chainparams.h"
 #include "reverse_iterate.h"
 
+#include <algorithm>
 #include <stdint.h>
 
 
@@ -59,13 +60,13 @@ double GuessVerificationProgress(const CBlockIndex* pindex, bool fSigchecks)
     if (pindex->nChainTx <= data.nTransactionsLastCheckpoint) {
         double nCheapBefore = pindex->nChainTx;
         double nCheapAfter = data.nTransactionsLastCheckpoint - pindex->nChainTx;
-        double nExpensiveAfter = (nNow - data.nTimeLastCheckpoint) / 86400.0 * data.fTransactionsPerDay;
+        double nExpensiveAfter = std::max<int64_t>(0, nNow - data.nTimeLastCheckpoint) / 86400.0 * data.fTransactionsPerDay;
         fWorkBefore = nCheapBefore;
         fWorkAfter = nCheapAfter + nExpensiveAfter * fSigcheckVerificationFactor;
     } else {
         double nCheapBefore = data.nTransactionsLastCheckpoint;
         double nExpensiveBefore = pindex->nChainTx - data.nTransactionsLastCheckpoint;
-        double nExpensiveAfter = (nNow - pindex->GetBlockTime()) / 86400.0 * data.fTransactionsPerDay;
+        double nExpensiveAfter = std::max<int64_t>(0, nNow - pindex->GetBlockTime()) / 86400.0 * data.fTransactionsPerDay;
         fWorkBefore = nCheapBefore + nExpensiveBefore * fSigcheckVerificationFactor;
         fWorkAfter = nExpensiveAfter * fSigcheckVerificationFactor;
     }

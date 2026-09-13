@@ -62,12 +62,12 @@ class PQOperatorTest(PivxTestFramework):
             reject(enabled + args, "exactly one PQ operator credential source")
         for invalid in ["", "0" * 64, "12", "g" * 64, "12" * 33, "0x" + identity]:
             reject(enabled + [credentials, "-pqoperatorid=" + invalid], "64 hexadecimal characters and nonzero")
-        reject(self.base_args + [credentials, registration], "require scheduled test-chain PQ masternode activation")
+        reject(self.base_args + [credentials, registration], "require scheduled PQ masternode activation")
         if not self.options.walletless:
             reject(enabled + [credentials, registration, "-disablewallet=0"], "require -disablewallet")
         for activation in ["0", "-1"]:
             reject(self.base_args + ["-nuparams=pq_masternodes:" + activation, credentials, registration],
-                   "require scheduled test-chain PQ masternode activation")
+                   "require scheduled PQ masternode activation")
         reject(enabled + ["-pqoperatorcredentials=relative", registration], "Could not load private PQ operator credentials")
 
         # Unknown/unconfirmed identity can sync, but configured must never mean active.

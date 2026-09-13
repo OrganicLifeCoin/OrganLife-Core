@@ -10,7 +10,7 @@ namespace interfaces {
 
     WalletBalances Wallet::getBalances() {
         WalletBalances result;
-        if (Params().IsTestChain()) {
+        if (Params().SupportsPQ()) {
             const auto balance = m_wallet.GetPQBalance();
             result.balance = balance.m_mine_trusted;
             result.unconfirmed_balance = balance.m_mine_untrusted_pending;

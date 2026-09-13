@@ -435,6 +435,34 @@ bool Journal::GetVote(uint32_t height, uint32_t round, pqquorum::Purpose step,
     return true;
 }
 
+bool Journal::CheckContext(uint32_t height, const uint256& anchor, const uint256& committee, std::string& reason) const
+{
+    LOCK(mutex);
+    reason.clear();
+    if (poisoned) {
+        reason = "pq-journal-poisoned";
+        return false;
+    }
+    for (const auto& entry : votes) {
+        if (entry.first.height == height &&
+            (entry.second.anchor != anchor || entry.second.committee != committee)) {
+            reason = "pq-journal-context-mismatch";
+            return false;
+        }
+    }
+    const auto proof = proofs.find(height);
+    if (proof != proofs.end() && (proof->second.statement.anchor != anchor ||
+                                  proof->second.statement.committee != committee)) {
+        reason = "pq-journal-context-mismatch";
+        return false;
+    }
+    if (locks.count(height) && proof == proofs.end()) {
+        reason = "pq-journal-lock-context-unavailable";
+        return false;
+    }
+    return true;
+}
+
 bool Journal::GetOrSignVote(const pqquorum::Statement& statement, const Signer& signer,
                             Signature& signature, std::string& reason)
 {

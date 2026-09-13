@@ -417,7 +417,7 @@ bool CBudgetManager::AddProposal(CBudgetProposal& budgetProposal)
 {
     AssertLockNotHeld(cs_proposals);    // need to lock cs_main here (CheckCollateral)
     const int nextHeight = GetBestHeight() + 1;
-    if (Params().IsTestChain() && pq::PaymentsActive(Params(), nextHeight) &&
+    if (Params().SupportsPQ() && pq::PaymentsActive(Params(), nextHeight) &&
         Params().GetConsensus().NetworkUpgradeActive(nextHeight, Consensus::UPGRADE_V6_1_GOV)) {
         return false;
     }
@@ -1418,7 +1418,7 @@ int CBudgetManager::ProcessMessageInner(CNode* pfrom, std::string& strCommand, C
 {
     if (!g_tiertwo_sync_state.IsBlockchainSynced()) return 0;
     const int nextHeight = GetBestHeight() + 1;
-    if (Params().IsTestChain() && pq::PaymentsActive(Params(), nextHeight) &&
+    if (Params().SupportsPQ() && pq::PaymentsActive(Params(), nextHeight) &&
         Params().GetConsensus().NetworkUpgradeActive(nextHeight, Consensus::UPGRADE_V6_1_GOV)) {
         return 0;
     }

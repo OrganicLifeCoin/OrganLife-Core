@@ -114,7 +114,7 @@ void RequestDialog::accept()
         QString title;
 
         CallResult<Destination> r;
-        if (Params().IsTestChain()) {
+        if (Params().SupportsPQ()) {
             if (!isPaymentRequest || !walletModel->validateAddress(receiveAddress)) {
                 inform(tr("Select a receiving address first"));
                 return;
@@ -129,13 +129,13 @@ void RequestDialog::accept()
             title = tr("Cold Staking Address Generated");
         }
 
-        if (!Params().IsTestChain() && !r) {
+        if (!Params().SupportsPQ() && !r) {
             // TODO: notify user about this error
             close();
             return;
         }
 
-        if (!Params().IsTestChain()) info->address = QString::fromStdString(r.getObjResult()->ToString());
+        if (!Params().SupportsPQ()) info->address = QString::fromStdString(r.getObjResult()->ToString());
         ui->labelTitle->setText(title);
 
         updateQr(info->address);

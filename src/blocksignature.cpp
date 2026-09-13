@@ -54,7 +54,7 @@ bool SignBlock(CBlock& block, const CWallet& wallet)
 bool CheckBlockSignature(const CBlock& block)
 {
     if (block.IsProofOfWork()) return block.vchBlockSig.empty();
-    if (!Params().IsTestChain() || block.vtx.size() < 2 || block.vtx[1]->vout.size() < 2 ||
+    if (!Params().SupportsPQ() || block.vtx.size() < 2 || block.vtx[1]->vout.size() < 2 ||
         block.vtx[1]->vout.size() > 3 ||
         block.vchBlockSig.size() != BLOCK_SIGNATURE_SIZE || block.vchBlockSig[0] != BLOCK_SIGNATURE_VERSION)
         return false;

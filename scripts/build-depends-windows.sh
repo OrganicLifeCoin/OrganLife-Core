@@ -20,6 +20,9 @@ fi
 DEPENDS_DIR="$REPO_ROOT/depends"
 BUILD_DIR="$REPO_ROOT/build-windows"
 
+# shellcheck source=scripts/version.sh
+. "$REPO_ROOT/scripts/version.sh"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -380,7 +383,7 @@ build_installer() {
 package_binaries() {
     log_step "Packaging binaries..."
     
-    VERSION=$(git describe --tags --dirty 2>/dev/null || echo "unknown")
+    VERSION="$(get_client_package_version "$REPO_ROOT/configure.ac")"
     PACKAGE_DIR="OrganicLifeCoin-windows-$VERSION"
     
     mkdir -p "$PACKAGE_DIR"

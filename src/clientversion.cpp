@@ -85,7 +85,7 @@ std::string FormatFullVersion()
 
 std::string FormatVersionFriendly()
 {
-    return FormatVersion(CLIENT_VERSION);
+    return FormatVersion(CLIENT_DISPLAY_VERSION);
 }
 
 /** 

@@ -100,7 +100,7 @@ bool IsBlockValueValid(int nHeight, CAmount& nExpectedValue, CAmount nMinted, CA
     // below the hard cap, governance issuance stops and ordinary rewards use
     // the remaining supply instead of creating a partial proposal payment.
     const CAmount nGovernanceCapacity = GetGovernanceCapacity(nHeight, nChainMinted, nBaseIssuanceExpected);
-    if (Params().IsTestChain() && pq::PaymentsActive(Params(), nHeight) &&
+    if (Params().SupportsPQ() && pq::PaymentsActive(Params(), nHeight) &&
         consensus.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_V6_1_GOV)) {
         CScript payee;
         uint256 proposalHash;

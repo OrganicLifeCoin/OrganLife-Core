@@ -11,7 +11,7 @@ namespace pqmnauth {
 std::unique_ptr<LocalOperator> LocalOperator::Load(const fs::path& directory, const CChainParams& params,
                                                  const uint256& id, std::string& reason)
 {
-    reason = "PQ operator credentials require scheduled test-chain PQ masternode activation";
+    reason = "PQ operator credentials require scheduled PQ masternode activation";
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
     if (!pq::MasternodesActive(params, first)) return nullptr;
     if (id.IsNull()) { reason = "PQ operator registration must be nonzero"; return nullptr; }
@@ -25,7 +25,7 @@ std::unique_ptr<LocalOperator> LocalOperator::LoadConfig(const std::string& enco
                                                          const CChainParams& params,
                                                          const uint256& id, std::string& reason)
 {
-    reason = "PQ operator credentials require scheduled test-chain PQ masternode activation";
+    reason = "PQ operator credentials require scheduled PQ masternode activation";
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
     if (!pq::MasternodesActive(params, first)) return nullptr;
     if (id.IsNull()) { reason = "PQ operator registration must be nonzero"; return nullptr; }

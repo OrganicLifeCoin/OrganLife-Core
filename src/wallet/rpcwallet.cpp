@@ -560,12 +560,12 @@ UniValue getnewpqaddress(const JSONRPCRequest& request)
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
     if (request.fHelp || request.params.size() != 1)
-        throw std::runtime_error("getnewpqaddress \"backup_destination\"\nCreate an experimental ML-DSA-44 address on testnet or regtest, including before activation.\n"
+        throw std::runtime_error("getnewpqaddress \"backup_destination\"\nCreate an ML-DSA-44 address on the selected network, including before activation.\n"
                                 "Requires an encrypted, fully unlocked wallet. Payments use dedicated PQ commands only.\n"
                                 "backup_destination must be a new file in an existing directory. The encrypted wallet snapshot is written before the address is returned.\n"
                                 "Returns {address, experimental: true, payable, warning}; payable requires active PQ consensus.\n"
                                 "The HD seed and dumpwallet do not back up PQ keys.\n");
-    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "Experimental PQ wallets require testnet or regtest");
+    if (!Params().SupportsPQ()) throw JSONRPCError(RPC_MISC_ERROR, "PQ wallets are unavailable on this network");
     LOCK2(cs_main, pwallet->cs_wallet);
     if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the wallet before creating experimental PQ keys");
     EnsureWalletIsUnlocked(pwallet);
@@ -795,10 +795,10 @@ UniValue listpqaddresses(const JSONRPCRequest& request)
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
     if (request.fHelp || !request.params.empty())
-        throw std::runtime_error("listpqaddresses\nList experimental ML-DSA-44 addresses on testnet or regtest, including before activation.\n"
+        throw std::runtime_error("listpqaddresses\nList ML-DSA-44 addresses on the selected network, including before activation.\n"
                                 "Works while locked. Returns {addresses, experimental: true, payable}.\n"
                                 "Payable requires active PQ consensus and dedicated PQ commands.\n");
-    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "Experimental PQ wallets require testnet or regtest");
+    if (!Params().SupportsPQ()) throw JSONRPCError(RPC_MISC_ERROR, "PQ wallets are unavailable on this network");
     UniValue addresses(UniValue::VARR);
     for (const auto& address : pwallet->GetPQAddresses()) addresses.push_back(address);
     UniValue result(UniValue::VOBJ);
@@ -813,10 +813,10 @@ UniValue listpqunspent(const JSONRPCRequest& request)
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
     if (request.fHelp || !request.params.empty())
-        throw std::runtime_error("listpqunspent\nList confirmed experimental PQ outputs on testnet or regtest. Works while locked.\n"
+        throw std::runtime_error("listpqunspent\nList confirmed PQ outputs on the selected network. Works while locked.\n"
                                 "Empty before payment activation; historical pre-activation testnet marker outputs are never spendable.\n"
                                 "Locked outputs are listed but cannot be selected for payments.\n");
-    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "Experimental PQ wallets require testnet or regtest");
+    if (!Params().SupportsPQ()) throw JSONRPCError(RPC_MISC_ERROR, "PQ wallets are unavailable on this network");
     pwallet->BlockUntilSyncedToCurrentChain();
     LOCK2(cs_main, pwallet->cs_wallet);
     UniValue result(UniValue::VARR);
@@ -849,7 +849,7 @@ static UniValue SendPQPayment(const JSONRPCRequest& request)
             "selected_inputs optionally restricts funding to one or two unique {\"txid\":\"hex\",\"vout\":n} objects.\n"
             "WARNING: explicitly selecting masternode collateral spends its bond and removes the masternode. Manual locks still apply.\n"
             "Returns {txid, fee, experimental: true}.\n");
-    if (!Params().IsTestChain()) throw JSONRPCError(RPC_MISC_ERROR, "Experimental PQ wallets require testnet or regtest");
+    if (!Params().SupportsPQ()) throw JSONRPCError(RPC_MISC_ERROR, "PQ wallets are unavailable on this network");
     pwallet->BlockUntilSyncedToCurrentChain();
     LOCK2(cs_main, pwallet->cs_wallet);
     if (!CWallet::PQPaymentsActive()) throw JSONRPCError(RPC_MISC_ERROR, "PQ payments are not active on this network");
@@ -2647,7 +2647,7 @@ UniValue getbalance(const JSONRPCRequest& request)
                                               (fIncludeShielded ? ISMINE_WATCH_ONLY_ALL : ISMINE_WATCH_ONLY) : ISMINE_NO);
     filter |= fIncludeDelegated ? ISMINE_SPENDABLE_DELEGATED : ISMINE_NO;
     filter |= fIncludeShielded ? ISMINE_SPENDABLE_SHIELDED : ISMINE_NO;
-    return ValueFromAmount(Params().IsTestChain() ? pwallet->GetPQBalance(nMinDepth).m_mine_trusted :
+    return ValueFromAmount(Params().SupportsPQ() ? pwallet->GetPQBalance(nMinDepth).m_mine_trusted :
         pwallet->GetAvailableBalance(filter, true, nMinDepth));
 }
 
@@ -2730,7 +2730,7 @@ UniValue getunconfirmedbalance(const JSONRPCRequest& request)
 
     LOCK2(cs_main, pwallet->cs_wallet);
 
-    return ValueFromAmount(Params().IsTestChain() ? pwallet->GetPQBalance().m_mine_untrusted_pending :
+    return ValueFromAmount(Params().SupportsPQ() ? pwallet->GetPQBalance().m_mine_untrusted_pending :
         pwallet->GetUnconfirmedBalance());
 }
 
@@ -4810,12 +4810,12 @@ UniValue getwalletinfo(const JSONRPCRequest& request)
     UniValue obj(UniValue::VOBJ);
     obj.pushKV("walletname", pwallet->GetName());
     obj.pushKV("walletversion", pwallet->GetVersion());
-    const auto pq_balance = Params().IsTestChain() ? pwallet->GetPQBalance() : CWallet::Balance{};
-    obj.pushKV("balance", ValueFromAmount(Params().IsTestChain() ? pq_balance.m_mine_trusted : pwallet->GetAvailableBalance()));
+    const auto pq_balance = Params().SupportsPQ() ? pwallet->GetPQBalance() : CWallet::Balance{};
+    obj.pushKV("balance", ValueFromAmount(Params().SupportsPQ() ? pq_balance.m_mine_trusted : pwallet->GetAvailableBalance()));
     obj.pushKV("delegated_balance", ValueFromAmount(pwallet->GetDelegatedBalance()));
     obj.pushKV("cold_staking_balance", ValueFromAmount(pwallet->GetColdStakingBalance()));
-    obj.pushKV("unconfirmed_balance", ValueFromAmount(Params().IsTestChain() ? pq_balance.m_mine_untrusted_pending : pwallet->GetUnconfirmedBalance()));
-    obj.pushKV("immature_balance", ValueFromAmount(Params().IsTestChain() ? pq_balance.m_mine_immature : pwallet->GetImmatureBalance()));
+    obj.pushKV("unconfirmed_balance", ValueFromAmount(Params().SupportsPQ() ? pq_balance.m_mine_untrusted_pending : pwallet->GetUnconfirmedBalance()));
+    obj.pushKV("immature_balance", ValueFromAmount(Params().SupportsPQ() ? pq_balance.m_mine_immature : pwallet->GetImmatureBalance()));
     obj.pushKV("immature_delegated_balance",    ValueFromAmount(pwallet->GetImmatureDelegatedBalance()));
     obj.pushKV("immature_cold_staking_balance",    ValueFromAmount(pwallet->GetImmatureColdStakingBalance()));
     obj.pushKV("txcount", (int)pwallet->mapWallet.size());

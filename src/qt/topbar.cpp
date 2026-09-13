@@ -1210,7 +1210,7 @@ void TopBar::loadWalletModel()
     refreshWalletSelector();
 
     // Upgrade wallet.
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         ui->pushButtonHDUpgrade->hide();
     } else if (walletModel->isHDEnabled()) {
         if (walletModel->isSaplingWalletEnabled()) {

@@ -559,7 +559,7 @@ std::string HelpMessage(HelpMessageMode mode)
 
     strUsage += HelpMessageGroup("Debugging/Testing options:");
     strUsage += HelpMessageOpt("-uacomment=<cmt>", "Append comment to the user agent string");
-    strUsage += HelpMessageOpt("-pqoperatorcredentials=<dir>", "Load operator credentials from a private absolute directory (scheduled test-chain PQ masternodes only; requires -disablewallet and -pqoperatorid). Credentials alone do not establish registry eligibility or finality.");
+    strUsage += HelpMessageOpt("-pqoperatorcredentials=<dir>", "Load operator credentials from a private absolute directory (scheduled PQ masternodes only; requires -disablewallet and -pqoperatorid). Credentials alone do not establish registry eligibility or finality.");
     strUsage += HelpMessageOpt("-pqoperatorconfig=<hex>", "Load bounded inline PQ operator credentials from the config file only (requires -disablewallet and -pqoperatorid). Never pass this secret on the command line.");
     strUsage += HelpMessageOpt("-pqoperatorid=<txid>", "Registration identity for pending PQ operator credentials (64 hexadecimal characters, nonzero)");
     if (showDebug) {
@@ -724,17 +724,32 @@ void ThreadImport(const std::vector<fs::path>& vImportFiles)
 
     // -reindex
     if (fReindex) {
-        int nFile = 0;
-        while (true) {
-            FlatFilePos pos(nFile, 0);
-            if (!fs::exists(GetBlockPosFilename(pos)))
-                break; // No block files left to reindex
-            FILE* file = OpenBlockFile(pos, true);
-            if (!file)
-                break; // This error is logged in OpenBlockFile
-            LogPrintf("Reindexing block file blk%05u.dat...\n", (unsigned int)nFile);
-            LoadExternalBlockFile(file, &pos);
-            nFile++;
+        pqanchor::Record anchor;
+        const bool anchored = pqAnchorStore && pqAnchorStore->Tip(anchor);
+        // Resolve finalized ancestry before replaying coins. PoS admission needs
+        // the active parent's UTXOs, so merely deferring activation until the
+        // last saved anchor arrives would prevent long PoS histories replaying.
+        for (int pass = anchored ? 0 : 1; pass < 2; ++pass) {
+            const bool headersOnly = pass == 0;
+            int nFile = 0;
+            while (true) {
+                FlatFilePos pos(nFile, 0);
+                if (!fs::exists(GetBlockPosFilename(pos)))
+                    break; // No block files left to reindex
+                FILE* file = OpenBlockFile(pos, true);
+                if (!file)
+                    break; // This error is logged in OpenBlockFile
+                LogPrintf("Reindexing %s file blk%05u.dat...\n",
+                          headersOnly ? "header" : "block", (unsigned int)nFile);
+                LoadExternalBlockFile(file, &pos, headersOnly);
+                nFile++;
+            }
+            if (headersOnly) {
+                LOCK(cs_main);
+                // Missing ancestry must reach startup reconciliation without
+                // attempting PoS validation against a genesis-only coin view.
+                if (!LookupBlockIndex(anchor.blockHash)) break;
+            }
         }
         pblocktree->WriteReindexing(false);
         fReindex = false;
@@ -1265,9 +1280,6 @@ bool AppInitSanityChecks()
 
 bool AppInitMain()
 {
-    if (!Params().IsTestChain()) {
-        return UIError(_("Mainnet is disabled in this pre-launch PQ-only build. Use testnet or regtest."));
-    }
     // ********************************************************* Step 4a: application initialization
     // After daemonization get the data directory lock again and hold on to it until exit
     // This creates a slight window for a race condition to happen, however this condition is harmless: it
@@ -1434,7 +1446,7 @@ bool AppInitMain()
     }
 
     // format user agent, check total size
-    strSubVersion = FormatSubVersion(CLIENT_NAME, CLIENT_VERSION, uacomments);
+    strSubVersion = FormatSubVersion(CLIENT_NAME, CLIENT_DISPLAY_VERSION, uacomments);
     if (strSubVersion.size() > MAX_SUBVERSION_LENGTH) {
         return UIError(strprintf(_("Total length of network version string (%i) exceeds maximum length (%i). Reduce the number or size of %s."),
             strSubVersion.size(), MAX_SUBVERSION_LENGTH, "-uacomment"));
@@ -1712,7 +1724,10 @@ bool AppInitMain()
                     uiInterface.InitMessage(_("Verifying blocks..."));
                     CBlockIndex *tip = chainActive.Tip();
                     RPCNotifyBlockChange(true, tip);
-                    if (tip && tip->nTime > GetAdjustedTime() + 2 * 60 * 60) {
+                    const auto& consensus = Params().GetConsensus();
+                    const bool scheduledGenesis = tip && tip->nHeight == 0 && consensus.nLaunchTime > 0 &&
+                        tip->GetBlockHash() == consensus.hashGenesisBlock;
+                    if (tip && !scheduledGenesis && tip->nTime > GetAdjustedTime() + 2 * 60 * 60) {
                         strLoadError = _("The block database contains a block which appears to be from the future. "
                                          "This may be due to your computer's date and time being set incorrectly. "
                                          "Only rebuild the block database if you are sure that your computer's date and time are correct");
@@ -1953,7 +1968,7 @@ bool AppInitMain()
         return false;
     }
 
-    // PQ finality runtime: started only when a pinned bootstrap is configured.
+    // PQ finality runtime: automatic on mainnet, configured on existing test chains.
     // It never gates ordinary PoS production. Stopped before credential or
     // EvoDB teardown in Shutdown().
     {

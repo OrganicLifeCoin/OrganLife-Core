@@ -36,6 +36,9 @@ class CBlockIndex;
 // the anchor it votes under. A peer certificate can never choose the trust
 // root or committee; verification always uses caller-supplied snapshots.
 namespace pqanchor {
+// Fresh mainnet derives its initial checkpoint from validated chain history.
+// Existing test chains retain their externally configured checkpoint policy.
+bool UsesAutomaticBootstrap(const CChainParams& params);
 // AnchorID = Hash(canonical serialization of {height, blockHash, committee}).
 uint256 ID(uint32_t height, const uint256& blockHash, const uint256& committee);
 
@@ -72,6 +75,7 @@ bool SignersInWindow(CEvoDB& db, const CChainParams& params, uint32_t upToHeight
                      std::map<uint256, uint32_t>& lastCarrier, bool& anyCert);
 
 class Store;
+struct Bootstrap;
 class ChainState {
 public:
     ChainState(CEvoDB& db, const CChainParams& params) : db(db), params(params) {}
@@ -102,6 +106,9 @@ public:
     uint32_t TipHeight() const;
     // Writes the pinned bootstrap committee as the initial snapshot (H0).
     bool SetInitialCommittee(uint32_t height, const std::vector<pqquorum::Member>& members, std::string& reason);
+    // Resolve the chain-derived provisional root, or validate the configured
+    // test-chain root. No durable finality is created by this lookup.
+    bool ResolveBootstrap(const CBlockIndex* tip, Bootstrap& out, std::string& reason) const;
 
 private:
     CEvoDB& db;
@@ -115,9 +122,9 @@ private:
                         const uint256& commitment, std::string& reason, bool belowMinimum = false);
 };
 
-// Pinned initial checkpoint (-pqbootstrap=height:blockhash:regid:pubkey:...).
-// Regtest/qualification only; main/testnet carry no bootstrap until coordinated
-// activation supplies real values. No bootstrap => finality fully inactive.
+// Initial checkpoint: configured on test chains, derived on fresh mainnet.
+// The regtest-only -pqautobootstrap option exercises the automatic policy on a
+// fresh isolated chain. It must be consistent across every regtest node.
 struct Bootstrap {
     uint32_t height{0};
     uint256 blockHash;
@@ -127,7 +134,7 @@ struct Bootstrap {
 // Parses the test-chain-only argument at init; false fails startup.
 bool InitBootstrap(const CChainParams& params, std::string& reason);
 const Bootstrap* GetBootstrap();
-// Lazy runtime validation; failure keeps voting inactive. Certificate-bearing
+// Lazy resolution/validation; failure keeps voting inactive. Certificate-bearing
 // blocks require a valid trust root as well. Requires the exact historical
 // chain-derived snapshot; configuration does not create one. Caller holds cs_main.
 bool ValidateBootstrap(const ChainState& state, const CBlockIndex* tip,

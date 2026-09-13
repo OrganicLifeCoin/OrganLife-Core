@@ -13,6 +13,7 @@ private Q_SLOTS:
     void masternodeServerConfiguration();
     void masternodeControllerCancelsWithoutWrites_data();
     void masternodeControllerCancelsWithoutWrites();
+    void mainnetPQWalletFlowAndBackup();
     void seamlessWalletUsesStandardScreens();
     void actualWalletUnloadQuiescesModel();
     void balancePollingDoesNotInvertChainLock();

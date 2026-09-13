@@ -612,12 +612,12 @@ void OrganicLifeGUI::goToSend()
 
 void OrganicLifeGUI::goToGovernance()
 {
-    if (Params().IsTestChain() && governanceWidget) showTop(governanceWidget);
+    if (Params().SupportsPQ() && governanceWidget) showTop(governanceWidget);
 }
 
 void OrganicLifeGUI::goToMasternodes()
 {
-    if (Params().IsTestChain() && masternodesWidget) showTop(masternodesWidget);
+    if (Params().SupportsPQ() && masternodesWidget) showTop(masternodesWidget);
 }
 
 void OrganicLifeGUI::goToSettings(){

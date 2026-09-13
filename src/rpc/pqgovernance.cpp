@@ -25,10 +25,10 @@
 #include <set>
 
 namespace {
-void EnsureTestChain()
+void EnsurePQNetwork()
 {
-    if (!Params().IsTestChain())
-        throw JSONRPCError(RPC_MISC_ERROR, "PQ governance is available only on testnet and regtest");
+    if (!Params().SupportsPQ())
+        throw JSONRPCError(RPC_MISC_ERROR, "PQ governance is unavailable on this network");
 }
 
 #ifdef ENABLE_WALLET
@@ -36,7 +36,7 @@ CWallet* GetUnlockedWallet(const JSONRPCRequest& request)
 {
     CWallet* wallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(wallet, request.fHelp)) return nullptr;
-    EnsureTestChain();
+    EnsurePQNetwork();
     wallet->BlockUntilSyncedToCurrentChain();
     EnsureWalletIsUnlocked(wallet);
     return wallet;
@@ -245,7 +245,7 @@ UniValue castgovvote(const JSONRPCRequest& request)
 
 UniValue listgovlocks(const JSONRPCRequest& request)
 {
-    EnsureTestChain();
+    EnsurePQNetwork();
     CWallet* wallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(wallet, request.fHelp)) return NullUniValue;
     if (request.fHelp || request.params.size() > 1)
@@ -280,7 +280,7 @@ UniValue listgovlocks(const JSONRPCRequest& request)
 
 UniValue getgovvotestatus(const JSONRPCRequest& request)
 {
-    EnsureTestChain();
+    EnsurePQNetwork();
     if (request.fHelp || request.params.size() != 1)
         throw std::runtime_error("getgovvotestatus \"proposal_hash\"\nReturn PQ coin-vote totals.\n");
     const uint256 hash = ParseHashV(request.params[0], "proposal_hash");
@@ -297,7 +297,7 @@ UniValue getgovvotestatus(const JSONRPCRequest& request)
 
 UniValue getnextsuperblock(const JSONRPCRequest& request)
 {
-    EnsureTestChain();
+    EnsurePQNetwork();
     if (request.fHelp || !request.params.empty())
         throw std::runtime_error("getnextsuperblock\nReturn the next governance-cycle height.\n");
     const int height = WITH_LOCK(cs_main, return chainActive.Height());
@@ -308,7 +308,7 @@ UniValue getnextsuperblock(const JSONRPCRequest& request)
 
 UniValue getbudgetinfo(const JSONRPCRequest& request)
 {
-    EnsureTestChain();
+    EnsurePQNetwork();
     if (request.fHelp || request.params.size() > 1)
         throw std::runtime_error("getbudgetinfo ( \"name\" )\nList confirmed PQ governance proposals.\n");
     const std::string filter = request.params.empty() ? "" : SanitizeString(request.params[0].get_str());

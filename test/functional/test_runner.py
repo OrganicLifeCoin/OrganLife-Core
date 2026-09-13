@@ -75,6 +75,7 @@ BASE_SCRIPTS= [
     'p2p_invalid_block.py',                     # ~ 213 sec
     'feature_reindex.py',                       # ~ 205 sec
     'feature_pq_only.py',
+    'feature_pq_mainnet.py',
     'feature_pq_governance.py',
     'feature_pq_governance.py --pq-masternode',
     'feature_pq_startup.py',
@@ -224,6 +225,9 @@ EXTENDED_SCRIPTS = [
     # vv Tests less than 5m vv
     'feature_pq_finality_smoke.py --round-recovery',
     'feature_pq_finality_smoke.py --reindex',
+    'feature_pq_finality_smoke.py --automatic-bootstrap',
+    'feature_pq_finality_smoke.py --automatic-bootstrap --reindex',
+    'feature_pq_finality_smoke.py --automatic-bootstrap --crash-recovery',
     'feature_pq_finality_smoke.py --committee-transitions',
     'feature_pq_finality_smoke.py --collateral-spend',
     'feature_pq_finality_smoke.py --crash-recovery',

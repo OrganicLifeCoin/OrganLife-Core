@@ -1612,7 +1612,7 @@ bool DashboardWidget::refreshChart()
     isChartInitialized = false;
     snapshotChartRows();
     showHideEmptyChart(!chartHasRenderedData, true, true);
-    // ponytail: linear aggregation over the existing snapshot; move only the
+    // Linear aggregation over the existing snapshot; move only the
     // immutable arithmetic off-thread if measured histories exceed a frame budget.
     // Keep it on the UI thread so wallet
     // switches and period changes cannot race a worker's result.

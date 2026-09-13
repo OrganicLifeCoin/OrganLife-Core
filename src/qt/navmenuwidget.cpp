@@ -99,7 +99,7 @@ NavMenuWidget::NavMenuWidget(OrganicLifeGUI *mainWindow, QWidget *parent) :
     }
     ui->btnMaster->setProperty("name", "master");
     setupNavButton(ui->btnMaster, tr("Masternodes"));
-    ui->btnMaster->setVisible(Params().IsTestChain());
+    ui->btnMaster->setVisible(Params().SupportsPQ());
     transactionsButton = new QToolButton(ui->scrollAreaNavVert);
     transactionsButton->setObjectName("btnTransactions");
     transactionsButton->setProperty("name", "transactions");
@@ -110,10 +110,10 @@ NavMenuWidget::NavMenuWidget(OrganicLifeGUI *mainWindow, QWidget *parent) :
     setupNavButton(ui->btnSettings, tr("Settings"));
     ui->btnGovernance->setProperty("name", "governance");
     setupNavButton(ui->btnGovernance, tr("Governance"));
-    ui->btnGovernance->setVisible(Params().IsTestChain());
+    ui->btnGovernance->setVisible(Params().SupportsPQ());
     btns = {ui->btnDashboard, ui->btnSend, ui->btnReceive, transactionsButton};
-    if (Params().IsTestChain()) btns.append(ui->btnGovernance);
-    if (Params().IsTestChain()) btns.append(ui->btnMaster);
+    if (Params().SupportsPQ()) btns.append(ui->btnGovernance);
+    if (Params().SupportsPQ()) btns.append(ui->btnMaster);
     btns.append(ui->btnSettings);
 
     // Match the PQ-only information architecture.

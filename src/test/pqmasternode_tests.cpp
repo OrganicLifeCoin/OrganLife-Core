@@ -153,14 +153,12 @@ BOOST_AUTO_TEST_CASE(local_operator_loads_pending_identity_without_registry_auth
     for (const auto& network : {CBaseChainParams::MAIN, CBaseChainParams::TESTNET}) {
         const auto params = CreateChainParams(network);
         BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory, *params, id, reason));
-        BOOST_CHECK_EQUAL(reason, network == CBaseChainParams::MAIN ?
-            "PQ operator credentials require scheduled test-chain PQ masternode activation" :
-            "Could not load private PQ operator credentials");
+        BOOST_CHECK_EQUAL(reason, "Could not load private PQ operator credentials");
     }
     for (const int height : {0, -1}) {
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, height);
         BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory, Params(), id, reason));
-        BOOST_CHECK_EQUAL(reason, "PQ operator credentials require scheduled test-chain PQ masternode activation");
+        BOOST_CHECK_EQUAL(reason, "PQ operator credentials require scheduled PQ masternode activation");
     }
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
     BOOST_CHECK(!pqmnauth::LocalOperator::Load(directory / "missing", Params(), id, reason));
@@ -441,22 +439,22 @@ BOOST_AUTO_TEST_CASE(read_only_validation_preserves_outer_transaction)
     BOOST_CHECK_EQUAL(actual.sequence, 0U);
 }
 
-BOOST_AUTO_TEST_CASE(reserved_envelope_parses_but_is_disabled_by_default)
+BOOST_AUTO_TEST_CASE(reserved_envelope_parses_but_is_disabled_before_activation)
 {
     pq::Payload payload; payload.mode = pq::MASTERNODE; payload.authorizations.resize(1); payload.data = {1};
     BOOST_CHECK(!pq::EncodePayload(payload).empty());
     auto tx = Transaction(Registration());
     std::string reason;
     BOOST_CHECK(pq::CheckStructure(tx, Params(), reason));
-    for (const std::string network : {"main", "regtest"}) {
+    for (const std::string network : {"regtest"}) {
         const auto params = CreateChainParams(network);
-        for (int height : {0, 1, 100, 1000000})
+        for (int height : {0, 1, 100, 2999})
             BOOST_CHECK(!pq::CheckContext(tx, *params, height, reason));
     }
     BOOST_CHECK_EQUAL(pq::GetSigOpCost(tx), 4 * pq::SIGOP_COST);
 }
 
-BOOST_AUTO_TEST_CASE(registry_context_requires_test_chain_activation_after_payments)
+BOOST_AUTO_TEST_CASE(registry_context_requires_pq_activation_after_payments)
 {
     const auto tx = Transaction(Registration()); std::string reason;
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 20);
@@ -473,12 +471,12 @@ BOOST_AUTO_TEST_CASE(registry_context_requires_test_chain_activation_after_payme
     for (const std::string network : {"main"}) {
         auto params = CreateChainParams(network);
         params->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 20);
-        BOOST_CHECK(!pq::MasternodesActive(*params, 20));
-        BOOST_CHECK(!pq::CheckContext(tx, *params, 20, reason));
+        BOOST_CHECK(pq::MasternodesActive(*params, 20));
+        BOOST_CHECK(pq::CheckContext(tx, *params, 20, reason));
     }
 }
 
-BOOST_AUTO_TEST_CASE(public_testnet_activates_registry_and_service_without_enabling_mainnet)
+BOOST_AUTO_TEST_CASE(public_testnet_and_mainnet_activate_registry_and_service)
 {
     const auto testnet = CreateChainParams("test");
     const auto tx = Transaction(Registration());
@@ -499,9 +497,9 @@ BOOST_AUTO_TEST_CASE(public_testnet_activates_registry_and_service_without_enabl
     mainnet->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 1);
     mainnet->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
     mainnet->UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_SERVICE, 1);
-    BOOST_CHECK(!pq::MasternodesActive(*mainnet, 3000));
-    BOOST_CHECK(!pqservice::Active(*mainnet, 3000));
-    BOOST_CHECK(!pq::CheckContext(tx, *mainnet, 3000, reason));
+    BOOST_CHECK(pq::MasternodesActive(*mainnet, 3000));
+    BOOST_CHECK(pqservice::Active(*mainnet, 3000));
+    BOOST_CHECK(pq::CheckContext(tx, *mainnet, 3000, reason));
 }
 
 BOOST_AUTO_TEST_CASE(register_external_internal_collateral_and_undo)
@@ -1123,8 +1121,12 @@ BOOST_AUTO_TEST_CASE(block_lifecycle_rejects_wrong_network_height_and_block_iden
     RegistryBlock block(parent, {}); pqmn::Index index(*evoDb, Params()); std::string reason;
     for (int firstHeight : {-1, 0, 21})
         BOOST_CHECK(!index.ConnectBlock(block.block, block.index, view, firstHeight, reason));
-    auto main = CreateChainParams(CBaseChainParams::MAIN); pqmn::Index mainIndex(*evoDb, *main);
-    BOOST_CHECK(!mainIndex.ConnectBlock(block.block, block.index, view, 20, reason));
+    struct UnknownNetwork : CChainParams {
+        UnknownNetwork() : CChainParams(*CreateChainParams(CBaseChainParams::MAIN)) { strNetworkID = "unknown"; }
+        const CCheckpointData& Checkpoints() const override { return Params().Checkpoints(); }
+    } unknown;
+    pqmn::Index unknownIndex(*evoDb, unknown);
+    BOOST_CHECK(!unknownIndex.ConnectBlock(block.block, block.index, view, 20, reason));
     for (int mutation = 0; mutation < 4; ++mutation) {
         CBlockIndex invalid = block.index;
         if (mutation == 0) invalid.phashBlock = nullptr;

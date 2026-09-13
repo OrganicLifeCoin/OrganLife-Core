@@ -5203,7 +5203,7 @@ void GovernanceDialogTests::dashboardWidgetRestoresTransactionListVisibilityAfte
     QVERIFY(sort->isVisible());
 }
 
-void GovernanceDialogTests::masternodeWidgetRefreshesWhenModelLoadsConfiguredMasternodes()
+void GovernanceDialogTests::masternodeWidgetDoesNotExposeLegacyConfiguredMasternodes()
 {
     std::unique_ptr<const NetworkStyle> networkStyle(NetworkStyle::instantiate("main"));
     QVERIFY(networkStyle != nullptr);
@@ -5251,9 +5251,9 @@ void GovernanceDialogTests::masternodeWidgetRefreshesWhenModelLoadsConfiguredMas
     mnModel.updateMNList();
     QCoreApplication::processEvents();
 
-    QCOMPARE(mnModel.rowCount(), 1);
-    QVERIFY2(masternodeList->isVisible(), "Configured masternodes should become visible after the model refreshes");
-    QVERIFY2(!emptyState->isVisible(), "Empty state should hide once configured masternodes are loaded");
+    QCOMPARE(mnModel.rowCount(), 0);
+    QVERIFY2(!masternodeList->isVisible(), "Legacy configuration must not appear as a registered PQ masternode");
+    QVERIFY2(emptyState->isVisible(), "The registry remains empty without a confirmed PQ registration");
 }
 
 void GovernanceDialogTests::dashboardWidgetUsesSelfDescribingRewardTiles()

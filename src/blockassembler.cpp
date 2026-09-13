@@ -278,6 +278,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
                                                const CTransactionRef& externalCoinstake,
                                                uint32_t externalStakeTime)
 {
+    if (GetTime() < chainparams.GetConsensus().nLaunchTime) return nullptr;
     resetBlock();
 
     pblocktemplate.reset(new CBlockTemplate());

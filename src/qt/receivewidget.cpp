@@ -153,7 +153,7 @@ ReceiveWidget::ReceiveWidget(OrganicLifeGUI* parent) :
     connect(ui->pushLeft, &QPushButton::clicked, [this](){onTransparentSelected(true);});
     connect(ui->pushRight,  &QPushButton::clicked, [this](){onTransparentSelected(false);});
 
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         ui->pushLeft->hide();
         ui->pushRight->hide();
         ui->labelSubtitle2->hide();
@@ -181,7 +181,7 @@ ReceiveWidget::ReceiveWidget(OrganicLifeGUI* parent) :
 void ReceiveWidget::loadWalletModel()
 {
     if (walletModel) {
-        if (Params().IsTestChain()) {
+        if (Params().SupportsPQ()) {
             if (!info) info = new SendCoinsRecipient();
             pqBackupDirectory = PQWalletUI::backupDirectory(walletModel);
             refreshPQAddresses();
@@ -246,7 +246,7 @@ void ReceiveWidget::refreshView(const QString& refreshAddress)
 {
     try {
         QString latestAddress = refreshAddress;
-        if (Params().IsTestChain()) {
+        if (Params().SupportsPQ()) {
             if (latestAddress.isEmpty() && walletModel) {
                 if (info && !info->address.isEmpty()) latestAddress = info->address;
                 else {
@@ -266,18 +266,18 @@ void ReceiveWidget::refreshView(const QString& refreshAddress)
 
         QString addressToShow = latestAddress;
         int64_t time = 0;
-        if (!Params().IsTestChain()) time = walletModel->getKeyCreationTime(latestAddress.toStdString());
-        if (Params().IsTestChain() || shieldedMode) {
+        if (!Params().SupportsPQ()) time = walletModel->getKeyCreationTime(latestAddress.toStdString());
+        if (Params().SupportsPQ() || shieldedMode) {
             addressToShow = addressToShow.left(20) + "..." + addressToShow.right(19);
         }
 
         ui->labelAddress->setText(addressToShow);
         ui->labelAddress->setToolTip(latestAddress);
         ui->labelAddress->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        if (!Params().IsTestChain())
+        if (!Params().SupportsPQ())
             ui->labelDate->setText(GUIUtil::dateTimeStr(GUIUtil::dateTimeFromTimeT(static_cast<qint64>(time))));
         updateQr(latestAddress);
-        if (!Params().IsTestChain()) updateLabel();
+        if (!Params().SupportsPQ()) updateLabel();
     } catch (const std::runtime_error& error) {
         ui->labelQrImg->setText(tr("No available address\ntry unlocking the wallet"));
         inform(tr("Error generating address"));
@@ -318,7 +318,7 @@ void ReceiveWidget::updateQr(const QString& address)
 
 void ReceiveWidget::handleAddressClicked(const QModelIndex &index)
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         refreshView(index.data().toString());
         return;
     }
@@ -357,7 +357,7 @@ void ReceiveWidget::onLabelClicked()
 
 void ReceiveWidget::onNewAddressClicked()
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         QPointer<WalletModel> operationWallet(walletModel);
         if (!operationWallet ||
             !PQWalletUI::ensureBackupDirectory(this, operationWallet, pqBackupDirectory) ||
@@ -426,7 +426,7 @@ void ReceiveWidget::onCopyClicked()
 
 void ReceiveWidget::onRequestClicked()
 {
-    if (Params().IsTestChain()) {
+    if (Params().SupportsPQ()) {
         if (!walletModel || isShowingDialog) return;
         if (!info || info->address.isEmpty()) onNewAddressClicked();
         if (!walletModel || !info || info->address.isEmpty()) return;
@@ -500,7 +500,7 @@ void ReceiveWidget::onSortOrderChanged(int idx)
 
 void ReceiveWidget::filterChanged(const QString& str)
 {
-    if (Params().IsTestChain()) { refreshPQAddresses(); return; }
+    if (Params().SupportsPQ()) { refreshPQAddresses(); return; }
     if (!filter) return;
 #if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
     this->filter->setFilterRegularExpression(QRegularExpression(QRegularExpression::escape(str), QRegularExpression::CaseInsensitiveOption));

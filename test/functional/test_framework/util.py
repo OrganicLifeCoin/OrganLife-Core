@@ -304,7 +304,7 @@ def initialize_datadir(dirname, n, chain="regtest"):
     if not os.path.isdir(datadir):
         os.makedirs(datadir)
     with open(os.path.join(datadir, "pivx.conf"), 'w', encoding='utf8') as f:
-        f.write({"regtest": "regtest=1\n", "test": "testnet=1\n"}[chain])
+        f.write({"regtest": "regtest=1\n", "test": "testnet=1\n", "main": ""}[chain])
         f.write("[" + chain + "]\n")
         f.write("port=" + str(p2p_port(n)) + "\n")
         f.write("rpcport=" + str(rpc_port(n)) + "\n")
@@ -338,7 +338,7 @@ def get_auth_cookie(datadir, chain="regtest"):
                 if line.startswith("rpcpassword="):
                     assert password is None  # Ensure that there is only one rpcpassword line
                     password = line.split("=")[1].strip("\n")
-    cookie = os.path.join(datadir, "testnet" if chain == "test" else chain, ".cookie")
+    cookie = os.path.join(datadir, {"main": "", "test": "testnet"}.get(chain, chain), ".cookie")
     if os.path.isfile(cookie):
         with open(cookie, 'r', encoding="utf8") as f:
             userpass = f.read()
@@ -351,7 +351,7 @@ def get_auth_cookie(datadir, chain="regtest"):
 
 # If a cookie file exists in the given datadir, delete it.
 def delete_cookie_file(datadir, chain="regtest"):
-    cookie = os.path.join(datadir, "testnet" if chain == "test" else chain, ".cookie")
+    cookie = os.path.join(datadir, {"main": "", "test": "testnet"}.get(chain, chain), ".cookie")
     if os.path.isfile(cookie):
         logger.debug("Deleting leftover cookie file")
         os.remove(cookie)

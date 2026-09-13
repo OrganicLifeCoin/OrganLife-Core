@@ -133,12 +133,12 @@ struct CBlockIndexWorkComparator {
         if (pa->nChainWork > pb->nChainWork) return false;
         if (pa->nChainWork < pb->nChainWork) return true;
 
-        // Test-chain stakers can extend equal-work branches in every slot.
+        // PQ stakers can extend equal-work branches in every slot.
         // Local arrival order leaves them split indefinitely: prefer the lower
         // numeric header hash, also after restart. Use one network-wide rule
         // (not mutable body flags or per-candidate activation) to keep this a
         // strict ordering. Saved-anchor and full-block checks still apply.
-        if (Params().IsTestChain())
+        if (Params().SupportsPQ())
             return UintToArith256(pb->GetBlockHash()) < UintToArith256(pa->GetBlockHash());
 
         // ... then by earliest time received, ...
@@ -1210,7 +1210,7 @@ bool CheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsVi
             if (!pq::VerifyInputs(tx, prevouts, Params(), reason))
                 return state.DoS(100, false, REJECT_INVALID, reason);
             return true;
-        } else if (Params().IsTestChain()) {
+        } else if (Params().SupportsPQ()) {
             for (const auto& input : tx.vin) {
                 if (pq::HasMarker(inputs.AccessCoin(input.prevout).out.scriptPubKey))
                     return state.DoS(100, false, REJECT_INVALID, "bad-pq-spend-type");
@@ -1577,8 +1577,8 @@ bool IsAllowedBySavedAnchor(const CBlockIndex* candidate) EXCLUSIVE_LOCKS_REQUIR
         const auto* ancestor = FinalityAncestor(anchored, candidate->nHeight);
         return ancestor && ancestor->GetBlockHash() == candidate->GetBlockHash();
     }
-    // Full reindex may not have loaded the future anchor header yet. Leave
-    // historical-prefix validation and reconciliation to ConnectBlock/startup.
+    // Retain provisional candidates during full reindex. Fork selection waits
+    // for the saved anchor header before activating any non-genesis block.
     return true;
 }
 
@@ -1784,26 +1784,31 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         if (!pqAnchors.CaptureCommittee(pqmn::Index(*evoDb, Params()), pindex->nHeight, reason))
             return state.DoS(100, false, REJECT_INVALID, reason);
         if (pq::IsFinality(*block.vtx[0])) {
-            if (!pqanchor::GetBootstrap())
+            const bool automatic = pqanchor::UsesAutomaticBootstrap(Params());
+            if (!automatic && !pqanchor::GetBootstrap())
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-inactive");
-            if (!pqanchor::ValidateBootstrap(pqAnchors, pindex->pprev, reason))
+            pqanchor::Bootstrap bootstrap;
+            if (!pqAnchors.ResolveBootstrap(pindex->pprev, bootstrap, reason)) {
+                if (automatic) {
+                    // Corrupt local evidence is not a peer fault. A certificate
+                    // before any eligible committee, however, has no valid root.
+                    if (!reason.empty()) return state.Error(reason);
+                    return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-no-anchor");
+                }
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-bootstrap");
+            }
             pqquorum::Certificate certificate;
             if (!pq::DecodeFinalityCertificate(*block.vtx[0], certificate))
                 return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-certificate");
             pqanchor::Record parent;
             bool hasParent = pqAnchors.TipAnchor(parent);
             if (!hasParent) {
-                // Before any certificate-bearing block has connected, the
-                // parent anchor is the pinned bootstrap checkpoint itself.
-                const auto* bootstrap = pqanchor::GetBootstrap();
-                std::vector<pqquorum::Member> pinned;
-                if (!bootstrap || certificate.statement.height != bootstrap->height + 1 ||
-                    !pqAnchors.CommitteeAt(bootstrap->height, pinned))
+                // Never take the first trust root from the certificate itself.
+                if (certificate.statement.height != bootstrap.height + 1)
                     return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-no-anchor");
-                parent.height = bootstrap->height;
-                parent.blockHash = bootstrap->blockHash;
-                parent.committee = pqquorum::Commitment(pinned);
+                parent.height = bootstrap.height;
+                parent.blockHash = bootstrap.blockHash;
+                parent.committee = pqquorum::Commitment(bootstrap.members);
             }
             // No skipping: the certificate finalizes exactly the parent anchor + 1.
             if (certificate.statement.height != parent.height + 1)
@@ -2433,6 +2438,18 @@ bool static ConnectTip(CValidationState& state, CBlockIndex* pindexNew, const st
  */
 static CBlockIndex* FindMostWorkChain()
 {
+    pqanchor::Record anchor;
+    const auto* store = GetPQAnchorStore();
+    if ((fReindex || fImporting) && store && store->Tip(anchor) &&
+        !LookupBlockIndex(anchor.blockHash)) {
+        // Block files can interleave competing historical branches. Retain
+        // candidates until their ancestry is known, including the final import
+        // activation after fReindex is cleared. Genesis must still initialize
+        // the coin database so an incomplete import can shut down safely.
+        auto* genesis = LookupBlockIndex(Params().GetConsensus().hashGenesisBlock);
+        return !chainActive.Tip() && genesis && setBlockIndexCandidates.count(genesis) ? genesis : nullptr;
+    }
+
     do {
         CBlockIndex* pindexNew = nullptr;
 
@@ -2600,7 +2617,7 @@ static bool ActivateBestChainStep(CValidationState& state, CBlockIndex* pindexMo
         // If any blocks were disconnected, disconnectpool may be non empty.  Add
         // any disconnected transactions back to the mempool.
         UpdateMempoolForReorg(disconnectpool, true);
-    } else if (Params().IsTestChain() && pindexOldTip &&
+    } else if (Params().SupportsPQ() && pindexOldTip &&
                pindexOldTip->nHeight + 1 < pq_activation_height && chainActive.Height() + 1 >= pq_activation_height) {
         // Activation invalidates every pending non-PQ transaction and its descendants.
         mempool.removeForReorg(pcoinsTip.get(), chainActive.Height() + 1, STANDARD_LOCKTIME_VERIFY_FLAGS);
@@ -3258,6 +3275,19 @@ static const CBlockIndex* GetLastCheckpoint() EXCLUSIVE_LOCKS_REQUIRED(cs_main)
     return nullptr;
 }
 
+static bool CheckLaunchTime(const CBlockHeader& block, CValidationState& state)
+{
+    const auto& consensus = Params().GetConsensus();
+    if (!consensus.nLaunchTime || block.GetHash() == consensus.hashGenesisBlock) return true;
+    // Use the local clock, not a peer-adjusted clock that could advance launch.
+    // Temporal refusal carries no peer penalty and must not poison block history.
+    if (GetTime() < consensus.nLaunchTime)
+        return state.Invalid(false, REJECT_INVALID, "mainnet-not-launched");
+    if (block.GetBlockTime() < consensus.nLaunchTime)
+        return state.DoS(100, false, REJECT_INVALID, "time-before-launch");
+    return true;
+}
+
 bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& state, CBlockIndex* const pindexPrev)
 {
     AssertLockHeld(cs_main);
@@ -3267,6 +3297,8 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
 
     if (hash == consensus.hashGenesisBlock)
         return true;
+
+    if (!CheckLaunchTime(block, state)) return false;
 
     assert(pindexPrev);
 
@@ -3391,6 +3423,7 @@ static bool GetPrevIndex(const CBlock& block, CBlockIndex** pindexPrevRet, CVali
 bool AcceptBlockHeader(const CBlock& block, CValidationState& state, CBlockIndex** ppindex, CBlockIndex* pindexPrev)
 {
     AssertLockHeld(cs_main);
+    if (!CheckLaunchTime(block, state)) return false;
     // Check for duplicate
     const uint256& hash = block.GetHash();
     CBlockIndex* pindex = LookupBlockIndex(hash);
@@ -4303,8 +4336,9 @@ bool LoadGenesisBlock()
 }
 
 
-bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
+bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp, bool headersOnly)
 {
+    assert(!headersOnly || (fReindex && dbp));
     // Map of disk positions for blocks with unknown parent (only used for reindex)
     static std::multimap<uint256, FlatFilePos> mapBlocksUnknownParent;
     int64_t nStart = GetTimeMillis();
@@ -4312,6 +4346,19 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
     // Block checked event listener
     BlockStateCatcherWrapper stateCatcher(UINT256_ZERO);
     stateCatcher.registerEvent();
+
+    const auto process = [&](const std::shared_ptr<const CBlock>& block, const FlatFilePos* pos) {
+        if (!headersOnly || block->GetHash() == Params().GetConsensus().hashGenesisBlock)
+            return ProcessNewBlock(block, pos);
+        LOCK(cs_main);
+        CValidationState state;
+        // The full block commits the stake metadata used by its index. Check
+        // that commitment, but leave kernel/UTXO validation to the body pass.
+        // Header-only entries are never marked as having transaction data.
+        if (!CheckBlock(*block, state) || !AcceptBlockHeader(*block, state))
+            return error("%s: header import failed: %s", __func__, FormatStateMessage(state));
+        return true;
+    };
 
     int nLoaded = 0;
     try {
@@ -4357,7 +4404,9 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
                 {
                     LOCK(cs_main);
                     // detect out of order blocks, and store them for later
-                    if (hash != Params().GetConsensus().hashGenesisBlock && !LookupBlockIndex(block.hashPrevBlock)) {
+                    const auto* parent = LookupBlockIndex(block.hashPrevBlock);
+                    if (hash != Params().GetConsensus().hashGenesisBlock &&
+                        (!parent || (dbp && !headersOnly && !(parent->nStatus & BLOCK_HAVE_DATA)))) {
                         LogPrint(BCLog::REINDEX, "%s: Out of order block %s, parent %s not known\n", __func__,
                                 hash.ToString(), block.hashPrevBlock.ToString());
                         if (dbp)
@@ -4372,7 +4421,7 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
                 if (!pindex || (pindex->nStatus & BLOCK_HAVE_DATA) == 0) {
                     std::shared_ptr<const CBlock> block_ptr = std::make_shared<const CBlock>(block);
                     stateCatcher.get().setBlockHash(block_ptr->GetHash());
-                    if (ProcessNewBlock(block_ptr, dbp)) {
+                    if (process(block_ptr, dbp)) {
                         nLoaded++;
                     }
                     if (stateCatcher.get().stateErrorFound()) {
@@ -4395,7 +4444,7 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
                             LogPrint(BCLog::REINDEX, "%s: Processing out of order child %s of %s\n", __func__, block.GetHash().ToString(),
                                 head.ToString());
                             std::shared_ptr<const CBlock> block_ptr = std::make_shared<const CBlock>(block);
-                            if (ProcessNewBlock(block_ptr, &it->second)) {
+                            if (process(block_ptr, &it->second)) {
                                 nLoaded++;
                                 queue.emplace_back(block.GetHash());
                             }
@@ -4412,7 +4461,8 @@ bool LoadExternalBlockFile(FILE* fileIn, FlatFilePos* dbp)
         AbortNode(std::string("System error: ") + e.what());
     }
     if (nLoaded > 0)
-        LogPrintf("Loaded %i blocks from external file in %dms\n", nLoaded, GetTimeMillis() - nStart);
+        LogPrintf("Loaded %i %s from external file in %dms\n", nLoaded,
+                  headersOnly ? "headers" : "blocks", GetTimeMillis() - nStart);
     return nLoaded > 0;
 }
 
