@@ -5,6 +5,11 @@ installer="$root/share/setup.nsi.in"
 grep -Fxq 'Unicode true' "$installer"
 grep -Fq '${IfNot} ${AtLeastBuild} 17763' "$installer"
 grep -Fq 'SetErrorLevel 1633' "$installer"
+if grep -Fq 'ReadRegStr $INSTDIR' "$installer"; then
+    echo 'An old uninstaller must not follow a registry path into another installation' >&2
+    exit 1
+fi
+grep -Fq 'StrCmp $R0 $INSTDIR registered_installation' "$installer"
 grep -Fq 'File @abs_top_srcdir@/release/@BITCOIN_TX_NAME@@EXEEXT@' "$installer"
 grep -Fq "UninstallString '\"\$INSTDIR\\uninstall.exe\"'" "$installer"
 grep -Fq 'Delete /REBOOTOK "$INSTDIR\daemon\@BITCOIN_TX_NAME@@EXEEXT@"' "$installer"

@@ -173,7 +173,12 @@ FunctionEnd
 # Uninstaller functions
 Function un.onInit
     SetRegView 64
-    ReadRegStr $INSTDIR HKCU "${REGKEY}" Path
+    ReadRegStr $R0 HKCU "${REGKEY}" Path
+    StrCmp $R0 $INSTDIR registered_installation
+      MessageBox MB_OK|MB_ICONSTOP "This uninstaller does not match the registered installation. Use the current OrganicLifeCoin entry in Windows Settings instead." /SD IDOK
+      SetErrorLevel 1603
+      Abort
+registered_installation:
     !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuGroup
     !insertmacro SELECT_UNSECTION Main ${UNSEC0000}
 FunctionEnd
