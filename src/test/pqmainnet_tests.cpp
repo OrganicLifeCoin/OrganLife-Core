@@ -63,7 +63,6 @@ BOOST_FIXTURE_TEST_SUITE(pq_mainnet_tests, TestingSetup)
 BOOST_AUTO_TEST_CASE(mainnet_height_one_two_pq_premine_and_empty_registry)
 {
     struct ResetTime { ~ResetTime() { SetMockTime(0); } } reset;
-    SelectParams(CBaseChainParams::MAIN);
     SetMockTime(Params().GetConsensus().nLaunchTime + 120);
 
     mldsa44::Key key;
@@ -131,7 +130,6 @@ BOOST_AUTO_TEST_CASE(mainnet_equal_work_forks_converge_independent_of_arrival)
 BOOST_AUTO_TEST_CASE(mainnet_height_one_legacy_coinbase_is_rejected_without_poisoning_header)
 {
     struct ResetTime { ~ResetTime() { SetMockTime(0); } } reset;
-    SelectParams(CBaseChainParams::MAIN);
     SetMockTime(Params().GetConsensus().nLaunchTime + 120);
 
     const CScript legacyScript = CScript() << OP_TRUE;

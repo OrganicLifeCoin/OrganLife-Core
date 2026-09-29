@@ -36,8 +36,8 @@ class CBlockIndex;
 // the anchor it votes under. A peer certificate can never choose the trust
 // root or committee; verification always uses caller-supplied snapshots.
 namespace pqanchor {
-// Fresh mainnet derives its initial checkpoint from validated chain history.
-// Existing test chains retain their externally configured checkpoint policy.
+// Mainnet and unconfigured testnet derive their initial checkpoint from
+// validated chain history. An explicit testnet checkpoint retains its policy.
 bool UsesAutomaticBootstrap(const CChainParams& params);
 // AnchorID = Hash(canonical serialization of {height, blockHash, committee}).
 uint256 ID(uint32_t height, const uint256& blockHash, const uint256& committee);
@@ -109,6 +109,11 @@ public:
     // Resolve the chain-derived provisional root, or validate the configured
     // test-chain root. No durable finality is created by this lookup.
     bool ResolveBootstrap(const CBlockIndex* tip, Bootstrap& out, std::string& reason) const;
+    // Resolves a later testnet predecessor only while its committee has remained
+    // identical since the deterministic root. Caller verifies the first
+    // certificate against this exact height/hash/committee anchor.
+    bool ResolveDelayedBootstrap(const CBlockIndex* tip, uint32_t height,
+                                 Bootstrap& out, std::string& reason) const;
 
 private:
     CEvoDB& db;

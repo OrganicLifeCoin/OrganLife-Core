@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <chrono>
 #include <future>
+#include <fstream>
+#include <set>
 #if defined(__linux__) || defined(__APPLE__)
 #include <sys/stat.h>
 #endif
@@ -51,6 +53,7 @@ struct RegisteredWallet : SaplingTestingSetup {
     explicit RegisteredWallet(const std::string& network = CBaseChainParams::REGTEST) : SaplingTestingSetup(network),
         m_wallet("pq-fixture", WalletDatabase::Create(GetDataDir() / "pq-fixture"))
     {
+        gArgs.ForceSetArg("-createwalletbackups", "0");
         bool first_run;
         BOOST_REQUIRE_EQUAL(m_wallet.LoadWallet(first_run), DB_LOAD_OK);
         RegisterWalletRPCCommands(tableRPC);
@@ -118,6 +121,191 @@ BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_FIXTURE_TEST_SUITE(pqwallet_tests, RegisteredWallet)
 
+BOOST_AUTO_TEST_CASE(plaintext_pq_keys_persist_sign_and_migrate_on_encryption)
+{
+    std::string address;
+    BOOST_REQUIRE(m_wallet.GeneratePQAddress(address));
+    pq::KeyID id;
+    BOOST_REQUIRE(pq::DecodeAddress(address, "regtest", id));
+    mldsa44::Key key;
+    BOOST_REQUIRE(m_wallet.GetPQKey(id, key, false));
+    const auto public_key = key.GetPublicKey();
+    const std::vector<unsigned char> message{1, 2, 3};
+    std::vector<unsigned char> signature;
+    BOOST_REQUIRE(key.Sign(message, {}, signature));
+    BOOST_CHECK(mldsa44::Verify(public_key, message, {}, signature));
+    BOOST_REQUIRE(m_wallet.BackupWallet((GetDataDir() / "plaintext-pq-backup.dat").string(), true));
+
+    CWallet loaded("plaintext-pq-reload", WalletDatabase::CreateDummy());
+    BOOST_REQUIRE_EQUAL(WalletBatch(m_wallet.GetDBHandle()).LoadWallet(&loaded), DB_LOAD_OK);
+    BOOST_CHECK(!loaded.IsCrypted());
+    BOOST_REQUIRE(loaded.GetPQKey(id, key, false));
+    BOOST_CHECK(key.GetPublicKey() == public_key);
+
+    BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
+    BOOST_CHECK(m_wallet.IsCrypted());
+    BOOST_CHECK(!m_wallet.GetPQKey(id, key, false));
+    BOOST_CHECK(!m_wallet.Unlock(NEW_PASSPHRASE));
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
+    BOOST_REQUIRE(m_wallet.GetPQKey(id, key, false));
+    BOOST_CHECK(key.GetPublicKey() == public_key);
+
+    CWallet encrypted_reload("encrypted-pq-reload", WalletDatabase::CreateDummy());
+    BOOST_REQUIRE_EQUAL(WalletBatch(m_wallet.GetDBHandle()).LoadWallet(&encrypted_reload), DB_LOAD_OK);
+    BOOST_CHECK(encrypted_reload.IsLocked());
+    BOOST_CHECK(!encrypted_reload.GetPQKey(id, key, false));
+    BOOST_REQUIRE(encrypted_reload.Unlock(PASSPHRASE));
+    BOOST_REQUIRE(encrypted_reload.GetPQKey(id, key, false));
+    BOOST_CHECK(key.GetPublicKey() == public_key);
+}
+
+BOOST_AUTO_TEST_CASE(unencrypted_pq_rpc_creation_and_operator_recovery)
+{
+    const auto address = CallRPC("getnewpqaddress")["address"].get_str();
+    pq::KeyID id;
+    BOOST_REQUIRE(pq::DecodeAddress(address, "regtest", id));
+    mldsa44::Key key;
+    BOOST_CHECK(m_wallet.GetPQKey(id, key, false));
+
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
+    const auto created = CallRPC("createpqoperator");
+    BOOST_CHECK(created["recovery_only"].get_bool());
+    BOOST_REQUIRE_EQUAL(m_wallet.GetPQOperators().size(), 1U);
+    const auto operator_bytes = ParseHex(created["publickey"].get_str());
+    mldsa44::PublicKey operator_public{};
+    std::copy(operator_bytes.begin(), operator_bytes.end(), operator_public.begin());
+    BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
+    std::string credential;
+    std::string reason;
+    BOOST_REQUIRE(m_wallet.ExportPQOperatorConfig(operator_public, credential, reason));
+    mldsa44::Key exported;
+    BOOST_REQUIRE(pqwallet::DecodeOperatorConfig(credential, "regtest",
+                                                 Params().GetConsensus().hashGenesisBlock, exported, reason));
+    BOOST_CHECK(exported.GetPublicKey() == operator_public);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+}
+
+BOOST_AUTO_TEST_CASE(plaintext_pq_record_corruption_and_mixed_encryption_are_rejected)
+{
+    DiskWallet source("pq-plaintext-corruption", WalletDatabase::Create(GetDataDir() / "pq-plaintext-corruption"));
+    bool first_run;
+    BOOST_REQUIRE_EQUAL(source.LoadWallet(first_run), DB_LOAD_OK);
+    std::string address;
+    BOOST_REQUIRE(source.GeneratePQAddress(address));
+    pq::KeyID id;
+    BOOST_REQUIRE(pq::DecodeAddress(address, "regtest", id));
+    pqwallet::Record plaintext;
+    {
+        BerkeleyBatch batch(source.GetDBHandle());
+        BOOST_REQUIRE(batch.Read(std::make_pair(std::string("pqkey44"), id), plaintext));
+    }
+    CheckWrongNetworkLoad(source, CBaseChainParams::TESTNET);
+    auto corrupt = plaintext;
+    corrupt.plaintext_seed.bytes[0] ^= 1;
+    {
+        BerkeleyBatch batch(source.GetDBHandle());
+        BOOST_REQUIRE(batch.Write(std::make_pair(std::string("pqkey44"), id), corrupt));
+    }
+    CWallet corrupt_load("pq-plaintext-corrupt-load", WalletDatabase::CreateDummy());
+    BOOST_CHECK_EQUAL(WalletBatch(source.GetDBHandle()).LoadWallet(&corrupt_load), DB_CORRUPT);
+
+    {
+        BerkeleyBatch batch(source.GetDBHandle());
+        BOOST_REQUIRE(batch.Write(std::make_pair(std::string("pqkey44"), id), plaintext));
+    }
+    BOOST_REQUIRE(source.EncryptWallet(PASSPHRASE));
+    {
+        BerkeleyBatch batch(source.GetDBHandle());
+        BOOST_REQUIRE(batch.Write(std::make_pair(std::string("pqkey44"), id), plaintext));
+    }
+    CWallet mixed_load("pq-mixed-encryption-load", WalletDatabase::CreateDummy());
+    BOOST_CHECK_EQUAL(WalletBatch(source.GetDBHandle()).LoadWallet(&mixed_load), DB_CORRUPT);
+}
+
+BOOST_AUTO_TEST_CASE(automatic_backups_are_unique_and_include_new_plaintext_pq_keys)
+{
+    CWallet sanitized_name("a b", WalletDatabase::CreateDummy());
+    CWallet canonical_name("ab", WalletDatabase::CreateDummy());
+    BOOST_CHECK(sanitized_name.GetUniqueWalletBackupName() != canonical_name.GetUniqueWalletBackupName());
+    BOOST_CHECK(m_wallet.GetUniqueWalletBackupName().rfind("pq-fixture.", 0) == 0);
+
+    struct RestoreBackupSetting {
+        ~RestoreBackupSetting() { gArgs.ForceSetArg("-createwalletbackups", "0"); }
+    } restore;
+    gArgs.ForceSetArg("-createwalletbackups", "10");
+    const auto directory = GetDataDir() / "backups";
+    fs::create_directories(directory);
+    const auto files = [&] {
+        std::vector<fs::path> result;
+        for (const auto& item : fs::directory_iterator(directory)) {
+            if (fs::is_regular_file(item.status()) && item.path().stem().string() == "pq-fixture")
+                result.push_back(item.path());
+        }
+        return result;
+    };
+    const auto before = files();
+    std::string warning, error;
+    BOOST_REQUIRE(AutoBackupWallet(m_wallet, warning, error));
+    BOOST_REQUIRE(AutoBackupWallet(m_wallet, warning, error));
+    const auto repeated = files();
+    BOOST_REQUIRE_EQUAL(repeated.size(), before.size() + 2);
+    BOOST_CHECK(repeated[repeated.size() - 1] != repeated[repeated.size() - 2]);
+
+    std::string address;
+    BOOST_REQUIRE(m_wallet.GeneratePQAddress(address));
+    const auto after_generation = files();
+    BOOST_REQUIRE_EQUAL(after_generation.size(), repeated.size() + 1);
+
+    gArgs.ForceSetArg("-createwalletbackups", "0");
+    BOOST_REQUIRE(m_wallet.GeneratePQAddress(address));
+    BOOST_CHECK_EQUAL(files().size(), after_generation.size());
+
+    gArgs.ForceSetArg("-createwalletbackups", "10");
+    for (int i = 0; i < 12; ++i) {
+        BOOST_REQUIRE(m_wallet.GeneratePQAddress(address));
+    }
+    const auto final_address = address;
+    const auto retained = files();
+    BOOST_REQUIRE_EQUAL(retained.size(), 10);
+
+    {
+        struct RestoreBackupDirectory {
+            fs::path original;
+            fs::path saved;
+            bool moved{false};
+            ~RestoreBackupDirectory()
+            {
+                if (!moved) return;
+                if (fs::exists(original) && !fs::is_directory(original)) fs::remove(original);
+                if (fs::exists(saved)) fs::rename(saved, original);
+            }
+        } restore_directory{directory, GetDataDir() / "backups-pq-test-saved"};
+        BOOST_REQUIRE(!fs::exists(restore_directory.saved));
+        fs::rename(restore_directory.original, restore_directory.saved);
+        restore_directory.moved = true;
+        std::ofstream blocker(restore_directory.original.string());
+        BOOST_REQUIRE(blocker.good());
+        blocker.close();
+        const auto addresses_before_failure = m_wallet.GetPQAddresses();
+        address = "not-empty";
+        BOOST_CHECK(!m_wallet.GeneratePQAddress(address));
+        BOOST_CHECK(address.empty());
+        BOOST_CHECK(m_wallet.GetPQAddresses() == addresses_before_failure);
+    }
+
+    m_wallet.GetDBHandle().Flush(true);
+    bool newest_contains_final_key = false;
+    for (const auto& path : retained) {
+        DiskWallet backup(path.filename().string(), WalletDatabase::Create(path));
+        bool first_run;
+        BOOST_REQUIRE_EQUAL(backup.LoadWallet(first_run), DB_LOAD_OK);
+        mldsa44::Key key;
+        if (backup.GetPQKey(final_address, key)) newest_contains_final_key = true;
+    }
+    BOOST_CHECK(newest_contains_final_key);
+}
+
 BOOST_AUTO_TEST_CASE(empty_wallet_passphrase_authentication)
 {
     const SecureString wrong_passphrase = "wrong-pq-test-passphrase";
@@ -131,21 +319,23 @@ BOOST_AUTO_TEST_CASE(operator_identity_requires_verified_recovery_snapshot)
 {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ_MASTERNODES, 1);
     const auto backup = GetDataDir() / "pq-operator-recovery.dat";
+    const auto retry_backup = GetDataDir() / "pq-operator-recovery-retry.dat";
     mldsa44::PublicKey public_key{};
     std::string reason;
-    BOOST_CHECK(!m_wallet.PreparePQOperator(backup, public_key, reason));
-    BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
-    BOOST_CHECK(!m_wallet.PreparePQOperator(backup, public_key, reason));
-    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, true));
-    BOOST_CHECK(!m_wallet.PreparePQOperator(backup, public_key, reason));
-    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, false));
     const auto missing = GetDataDir() / "missing-operator-backup" / "wallet.dat";
     BOOST_CHECK(!m_wallet.PreparePQOperator(missing, public_key, reason));
     BOOST_CHECK(public_key == mldsa44::PublicKey{});
     BOOST_CHECK(m_wallet.GetPQOperators().empty());
-    BOOST_REQUIRE_MESSAGE(m_wallet.PreparePQOperator(backup, public_key, reason), reason);
+    BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, true));
+    BOOST_CHECK(!m_wallet.PreparePQOperator(backup, public_key, reason));
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, false));
+    BOOST_CHECK(!m_wallet.PreparePQOperator(missing, public_key, reason));
+    BOOST_CHECK(public_key == mldsa44::PublicKey{});
+    BOOST_CHECK(m_wallet.GetPQOperators().empty());
+    BOOST_REQUIRE_MESSAGE(m_wallet.PreparePQOperator(retry_backup, public_key, reason), reason);
     BOOST_CHECK(reason.empty());
-    BOOST_CHECK(fs::is_regular_file(backup));
+    BOOST_CHECK(fs::is_regular_file(retry_backup));
     BOOST_REQUIRE_EQUAL(m_wallet.GetPQOperators().size(), 1U);
     BOOST_CHECK(m_wallet.GetPQOperators().front() == public_key);
     BOOST_CHECK(m_wallet.GetPQAddresses().empty());
@@ -181,11 +371,12 @@ BOOST_AUTO_TEST_CASE(operator_export_cannot_bypass_controller_authorization)
         BOOST_CHECK(credential.empty());
     };
     denied(public_key);
-    BOOST_CHECK(reason.find("fully unlocked") != std::string::npos);
+    BOOST_CHECK(reason.find("Unknown or unbacked") != std::string::npos);
     BOOST_REQUIRE(m_wallet.EncryptWallet(PASSPHRASE));
     denied(public_key);
     BOOST_CHECK(reason.find("fully unlocked") != std::string::npos);
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
+    BOOST_REQUIRE(m_wallet.PreparePQOperator({}, public_key, reason));
     BOOST_REQUIRE(m_wallet.PreparePQOperator(GetDataDir() / "export-recovery.dat", public_key, reason));
     BOOST_REQUIRE(m_wallet.Lock());
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, true));
@@ -364,15 +555,14 @@ BOOST_AUTO_TEST_CASE(operator_recovery_corruption_and_namespace_gates)
 
 BOOST_AUTO_TEST_CASE(encryption_lock_staking_and_network_gates)
 {
-    std::string address = "stale";
-    BOOST_CHECK(!m_wallet.GeneratePQAddress(address));
-    BOOST_CHECK(address.empty());
-    EncryptTestWallet(m_wallet);
-    BOOST_CHECK(!m_wallet.GeneratePQAddress(address));
-    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, true));
-    BOOST_CHECK(!m_wallet.GeneratePQAddress(address));
-    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, false));
+    std::string address;
     BOOST_REQUIRE(m_wallet.GeneratePQAddress(address));
+    EncryptTestWallet(m_wallet);
+    std::string denied_address;
+    BOOST_CHECK(!m_wallet.GeneratePQAddress(denied_address));
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, true));
+    BOOST_CHECK(!m_wallet.GeneratePQAddress(denied_address));
+    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, false));
     mldsa44::Key key;
     BOOST_REQUIRE(m_wallet.GetPQKey(address, key));
     const auto pub = key.GetPublicKey();
@@ -528,7 +718,10 @@ BOOST_AUTO_TEST_CASE(missing_master_key_is_corrupt)
 
 BOOST_AUTO_TEST_CASE(rpc_addresses_use_only_the_pq_payment_path)
 {
-    BOOST_CHECK_THROW(CallPQRPC("getnewpqaddress"), std::runtime_error);
+    const auto plaintext_created = CallRPC("getnewpqaddress");
+    BOOST_CHECK(plaintext_created["experimental"].get_bool());
+    mldsa44::Key plaintext_key;
+    BOOST_CHECK(m_wallet.GetPQKey(plaintext_created["address"].get_str(), plaintext_key));
     EncryptTestWallet(m_wallet);
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
     const auto created = CallPQRPC("getnewpqaddress");
@@ -543,8 +736,10 @@ BOOST_AUTO_TEST_CASE(rpc_addresses_use_only_the_pq_payment_path)
     BOOST_CHECK_THROW(CallRPC("dumpprivkey " + address), std::runtime_error);
     BOOST_REQUIRE(m_wallet.Lock());
     const auto listed = CallRPC("listpqaddresses");
-    BOOST_CHECK_EQUAL(listed["addresses"].size(), 1U);
-    BOOST_CHECK_EQUAL(listed["addresses"][0].get_str(), address);
+    BOOST_CHECK_EQUAL(listed["addresses"].size(), 2U);
+    const std::set<std::string> listed_addresses{listed["addresses"][0].get_str(), listed["addresses"][1].get_str()};
+    BOOST_CHECK(listed_addresses.count(plaintext_created["address"].get_str()));
+    BOOST_CHECK(listed_addresses.count(address));
     BOOST_CHECK(listed["payable"].get_bool());
     BOOST_CHECK_THROW(CallPQRPC("getnewpqaddress"), std::runtime_error);
 }
@@ -553,8 +748,12 @@ BOOST_AUTO_TEST_CASE(rpc_address_creation_requires_a_successful_backup)
 {
     EncryptTestWallet(m_wallet);
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
-    BOOST_CHECK_THROW(CallRPC("getnewpqaddress"), std::runtime_error);
-    const auto key_count = m_wallet.GetPQAddresses().size();
+    const auto no_backup_address = CallRPC("getnewpqaddress")["address"].get_str();
+    const auto addresses_without_backup = m_wallet.GetPQAddresses();
+    BOOST_CHECK_EQUAL(addresses_without_backup.size(), 1U);
+    BOOST_CHECK(std::find(addresses_without_backup.begin(), addresses_without_backup.end(), no_backup_address) !=
+                addresses_without_backup.end());
+    const auto key_count = addresses_without_backup.size();
     const auto missing_parent = GetDataDir() / "missing-pq-backup-dir" / "wallet.dat";
     BOOST_CHECK_EXCEPTION(CallRPC("getnewpqaddress " + missing_parent.string()), std::runtime_error,
         [](const std::runtime_error& e) { return std::string(e.what()).find("backup failed") != std::string::npos; });
@@ -571,9 +770,25 @@ BOOST_AUTO_TEST_CASE(rpc_address_creation_requires_a_successful_backup)
 
 BOOST_AUTO_TEST_CASE(encrypted_snapshots_are_exclusive_and_restorable)
 {
+    const auto plaintext_destination = GetDataDir() / "pq-plaintext-exclusive.dat";
+    std::string plaintext_address;
+    {
+        DiskWallet plaintext_source("pq-plaintext-exclusive-source",
+            WalletDatabase::Create(GetDataDir() / "pq-plaintext-exclusive-source"));
+        bool source_first_run;
+        BOOST_REQUIRE_EQUAL(plaintext_source.LoadWallet(source_first_run), DB_LOAD_OK);
+        BOOST_REQUIRE(plaintext_source.GeneratePQAddress(plaintext_address));
+        BOOST_REQUIRE(plaintext_source.BackupWallet(plaintext_destination.string(), true));
+        plaintext_source.GetDBHandle().Flush(true);
+    }
+    DiskWallet plaintext_restored("pq-plaintext-exclusive", WalletDatabase::Create(plaintext_destination));
+    bool plaintext_first_run;
+    BOOST_REQUIRE_EQUAL(plaintext_restored.LoadWallet(plaintext_first_run), DB_LOAD_OK);
+    BOOST_CHECK(!plaintext_restored.IsCrypted());
+    mldsa44::Key plaintext_key;
+    BOOST_REQUIRE(plaintext_restored.GetPQKey(plaintext_address, plaintext_key));
+
     const auto destination = GetDataDir() / "pq-exclusive.dat";
-    BOOST_CHECK(!m_wallet.BackupWallet(destination.string(), true));
-    BOOST_CHECK(!fs::exists(destination));
     EncryptTestWallet(m_wallet);
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
     std::string address;
@@ -819,8 +1034,6 @@ BOOST_AUTO_TEST_CASE(pq_listing_waits_for_pending_wallet_notifications)
 void CheckPaymentTransactions(CWallet& m_wallet)
 {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 0);
-    EncryptTestWallet(m_wallet);
-    BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE));
     std::string address;
     BOOST_REQUIRE(m_wallet.GeneratePQAddress(address));
     pq::KeyID id;
@@ -869,7 +1082,7 @@ void CheckPaymentTransactions(CWallet& m_wallet)
     BOOST_CHECK_EQUAL(m_wallet.GetPQAddresses().size(), key_count);
     BOOST_CHECK(!WITH_LOCK(m_wallet.cs_wallet, return m_wallet.IsSpent(pq_coin)));
     const auto old_key_count = m_wallet.GetPQAddresses().size();
-    const auto sent = CallPQRPC("sendpqtoaddress " + address + " 1");
+    const auto sent = CallRPC("sendpqtoaddress " + address + " 1");
     const auto transfer = WITH_LOCK(m_wallet.cs_wallet, return m_wallet.mapWallet.at(uint256S(sent["txid"].get_str())).tx);
     BOOST_REQUIRE_EQUAL(transfer->vin.size(), 1U);
     BOOST_CHECK(transfer->vin[0].scriptSig.empty());
@@ -939,7 +1152,6 @@ void CheckPaymentTransactions(CWallet& m_wallet)
     BOOST_CHECK_EQUAL(restored.mapWallet.count(source_ref->GetHash()), 1U);
     BOOST_CHECK_EQUAL(restored.mapWallet.count(transfer->GetHash()), 1U);
     BOOST_CHECK_EQUAL(restored.mapWallet.count(two_input_tx->GetHash()), 1U);
-    BOOST_REQUIRE(restored.Unlock(PASSPHRASE));
     for (const auto& restored_address : restored.GetPQAddresses()) {
         pq::KeyID restored_id;
         mldsa44::Key key;
@@ -997,7 +1209,7 @@ BOOST_AUTO_TEST_CASE(operator_controller_backup_export_and_reload_are_network_bo
 BOOST_AUTO_TEST_CASE(finality_status_is_available_without_claiming_activation)
 {
     const auto status = CallRPC("getpqfinalityinfo");
-    BOOST_CHECK(!status["configured"].get_bool());
+    BOOST_CHECK(status["configured"].get_bool()); // Automatic testnet history validation.
     BOOST_CHECK(!status["validated"].get_bool());
     BOOST_CHECK(!status["member"].get_bool());
     SelectParams(CBaseChainParams::MAIN);
@@ -1010,8 +1222,8 @@ BOOST_AUTO_TEST_CASE(receiving_before_activation_preserves_security_and_network_
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 20);
     BOOST_CHECK(!CWallet::PQPaymentsActive());
     BOOST_CHECK_EQUAL(CallRPC("listpqaddresses")["addresses"].size(), 0U);
-    BOOST_CHECK_EXCEPTION(CallPQRPC("getnewpqaddress"), std::runtime_error,
-        [](const std::runtime_error& e) { return std::string(e.what()).find("Encrypt") != std::string::npos; });
+    const auto plaintext = CallRPC("getnewpqaddress");
+    BOOST_CHECK(!plaintext["payable"].get_bool());
     EncryptTestWallet(m_wallet);
     BOOST_CHECK_THROW(CallPQRPC("getnewpqaddress"), std::runtime_error);
     BOOST_REQUIRE(m_wallet.Unlock(PASSPHRASE, true));
@@ -1044,7 +1256,11 @@ BOOST_AUTO_TEST_CASE(receiving_before_activation_preserves_security_and_network_
     // Switching back restores the network defaults, not this test's delayed activation.
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_PQ, 20);
     BOOST_REQUIRE(m_wallet.Lock());
-    BOOST_CHECK_EQUAL(CallRPC("listpqaddresses")["addresses"][0].get_str(), address);
+    const auto listed = CallRPC("listpqaddresses")["addresses"];
+    BOOST_REQUIRE_EQUAL(listed.size(), 2U);
+    const std::set<std::string> addresses{listed[0].get_str(), listed[1].get_str()};
+    BOOST_CHECK(addresses.count(address));
+    BOOST_CHECK(addresses.count(plaintext["address"].get_str()));
     BOOST_CHECK(!CallRPC("listpqaddresses")["payable"].get_bool());
     BOOST_CHECK(!m_wallet.GetPQKey(address, key));
     BOOST_CHECK(!key.IsValid());

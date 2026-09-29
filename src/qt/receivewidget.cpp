@@ -370,7 +370,7 @@ void ReceiveWidget::onNewAddressClicked()
         }
         std::string address;
         if (!operationWallet->getWallet()->GeneratePQAddress(address)) {
-            inform(tr("Encrypt and fully unlock the wallet before creating an address"));
+            inform(tr("Could not create or back up the address. Check the backup directory and fully unlock the wallet if it is encrypted."));
             return;
         }
         if (!PQWalletUI::backupSnapshot(operationWallet, pqBackupDirectory)) {
@@ -381,7 +381,7 @@ void ReceiveWidget::onNewAddressClicked()
                             CClientUIInterface::MSG_ERROR);
             } else {
                 emitMessage(tr("Receive"),
-                            tr("The encrypted wallet backup could not be saved. No address was created."),
+                            tr("The requested wallet backup could not be saved. No address was created."),
                             CClientUIInterface::MSG_ERROR);
             }
             return;

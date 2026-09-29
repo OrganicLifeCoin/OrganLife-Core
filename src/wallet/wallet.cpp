@@ -27,6 +27,8 @@
 #include "scheduler.h"
 #include "shutdown.h"
 #include "util/validation.h"
+#include "utilstrencodings.h"
+#include "utiltime.h"
 #include "utilmoneystr.h"
 #include "wallet/fees.h"
 
@@ -850,7 +852,25 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
     {
         LOCK(cs_wallet);
-        mapMasterKeys[++nMasterKeyMaxID] = kMasterKey;
+        LOCK(cs_KeyStore);
+        std::map<pq::KeyID, pqwallet::Record> encrypted_pq_keys;
+        std::map<pq::KeyID, pqwallet::OperatorRecovery> encrypted_operator_recovery;
+        for (const auto& entry : m_pq_keys) {
+            pqwallet::Record record;
+            if (entry.second.version != 4 ||
+                !pqwallet::EncryptSeed(entry.second.plaintext_seed.bytes, vMasterKey,
+                                       Params().NetworkIDString(), record)) return false;
+            encrypted_pq_keys.emplace(entry.first, std::move(record));
+        }
+        for (const auto& entry : m_pq_operator_recovery) {
+            auto recovery = entry.second;
+            pqwallet::SecureBytes seed = recovery.record.plaintext_seed.bytes;
+            if (recovery.record.version != 4 ||
+                !pqwallet::EncryptOperatorRecovery(seed, vMasterKey,
+                        Params().NetworkIDString(), Params().GetConsensus().hashGenesisBlock, recovery.record)) return false;
+            encrypted_operator_recovery.emplace(entry.first, std::move(recovery));
+        }
+        const unsigned int master_key_id = nMasterKeyMaxID + 1;
         assert(!encrypted_batch);
         encrypted_batch = new WalletBatch(*database);
         if (!encrypted_batch->TxnBegin()) {
@@ -858,7 +878,30 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             encrypted_batch = nullptr;
             return false;
         }
-        encrypted_batch->WriteMasterKey(nMasterKeyMaxID, kMasterKey);
+        if (!encrypted_batch->WriteMasterKey(master_key_id, kMasterKey)) {
+            encrypted_batch->TxnAbort();
+            delete encrypted_batch;
+            encrypted_batch = nullptr;
+            return false;
+        }
+
+        for (const auto& entry : encrypted_pq_keys) {
+            if (!encrypted_batch->WritePQKey(entry.first, entry.second, true)) {
+                encrypted_batch->TxnAbort();
+                delete encrypted_batch;
+                encrypted_batch = nullptr;
+                return false;
+            }
+        }
+        for (const auto& entry : encrypted_operator_recovery) {
+            if (!encrypted_batch->WritePQOperatorRecovery(Params().GetConsensus().hashGenesisBlock,
+                                                           entry.first, entry.second, true)) {
+                encrypted_batch->TxnAbort();
+                delete encrypted_batch;
+                encrypted_batch = nullptr;
+                return false;
+            }
+        }
 
 
         if (!EncryptKeys(vMasterKey) || (m_sspk_man->IsEnabled() && !m_sspk_man->EncryptSaplingKeys(vMasterKey))) {
@@ -878,6 +921,11 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             // die to avoid confusion and let the user reload their unencrypted wallet.
             assert(false);
         }
+
+        nMasterKeyMaxID = master_key_id;
+        mapMasterKeys.emplace(master_key_id, kMasterKey);
+        m_pq_keys = std::move(encrypted_pq_keys);
+        m_pq_operator_recovery = std::move(encrypted_operator_recovery);
 
         delete encrypted_batch;
         encrypted_batch = nullptr;
@@ -4438,7 +4486,7 @@ bool CWallet::BackupWallet(const std::string& strDest, bool exclusive)
 {
     if (exclusive) {
         LOCK(cs_wallet);
-        return IsCrypted() && database->Backup(strDest, true);
+        return database->Backup(strDest, true);
     }
     return database->Backup(strDest);
 }
@@ -4512,8 +4560,15 @@ bool CWalletTx::AcceptToMemoryPool(CValidationState& state)
 
 std::string CWallet::GetUniqueWalletBackupName() const
 {
+    static std::atomic<uint64_t> sequence{0};
     std::string name = !m_name.empty() ? SanitizeString(m_name, SAFE_CHARS_FILENAME) : "wallet_backup";
-    return strprintf("%s%s", name, FormatISO8601DateTimeForBackup(GetTime()));
+    if (name != m_name && !m_name.empty()) {
+        std::vector<unsigned char> hash(CSHA256::OUTPUT_SIZE);
+        CSHA256().Write(reinterpret_cast<const unsigned char*>(m_name.data()), m_name.size()).Finalize(hash.data());
+        name += "-" + HexStr(MakeUCharSpan(hash));
+    }
+    return name + FormatISO8601DateTimeForBackup(GetTime()) + "-" +
+        std::to_string(GetTimeMicros()) + "-" + std::to_string(sequence.fetch_add(1));
 }
 
 CWallet::CWallet(std::string name, std::unique_ptr<WalletDatabase> database) : m_name(std::move(name)), database(std::move(database))

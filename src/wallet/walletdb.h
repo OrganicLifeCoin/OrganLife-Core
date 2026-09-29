@@ -153,7 +153,7 @@ public:
     bool WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata& keyMeta);
     bool WriteCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret, const CKeyMetadata& keyMeta);
     bool WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey);
-    bool WritePQKey(const pq::KeyID& id, const pqwallet::Record& record);
+    bool WritePQKey(const pq::KeyID& id, const pqwallet::Record& record, bool overwrite = false);
     bool ErasePQKey(const pq::KeyID& id);
     bool WritePQOperatorRecovery(const uint256& genesis, const pq::KeyID& id,
                                  const pqwallet::OperatorRecovery& recovery, bool overwrite = false);

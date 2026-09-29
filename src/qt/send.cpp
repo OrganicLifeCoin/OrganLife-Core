@@ -743,7 +743,7 @@ bool SendWidget::sendFinalStep()
     if (Params().SupportsPQ()) {
             if (!PQWalletUI::backupSnapshot(walletModel, pqBackupDirectory)) {
                 showSendBlockingError(this,
-                    tr("The encrypted wallet backup could not be saved. The payment was not sent."));
+                    tr("The requested wallet backup could not be saved. The payment was not sent."));
                 dialog->deleteLater();
                 return false;
             }

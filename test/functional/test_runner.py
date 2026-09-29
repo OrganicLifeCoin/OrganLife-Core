@@ -79,6 +79,8 @@ BASE_SCRIPTS= [
     'feature_pq_governance.py',
     'feature_pq_governance.py --pq-masternode',
     'feature_pq_startup.py',
+    'feature_pq_wallet_backups.py',
+    'feature_pq_wallet_backups.py --mainnet',
     'feature_pq_registry.py',
     'feature_pq_operator.py',
     'feature_pq_operator_recovery.py',

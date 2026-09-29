@@ -11,6 +11,7 @@
 namespace Ui {
 class SettingsBackupWallet;
 }
+class QCheckBox;
 
 class SettingsBackupWallet : public PWidget
 {
@@ -19,6 +20,10 @@ class SettingsBackupWallet : public PWidget
 public:
     explicit SettingsBackupWallet(OrganicLifeGUI* _window, QWidget *parent = nullptr);
     ~SettingsBackupWallet();
+    void clearWalletModel() override;
+
+protected:
+    void loadWalletModel() override;
 
 private Q_SLOTS:
     void selectFileOutput();
@@ -26,6 +31,7 @@ private Q_SLOTS:
 
 private:
     Ui::SettingsBackupWallet *ui;
+    QCheckBox* automaticBackup;
 };
 
 #endif // PIVX_QT_SETTINGS_BACKUPWALLET_H

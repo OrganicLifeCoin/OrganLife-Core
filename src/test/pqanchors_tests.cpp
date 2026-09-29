@@ -14,9 +14,9 @@
 
 namespace {
 struct AutomaticAnchorParams : CChainParams {
-    explicit AutomaticAnchorParams(int service = 20)
+    explicit AutomaticAnchorParams(int service = 20, const std::string& network = CBaseChainParams::MAIN)
     {
-        strNetworkID = CBaseChainParams::MAIN;
+        strNetworkID = network;
         consensus = Params().GetConsensus();
         consensus.vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight = 1;
         consensus.vUpgrades[Consensus::UPGRADE_PQ_SERVICE].nActivationHeight = service;
@@ -174,10 +174,29 @@ BOOST_AUTO_TEST_CASE(automatic_bootstrap_regtest_override_is_network_scoped)
 {
     gArgs.ForceSetArg("-pqautobootstrap", "1");
     BOOST_CHECK(pqanchor::UsesAutomaticBootstrap(Params()));
-    BOOST_CHECK(!pqanchor::UsesAutomaticBootstrap(*CreateChainParams("test")));
+    gArgs.ForceSetArg("-pqbootstrap", "");
+    BOOST_CHECK(pqanchor::UsesAutomaticBootstrap(*CreateChainParams("test")));
     gArgs.ForceSetArg("-pqautobootstrap", "0");
     BOOST_CHECK(!pqanchor::UsesAutomaticBootstrap(Params()));
     BOOST_CHECK(pqanchor::UsesAutomaticBootstrap(*CreateChainParams("main")));
+}
+
+BOOST_AUTO_TEST_CASE(testnet_manual_bootstrap_remains_supported)
+{
+    std::vector<pqquorum::Member> members;
+    for (size_t i = 0; i < 4; ++i)
+        members.push_back({uint256S(std::to_string(i + 1)), keys[i].GetPublicKey()});
+    const auto testParams = CreateChainParams("test");
+    gArgs.ForceSetArg("-pqbootstrap", "");
+    BOOST_CHECK(pqanchor::UsesAutomaticBootstrap(*testParams));
+    gArgs.ForceSetArg("-pqbootstrap", BootstrapSpec(20, uint256S("20"), members));
+    BOOST_CHECK(!pqanchor::UsesAutomaticBootstrap(*testParams));
+    std::string reason;
+    BOOST_REQUIRE(pqanchor::InitBootstrap(*testParams, reason));
+    BOOST_REQUIRE(pqanchor::GetBootstrap());
+    BOOST_CHECK_EQUAL(pqanchor::GetBootstrap()->height, 20U);
+    gArgs.ForceSetArg("-pqbootstrap", "");
+    BOOST_REQUIRE(pqanchor::InitBootstrap(*testParams, reason));
 }
 
 BOOST_AUTO_TEST_CASE(automatic_bootstrap_rejects_a_manual_checkpoint)
@@ -255,6 +274,111 @@ BOOST_AUTO_TEST_CASE(automatic_bootstrap_waits_for_four_and_freezes_historical_m
     hashes[30] = uint256S("123abc");
     BOOST_REQUIRE(state.ResolveBootstrap(&chain.back(), root, reason));
     BOOST_CHECK(root.blockHash == hashes[30]);
+}
+
+BOOST_AUTO_TEST_CASE(testnet_delayed_root_requires_one_continuous_historical_committee)
+{
+    LOCK(cs_main);
+    AutomaticAnchorParams params(20, "test");
+    pqmn::Index index(*evoDb, Params());
+    pqanchor::ChainState state(*evoDb, params);
+    std::vector<CBlockIndex> chain;
+    std::vector<uint256> hashes;
+    MakeChain(chain, hashes, 60);
+    std::string reason;
+    gArgs.ForceSetArg("-pqbootstrap", "");
+    RegisterFour(index, reason);
+    BOOST_REQUIRE(state.CaptureCommittee(index, 20, reason));
+
+    pqanchor::Bootstrap base;
+    BOOST_REQUIRE(state.ResolveBootstrap(&chain.back(), base, reason));
+    BOOST_CHECK_EQUAL(base.height, 20U);
+    pqanchor::Bootstrap delayed;
+    BOOST_REQUIRE(state.ResolveDelayedBootstrap(&chain.back(), 40, delayed, reason));
+    BOOST_CHECK_EQUAL(delayed.height, 40U);
+    BOOST_CHECK(delayed.blockHash == hashes[40]);
+    BOOST_CHECK(pqquorum::Commitment(delayed.members) == pqquorum::Commitment(base.members));
+
+    pqquorum::Statement statement;
+    statement.purpose = pqquorum::Purpose::PRECOMMIT;
+    statement.genesis = params.GetConsensus().hashGenesisBlock;
+    statement.anchor = pqanchor::ID(delayed.height, delayed.blockHash,
+                                    pqquorum::Commitment(delayed.members));
+    statement.committee = pqquorum::Commitment(delayed.members);
+    statement.height = delayed.height + 1;
+    statement.value = hashes[statement.height];
+    pqquorum::Certificate certificate;
+    certificate.statement = statement;
+    for (uint16_t member = 0; member < pqquorum::Threshold(delayed.members.size()); ++member) {
+        pqquorum::Signature signature;
+        signature.member = member;
+        std::vector<unsigned char> bytes;
+        bool signedByMember = false;
+        for (size_t node = 0; node < 4; ++node) {
+            if (delayed.members[member].operator_key != keys[3 * node + 1].GetPublicKey()) continue;
+            BOOST_REQUIRE(keys[3 * node + 1].Sign(pqquorum::Message(statement), pqquorum::Context(), bytes));
+            signedByMember = true;
+            break;
+        }
+        BOOST_REQUIRE(signedByMember);
+        std::copy(bytes.begin(), bytes.end(), signature.bytes.begin());
+        certificate.signatures.push_back(signature);
+    }
+    BOOST_CHECK(pqquorum::Verify(certificate, statement, delayed.members, reason));
+    auto wrongAnchor = statement;
+    wrongAnchor.anchor = uint256S("1234");
+    BOOST_CHECK(!pqquorum::Verify(certificate, wrongAnchor, delayed.members, reason));
+    auto wrongValue = statement;
+    wrongValue.value = uint256S("1234");
+    BOOST_CHECK(!pqquorum::Verify(certificate, wrongValue, delayed.members, reason));
+    auto badSignature = certificate;
+    badSignature.signatures.front().bytes.front() ^= 1;
+    BOOST_CHECK(!pqquorum::Verify(badSignature, statement, delayed.members, reason));
+    auto shortCertificate = certificate;
+    shortCertificate.signatures.pop_back();
+    BOOST_CHECK(!pqquorum::Verify(shortCertificate, statement, delayed.members, reason));
+    auto wrongMembers = delayed.members;
+    wrongMembers.front().operator_key[0] ^= 1;
+    BOOST_CHECK(!pqquorum::Verify(certificate, statement, wrongMembers, reason));
+    BOOST_CHECK(!state.ResolveDelayedBootstrap(&chain.back(), base.height - 1, delayed, reason));
+    BOOST_CHECK(!state.ResolveDelayedBootstrap(&chain.back(), 61, delayed, reason));
+}
+
+BOOST_AUTO_TEST_CASE(testnet_delayed_root_rejects_committee_changes_and_empty_intervals)
+{
+    LOCK(cs_main);
+    AutomaticAnchorParams params(20, "test");
+    pqmn::Index index(*evoDb, Params());
+    pqanchor::ChainState state(*evoDb, params);
+    std::vector<CBlockIndex> chain;
+    std::vector<uint256> hashes;
+    MakeChain(chain, hashes, 60);
+    std::string reason;
+    gArgs.ForceSetArg("-pqbootstrap", "");
+    RegisterFour(index, reason);
+    BOOST_REQUIRE(state.CaptureCommittee(index, 20, reason));
+
+    BOOST_REQUIRE(index.Apply(*FeeOnly(Registration(4, 51004), 4), view, 30, reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 30, reason));
+    pqanchor::Bootstrap delayed;
+    BOOST_CHECK(!state.ResolveDelayedBootstrap(&chain.back(), 40, delayed, reason));
+
+    pqmn::Payload revoke;
+    revoke.action = pqmn::Action::REVOKE;
+    revoke.sequence = 1;
+    for (const auto& member : pqanchor::SelectCommittee(index, 30))
+        if (member.operator_key == keys[13].GetPublicKey()) revoke.registration = member.registration;
+    BOOST_REQUIRE(!revoke.registration.IsNull());
+    BOOST_REQUIRE(index.Apply(*FeeOnly(revoke, 4), view, 31, reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 31, reason));
+    BOOST_CHECK(!state.ResolveDelayedBootstrap(&chain.back(), 40, delayed, reason));
+
+    revoke.sequence = 1;
+    for (const auto& member : pqanchor::SelectCommittee(index, 31))
+        if (member.operator_key == keys[1].GetPublicKey()) revoke.registration = member.registration;
+    BOOST_REQUIRE(index.Apply(*FeeOnly(revoke, 0), view, 32, reason));
+    BOOST_REQUIRE(state.CaptureCommittee(index, 32, reason));
+    BOOST_CHECK(!state.ResolveDelayedBootstrap(&chain.back(), 40, delayed, reason));
 }
 
 BOOST_AUTO_TEST_CASE(automatic_bootstrap_reopens_from_disk_and_undo_is_persistent)
@@ -814,6 +938,57 @@ BOOST_AUTO_TEST_CASE(durable_store_accepts_identical_historical_replay_without_r
     first.blockHash = uint256S("22");
     BOOST_CHECK(!store->Write(first, {}, reason));
     BOOST_CHECK_EQUAL(store->TipHeight(), 21U);
+}
+
+BOOST_AUTO_TEST_CASE(testnet_delayed_first_carrier_is_the_first_durable_anchor)
+{
+    const auto datadir = SetDataDir("pq-testnet-delayed-anchor");
+    std::string reason;
+    auto store = pqanchor::Store::Open(datadir, reason);
+    BOOST_REQUIRE_MESSAGE(store, "open: " << reason);
+    BOOST_CHECK_EQUAL(store->TipHeight(), 0U); // The derived h3193 root is provisional only.
+
+    std::vector<pqquorum::Member> members;
+    for (size_t i = 0; i < 4; ++i)
+        members.push_back({uint256S(strprintf("%u", i + 1)), keys[3 * i + 1].GetPublicKey()});
+    const uint256 committee = pqquorum::Commitment(members);
+    pqquorum::Certificate certificate;
+    certificate.statement.purpose = pqquorum::Purpose::PRECOMMIT;
+    certificate.statement.genesis = Params().GetConsensus().hashGenesisBlock;
+    certificate.statement.anchor = pqanchor::ID(3454, uint256S("3454"), committee);
+    certificate.statement.committee = committee;
+    certificate.statement.height = 3455;
+    certificate.statement.round = 0;
+    certificate.statement.value = uint256S("3455");
+    for (size_t i = 0; i < pqquorum::Threshold(members.size()); ++i) {
+        pqquorum::Signature signature;
+        signature.member = i;
+        std::vector<unsigned char> bytes;
+        BOOST_REQUIRE(keys[3 * i + 1].Sign(pqquorum::Message(certificate.statement),
+                                           pqquorum::Context(), bytes));
+        std::copy(bytes.begin(), bytes.end(), signature.bytes.begin());
+        certificate.signatures.push_back(signature);
+    }
+    BOOST_REQUIRE(pqquorum::Verify(certificate, certificate.statement, members, reason));
+
+    pqanchor::Record first;
+    first.height = 3455;
+    first.blockHash = certificate.statement.value;
+    first.committee = committee;
+    BOOST_REQUIRE(store->Write(first, certificate, reason));
+    BOOST_CHECK_EQUAL(store->TipHeight(), 3455U);
+    pqanchor::Record record;
+    BOOST_CHECK(!store->Read(3193, record));
+    BOOST_REQUIRE(store->Read(3455, record));
+    BOOST_CHECK(record.blockHash == first.blockHash);
+
+    store.reset();
+    store = pqanchor::Store::Open(datadir, reason);
+    BOOST_REQUIRE_MESSAGE(store, "reopen: " << reason);
+    BOOST_REQUIRE(store->Tip(record));
+    BOOST_CHECK_EQUAL(record.height, 3455U);
+    BOOST_CHECK(store->Write(first, certificate, reason)); // Replay does not create h3193.
+    BOOST_CHECK_EQUAL(store->TipHeight(), 3455U);
 }
 
 BOOST_AUTO_TEST_CASE(durable_store_fsyncs_enforces_monotonic_height_and_survives_reopen)

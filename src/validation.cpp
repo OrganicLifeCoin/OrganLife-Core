@@ -1803,9 +1803,17 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
             pqanchor::Record parent;
             bool hasParent = pqAnchors.TipAnchor(parent);
             if (!hasParent) {
-                // Never take the first trust root from the certificate itself.
-                if (certificate.statement.height != bootstrap.height + 1)
-                    return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-no-anchor");
+                if (certificate.statement.height != bootstrap.height + 1) {
+                    // Testnet can start later than its deterministic root only
+                    // when that root's committee stayed unchanged and the cert
+                    // signs the exact locally derived predecessor anchor below.
+                    if (!automatic || Params().NetworkIDString() != CBaseChainParams::TESTNET ||
+                        certificate.statement.height == 0 ||
+                        !pqAnchors.ResolveDelayedBootstrap(pindex->pprev,
+                                                           certificate.statement.height - 1,
+                                                           bootstrap, reason))
+                        return state.DoS(100, false, REJECT_INVALID, "bad-pq-finality-no-anchor");
+                }
                 parent.height = bootstrap.height;
                 parent.blockHash = bootstrap.blockHash;
                 parent.committee = pqquorum::Commitment(bootstrap.members);

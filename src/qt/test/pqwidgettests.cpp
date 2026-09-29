@@ -76,6 +76,35 @@
 #include <aclapi.h>
 #endif
 
+void PQWidgetTests::backupIsOptional()
+{
+    const auto oldNetwork = Params().NetworkIDString();
+    struct Restore { std::string network; ~Restore() { SelectParams(network); } } restore{oldNetwork};
+    SelectParams(CBaseChainParams::REGTEST);
+    QTemporaryDir temporary;
+    QVERIFY(temporary.isValid());
+    CWallet wallet("optional-backup-" + QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString(),
+                   WalletDatabase::Create(fs::path(temporary.path().toStdString()) / "wallet"));
+    bool firstRun;
+    QCOMPARE(wallet.LoadWallet(firstRun), DB_LOAD_OK);
+    OptionsModel options;
+    WalletModel model(&wallet, &options);
+    model.init();
+    const auto settingsKey = PQWalletUI::backupSettingsKey(&model);
+    QSettings settings;
+    settings.remove(settingsKey);
+    QString directory = temporary.path();
+    QVERIFY(PQWalletUI::ensureBackupDirectory(nullptr, &model, directory));
+    QVERIFY(directory.isEmpty());
+    settings.setValue(settingsKey, temporary.path());
+    QVERIFY(PQWalletUI::ensureBackupDirectory(nullptr, &model, directory));
+    QCOMPARE(directory, temporary.path());
+    settings.remove(settingsKey);
+    directory.clear();
+    QVERIFY(PQWalletUI::backupSnapshot(&model, directory));
+    QVERIFY(!PQWalletUI::backupSnapshot(nullptr, directory));
+}
+
 void PQWidgetTests::masternodeControllerNavigation_data()
 {
     QTest::addColumn<QString>("network");
@@ -416,7 +445,8 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     operatorKey = payload.operatorKey;
     QVERIFY(payload.owner != payload.collateralKey);
     QCOMPARE(payload.service.GetPort(), uint16_t(49736));
-    const auto backupFile = reviewMessage.section("Encrypted backup: ", 1).section('\n', 0, 0);
+    const auto backupFile = reviewMessage.section("Backup: ", 1).section('\n', 0, 0);
+    QVERIFY(!backupFile.isEmpty());
     {
         // Berkeley DB must close the source before opening its backup copy
         // (the copies intentionally have the same database file ID).
@@ -509,9 +539,34 @@ void PQWidgetTests::masternodeControllerCancelsWithoutWrites()
     record.collateral = COutPoint(uint256S("aa"), 2);
     record.collateralHeight = 10;
     const auto recordKey = std::make_pair(std::make_pair(std::string("pqmn1r"), genesisHash), uint256S("bb"));
+    pq::KeyID ownerId;
+    QVERIFY(pq::DecodeAddress(wallet.GetPQAddresses().front(), Params().NetworkIDString(), ownerId));
+    mldsa44::Key ownerKey;
+    QVERIFY(wallet.GetPQKey(ownerId, ownerKey, false));
+    record.owner = ownerKey.GetPublicKey();
+    record.payout = ownerId;
     evoDb->Write(recordKey, record);
+    auto foreignRecord = record;
+    foreignRecord.owner = operatorKey;
+    foreignRecord.payout = ownerId; // Payout and operator identities alone do not establish ownership.
+    const auto foreignRecordKey = std::make_pair(std::make_pair(std::string("pqmn1r"), genesisHash), uint256S("bc"));
+    evoDb->Write(foreignRecordKey, foreignRecord);
+    registryModel->setWalletModel(nullptr);
+    registryModel->updateMNList();
+    QCOMPARE(registryModel->rowCount(), 0);
+    registryModel->setWalletModel(&model);
     registryModel->updateMNList();
     QCOMPARE(registryModel->rowCount(), 1);
+    registryModel->setWalletModel(&replacementModel);
+    registryModel->updateMNList();
+    QCOMPARE(registryModel->rowCount(), 0);
+    registryModel->setWalletModel(&model);
+    registryModel->updateMNList();
+    QCOMPARE(registryModel->rowCount(), 1);
+    wallet.Lock();
+    registryModel->updateMNList();
+    QCOMPARE(registryModel->rowCount(), 1); // Ownership remains visible while the wallet is locked.
+    QVERIFY(wallet.Unlock(SecureString("test-only")));
     QVERIFY(registryModel->index(0, MNModel::ALIAS, {}).data().toString().size() < 40);
     QCOMPARE(registryModel->index(0, MNModel::ALIAS, {}).data(Qt::ToolTipRole).toString(), QString::fromStdString(uint256S("bb").GetHex()));
     QCOMPARE(registryModel->index(0, MNModel::STATUS, {}).data().toString(), QString("IMMATURE"));

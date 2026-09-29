@@ -11,8 +11,6 @@
 
 #include <QCryptographicHash>
 #include <QDir>
-#include <QFileDialog>
-#include <QPointer>
 #include <QSettings>
 #include <QUuid>
 
@@ -39,22 +37,17 @@ QString PQWalletUI::backupDirectory(WalletModel* model)
 
 bool PQWalletUI::ensureBackupDirectory(QWidget* parent, WalletModel* model, QString& directory)
 {
+    Q_UNUSED(parent);
     if (!model || !Params().SupportsPQ()) return false;
-    if (directory.isEmpty()) directory = backupDirectory(model);
-    if (!directory.isEmpty()) return true;
-    const QString settingsKey = backupSettingsKey(model);
-    QPointer<WalletModel> guardedModel(model);
-    directory = QFileDialog::getExistingDirectory(parent,
-        QObject::tr("Choose encrypted wallet backup folder"));
-    if (directory.isEmpty() || guardedModel.isNull()) return false;
-    QSettings().setValue(settingsKey, directory);
+    // Re-read the selected wallet's optional preference, not another wallet's cached path.
+    directory = backupDirectory(model);
     return true;
 }
 
 bool PQWalletUI::backupSnapshot(WalletModel* model, QString& directory)
 {
     if (!model || !Params().SupportsPQ()) return false;
-    if (model->getEncryptionStatus() == WalletModel::Unencrypted || directory.isEmpty()) return false;
+    if (directory.isEmpty()) return true;
     const QString filename = QDir(directory).filePath("olc-pq-" +
         QString::fromStdString(Params().NetworkIDString()) + "-" +
         QUuid::createUuid().toString(QUuid::WithoutBraces) + ".dat");

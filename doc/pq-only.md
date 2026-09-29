@@ -9,7 +9,7 @@ payments, delegation, WIF, and BIP32 seeds are not accepted.
 
 ### Mainnet
 
-- Release profile: v1.1.0 fresh mainnet.
+- Release profile: v1.11.0, retaining the fresh-mainnet configuration.
 - Genesis launch: 2026-09-16 14:00 UTC (16:00 Europe/Prague).
 - Genesis hash: `0000091cf3aeeed50f65d6e640a35029d7b541b4e42950232385b13e88a12fdb`.
 - PQ address HRP: `olcpq`.
@@ -34,8 +34,14 @@ finality; it does not stop ordinary payments or PoS production.
 
 ### Testnet
 
-Testnet retains its existing genesis, network magic, configured peers, and
-pinned finality checkpoint. Its PQ address HRP is `olcpqtest`, P2P port is
+Testnet retains its existing genesis, network magic, and configured peers.
+New nodes derive the first finality committee from validated chain history;
+no manual checkpoint is needed for initial sync. The historical delayed first
+certificate is accepted only if that committee stayed unchanged through its
+predecessor, and its signatures and block ancestry verify. Existing explicit
+testnet checkpoints remain supported. Before the first accepted certificate,
+an unconfigured testnet node does not vote from a provisional checkpoint.
+Its PQ address HRP is `olcpqtest`, P2P port is
 `49716`, and RPC port is `49718`. Public testnet registry and service rules use
 their configured activation height. Use a separate data directory, wallet, and
 key set from mainnet.
@@ -48,15 +54,22 @@ not be used as mainnet recovery controls.
 
 ## Wallet and backup safety
 
-Encrypt the wallet before creating an address or sending a payment. The Qt
+Wallet encryption is optional. Encrypted wallets require full unlock before
+creating an address or sending a payment. The Qt
 Dashboard, Send, Receive, and history screens use the PQ path automatically.
 Each receive and change key has an independent ML-DSA-44 seed stored in the
-encrypted wallet. A text private-key export, WIF, or BIP32 seed cannot replace
+wallet. A text private-key export, WIF, or BIP32 seed cannot replace
 a PQ wallet backup.
 
-Address creation and payment complete a new binary wallet snapshot before the
-address or transaction is exposed. Automatic snapshots create a new file in a
-trusted backup directory, flush it, compare it with the wallet checkpoint, and
+Qt and the daemon create the wallet on first start. Automatic backups are on
+by default and retain up to 10 snapshots in the network data directory's
+`backups` folder. New PQ receiving, change, and operator keys are backed up
+before use. Set `createwalletbackups=0` to opt out. A separate backup destination
+is optional; if requested, it must succeed before the address or transaction is
+exposed. Unencrypted wallets produce unencrypted backups.
+Encrypting the wallet later does not encrypt its older backup files.
+
+Automatic snapshots create a new file, flush it, compare it with the wallet checkpoint, and
 do not replace existing files or links. A failed snapshot may leave an
 incomplete new file; do not use it for recovery. The ordinary `backupwallet`
 RPC keeps its existing overwrite behavior.
@@ -69,10 +82,10 @@ responsibility.
 
 Useful RPCs are:
 
-- `getnewpqaddress backup_destination`
+- `getnewpqaddress ( backup_destination )`
 - `listpqaddresses`
 - `listpqunspent`
-- `sendpqtoaddress address amount backup_destination ( selected_inputs )`
+- `sendpqtoaddress address amount ( backup_destination selected_inputs )`
 - `backupwallet destination`
 - `getstakingstatus`
 
@@ -144,8 +157,8 @@ select confirmed collateral and deliberately remove that registration.
 
 The optional `sendpqtoaddress` input list selects one or two unique confirmed
 inputs. No other inputs are added. Malformed, unavailable, locked, or
-insufficient selections fail before relay. Controller registration requires a
-verified encrypted wallet snapshot. The Qt dialog asks for fee and action approval.
+insufficient selections fail before relay. Controller registration uses the
+same automatic backup policy. The Qt dialog asks for fee and action approval.
 
 Masternode rewards use one whole `6 OLC` network share per eligible block,
 subject to the supply cap. One selected operator receives the share. Selection

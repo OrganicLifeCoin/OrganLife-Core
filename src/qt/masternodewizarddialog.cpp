@@ -92,7 +92,7 @@ MasterNodeWizardDialog::MasterNodeWizardDialog(WalletModel* model, MNModel* _mnM
                 formatParagraph(tr("The registration transaction will embed the %1 collateral, "
                         "which remains yours and is locked while the node runs.").arg(collateralAmountStr))));
     if (Params().SupportsPQ()) ui->labelMessage3->setText(ui->labelMessage3->text() +
-        formatParagraph(tr("Keys and encrypted wallet backups are prepared automatically before the final fee confirmation. Cancelling that confirmation sends no coins; the unused keys and backups are retained.")));
+        formatParagraph(tr("Keys are saved in this wallet before the final fee confirmation. Encryption and backups are optional in wallet settings. Cancelling sends no coins; unused keys are retained.")));
 
     initCssEditLine(ui->lineEditName);
     // MN alias must not contain spaces or "#" character

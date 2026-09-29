@@ -22,8 +22,8 @@ bool CWallet::PreparePQOperator(const fs::path& backup, mldsa44::PublicKey& publ
     const auto& params = Params();
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
     if (!pq::MasternodesActive(params, first)) return fail("PQ operator recovery requires scheduled masternodes");
-    if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
-        return fail("PQ operator recovery requires an encrypted, fully unlocked wallet");
+    if (IsCrypted() && (IsLocked() || fWalletUnlockStaking))
+        return fail("PQ operator recovery requires a fully unlocked wallet");
     const auto& genesis = params.GetConsensus().hashGenesisBlock;
     auto pending = std::find_if(m_pq_operator_recovery.begin(), m_pq_operator_recovery.end(),
                                [](const auto& entry) { return !entry.second.backed; });
@@ -31,7 +31,10 @@ bool CWallet::PreparePQOperator(const fs::path& backup, mldsa44::PublicKey& publ
         pqwallet::SecureBytes seed(mldsa44::SEED_SIZE);
         GetStrongRandBytes(seed.data(), seed.size());
         pqwallet::OperatorRecovery recovery;
-        if (!pqwallet::EncryptOperatorRecovery(seed, vMasterKey, params.NetworkIDString(), genesis, recovery.record))
+        const bool stored = IsCrypted()
+            ? pqwallet::EncryptOperatorRecovery(seed, vMasterKey, params.NetworkIDString(), genesis, recovery.record)
+            : pqwallet::StorePlainOperatorSeed(seed, params.NetworkIDString(), genesis, recovery.record);
+        if (!stored)
             return fail("Could not encrypt PQ operator recovery key");
         const auto id = pq::GetID(recovery.record.public_key, params.NetworkIDString());
         if (!id || m_pq_keys.count(*id) || m_pq_operator_recovery.count(*id) ||
@@ -39,9 +42,14 @@ bool CWallet::PreparePQOperator(const fs::path& backup, mldsa44::PublicKey& publ
             return fail("Could not persist pending PQ operator recovery key");
         pending = m_pq_operator_recovery.emplace(*id, recovery).first;
     }
-    // Preserve the pending encrypted seed on failure/crash. No listing or return
-    // path publishes it; the next request retries it before generating another.
-    if (!BackupWallet(backup.string(), true)) return fail("PQ operator recovery backup failed; retry with a new backup file");
+    // Preserve pending recovery material if any configured snapshot fails.
+    if (std::max(0, std::min(10, static_cast<int>(gArgs.GetArg("-createwalletbackups", DEFAULT_CREATEWALLETBACKUPS)))) > 0) {
+        std::string warning, error;
+        if (!AutoBackupWallet(*this, warning, error) && !error.empty())
+            return fail("PQ operator recovery automatic backup failed");
+    }
+    if (!backup.empty() && !BackupWallet(backup.string(), true))
+        return fail("PQ operator recovery backup failed; retry with a new backup file");
     auto backed = pending->second;
     backed.backed = 1;
     if (!WalletBatch(*database).WritePQOperatorRecovery(genesis, pending->first, backed, true))
@@ -70,8 +78,8 @@ bool CWallet::PreparePQOperatorExport(const mldsa44::PublicKey& public_key, pqwa
     const auto& params = Params();
     const int first = params.GetConsensus().vUpgrades[Consensus::UPGRADE_PQ_MASTERNODES].nActivationHeight;
     if (!pq::MasternodesActive(params, first)) return fail("PQ operator export requires scheduled masternodes");
-    if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
-        return fail("PQ operator export requires an encrypted, fully unlocked wallet");
+    if (IsCrypted() && (IsLocked() || fWalletUnlockStaking))
+        return fail("PQ operator export requires a fully unlocked wallet");
     const auto id = pq::GetID(public_key, params.NetworkIDString());
     const auto found = id ? m_pq_operator_recovery.find(*id) : m_pq_operator_recovery.end();
     if (found == m_pq_operator_recovery.end() || found->second.backed != 1 || found->second.record.public_key != public_key)
@@ -110,9 +118,12 @@ bool CWallet::LoadPQOperatorRecovery(const uint256& genesis, const pq::KeyID& id
 {
     LOCK(cs_KeyStore);
     const auto expected = pq::GetID(recovery.record.public_key, Params().NetworkIDString());
+    mldsa44::Key plain_key;
     if (!Params().SupportsPQ() || genesis != Params().GetConsensus().hashGenesisBlock ||
-        recovery.record.version != 3 || recovery.backed > 1 || !expected || *expected != id ||
-        m_pq_keys.count(id) || m_pq_operator_recovery.count(id) || !SetCrypted()) return false;
+        (recovery.record.version != 3 && recovery.record.version != 4) || recovery.backed > 1 || !expected || *expected != id ||
+        (recovery.record.version == 4 && !pqwallet::ReadPlainOperatorKey(recovery.record, Params().NetworkIDString(), genesis, plain_key)) ||
+        m_pq_keys.count(id) || m_pq_operator_recovery.count(id) ||
+        (recovery.record.version == 3 && !SetCrypted())) return false;
     m_pq_operator_recovery.emplace(id, recovery);
     return true;
 }
@@ -121,14 +132,24 @@ bool CWallet::GeneratePQAddress(std::string& address)
 {
     address.clear();
     LOCK2(cs_wallet, cs_KeyStore);
-    if (!Params().SupportsPQ() || !IsCrypted() || IsLocked() || fWalletUnlockStaking) return false;
+    if (!Params().SupportsPQ() || (IsCrypted() && (IsLocked() || fWalletUnlockStaking))) return false;
     pqwallet::SecureBytes seed(mldsa44::SEED_SIZE);
     GetStrongRandBytes(seed.data(), seed.size());
     pqwallet::Record record;
-    if (!pqwallet::EncryptSeed(seed, vMasterKey, Params().NetworkIDString(), record)) return false;
+    const bool stored = IsCrypted()
+        ? pqwallet::EncryptSeed(seed, vMasterKey, Params().NetworkIDString(), record)
+        : pqwallet::StorePlainSeed(seed, Params().NetworkIDString(), record);
+    if (!stored) return false;
     const auto id = pq::GetID(record.public_key, Params().NetworkIDString());
     if (!id || m_pq_keys.count(*id) || m_pq_operator_recovery.count(*id) || !WalletBatch(*database).WritePQKey(*id, record)) return false;
     m_pq_keys.emplace(*id, record);
+    if (std::max(0, std::min(10, static_cast<int>(gArgs.GetArg("-createwalletbackups", DEFAULT_CREATEWALLETBACKUPS)))) > 0) {
+        std::string warning, error;
+        if (!AutoBackupWallet(*this, warning, error) && !error.empty()) {
+            if (WalletBatch(*database).ErasePQKey(*id)) m_pq_keys.erase(*id);
+            return false;
+        }
+    }
     address = pq::EncodeAddress(*id, Params().NetworkIDString());
     return true;
 }
@@ -164,17 +185,23 @@ bool CWallet::GetPQKey(const pq::KeyID& id, mldsa44::Key& key, bool staking) con
 {
     key.Clear();
     LOCK2(cs_wallet, cs_KeyStore);
-    if (!Params().SupportsPQ() || !IsCrypted() || IsLocked() || (!staking && fWalletUnlockStaking)) return false;
+    if (!Params().SupportsPQ() || (IsCrypted() && (IsLocked() || (!staking && fWalletUnlockStaking)))) return false;
     const auto entry = m_pq_keys.find(id);
-    return entry != m_pq_keys.end() && pqwallet::DecryptKey(vMasterKey, entry->second, Params().NetworkIDString(), key);
+    if (entry == m_pq_keys.end()) return false;
+    return IsCrypted()
+        ? pqwallet::DecryptKey(vMasterKey, entry->second, Params().NetworkIDString(), key)
+        : pqwallet::ReadPlainKey(entry->second, Params().NetworkIDString(), key);
 }
 
 bool CWallet::LoadPQKey(const pq::KeyID& id, const pqwallet::Record& record)
 {
     LOCK(cs_KeyStore);
     const auto expected_id = pq::GetID(record.public_key, Params().NetworkIDString());
-    if (!Params().SupportsPQ() || record.version != 1 || !expected_id || id != *expected_id ||
-        m_pq_keys.count(id) || m_pq_operator_recovery.count(id) || !SetCrypted()) return false;
+    mldsa44::Key plain_key;
+    if (!Params().SupportsPQ() || (record.version != 1 && record.version != 4) || !expected_id || id != *expected_id ||
+        (record.version == 4 && !pqwallet::ReadPlainKey(record, Params().NetworkIDString(), plain_key)) ||
+        m_pq_keys.count(id) || m_pq_operator_recovery.count(id) ||
+        (record.version == 1 && !SetCrypted())) return false;
     m_pq_keys.emplace(id, record);
     return true;
 }
@@ -309,8 +336,8 @@ bool CWallet::PreparePQMasternodeTransaction(const pqmn::Payload& operation, con
     const auto& params = Params();
     if (!pq::MasternodesActive(params, chainActive.Height() + 1) || !evoDb)
         return fail("PQ masternodes are not active on this network");
-    if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
-        return fail("PQ masternodes require an encrypted, fully unlocked wallet");
+    if (IsCrypted() && (IsLocked() || fWalletUnlockStaking))
+        return fail("PQ masternodes require a fully unlocked wallet");
     try {
         pqmn::Index index(*evoDb, params);
         if (!index.MatchesChainTip(chainActive.Tip())) return fail("PQ masternode registry is not current");
@@ -325,14 +352,18 @@ bool CWallet::PreparePQMasternodeTransaction(const pqmn::Payload& operation, con
             const auto found = id ? m_pq_operator_recovery.find(*id) : m_pq_operator_recovery.end();
             if (found == m_pq_operator_recovery.end() || found->second.backed != 1 ||
                 found->second.record.public_key != expected ||
-                !pqwallet::DecryptOperatorRecovery(vMasterKey, found->second.record, params.NetworkIDString(),
-                                                    params.GetConsensus().hashGenesisBlock, signer))
+                !(IsCrypted()
+                    ? pqwallet::DecryptOperatorRecovery(vMasterKey, found->second.record, params.NetworkIDString(),
+                                                        params.GetConsensus().hashGenesisBlock, signer)
+                    : pqwallet::ReadPlainOperatorKey(found->second.record, params.NetworkIDString(),
+                                                     params.GetConsensus().hashGenesisBlock, signer)))
                 return fail("Unknown or unbacked PQ operator identity");
         }
         CTransactionRef prepared;
         CAmount prepared_fee;
         if (!CreatePQMasternodeTransaction(operation, &signer, prepared, prepared_fee, reason, coin_control)) return false;
-        if (!BackupWallet(backup.string(), true)) return fail("PQ masternode backup failed; transaction was not relayed");
+        if (!backup.empty() && !BackupWallet(backup.string(), true))
+            return fail("PQ masternode backup failed; transaction was not relayed");
         tx = std::move(prepared); fee = prepared_fee;
         return true;
     } catch (const std::exception&) {
@@ -406,8 +437,8 @@ bool CWallet::CreatePQTransactionInternal(const std::vector<CTxOut>& outputs, ui
     const auto fail = [&](const char* message) { reason = message; return false; };
     const auto& consensus = Params().GetConsensus();
     if (!PQPaymentsActive()) return fail("PQ payments are not active on this network");
-    if (!IsCrypted() || IsLocked() || fWalletUnlockStaking)
-        return fail("PQ payments require an encrypted, fully unlocked wallet");
+    if (IsCrypted() && (IsLocked() || fWalletUnlockStaking))
+        return fail("PQ payments require a fully unlocked wallet");
     const bool masternode = mode == pq::MASTERNODE && operation;
     if (masternode ? (data.empty() || outputs.size() > 1) :
         ((mode != pq::TRANSFER && !pq::IsGovernanceMode(mode)) ||

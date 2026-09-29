@@ -24,9 +24,10 @@ if (REPO_ROOT="$TEST_ROOT" copy_windows_installer); then
     exit 1
 fi
 
-touch "$TEST_ROOT/OrganicLifeCoin-1.1.0-win64-setup.exe"
+version="$(get_client_package_version "$TEST_ROOT/configure.ac")"
+touch "$TEST_ROOT/OrganicLifeCoin-${version}-win64-setup.exe"
 REPO_ROOT="$TEST_ROOT" copy_windows_installer
-test -f "$DIST_DIR/OrganicLifeCoin-1.1.0-win64-setup.exe"
+test -f "$DIST_DIR/OrganicLifeCoin-${version}-win64-setup.exe"
 
 package_script="$SOURCE_SCRIPTS_DIR/build-depends-windows.sh"
 grep -Fq 'VERSION="$(get_client_package_version "$REPO_ROOT/configure.ac")"' "$package_script"

@@ -371,10 +371,9 @@ void AskPassphraseDialog::warningMessage()
                "Remember that encrypting your wallet cannot fully protect "
                "your OrganicLife from being stolen by malware infecting your computer.") +
             "<br><br><b>" +
-            tr("IMPORTANT: Any previous backups you have made of your wallet file "
-               "should be replaced with the newly generated, encrypted wallet file. "
-               "For security reasons, previous backups of the unencrypted wallet file "
-               "will become useless as soon as you start using the new, encrypted wallet.") +
+            tr("IMPORTANT: Create a new encrypted wallet backup. "
+               "Older backup files are not encrypted by this operation and can still expose your private keys. "
+               "Keep all backups in a private, safe location.") +
             "</b></qt>",
             tr("OK")
             );

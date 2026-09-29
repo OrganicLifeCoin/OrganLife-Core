@@ -1,3 +1,4 @@
+Unicode true
 Name "OrganicLifeCoin (64-bit)"
 
 RequestExecutionLevel user
@@ -6,7 +7,7 @@ SetCompressor zlib
 # General Symbol Definitions
 !define REGKEY "SOFTWARE\OrganicLifeCoin"
 !define COMPANY "OrganicLifeCoin project"
-!define URL @PACKAGE_URL@
+!define URL "https://github.com/OrganicLifeCoin/OrganLife-Core"
 
 # MUI Symbol Definitions
 !define MUI_ICON "@abs_top_srcdir@/share/pixmaps/organiclife.ico"
@@ -28,6 +29,7 @@ SetCompressor zlib
 !include Sections.nsh
 !include MUI2.nsh
 !include x64.nsh
+!include WinVer.nsh
 
 # Variables
 Var StartMenuGroup
@@ -72,8 +74,7 @@ Section -Main SEC0000
     SetOutPath $INSTDIR\daemon
     File @abs_top_srcdir@/release/@BITCOIN_DAEMON_NAME@@EXEEXT@
     File @abs_top_srcdir@/release/@BITCOIN_CLI_NAME@@EXEEXT@
-    SetOutPath $INSTDIR\doc
-    File /r @abs_top_srcdir@/doc\*.*
+    File @abs_top_srcdir@/release/@BITCOIN_TX_NAME@@EXEEXT@
     SetOutPath $APPDATA\OrganicLifeCoinParams
     File @abs_top_srcdir@/params/sapling-output.params
     File @abs_top_srcdir@/params/sapling-spend.params
@@ -88,7 +89,7 @@ Section -post SEC0001
     !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory $SMPROGRAMS\$StartMenuGroup
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\$(^Name).lnk" $INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@
-    CreateShortcut "$SMPROGRAMS\$StartMenuGroup\OrganicLifeCoin (testnet, 64-bit).lnk" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "-testnet" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" 1
+    CreateShortcut "$SMPROGRAMS\$StartMenuGroup\OrganicLifeCoin (testnet, 64-bit).lnk" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" "-testnet" "$INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@" 0
     CreateShortcut "$SMPROGRAMS\$StartMenuGroup\Uninstall $(^Name).lnk" $INSTDIR\uninstall.exe
     !insertmacro MUI_STARTMENU_WRITE_END
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" DisplayName "$(^Name)"
@@ -96,7 +97,7 @@ Section -post SEC0001
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" Publisher "${COMPANY}"
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" URLInfoAbout "${URL}"
     WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" DisplayIcon $INSTDIR\uninstall.exe
-    WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" UninstallString $INSTDIR\uninstall.exe
+    WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" UninstallString '"$INSTDIR\uninstall.exe"'
     WriteRegDWORD HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" NoModify 1
     WriteRegDWORD HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$(^Name)" NoRepair 1
     WriteRegStr HKCU "Software\Classes\@PACKAGE_TARNAME@" "URL Protocol" ""
@@ -123,8 +124,10 @@ Section /o -un.Main UNSEC0000
     Delete /REBOOTOK $INSTDIR\@BITCOIN_GUI_NAME@@EXEEXT@
     Delete /REBOOTOK $INSTDIR\COPYING.txt
     Delete /REBOOTOK $INSTDIR\readme.txt
-    RMDir /r /REBOOTOK $INSTDIR\daemon
-    RMDir /r /REBOOTOK $INSTDIR\doc
+    Delete /REBOOTOK "$INSTDIR\daemon\@BITCOIN_DAEMON_NAME@@EXEEXT@"
+    Delete /REBOOTOK "$INSTDIR\daemon\@BITCOIN_CLI_NAME@@EXEEXT@"
+    Delete /REBOOTOK "$INSTDIR\daemon\@BITCOIN_TX_NAME@@EXEEXT@"
+    RMDir /REBOOTOK "$INSTDIR\daemon"
     DeleteRegValue HKCU "${REGKEY}\Components" Main
 SectionEnd
 
@@ -135,8 +138,6 @@ Section -un.post UNSEC0001
     Delete /REBOOTOK "$SMPROGRAMS\$StartMenuGroup\OrganicLifeCoin (testnet, 64-bit).lnk"
     Delete /REBOOTOK "$SMSTARTUP\OrganicLifeCoin.lnk"
     Delete /REBOOTOK $INSTDIR\uninstall.exe
-    Delete /REBOOTOK $INSTDIR\debug.log
-    Delete /REBOOTOK $INSTDIR\db.log
     DeleteRegValue HKCU "${REGKEY}" StartMenuGroup
     DeleteRegValue HKCU "${REGKEY}" Path
     DeleteRegKey /IfEmpty HKCU "${REGKEY}\Components"
@@ -158,13 +159,20 @@ Function .onInit
       ; disable registry redirection (enable access to 64-bit portion of registry)
       SetRegView 64
     ${Else}
-      MessageBox MB_OK|MB_ICONSTOP "Cannot install 64-bit version on a 32-bit system."
+      MessageBox MB_OK|MB_ICONSTOP "Cannot install 64-bit version on a 32-bit system." /SD IDOK
+      SetErrorLevel 1633
+      Abort
+    ${EndIf}
+    ${IfNot} ${AtLeastBuild} 17763
+      MessageBox MB_OK|MB_ICONSTOP "This wallet requires Windows 10 version 1809 or later, or Windows 11. Please update Windows before installing." /SD IDOK
+      SetErrorLevel 1633
       Abort
     ${EndIf}
 FunctionEnd
 
 # Uninstaller functions
 Function un.onInit
+    SetRegView 64
     ReadRegStr $INSTDIR HKCU "${REGKEY}" Path
     !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuGroup
     !insertmacro SELECT_UNSECTION Main ${UNSEC0000}

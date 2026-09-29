@@ -7,6 +7,7 @@ class PQWidgetTests : public QObject
 {
     Q_OBJECT
 private Q_SLOTS:
+    void backupIsOptional();
     void masternodeControllerNavigation_data();
     void masternodeControllerNavigation();
     void masternodeRegistryFailsClosed();

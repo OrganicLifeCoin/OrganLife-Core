@@ -903,7 +903,10 @@ int64_t Manager::Process()
         bool hasAnchor = false;
         if (store && store->Tip(tipAnchor)) hasAnchor = true;
         else if (chainState.TipAnchor(tipAnchor)) hasAnchor = true;
-        else if (ok && automatic) {
+        // A testnet candidate is only a validation root. Until an in-block
+        // certificate establishes the first durable anchor, never vote from
+        // it: on a synced chain that would replay votes from root + 1.
+        else if (ok && automatic && Params().NetworkIDString() != CBaseChainParams::TESTNET) {
             tipAnchor.height = bootstrap.height;
             tipAnchor.blockHash = bootstrap.blockHash;
             tipAnchor.committee = pqquorum::Commitment(bootstrap.members);

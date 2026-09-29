@@ -8,14 +8,39 @@
 #include "guiinterface.h"
 #include "guiutil.h"
 #include "qtutils.h"
+#include "pqwalletui.h"
+#include <chainparams.h>
 
 #include <QGraphicsDropShadowEffect>
+#include <QCheckBox>
+#include <QFileDialog>
+#include <QSettings>
+#include <QSignalBlocker>
 
 SettingsBackupWallet::SettingsBackupWallet(OrganicLifeGUI* _window, QWidget *parent) :
     PWidget(_window, parent),
     ui(new Ui::SettingsBackupWallet)
 {
     ui->setupUi(this);
+    automaticBackup = new QCheckBox(tr("Also back up newly created PQ keys to a chosen folder"), this);
+    automaticBackup->setObjectName("automaticPQBackup");
+    automaticBackup->setEnabled(false);
+    automaticBackup->setToolTip(tr("Optional. Without a current backup, losing this wallet file can lose your coins. Unencrypted wallets also produce unencrypted backups."));
+    ui->verticalLayout_9->addWidget(automaticBackup);
+    connect(automaticBackup, &QCheckBox::toggled, this, [this](bool enabled) {
+        if (!walletModel) return;
+        QPointer<WalletModel> selectedWallet(walletModel);
+        const QString key = PQWalletUI::backupSettingsKey(selectedWallet);
+        const QString directory = enabled ? QFileDialog::getExistingDirectory(this, tr("Choose wallet backup folder")) : QString();
+        if (!selectedWallet || selectedWallet != walletModel) return;
+        if (enabled && directory.isEmpty()) {
+            QSignalBlocker blocker(automaticBackup);
+            automaticBackup->setChecked(!PQWalletUI::backupDirectory(selectedWallet).isEmpty());
+            return;
+        }
+        if (enabled) QSettings().setValue(key, directory);
+        else QSettings().remove(key);
+    });
 
     this->setStyleSheet(parent->styleSheet());
 
@@ -41,6 +66,20 @@ SettingsBackupWallet::SettingsBackupWallet(OrganicLifeGUI* _window, QWidget *par
 
     connect(ui->pushButtonDocuments, &QPushButton::clicked, this, &SettingsBackupWallet::selectFileOutput);
     connect(ui->pushButtonSave_2, &QPushButton::clicked, this, &SettingsBackupWallet::changePassphrase);
+}
+
+void SettingsBackupWallet::loadWalletModel()
+{
+    QSignalBlocker blocker(automaticBackup);
+    automaticBackup->setVisible(Params().SupportsPQ());
+    automaticBackup->setEnabled(bool(walletModel));
+    automaticBackup->setChecked(walletModel && !PQWalletUI::backupDirectory(walletModel).isEmpty());
+}
+
+void SettingsBackupWallet::clearWalletModel()
+{
+    PWidget::clearWalletModel();
+    loadWalletModel();
 }
 
 void SettingsBackupWallet::selectFileOutput()

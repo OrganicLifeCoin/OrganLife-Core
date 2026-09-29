@@ -6,7 +6,7 @@ Its code comes from PIVX and Bitcoin.
 
 ## Network status
 
-This README describes the v1.1.0 fresh-mainnet launch and the existing PQ testnet.
+This README describes v1.11.0, the fresh mainnet and the existing PQ testnet.
 Mainnet launch is scheduled for 2026-09-16 14:00 UTC (16:00 Europe/Prague).
 The node can start before launch for wallet and operator preparation.
 It must not accept or create mainnet blocks before launch time.
@@ -34,7 +34,7 @@ A successful test suite is not cryptographic certification.
 
 ## Mainnet parameters
 
-| Parameter | v1.1.0 mainnet configuration |
+| Parameter | v1.11.0 mainnet configuration |
 | --- | --- |
 | Ticker | `OLC` |
 | Genesis launch time | `2026-09-16 14:00:00 UTC` |
@@ -67,18 +67,22 @@ PQ payments do not require a separate wallet screen.
 The wallet also provides coin control and shows immature rewards.
 
 Each receive key and change key has an independent ML-DSA-44 seed.
-The encrypted wallet stores these seeds.
+The wallet stores these seeds. Encryption is optional.
 A legacy private-key export or a BIP32 seed cannot replace a PQ wallet backup.
 
-Address creation and payments require a new encrypted wallet snapshot.
-The wallet completes this snapshot before it shows a new address or sends a payment.
+Qt and the daemon create a wallet on first start. By default, they keep up to
+10 automatic backups in the network data directory's `backups` folder.
+New PQ keys are backed up before use. Set `createwalletbackups=0` to disable
+automatic backups. An additional backup folder can be selected in wallet settings.
+Backups of an unencrypted wallet are also unencrypted.
+Encrypting the wallet does not encrypt its older backup files.
 The Send screen accepts one recipient per transaction.
 
 ### Prepare the wallet
 
-1. Encrypt the wallet.
-2. Select a private directory for automatic wallet backups.
-3. Fully unlock the wallet before you create an address or send a payment.
+1. Start the wallet. It creates its wallet file and automatic backup.
+2. Encrypt the wallet if you want passphrase protection.
+3. If encrypted, fully unlock it before you create an address or send a payment.
 4. Use the Receive screen to create an address.
 5. Use the Send screen to send coins.
 6. For staking without payment access, unlock the wallet for staking only.
@@ -90,10 +94,10 @@ Loss of the private keys can prevent access to your coins.
 
 | Command | Purpose |
 | --- | --- |
-| `getnewpqaddress` | Create a receive address with a new wallet backup |
+| `getnewpqaddress` | Create a receive address; an additional backup destination is optional |
 | `listpqaddresses` | List PQ addresses |
 | `listpqunspent` | List unspent PQ outputs |
-| `sendpqtoaddress` | Send a PQ payment with a new wallet backup |
+| `sendpqtoaddress` | Send a PQ payment; an additional backup destination is optional |
 | `backupwallet` | Save a wallet backup |
 | `getstakingstatus` | Show the staking status |
 
@@ -118,8 +122,8 @@ The PQ wallet provides this workflow on mainnet and testnet.
 2. Select **Create Masternode**.
 3. Enter a name.
 4. Enter the numeric VPS IP address and service port.
-5. Fully unlock the wallet.
-6. If the wallet requests a backup directory, select a private directory.
+5. Fully unlock the wallet if it is encrypted.
+6. Optionally select an additional backup folder in wallet settings.
 7. Review the collateral, transaction fee, and backup destination.
 8. Approve the registration transaction.
 9. Wait for the registration to appear in a block.

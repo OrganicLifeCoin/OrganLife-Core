@@ -8,10 +8,25 @@
 #include <serialize.h>
 #include <uint256.h>
 #include <fs.h>
+#include <ios>
 #include <string>
 
 namespace pqwallet {
 using SecureBytes = std::vector<unsigned char, secure_allocator<unsigned char>>;
+
+// The seed is fixed-size on disk and uses secure_allocator in memory.
+struct PlainSeed {
+    SecureBytes bytes;
+    PlainSeed() = default;
+    template <typename Stream> void Serialize(Stream& stream) const {
+        if (bytes.size() != mldsa44::SEED_SIZE) throw std::ios_base::failure("invalid PQ seed size");
+        stream.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    }
+    template <typename Stream> void Unserialize(Stream& stream) {
+        bytes.resize(mldsa44::SEED_SIZE);
+        stream.read(reinterpret_cast<char*>(bytes.data()), bytes.size());
+    }
+};
 
 // Network-bound encrypted seed record. Fixed lengths bound deserialization.
 struct Record {
@@ -19,8 +34,11 @@ struct Record {
     mldsa44::PublicKey public_key{};
     std::array<unsigned char, 24> nonce{};
     std::array<unsigned char, 48> encrypted_seed{};
+    PlainSeed plaintext_seed;
     SERIALIZE_METHODS(Record, obj) {
-        READWRITE(obj.version, obj.public_key, obj.nonce, obj.encrypted_seed);
+        READWRITE(obj.version, obj.public_key);
+        if (obj.version == 4) READWRITE(obj.plaintext_seed);
+        else READWRITE(obj.nonce, obj.encrypted_seed);
     }
 };
 
@@ -35,6 +53,8 @@ struct OperatorRecovery {
 // Seeds are independent of the existing HD wallet. No plaintext seed export.
 bool EncryptSeed(const SecureBytes& seed, const SecureBytes& master_key, const std::string& network, Record& record);
 bool DecryptKey(const SecureBytes& master_key, const Record& record, const std::string& network, mldsa44::Key& key);
+bool StorePlainSeed(const SecureBytes& seed, const std::string& network, Record& record);
+bool ReadPlainKey(const Record& record, const std::string& network, mldsa44::Key& key);
 
 // Separate operator-only storage domain, bound to a specific chain genesis.
 // Caller supplies an independent random 32-byte wrapping key, never a password
@@ -49,6 +69,10 @@ bool EncryptOperatorRecovery(const SecureBytes& seed, const SecureBytes& master_
                              const std::string& network, const uint256& genesis, Record& record);
 bool DecryptOperatorRecovery(const SecureBytes& master_key, const Record& record,
                              const std::string& network, const uint256& genesis, mldsa44::Key& key);
+bool StorePlainOperatorSeed(const SecureBytes& seed, const std::string& network,
+                            const uint256& genesis, Record& record);
+bool ReadPlainOperatorKey(const Record& record, const std::string& network,
+                          const uint256& genesis, mldsa44::Key& key);
 // Rewrap only a backed controller operator record for the expected identity.
 // The caller supplies a fresh independent random wrapping key and delivers it
 // through protected host custody. No plaintext seed or wallet master is output.

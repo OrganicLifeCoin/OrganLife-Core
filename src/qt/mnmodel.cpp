@@ -60,7 +60,13 @@ void MNModel::updateMNList()
                 throw std::runtime_error("inactive registry");
             pqmn::Index registry(*evoDb, Params());
             if (!registry.MatchesChainTip(chainActive.Tip())) throw std::runtime_error("stale registry");
-            pqNodes = registry.List();
+            if (walletModel && walletModel->getWallet()) {
+                for (auto& entry : registry.List()) {
+                    const auto owner = pq::GetID(entry.second.owner, Params().NetworkIDString());
+                    if (owner && walletModel->getWallet()->IsPQMine(CTxOut(0, pq::GetScript(*owner))))
+                        pqNodes.push_back(std::move(entry));
+                }
+            }
         } catch (const std::exception&) {
             pqError = tr("PQ registry inactive, unavailable or syncing. No controller actions are available.");
         }

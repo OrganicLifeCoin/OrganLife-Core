@@ -173,6 +173,7 @@ void MasterNodesWidget::loadWalletModel()
 {
     if (Params().SupportsPQ() && mnModel) {
         coinControlDialog->setModel(walletModel);
+        mnModel->setWalletModel(walletModel);
         mnModel->updateMNList();
         updateListState();
     }
@@ -187,14 +188,14 @@ void MasterNodesWidget::onPQOperatorsClicked()
     dialog.setWindowTitle(tr("Operator keys"));
     auto* form = new QFormLayout(&dialog);
     form->setSpacing(14);
-    auto* explanation = new QLabel(tr("Recovery keys stay in this encrypted controller wallet. Creating an identity first verifies a wallet backup. Export produces operator-only credentials, never wallet spending keys. Both exported files are secret: transfer them securely and seal them on the operator host."), &dialog);
+    auto* explanation = new QLabel(tr("Recovery keys stay in this controller wallet. Wallet encryption and backups are optional. Export produces operator-only credentials, never wallet spending keys. Both exported files are secret: transfer them securely and seal them on the operator host."), &dialog);
     explanation->setWordWrap(true);
     form->addRow(explanation);
     QComboBox operators;
     QLineEdit destination;
     destination.setObjectName("pqOperatorExportPath");
     destination.setPlaceholderText(tr("New credential directory inside a private folder"));
-    auto* create = new QPushButton(tr("Create backed operator"), &dialog);
+    auto* create = new QPushButton(tr("Create operator"), &dialog);
     auto* exportButton = new QPushButton(tr("Export selected operator"), &dialog);
     auto* browse = new QPushButton(tr("Choose private folder…"), &dialog);
     create->setObjectName("createPQOperator");
@@ -227,7 +228,7 @@ void MasterNodesWidget::onPQOperatorsClicked()
         if (!unlock.isValid() || !controller || controller != walletModel) return;
         QString directory;
         if (!PQWalletUI::ensureBackupDirectory(&dialog, controller, directory) || !controller || controller != walletModel) return;
-        const auto backup = QDir(directory).filePath("olc-pq-operator-" + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".dat");
+        const auto backup = directory.isEmpty() ? QString() : QDir(directory).filePath("olc-pq-operator-" + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".dat");
         mldsa44::PublicKey key;
         std::string reason;
         if (!controller->getWallet()->PreparePQOperator(backup.toStdString(), key, reason)) {
@@ -235,7 +236,7 @@ void MasterNodesWidget::onPQOperatorsClicked()
         }
         refresh();
         operators.setCurrentIndex(operators.findData(QString::fromStdString(HexStr(key))));
-        inform(tr("Operator created. Encrypted recovery backup: %1").arg(backup));
+        inform(backup.isEmpty() ? tr("Operator created. Keep a wallet backup to protect its recovery keys.") : tr("Operator created. Recovery backup: %1").arg(backup));
     });
     connect(exportButton, &QPushButton::clicked, &dialog, [&] {
         if (!controller || controller != walletModel) return;
@@ -352,7 +353,7 @@ void MasterNodesWidget::pqOperation(int action)
     }
     QString directory;
     if (!PQWalletUI::ensureBackupDirectory(this, controller, directory) || !controller || controller != walletModel) return;
-    const auto backup = QDir(directory).filePath("olc-pq-masternode-" + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".dat");
+    const auto backup = directory.isEmpty() ? QString() : QDir(directory).filePath("olc-pq-masternode-" + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".dat");
     CTransactionRef tx;
     CAmount fee;
     std::string reason;
@@ -361,10 +362,10 @@ void MasterNodesWidget::pqOperation(int action)
     }
     const auto actionName = op.action == pqmn::Action::REVOKE ? tr("Revoke") :
         op.action == pqmn::Action::SERVICE ? tr("Update service") : tr("Update payout / operator");
-    auto summary = tr("Action: %1\nRegistration: %2\nFee: %3\nEncrypted backup: %4")
+    auto summary = tr("Action: %1\nRegistration: %2\nFee: %3\nBackup: %4")
         .arg(actionName).arg(QString::fromStdString(op.registration.GetHex()))
         .arg(GUIUtil::formatBalance(fee, BitcoinUnits::PIV))
-        .arg(backup);
+        .arg(backup.isEmpty() ? tr("Not requested") : backup);
     if (op.action == pqmn::Action::UPDATE) {
         const auto id = pq::GetID(op.operatorKey, Params().NetworkIDString());
         summary += tr("\nPayout: %1\nOperator fingerprint: %2").arg(payout.currentText(), id ? QString::fromStdString(HexStr(*id)) : "");
@@ -398,9 +399,10 @@ void MasterNodesWidget::createPQMasternode()
     op.action = pqmn::Action::REGISTER;
     op.collateral = COutPoint(uint256(), 0);
     op.service = LookupNumeric(wizard.service().toStdString());
-    const auto backupBase = QDir(directory).filePath("olc-pq-masternode-" + QUuid::createUuid().toString(QUuid::WithoutBraces));
+    const auto backupBase = directory.isEmpty() ? QString() : QDir(directory).filePath("olc-pq-masternode-" + QUuid::createUuid().toString(QUuid::WithoutBraces));
     std::string reason;
-    if (!wallet->PreparePQOperator((backupBase + "-wallet-before-registration.dat").toStdString(), op.operatorKey, reason)) {
+    const auto operatorBackup = backupBase.isEmpty() ? QString() : backupBase + "-wallet-before-registration.dat";
+    if (!wallet->PreparePQOperator(operatorBackup.toStdString(), op.operatorKey, reason)) {
         warn(tr("Error creating masternode"), QString::fromStdString(reason)); return;
     }
     std::string ownerAddress, collateralAddress, payoutAddress;
@@ -413,14 +415,14 @@ void MasterNodesWidget::createPQMasternode()
     op.owner = owner.GetPublicKey(); op.collateralKey = collateral.GetPublicKey();
     CTransactionRef tx;
     CAmount fee;
-    const auto backup = backupBase + ".dat";
+    const auto backup = backupBase.isEmpty() ? QString() : backupBase + ".dat";
     if (!wallet->PreparePQMasternodeTransaction(op, backup.toStdString(), tx, fee, reason, &selectedCoins)) {
         warn(tr("Error creating masternode"), QString::fromStdString(reason)); return;
     }
-    const auto summary = tr("Name: %1\nService: %2\nCollateral: %3\nFee: %4\nEncrypted backup: %5\n\nThe collateral and rewards stay in this wallet. Create this masternode?")
+    const auto summary = tr("Name: %1\nService: %2\nCollateral: %3\nFee: %4\nBackup: %5\n\nThe collateral and rewards stay in this wallet. Create this masternode?")
         .arg(wizard.alias(), QString::fromStdString(op.service.ToString()),
              GUIUtil::formatBalance(Params().GetConsensus().nMNCollateralAmt, BitcoinUnits::PIV),
-             GUIUtil::formatBalance(fee, BitcoinUnits::PIV), backup);
+             GUIUtil::formatBalance(fee, BitcoinUnits::PIV), backup.isEmpty() ? tr("Not requested") : backup);
     if (!ask(tr("Create Masternode"), summary) || !controller || controller != walletModel) return;
     const auto committed = wallet->CommitTransaction(tx, nullptr, g_connman.get());
     if (committed.status != CWallet::CommitStatus::OK) { warn(tr("Masternode"), QString::fromStdString(committed.ToString())); return; }
@@ -434,6 +436,10 @@ void MasterNodesWidget::createPQMasternode()
 void MasterNodesWidget::clearWalletModel()
 {
     PWidget::clearWalletModel();
+    if (mnModel) {
+        mnModel->setWalletModel(nullptr);
+        mnModel->updateMNList();
+    }
     coinControlDialog->setModel(nullptr);
     resetCoinControl();
     if (auto* dialog = findChild<QDialog*>("pqMasternodeDialog")) dialog->reject();

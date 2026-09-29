@@ -651,7 +651,7 @@ BOOST_AUTO_TEST_CASE(util_GetChainName)
 
 BOOST_AUTO_TEST_CASE(util_version_display_and_storage_compatibility)
 {
-    BOOST_CHECK_EQUAL(FormatVersionFriendly(), "1.1.0");
+    BOOST_CHECK_EQUAL(FormatVersionFriendly(), "1.11.0");
     BOOST_CHECK_GE(CLIENT_VERSION, 1011300);
 }
 

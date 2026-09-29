@@ -11,7 +11,6 @@
 
 #include "key_io.h"
 #include "protocol.h"
-#include "reverse_iterate.h"
 #include "sapling/key_io_sapling.h"
 #include "serialize.h"
 #include "sync.h"
@@ -20,6 +19,7 @@
 #include "wallet/wallet.h"
 
 #include <atomic>
+#include <map>
 
 #include <boost/thread.hpp>
 
@@ -194,9 +194,9 @@ bool WalletBatch::WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey)
     return WriteIC(std::make_pair(std::string(DBKeys::MASTER_KEY), nID), kMasterKey, true);
 }
 
-bool WalletBatch::WritePQKey(const pq::KeyID& id, const pqwallet::Record& record)
+bool WalletBatch::WritePQKey(const pq::KeyID& id, const pqwallet::Record& record, bool overwrite)
 {
-    return WriteIC(std::make_pair(DBKeys::PQ_KEY, id), record, false);
+    return WriteIC(std::make_pair(DBKeys::PQ_KEY, id), record, overwrite);
 }
 
 bool WalletBatch::ErasePQKey(const pq::KeyID& id)
@@ -354,7 +354,8 @@ public:
     unsigned int nZKeyMeta;
     unsigned int nSapZAddrs;
     bool fIsEncrypted;
-    bool fHasPQKeys{false};
+    bool fHasEncryptedPQKeys{false};
+    bool fHasPlainPQKeys{false};
     bool fAnyUnordered;
     int nFileVersion;
     std::vector<uint256> vWalletUpgrade;
@@ -508,8 +509,9 @@ bool ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue, CW
                 strErr = "Error reading wallet database: experimental PQ key record corrupt or wrong network";
                 return false;
             }
-            wss.fIsEncrypted = true;
-            wss.fHasPQKeys = true;
+            wss.fHasEncryptedPQKeys |= record.version == 1;
+            wss.fHasPlainPQKeys |= record.version == 4;
+            wss.fIsEncrypted |= record.version == 1;
         } else if (strType == DBKeys::PQ_OPERATOR_RECOVERY) {
             uint256 genesis;
             pq::KeyID id;
@@ -520,8 +522,9 @@ bool ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue, CW
                 strErr = "Error reading wallet database: PQ operator recovery record corrupt or wrong chain";
                 return false;
             }
-            wss.fIsEncrypted = true;
-            wss.fHasPQKeys = true;
+            wss.fHasEncryptedPQKeys |= recovery.record.version == 3;
+            wss.fHasPlainPQKeys |= recovery.record.version == 4;
+            wss.fIsEncrypted |= recovery.record.version == 3;
         } else if (strType == DBKeys::KEYMETA) {
             CPubKey vchPubKey;
             ssKey >> vchPubKey;
@@ -737,7 +740,8 @@ DBErrors WalletBatch::LoadWallet(CWallet* pwallet)
     if (fNoncriticalErrors && result == DB_LOAD_OK)
         result = DB_NONCRITICAL_ERROR;
 
-    if (wss.fHasPQKeys && !pwallet->HasEncryptionKeys())
+    if ((wss.fHasEncryptedPQKeys && !pwallet->HasEncryptionKeys()) ||
+        (wss.fHasPlainPQKeys && (pwallet->IsCrypted() || pwallet->HasEncryptionKeys())))
         result = DB_CORRUPT;
 
     // Any wallet corruption at all: skip any rewriting or
@@ -883,7 +887,7 @@ void MaybeCompactWalletDB()
     fOneThread = false;
 }
 
-typedef std::multimap<std::time_t, fs::path> folder_set_t;
+typedef std::map<std::pair<std::time_t, std::string>, fs::path> folder_set_t;
 static folder_set_t buildBackupsMapSortedByLastWrite(const std::string& strWalletFile, const fs::path& backupsDir)
 {
     folder_set_t folder_set;
@@ -894,29 +898,30 @@ static folder_set_t buildBackupsMapSortedByLastWrite(const std::string& strWalle
         if (fs::is_regular_file(dir_iter->status())) {
             // Only add the backups for the current wallet, e.g. wallet.dat.*
             if(dir_iter->path().stem().string() == strWalletFile) {
-                folder_set.insert(folder_set_t::value_type(fs::last_write_time(dir_iter->path()), *dir_iter));
+                folder_set.insert(folder_set_t::value_type(
+                    std::make_pair(fs::last_write_time(dir_iter->path()), dir_iter->path().filename().string()), *dir_iter));
             }
         }
     }
     return folder_set;
 }
 
-static bool cleanWalletBackups(folder_set_t& folder_set, int nWalletBackups, std::string& strBackupWarning)
+static bool cleanWalletBackups(folder_set_t& folder_set, int nWalletBackups, const fs::path& protectedBackup, std::string& strBackupWarning)
 {
-    // Loop backward through backup files and keep the N newest ones (1 <= N <= 10)
-    int counter = 0;
-    for (const std::pair<const std::time_t, fs::path>& file : reverse_iterate(folder_set)) {
-        counter++;
-        if (counter > nWalletBackups) {
-            // More than nWalletBackups backups: delete oldest one(s)
-            try {
-                fs::remove(file.second);
-                LogPrintf("Old backup deleted: %s\n", file.second);
-            } catch (fs::filesystem_error &error) {
-                strBackupWarning = strprintf(_("Failed to delete backup, error: %s"), error.what());
-                LogPrintf("%s\n", strBackupWarning);
-                return false;
-            }
+    // Keep the configured number, always preserving the snapshot just created.
+    size_t excess = folder_set.size() > static_cast<size_t>(nWalletBackups)
+        ? folder_set.size() - static_cast<size_t>(nWalletBackups) : 0;
+    for (const auto& file : folder_set) {
+        if (excess == 0) break;
+        if (file.second == protectedBackup) continue;
+        try {
+            fs::remove(file.second);
+            LogPrintf("Old backup deleted: %s\n", file.second);
+            --excess;
+        } catch (fs::filesystem_error &error) {
+            strBackupWarning = strprintf(_("Failed to delete backup, error: %s"), error.what());
+            LogPrintf("%s\n", strBackupWarning);
+            return false;
         }
     }
     return true;
@@ -931,26 +936,32 @@ bool AutoBackupWallet(CWallet& wallet, std::string& strBackupWarning, std::strin
         return false;
     }
 
-    fs::path backupsDir = GetDataDir() / "backups";
-    backupsDir.make_preferred();
-    TryCreateDirectories(backupsDir);
-    std::string strWalletFile = wallet.GetUniqueWalletBackupName();
-    fs::path backupFile = backupsDir / strWalletFile;
-    backupFile.make_preferred();
-    if (fs::exists(backupFile)) {
-        LogPrintf("%s\n", _("Failed to create backup, file already exists! This could happen if you restarted wallet in less than 60 seconds. You can continue if you are ok with this."));
+    try {
+        fs::path backupsDir = GetDataDir() / "backups";
+        backupsDir.make_preferred();
+        TryCreateDirectories(backupsDir);
+        if (!fs::is_directory(backupsDir)) {
+            strBackupError = "Failed to create wallet backup directory";
+            return false;
+        }
+        fs::path backupFile = backupsDir / wallet.GetUniqueWalletBackupName();
+        backupFile.make_preferred();
+        if (fs::exists(backupFile)) {
+            strBackupError = "Wallet backup already exists; no existing file was changed";
+            return false;
+        }
+
+        if (!wallet.BackupWallet(backupFile.string(), true)) {
+            strBackupError = "Failed to create exclusive wallet backup";
+            return false;
+        }
+
+        folder_set_t folder_set = buildBackupsMapSortedByLastWrite(backupFile.stem().string(), backupsDir);
+        return cleanWalletBackups(folder_set, nWalletBackups, backupFile, strBackupWarning);
+    } catch (const fs::filesystem_error& error) {
+        strBackupError = strprintf("Failed to create wallet backup: %s", error.what());
         return false;
     }
-
-    // Try to backup
-    if (!wallet.BackupWallet(backupFile.string())) {
-        strBackupError = "Failed to backup wallet";
-        return false; // error is logged internally
-    }
-
-    // Keep only 0 < nWalletBackups <= 10 backups, including the new one of course
-    folder_set_t folder_set = buildBackupsMapSortedByLastWrite(backupFile.stem().string(), backupsDir);
-    return cleanWalletBackups(folder_set, nWalletBackups, strBackupWarning);
 }
 
 //

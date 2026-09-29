@@ -103,6 +103,8 @@ uint256 ID(uint32_t height, const uint256& blockHash, const uint256& committee)
 bool UsesAutomaticBootstrap(const CChainParams& params)
 {
     return params.NetworkIDString() == CBaseChainParams::MAIN ||
+           (params.NetworkIDString() == CBaseChainParams::TESTNET &&
+            (!gArgs.IsArgSet("-pqbootstrap") || gArgs.GetArg("-pqbootstrap", "").empty())) ||
            (params.IsRegTestNet() && gArgs.GetBoolArg("-pqautobootstrap", false));
 }
 
@@ -578,6 +580,53 @@ bool ChainState::ResolveBootstrap(const CBlockIndex* tip, Bootstrap& out, std::s
     if (pqquorum::Commitment(historical) != pqquorum::Commitment(bootstrap->members))
         return Fail(reason, "pq-bootstrap-snapshot-mismatch");
     out = *bootstrap;
+    return true;
+}
+
+bool ChainState::ResolveDelayedBootstrap(const CBlockIndex* tip, uint32_t height,
+                                         Bootstrap& out, std::string& reason) const
+{
+    AssertLockHeld(cs_main);
+    out = {};
+    reason.clear();
+    if (params.NetworkIDString() != CBaseChainParams::TESTNET || !UsesAutomaticBootstrap(params) ||
+        !tip || tip->nHeight < 0 || height > uint32_t(tip->nHeight) ||
+        height > uint32_t(std::numeric_limits<int>::max())) return false;
+
+    Bootstrap base;
+    if (!ResolveBootstrap(tip, base, reason) || height <= base.height) return false;
+
+    const uint256 commitment = pqquorum::Commitment(base.members);
+    uint32_t cursor{0};
+    if (!Read(Kind('M'), cursor)) return Fail(reason, "pq-bootstrap-candidate-state");
+    bool foundAtHeight = false;
+    while (cursor) {
+        SnapshotEntry snapshot;
+        if (!Read(AtHeight('m', cursor), snapshot) || snapshot.prevHeight >= cursor ||
+            pqquorum::Commitment(snapshot.members) != snapshot.commitment)
+            return Fail(reason, "pq-bootstrap-candidate-state");
+        if (cursor <= height) {
+            foundAtHeight = true;
+            if (cursor >= base.height &&
+                (snapshot.belowMinimum || snapshot.members.empty() || snapshot.commitment != commitment))
+                return false;
+        }
+        if (cursor < base.height) break;
+        cursor = snapshot.prevHeight;
+    }
+    if (!foundAtHeight) return false;
+
+    std::vector<pqquorum::Member> members;
+    bool snapshotFound = false, belowMinimum = false;
+    CommitteeAtStatus(height, members, snapshotFound, &belowMinimum);
+    if (!snapshotFound || belowMinimum || members.empty() ||
+        pqquorum::Commitment(members) != commitment) return false;
+
+    const CBlockIndex* ancestor = tip->GetAncestor(int(height));
+    if (!ancestor) return Fail(reason, "pq-bootstrap-candidate-state");
+    out = std::move(base);
+    out.height = height;
+    out.blockHash = ancestor->GetBlockHash();
     return true;
 }
 

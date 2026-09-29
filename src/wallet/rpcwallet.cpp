@@ -559,22 +559,21 @@ UniValue getnewpqaddress(const JSONRPCRequest& request)
 {
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
-    if (request.fHelp || request.params.size() != 1)
-        throw std::runtime_error("getnewpqaddress \"backup_destination\"\nCreate an ML-DSA-44 address on the selected network, including before activation.\n"
-                                "Requires an encrypted, fully unlocked wallet. Payments use dedicated PQ commands only.\n"
-                                "backup_destination must be a new file in an existing directory. The encrypted wallet snapshot is written before the address is returned.\n"
+    if (request.fHelp || request.params.size() > 1)
+        throw std::runtime_error("getnewpqaddress ( \"backup_destination\" )\nCreate an ML-DSA-44 address on the selected network, including before activation.\n"
+                                "Encrypted wallets must be fully unlocked. Encryption and backups are optional.\n"
+                                "A nonempty backup_destination must be a new file in an existing directory; that snapshot must succeed before the address is returned.\n"
                                 "Returns {address, experimental: true, payable, warning}; payable requires active PQ consensus.\n"
                                 "The HD seed and dumpwallet do not back up PQ keys.\n");
     if (!Params().SupportsPQ()) throw JSONRPCError(RPC_MISC_ERROR, "PQ wallets are unavailable on this network");
     LOCK2(cs_main, pwallet->cs_wallet);
-    if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the wallet before creating experimental PQ keys");
     EnsureWalletIsUnlocked(pwallet);
-    const fs::path backup = request.params[0].get_str();
-    if (backup.empty() || fs::exists(backup))
+    const fs::path backup = request.params.empty() ? fs::path() : fs::path(request.params[0].get_str());
+    if (!backup.empty() && fs::exists(backup))
         throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup destination must be a new file");
     std::string address;
-    if (!pwallet->GeneratePQAddress(address)) throw JSONRPCError(RPC_WALLET_ERROR, "Could not create and persist experimental PQ key");
-    if (!pwallet->BackupWallet(backup.string(), true)) {
+    if (!pwallet->GeneratePQAddress(address)) throw JSONRPCError(RPC_WALLET_ERROR, "Could not create, persist or back up PQ key");
+    if (!backup.empty() && !pwallet->BackupWallet(backup.string(), true)) {
         if (!pwallet->ErasePQAddress(address))
             throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup and unused-key cleanup failed; back up the wallet before using any listed PQ address");
         throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup failed; the new address was not returned");
@@ -583,7 +582,7 @@ UniValue getnewpqaddress(const JSONRPCRequest& request)
     result.pushKV("address", address);
     result.pushKV("experimental", true);
     result.pushKV("payable", CWallet::PQPaymentsActive());
-    result.pushKV("warning", "Experimental testnet/regtest PQ commands only; payments require active upgrades. The encrypted wallet snapshot completed before this address was returned.");
+    result.pushKV("warning", "PQ keys are not covered by the HD seed or dumpwallet. Keep a wallet backup to protect against loss.");
     return result;
 }
 
@@ -591,18 +590,17 @@ UniValue createpqoperator(const JSONRPCRequest& request)
 {
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
-    if (request.fHelp || request.params.size() != 1)
-        throw std::runtime_error("createpqoperator \"backup_destination\"\n"
+    if (request.fHelp || request.params.size() > 1)
+        throw std::runtime_error("createpqoperator ( \"backup_destination\" )\n"
             "Create or retry a controller-local PQ operator recovery key on a scheduled test chain.\n"
-            "Requires an encrypted, fully unlocked wallet and a new backup file in a trusted directory.\n"
+            "Encrypted wallets must be fully unlocked. A backup to a new file is optional.\n"
             "A pending key is retried after backup failure or restoration, before generating another key.\n"
             "Returns only publickey and recovery_only; does not register, export or start an operator.\n");
     LOCK2(cs_main, pwallet->cs_wallet);
-    if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the wallet before creating PQ operator recovery keys");
     EnsureWalletIsUnlocked(pwallet);
     mldsa44::PublicKey public_key{};
     std::string reason;
-    if (!pwallet->PreparePQOperator(request.params[0].get_str(), public_key, reason))
+    if (!pwallet->PreparePQOperator(request.params.empty() ? fs::path() : fs::path(request.params[0].get_str()), public_key, reason))
         throw JSONRPCError(RPC_WALLET_ERROR, reason);
     UniValue result(UniValue::VOBJ);
     result.pushKV("publickey", HexStr(public_key));
@@ -615,7 +613,7 @@ UniValue listpqoperators(const JSONRPCRequest& request)
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
     if (request.fHelp || !request.params.empty())
-        throw std::runtime_error("listpqoperators\nList public keys with completed controller recovery snapshots.\n"
+        throw std::runtime_error("listpqoperators\nList public operator keys stored by this controller wallet.\n"
                                 "Pending keys are hidden. This is not a registry, service or finality status.\n");
     UniValue result(UniValue::VARR);
     for (const auto& public_key : pwallet->GetPQOperators()) result.push_back(HexStr(public_key));
@@ -629,7 +627,7 @@ UniValue exportpqoperator(const JSONRPCRequest& request)
     if (request.fHelp || request.params.size() != 2)
         throw std::runtime_error("exportpqoperator \"publickey\" \"credential_directory\"\n"
             "Prepare operator-only credentials for a backed recovery identity on a scheduled test chain.\n"
-            "Requires an encrypted, fully unlocked controller wallet. No spending keys are exported.\n"
+            "Encrypted controller wallets must be fully unlocked. No spending keys are exported.\n"
             "The absolute destination must not exist; its parent must be a trusted private directory.\n"
             "Supports Linux, macOS and Windows (local fixed NTFS).\n"
             "Publishes an owner-private directory with two secret credential files.\n"
@@ -637,7 +635,6 @@ UniValue exportpqoperator(const JSONRPCRequest& request)
             "Returns only publickey and credentials_only; does not register or start an operator.\n");
     RPCTypeCheck(request.params, {UniValue::VSTR, UniValue::VSTR});
     LOCK2(cs_main, pwallet->cs_wallet);
-    if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the wallet before exporting PQ operator credentials");
     EnsureWalletIsUnlocked(pwallet);
     const auto text = request.params[0].get_str();
     if (text.size() != 2 * mldsa44::PUBLIC_KEY_SIZE || !IsHex(text))
@@ -658,10 +655,10 @@ UniValue sendpqmasternode(const JSONRPCRequest& request)
 {
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
-    if (request.fHelp || request.params.size() != 3)
-        throw std::runtime_error("sendpqmasternode \"action\" {options} \"backup_destination\"\n"
+    if (request.fHelp || request.params.size() < 2 || request.params.size() > 3)
+        throw std::runtime_error("sendpqmasternode \"action\" {options} ( \"backup_destination\" )\n"
             "Test-chain controller transactions; require active PQ masternodes.\n"
-            "Actions: register, update, service, revoke. Requires encrypted full unlock.\n"
+            "Actions: register, update, service, revoke. Encrypted wallets must be fully unlocked.\n"
             "register requires collateral_address, owner_address, operator_publickey, payout_address.\n"
             "Optional register fields: service (numeric IP:port), operator_reward (0..10000 basis points),\n"
             "operator_payout_address; collateral_txid and collateral_vout select an existing bond.\n"
@@ -670,13 +667,12 @@ UniValue sendpqmasternode(const JSONRPCRequest& request)
             "update requires payout_address and operator_publickey (same key or a backed replacement).\n"
             "service requires service; omitted operator_payout_address preserves the current payout.\n"
             "After rotation, reward-bearing operators must set a new operator payout. revoke has no other fields.\n"
-            "Operators must have backed controller recovery records; no private keys are accepted.\n"
-            "Writes a new encrypted wallet snapshot before commit/relay. Returns txid and fee.\n"
+            "Operators must have ready controller recovery records; no private keys are accepted.\n"
+            "An optional backup must succeed before commit/relay. Returns txid and fee.\n"
             "If the response is lost, inspect wallet transactions and registry before retrying.\n");
     RPCTypeCheck(request.params, {UniValue::VSTR, UniValue::VOBJ, UniValue::VSTR});
     pwallet->BlockUntilSyncedToCurrentChain();
     LOCK2(cs_main, pwallet->cs_wallet);
-    if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the controller wallet first");
     EnsureWalletIsUnlocked(pwallet);
     const auto action = request.params[0].get_str();
     const auto& options = request.params[1];
@@ -780,7 +776,7 @@ UniValue sendpqmasternode(const JSONRPCRequest& request)
     CTransactionRef tx;
     CAmount fee;
     std::string reason;
-    if (!pwallet->PreparePQMasternodeTransaction(op, request.params[2].get_str(), tx, fee, reason))
+    if (!pwallet->PreparePQMasternodeTransaction(op, request.params.size() > 2 ? fs::path(request.params[2].get_str()) : fs::path(), tx, fee, reason))
         throw JSONRPCError(RPC_WALLET_ERROR, reason);
     const auto committed = pwallet->CommitTransaction(tx, nullptr, g_connman.get());
     if (committed.status != CWallet::CommitStatus::OK) throw JSONRPCError(RPC_WALLET_ERROR, committed.ToString());
@@ -841,11 +837,11 @@ static UniValue SendPQPayment(const JSONRPCRequest& request)
 {
     CWallet* const pwallet = GetWalletForJSONRPCRequest(request);
     if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) return NullUniValue;
-    if (request.fHelp || request.params.size() < 3 || request.params.size() > 4)
-        throw std::runtime_error(request.strMethod + " \"address\" amount \"backup_destination\" ( selected_inputs )\n"
+    if (request.fHelp || request.params.size() < 2 || request.params.size() > 4)
+        throw std::runtime_error(request.strMethod + " \"address\" amount ( \"backup_destination\" selected_inputs )\n"
             "Send test coins to a PQ address using one or two confirmed PQ inputs and optional PQ change.\n"
-            "Requires encryption, full unlock and active PQ consensus.\n"
-            "backup_destination must be a new file in an existing directory. The encrypted wallet snapshot is written before relay.\n"
+            "Requires active PQ consensus; encrypted wallets must be fully unlocked.\n"
+            "Backups are optional. A nonempty backup_destination must be a new file and the snapshot must succeed before relay.\n"
             "selected_inputs optionally restricts funding to one or two unique {\"txid\":\"hex\",\"vout\":n} objects.\n"
             "WARNING: explicitly selecting masternode collateral spends its bond and removes the masternode. Manual locks still apply.\n"
             "Returns {txid, fee, experimental: true}.\n");
@@ -853,10 +849,9 @@ static UniValue SendPQPayment(const JSONRPCRequest& request)
     pwallet->BlockUntilSyncedToCurrentChain();
     LOCK2(cs_main, pwallet->cs_wallet);
     if (!CWallet::PQPaymentsActive()) throw JSONRPCError(RPC_MISC_ERROR, "PQ payments are not active on this network");
-    if (!pwallet->IsCrypted()) throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Encrypt the wallet before making PQ payments");
     EnsureWalletIsUnlocked(pwallet);
-    const fs::path backup = request.params[2].get_str();
-    if (backup.empty() || fs::exists(backup))
+    const fs::path backup = request.params.size() > 2 ? fs::path(request.params[2].get_str()) : fs::path();
+    if (!backup.empty() && fs::exists(backup))
         throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup destination must be a new file");
     const auto address = request.params[0].get_str();
     pq::KeyID id;
@@ -899,7 +894,7 @@ static UniValue SendPQPayment(const JSONRPCRequest& request)
             throw JSONRPCError(RPC_WALLET_ERROR, "PQ payment preparation and unused-key cleanup failed; back up the wallet before using any listed PQ address");
         throw JSONRPCError(RPC_WALLET_ERROR, reason);
     }
-    if (!pwallet->BackupWallet(backup.string(), true)) {
+    if (!backup.empty() && !pwallet->BackupWallet(backup.string(), true)) {
         if (!cleanup_new_pq_keys())
             throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup and unused-key cleanup failed; back up the wallet before using any listed PQ address");
         throw JSONRPCError(RPC_WALLET_ERROR, "PQ wallet backup failed; the payment was not relayed");
