@@ -1009,7 +1009,11 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFlushOnClose)
 
     bool fUpdated = false;
     if (!fInsertedNew) {
-        if (wtxIn.m_confirm.status != wtx.m_confirm.status) {
+        // A rescan may find a transaction on the replacement branch before the
+        // queued disconnect notification clears its previous confirmation.
+        if (wtxIn.m_confirm.status != wtx.m_confirm.status ||
+            (wtxIn.m_confirm.status == CWalletTx::Status::CONFIRMED &&
+             wtxIn.m_confirm.hashBlock != wtx.m_confirm.hashBlock)) {
             wtx.m_confirm.status = wtxIn.m_confirm.status;
             wtx.m_confirm.nIndex = wtxIn.m_confirm.nIndex;
             wtx.m_confirm.hashBlock = wtxIn.m_confirm.hashBlock;

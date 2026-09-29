@@ -390,6 +390,35 @@ BOOST_AUTO_TEST_CASE(wallet_transaction_begin_and_commit_failure_are_atomic)
     BOOST_REQUIRE(m_wallet.AddToWallet(CWalletTx(&m_wallet, payment_ref)));
 }
 
+BOOST_AUTO_TEST_CASE(rescan_updates_reconfirmed_transaction_atomically)
+{
+    LOCK2(cs_main, m_wallet.cs_wallet);
+    CMutableTransaction tx;
+    tx.vout.emplace_back(COIN, CScript() << OP_TRUE);
+    const auto ref = MakeTransactionRef(tx);
+    CWalletTx original(&m_wallet, ref);
+    original.m_confirm = {CWalletTx::Status::CONFIRMED, 1, uint256S("01"), 0};
+    BOOST_REQUIRE(m_wallet.AddToWallet(original));
+    const CWalletTx::Confirmation moved{CWalletTx::Status::CONFIRMED, 2, uint256S("02"), 0};
+    const auto check = [&](const CWalletTx::Confirmation& expected) {
+        const auto& live = m_wallet.mapWallet.at(ref->GetHash()).m_confirm;
+        BOOST_CHECK(live.status == expected.status);
+        BOOST_CHECK_EQUAL(live.hashBlock, expected.hashBlock);
+        BOOST_CHECK_EQUAL(live.block_height, expected.block_height);
+        CWalletTx stored(&m_wallet, nullptr);
+        BerkeleyBatch batch(m_wallet.GetDBHandle(), "r");
+        BOOST_REQUIRE(batch.Read(std::make_pair(std::string("tx"), ref->GetHash()), stored));
+        BOOST_CHECK_EQUAL(stored.m_confirm.hashBlock, expected.hashBlock);
+    };
+    {
+        FailWalletTxWrites fail(m_wallet);
+        BOOST_CHECK(!m_wallet.AddToWalletIfInvolvingMe(ref, moved, true));
+        check(original.m_confirm);
+    }
+    BOOST_REQUIRE(m_wallet.AddToWalletIfInvolvingMe(ref, moved, true));
+    check(moved);
+}
+
 BOOST_AUTO_TEST_CASE(ordinary_conflict_metadata_is_persisted_before_publication)
 {
     CheckConflictMetadataPersistence(m_wallet, false);
